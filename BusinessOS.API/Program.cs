@@ -1,5 +1,7 @@
+using System.Text;
 using BusinessOS.API.Endpoints;
 using BusinessOS.API.Middlewares;
+using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 

@@ -1,4 +1,3 @@
-using System.Reflection.Emit;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Infrastructure.Identity;
@@ -10,9 +9,10 @@ namespace BusinessOS.Persistence.Context;
 public class BusinessOSDbContext : IdentityDbContext<ApplicationUser>
 {
     private readonly ITenantProvider _tenantProvider;
-    public BusinessOSDbContext(DbContextOptions<BusinessOSDbContext> options,
-        ITenantProvider tenantProvider, IdentityDbContext<ApplicationUser>,
-    IApplicationDbContext)
+
+    public BusinessOSDbContext(
+        DbContextOptions<BusinessOSDbContext> options,
+        ITenantProvider tenantProvider)
         : base(options)
     {
         _tenantProvider = tenantProvider;
@@ -37,13 +37,13 @@ public class BusinessOSDbContext : IdentityDbContext<ApplicationUser>
     {
         base.OnModelCreating(builder);
 
-        // Global filter for multi-tenancy (IMPORTANT)
+        // Soft delete filters
         builder.Entity<Product>().HasQueryFilter(x => !x.IsDeleted);
         builder.Entity<Category>().HasQueryFilter(x => !x.IsDeleted);
 
-        // You will extend this later with Tenant filter middleware
+        // Multi-tenancy filters
         builder.Entity<Product>()
-        .HasQueryFilter(x => x.TenantId == _tenantProvider.GetTenantId());
+            .HasQueryFilter(x => x.TenantId == _tenantProvider.GetTenantId());
 
         builder.Entity<Category>()
             .HasQueryFilter(x => x.TenantId == _tenantProvider.GetTenantId());

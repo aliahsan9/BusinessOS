@@ -1,6 +1,7 @@
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Infrastructure.MultiTenancy;
 using BusinessOS.Infrastructure.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BusinessOS.Infrastructure;
 

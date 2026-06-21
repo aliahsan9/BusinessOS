@@ -12,7 +12,7 @@
 
     <AnalysisLevel>latest</AnalysisLevel>
 
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
 
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
 

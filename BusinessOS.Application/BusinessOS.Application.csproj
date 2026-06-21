@@ -10,4 +10,22 @@
     <ProjectReference Include="..\BusinessOS.Domain\BusinessOS.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Abstractions\Services\" />
+    <Folder Include="Abstractions\Persistence\" />
+    <Folder Include="DTOs\" />
+    <Folder Include="Features\Customers\" />
+    <Folder Include="Features\Dashboard\" />
+    <Folder Include="Features\AI\" />
+    <Folder Include="Features\Purchases\" />
+    <Folder Include="Features\Orders\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+    <PackageReference Include="MediatR" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+  </ItemGroup>
+
 </Project>
