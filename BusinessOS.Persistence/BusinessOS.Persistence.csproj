@@ -9,6 +9,7 @@
   <ItemGroup>
     <ProjectReference Include="..\BusinessOS.Application\BusinessOS.Application.csproj" />
     <ProjectReference Include="..\BusinessOS.Domain\BusinessOS.Domain.csproj" />
+    <ProjectReference Include="..\BusinessOS.Infrastructure\BusinessOS.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>
