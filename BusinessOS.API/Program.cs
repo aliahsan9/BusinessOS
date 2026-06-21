@@ -2,6 +2,7 @@ using System.Text;
 using BusinessOS.API.Endpoints;
 using BusinessOS.API.Middlewares;
 using Microsoft.IdentityModel.Tokens;
+using BusinessOS.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,6 +28,8 @@ builder.Services.AddAuthentication("Bearer")
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddInfrastructure();
 
 var app = builder.Build();
 

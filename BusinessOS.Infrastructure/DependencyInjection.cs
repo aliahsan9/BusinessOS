@@ -9,9 +9,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services)
     {
-        services.AddHttpContextAccessor();
-
-        services.AddScoped<ITenantProvider, TenantProvider>();
+        services.AddScoped<ITenantProvider, TenantProvider>(); 
         services.AddScoped<ICurrentUserService, CurrentUserService>();
 
         return services;
