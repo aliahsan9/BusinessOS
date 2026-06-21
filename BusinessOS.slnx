@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="BusinessOS.API/BusinessOS.API.csproj" />
+    <Project Path="BusinessOS.Application/BusinessOS.Application.csproj" />
+    <Project Path="BusinessOS.Domain/BusinessOS.Domain.csproj" />
+    <Project Path="BusinessOS.Infrastructure/BusinessOS.Infrastructure.csproj" />
+    <Project Path="BusinessOS.Persistence/BusinessOS.Persistence.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="BusinessOS.IntegrationTests/BusinessOS.IntegrationTests.csproj" />
+    <Project Path="BusinessOS.UnitTests/BusinessOS.UnitTests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,29 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0" />
+
+    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.0" />
+
+    <PackageVersion Include="MediatR" Version="13.0.0" />
+    <PackageVersion Include="FluentValidation" Version="12.0.0" />
+
+    <PackageVersion Include="Mapster" Version="8.4.0" />
+
+    <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageVersion Include="Serilog.Sinks.Console" Version="7.0.0" />
+
+    <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.0.0" />
+
+    <PackageVersion Include="OpenAI" Version="3.0.0" />
+
+    <PackageVersion Include="xunit" Version="3.0.1" />
+
+  </ItemGroup>
+</Project>
