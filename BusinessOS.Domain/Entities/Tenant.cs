@@ -1,5 +1,4 @@
 using BusinessOS.Domain.Common;
-
 namespace BusinessOS.Domain.Entities;
 
 public class Tenant : AuditableEntity
@@ -13,7 +12,6 @@ public class Tenant : AuditableEntity
 
     public string SubscriptionPlan { get; set; } = "Free";
     public bool IsActive { get; set; } = true;
-
+    public string OwnerUserId { get; set; } = default!;
     // Navigation
-    public ICollection<ApplicationUser> Users { get; set; } = new List<ApplicationUser>();
 }
