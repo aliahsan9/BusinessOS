@@ -1,3 +1,4 @@
+using BusinessOS.API.Endpoints;
 using BusinessOS.API.Middlewares;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -32,6 +33,7 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
+app.MapProductEndpoints();
 app.UseMiddleware<TenantMiddleware>();
 app.UseHttpsRedirection();
 

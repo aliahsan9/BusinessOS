@@ -11,7 +11,8 @@ public class BusinessOSDbContext : IdentityDbContext<ApplicationUser>
 {
     private readonly ITenantProvider _tenantProvider;
     public BusinessOSDbContext(DbContextOptions<BusinessOSDbContext> options,
-        ITenantProvider tenantProvider)
+        ITenantProvider tenantProvider, IdentityDbContext<ApplicationUser>,
+    IApplicationDbContext)
         : base(options)
     {
         _tenantProvider = tenantProvider;
