@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -8,9 +9,12 @@ namespace BusinessOS.Persistence.Context;
 
 public class BusinessOSDbContext : IdentityDbContext<ApplicationUser>
 {
-    public BusinessOSDbContext(DbContextOptions<BusinessOSDbContext> options)
+    private readonly ITenantProvider _tenantProvider;
+    public BusinessOSDbContext(DbContextOptions<BusinessOSDbContext> options,
+        ITenantProvider tenantProvider)
         : base(options)
     {
+        _tenantProvider = tenantProvider;
     }
 
     public DbSet<Tenant> Tenants => Set<Tenant>();
@@ -37,5 +41,22 @@ public class BusinessOSDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<Category>().HasQueryFilter(x => !x.IsDeleted);
 
         // You will extend this later with Tenant filter middleware
+        builder.Entity<Product>()
+        .HasQueryFilter(x => x.TenantId == _tenantProvider.GetTenantId());
+
+        builder.Entity<Category>()
+            .HasQueryFilter(x => x.TenantId == _tenantProvider.GetTenantId());
+
+        builder.Entity<Customer>()
+            .HasQueryFilter(x => x.TenantId == _tenantProvider.GetTenantId());
+
+        builder.Entity<Order>()
+            .HasQueryFilter(x => x.TenantId == _tenantProvider.GetTenantId());
+
+        builder.Entity<Expense>()
+            .HasQueryFilter(x => x.TenantId == _tenantProvider.GetTenantId());
+
+        builder.Entity<Supplier>()
+            .HasQueryFilter(x => x.TenantId == _tenantProvider.GetTenantId());
     }
 }
