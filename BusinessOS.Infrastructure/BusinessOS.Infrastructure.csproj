@@ -10,4 +10,11 @@
     <ProjectReference Include="..\BusinessOS.Application\BusinessOS.Application.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Email\" />
+    <Folder Include="Logging\" />
+    <Folder Include="BackgroundJobs\" />
+    <Folder Include="OpenAI\" />
+  </ItemGroup>
+
 </Project>
