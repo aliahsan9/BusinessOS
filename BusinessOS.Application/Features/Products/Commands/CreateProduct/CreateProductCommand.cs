@@ -3,7 +3,7 @@ using MediatR;
 namespace BusinessOS.Application.Features.Products.Commands.CreateProduct;
 
 public record CreateProductCommand(
-    Guid? CategoryId,
+    Guid CategoryId,
     string Name,
     string SKU,
     string? Description,
