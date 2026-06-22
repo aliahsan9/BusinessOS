@@ -1,5 +1,4 @@
 using BusinessOS.Infrastructure.Data;
-using BusinessOS.Infrastructure.MultiTenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
@@ -10,20 +9,23 @@ public class BusinessOSDbContextFactory : IDesignTimeDbContextFactory<BusinessOS
 {
     public BusinessOSDbContext CreateDbContext(string[] args)
     {
-        TenantContext.Clear();
-
         var basePath = Directory.GetCurrentDirectory();
-        var apiPath = Path.Combine(basePath, "..", "BusinessOS.API");
+
+        var apiPath = File.Exists(Path.Combine(basePath, "appsettings.json"))
+            ? basePath
+            : Path.GetFullPath(Path.Combine(basePath, "..", "BusinessOS.API"));
 
         var configuration = new ConfigurationBuilder()
-            .SetBasePath(Directory.Exists(apiPath) ? apiPath : basePath)
-            .AddJsonFile("appsettings.json", optional: false)
+            .SetBasePath(apiPath)
+            .AddJsonFile("appsettings.json", optional: true)
             .AddJsonFile("appsettings.Development.json", optional: true)
             .Build();
 
-        var connectionString = configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException(
-                "Connection string 'DefaultConnection' was not found.");
+        var connectionString = configuration.GetConnectionString("DefaultConnection");
+
+        if (string.IsNullOrWhiteSpace(connectionString))
+            throw new InvalidOperationException(
+                "DefaultConnection is missing in appsettings.json");
 
         var optionsBuilder = new DbContextOptionsBuilder<BusinessOSDbContext>();
         optionsBuilder.UseSqlServer(connectionString);

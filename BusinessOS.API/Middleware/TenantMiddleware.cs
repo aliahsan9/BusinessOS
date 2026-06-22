@@ -15,42 +15,37 @@ public class TenantMiddleware
 
     public async Task InvokeAsync(HttpContext context, ITenantProvider tenantProvider)
     {
-        // Allow swagger/scalar endpoints without tenant (optional safety)
-        var path = context.Request.Path.Value?.ToLower();
+        var path = context.Request.Path.Value?.ToLower() ?? "";
 
-        if (path != null &&
-            (path.Contains("swagger") || path.Contains("scalar")))
+        // ✅ ALWAYS allow API documentation tools
+        if (path.StartsWith("/swagger") ||
+            path.StartsWith("/scalar") ||
+            path.StartsWith("/openapi"))
         {
             await _next(context);
             return;
         }
 
-        // Validate header
+        // ✅ Validate tenant header ONLY for API calls
         if (!context.Request.Headers.TryGetValue("X-Tenant-ID", out var tenantId) ||
             !Guid.TryParse(tenantId, out var parsedTenantId))
         {
-            await WriteJsonResponse(context, StatusCodes.Status400BadRequest, new
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            context.Response.ContentType = "application/json";
+
+            var error = JsonSerializer.Serialize(new
             {
                 error = "Missing or invalid X-Tenant-ID header",
                 code = "TENANT_HEADER_REQUIRED"
             });
 
+            await context.Response.WriteAsync(error);
             return;
         }
 
-        // Set tenant
+        // ✅ Set tenant
         tenantProvider.SetTenantId(parsedTenantId);
 
         await _next(context);
-    }
-
-    private static async Task WriteJsonResponse(HttpContext context, int statusCode, object response)
-    {
-        context.Response.StatusCode = statusCode;
-        context.Response.ContentType = "application/json";
-
-        var json = JsonSerializer.Serialize(response);
-
-        await context.Response.WriteAsync(json);
     }
 }

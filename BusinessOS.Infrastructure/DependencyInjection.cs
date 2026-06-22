@@ -15,11 +15,26 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.AddScoped<ITenantProvider, TenantProvider>();
-
-        services.AddDbContext<BusinessOSDbContext>(options =>
+        services.AddScoped<ITenantDbConnection, TenantDbConnection>();
+        services.AddDbContext<BusinessOSDbContext>((sp, options) =>
         {
-            options.UseSqlServer(
-                configuration.GetConnectionString("DefaultConnection"));
+            var tenantProvider = sp.GetRequiredService<ITenantProvider>();
+            var tenantDb = sp.GetRequiredService<ITenantDbConnection>();
+
+            Guid tenantId;
+
+            try
+            {
+                tenantId = tenantProvider.GetTenantId();
+            }
+            catch
+            {
+                // fallback for Swagger / Scalar / design-time / migrations
+                tenantId = Guid.Empty;
+            }
+            var connectionString = tenantDb.GetConnectionString(tenantId);
+
+            options.UseSqlServer(connectionString);
         });
 
         services.AddScoped<IApplicationDbContext, BusinessOSDbContext>();
