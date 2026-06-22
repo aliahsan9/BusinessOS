@@ -35,6 +35,7 @@ public static class DependencyInjection
             var connectionString = tenantDb.GetConnectionString(tenantId);
 
             options.UseSqlServer(connectionString);
+            configuration.GetConnectionString("DefaultConnection");
         });
          
         services.AddScoped<IApplicationDbContext, BusinessOSDbContext>();

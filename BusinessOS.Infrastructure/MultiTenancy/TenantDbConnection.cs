@@ -9,7 +9,7 @@ public class TenantDbConnection : ITenantDbConnection
         return tenantId switch
         {
             var id when id != Guid.Empty =>
-                "Server=DESKTOP-GVA6N7B\\SQLEXPRESS;Database=BusinessOSDb;Trusted_Connection=True;TrustServerCertificate=True",
+                "Server=DESKTOP-GVA6N7B\\SQLEXPRESS;Database=BusinessOS;Trusted_Connection=True;TrustServerCertificate=True",
 
             _ => throw new Exception("Invalid tenant")
         };
