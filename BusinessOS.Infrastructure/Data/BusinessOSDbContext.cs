@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Infrastructure.Data.Configurations;
 using BusinessOS.Infrastructure.Identity;
@@ -7,16 +8,21 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BusinessOS.Infrastructure.Data;
 
-public class BusinessOSDbContext : IdentityDbContext<ApplicationUser>
+public class BusinessOSDbContext
+    : IdentityDbContext<ApplicationUser>, IApplicationDbContext
 {
-    public BusinessOSDbContext(DbContextOptions<BusinessOSDbContext> options)
+    public BusinessOSDbContext(
+        DbContextOptions<BusinessOSDbContext> options)
         : base(options)
     {
     }
 
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Category> Categories => Set<Category>();
+
+    // Required by IApplicationDbContext
     public DbSet<Product> Products => Set<Product>();
+
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Supplier> Suppliers => Set<Supplier>();
     public DbSet<Order> Orders => Set<Order>();
@@ -30,11 +36,18 @@ public class BusinessOSDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<AIConversation> AIConversations => Set<AIConversation>();
     public DbSet<Notification> Notifications => Set<Notification>();
 
+    public new Task<int> SaveChangesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
 
-        builder.ApplyConfigurationsFromAssembly(typeof(CustomerConfiguration).Assembly);
+        builder.ApplyConfigurationsFromAssembly(
+            typeof(CustomerConfiguration).Assembly);
 
         ConfigureGlobalQueryFilters(builder);
     }

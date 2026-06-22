@@ -17,11 +17,12 @@ public static class DependencyInjection
         services.AddScoped<ITenantProvider, TenantProvider>();
 
         services.AddDbContext<BusinessOSDbContext>(options =>
+        {
             options.UseSqlServer(
-                configuration.GetConnectionString("DefaultConnection")));
+                configuration.GetConnectionString("DefaultConnection"));
+        });
 
-        services.AddScoped<IApplicationDbContext>(
-            provider => provider.GetRequiredService<BusinessOSDbContext>());
+        services.AddScoped<IApplicationDbContext, BusinessOSDbContext>();
 
         services.AddScoped<ICurrentUserService, CurrentUserService>();
 
