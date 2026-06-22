@@ -77,6 +77,7 @@ app.UseMiddleware<TenantMiddleware>();
 
 app.MapControllers();
 
+app.MapCategoryEndpoints();
 app.MapProductEndpoints();
 
 #endregion
