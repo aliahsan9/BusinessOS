@@ -1,21 +1,24 @@
 using BusinessOS.Application.Common.Interfaces;
+using System.Threading;
 
 namespace BusinessOS.Infrastructure.MultiTenancy;
 
 public class TenantProvider : ITenantProvider
 {
-    private Guid _tenantId;
+    private static readonly AsyncLocal<Guid> _tenantId = new();
 
     public Guid GetTenantId()
     {
-        if (_tenantId == Guid.Empty)
-            throw new Exception("Tenant not resolved");
+        var id = _tenantId.Value;
 
-        return _tenantId;
+        if (id == Guid.Empty)
+            throw new Exception("Tenant not resolved for this request");
+
+        return id;
     }
 
     public void SetTenantId(Guid tenantId)
     {
-        _tenantId = tenantId;
+        _tenantId.Value = tenantId;
     }
 }

@@ -1,8 +1,8 @@
-﻿namespace BusinessOS.IntegrationTests
+namespace BusinessOS.IntegrationTests
 {
     public class UnitTest1
     {
-        [Fact]
+        //[Fact]
         public void Test1()
         {
 

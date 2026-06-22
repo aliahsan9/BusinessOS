@@ -1,23 +1,19 @@
-using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Infrastructure.Identity;
+using BusinessOS.Infrastructure.MultiTenancy;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
-namespace BusinessOS.Persistence.Context;
+namespace BusinessOS.Infrastructure.Data;
 
 public class BusinessOSDbContext : IdentityDbContext<ApplicationUser>
 {
-    private readonly ITenantProvider _tenantProvider;
-
-    public BusinessOSDbContext(
-        DbContextOptions<BusinessOSDbContext> options,
-        ITenantProvider tenantProvider)
+    public BusinessOSDbContext(DbContextOptions<BusinessOSDbContext> options)
         : base(options)
     {
-        _tenantProvider = tenantProvider;
     }
 
+    // DbSets
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Product> Products => Set<Product>();
@@ -29,6 +25,7 @@ public class BusinessOSDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<PurchaseItem> PurchaseItems => Set<PurchaseItem>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<Expense> Expenses => Set<Expense>();
+    public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<InventoryTransaction> InventoryTransactions => Set<InventoryTransaction>();
     public DbSet<AIConversation> AIConversations => Set<AIConversation>();
     public DbSet<Notification> Notifications => Set<Notification>();
@@ -37,27 +34,38 @@ public class BusinessOSDbContext : IdentityDbContext<ApplicationUser>
     {
         base.OnModelCreating(builder);
 
-        // Soft delete filters
-        builder.Entity<Product>().HasQueryFilter(x => !x.IsDeleted);
-        builder.Entity<Category>().HasQueryFilter(x => !x.IsDeleted);
+        // =========================
+        // MULTI-TENANT GLOBAL FILTER
+        // =========================
 
-        // Multi-tenancy filters
         builder.Entity<Product>()
-            .HasQueryFilter(x => x.TenantId == _tenantProvider.GetTenantId());
+            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId && !x.IsDeleted);
 
         builder.Entity<Category>()
-            .HasQueryFilter(x => x.TenantId == _tenantProvider.GetTenantId());
+            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId && !x.IsDeleted);
 
         builder.Entity<Customer>()
-            .HasQueryFilter(x => x.TenantId == _tenantProvider.GetTenantId());
-
-        builder.Entity<Order>()
-            .HasQueryFilter(x => x.TenantId == _tenantProvider.GetTenantId());
-
-        builder.Entity<Expense>()
-            .HasQueryFilter(x => x.TenantId == _tenantProvider.GetTenantId());
+            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
 
         builder.Entity<Supplier>()
-            .HasQueryFilter(x => x.TenantId == _tenantProvider.GetTenantId());
+            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
+
+        builder.Entity<Order>()
+            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
+
+        builder.Entity<Expense>()
+            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
+
+        builder.Entity<Employee>()
+            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
+
+        builder.Entity<InventoryTransaction>()
+            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
+
+        builder.Entity<Purchase>()
+            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
+
+        builder.Entity<Payment>()
+            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
     }
 }
