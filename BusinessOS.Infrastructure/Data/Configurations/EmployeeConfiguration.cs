@@ -2,7 +2,7 @@ using BusinessOS.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace BusinessOS.Persistence.Configurations;
+namespace BusinessOS.Infrastructure.Data.Configurations;
 
 public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 {
@@ -15,7 +15,9 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
         builder.Property(x => x.FirstName).HasMaxLength(100).IsRequired();
         builder.Property(x => x.LastName).HasMaxLength(100).IsRequired();
         builder.Property(x => x.Email).HasMaxLength(256).IsRequired();
-        builder.Property(x => x.Salary).HasPrecision(18, 2);
+        builder.Property(x => x.Phone).HasMaxLength(50).IsRequired();
+        builder.Property(x => x.Designation).HasMaxLength(100).IsRequired();
+        builder.Property(x => x.Salary).AsMoney();
 
         builder.HasIndex(x => new { x.TenantId, x.Email });
     }

@@ -4,8 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace BusinessOS.Infrastructure.Persistence.Configurations;
 
-public class ProductConfiguration
-    : IEntityTypeConfiguration<Product>
+public class ProductConfiguration : IEntityTypeConfiguration<Product>
 {
     public void Configure(EntityTypeBuilder<Product> builder)
     {
@@ -21,14 +20,11 @@ public class ProductConfiguration
             .HasMaxLength(100)
             .IsRequired();
 
-        builder.Property(x => x.CostPrice)
-            .HasPrecision(18, 2);
+        builder.Property(x => x.CostPrice).HasPrecision(18, 2);
+        builder.Property(x => x.SalePrice).HasPrecision(18, 2);
+        builder.Property(x => x.CurrentStock).HasPrecision(18, 2);
+        builder.Property(x => x.ReorderLevel).HasPrecision(18, 2);
 
-        builder.Property(x => x.SalePrice)
-            .HasPrecision(18, 2);
-
-        builder.HasIndex(x =>
-            new { x.TenantId, x.SKU })
-            .IsUnique();
+        builder.HasIndex(x => new { x.TenantId, x.SKU }).IsUnique();
     }
 }

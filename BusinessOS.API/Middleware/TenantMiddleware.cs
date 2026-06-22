@@ -15,9 +15,10 @@ public class TenantMiddleware
     public async Task InvokeAsync(HttpContext context, ITenantProvider tenantProvider)
     {
         // OPTION 1: From Header (simple for MVP)
-        if (context.Request.Headers.TryGetValue("X-Tenant-ID", out var tenantId))
+        if (context.Request.Headers.TryGetValue("X-Tenant-ID", out var tenantId)
+            && Guid.TryParse(tenantId, out var parsedTenantId))
         {
-            tenantProvider.SetTenantId(Guid.Parse(tenantId!));
+            tenantProvider.SetTenantId(parsedTenantId);
         }
 
         // OPTION 2: Later from JWT claim (recommended for production)

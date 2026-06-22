@@ -4,6 +4,7 @@ namespace BusinessOS.Domain.Entities;
 
 public class OrderItem : BaseEntity
 {
+    public Guid TenantId { get; set; }
     public Guid OrderId { get; set; }
     public Guid ProductId { get; set; }
 
@@ -12,5 +13,5 @@ public class OrderItem : BaseEntity
     public decimal Total { get; set; }
 
     public Order Order { get; set; } = default!;
-    public Product Product { get; set; } = default!;
+    public Product? Product { get; set; }
 }

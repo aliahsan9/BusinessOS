@@ -16,7 +16,7 @@ public static class DependencyInjection
     {
         services.AddScoped<ITenantProvider, TenantProvider>();
         services.AddDbContext<BusinessOSDbContext>(options =>
-    options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+            options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
         services.AddScoped<ICurrentUserService, CurrentUserService>();
 
         return services;

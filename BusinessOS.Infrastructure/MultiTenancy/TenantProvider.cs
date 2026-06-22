@@ -20,5 +20,6 @@ public class TenantProvider : ITenantProvider
     public void SetTenantId(Guid tenantId)
     {
         _tenantId.Value = tenantId;
+        TenantContext.SetTenantId(tenantId);
     }
 }

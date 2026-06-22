@@ -1,4 +1,5 @@
 using BusinessOS.Domain.Entities;
+using BusinessOS.Infrastructure.Data.Configurations;
 using BusinessOS.Infrastructure.Identity;
 using BusinessOS.Infrastructure.MultiTenancy;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -13,7 +14,6 @@ public class BusinessOSDbContext : IdentityDbContext<ApplicationUser>
     {
     }
 
-    // DbSets
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Product> Products => Set<Product>();
@@ -34,10 +34,13 @@ public class BusinessOSDbContext : IdentityDbContext<ApplicationUser>
     {
         base.OnModelCreating(builder);
 
-        // =========================
-        // MULTI-TENANT GLOBAL FILTER
-        // =========================
+        builder.ApplyConfigurationsFromAssembly(typeof(CustomerConfiguration).Assembly);
 
+        ConfigureGlobalQueryFilters(builder);
+    }
+
+    private static void ConfigureGlobalQueryFilters(ModelBuilder builder)
+    {
         builder.Entity<Product>()
             .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId && !x.IsDeleted);
 
@@ -53,6 +56,9 @@ public class BusinessOSDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<Order>()
             .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
 
+        builder.Entity<OrderItem>()
+            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
+
         builder.Entity<Expense>()
             .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
 
@@ -63,6 +69,9 @@ public class BusinessOSDbContext : IdentityDbContext<ApplicationUser>
             .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
 
         builder.Entity<Purchase>()
+            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
+
+        builder.Entity<PurchaseItem>()
             .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
 
         builder.Entity<Payment>()

@@ -16,5 +16,5 @@ public class InventoryTransaction : AuditableEntity
 
     public DateTime TransactionDate { get; set; } = DateTime.UtcNow;
 
-    public Product Product { get; set; } = default!;
+    public Product? Product { get; set; }
 }
