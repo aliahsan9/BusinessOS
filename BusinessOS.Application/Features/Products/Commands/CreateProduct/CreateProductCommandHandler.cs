@@ -1,48 +1,43 @@
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Domain.Entities;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace BusinessOS.Application.Features.Products.Commands.CreateProduct;
 
-public class CreateProductCommandHandler
-    : IRequestHandler<CreateProductCommand, Guid>
+public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand, Guid>
 {
-    private readonly IApplicationDbContext _db;
-    private readonly ITenantProvider _tenantProvider;
+    private readonly IApplicationDbContext _context;
 
-    public CreateProductCommandHandler(
-        IApplicationDbContext db,
-        ITenantProvider tenantProvider)
+    public CreateProductCommandHandler(IApplicationDbContext context)
     {
-        _db = db;
-        _tenantProvider = tenantProvider;
+        _context = context;
     }
 
-    public async Task<Guid> Handle(
-    CreateProductCommand request,
-    CancellationToken cancellationToken)
+    public async Task<Guid> Handle(CreateProductCommand request, CancellationToken cancellationToken)
     {
+        // ✅ STEP 1: Validate Category exists
+        var categoryExists = await _context.Categories
+            .AnyAsync(x => x.Id == request.CategoryId, cancellationToken);
+
+        if (!categoryExists)
+            throw new Exception("Invalid CategoryId. Category does not exist.");
+
+        // ✅ STEP 2: Create Product
         var product = new Product
         {
-            TenantId = _tenantProvider.GetTenantId(),
+            Id = Guid.NewGuid(),
             CategoryId = request.CategoryId,
-
             Name = request.Name,
             SKU = request.SKU,
             Description = request.Description,
-
             CostPrice = request.CostPrice,
             SalePrice = request.SalePrice,
-
-            CurrentStock = 0,
-            ReorderLevel = request.ReorderLevel,
-
-            IsActive = true
+            ReorderLevel = request.ReorderLevel
         };
 
-        _db.Products.Add(product);
-
-        await _db.SaveChangesAsync(cancellationToken);
+        _context.Products.Add(product);
+        await _context.SaveChangesAsync(cancellationToken);
 
         return product.Id;
     }

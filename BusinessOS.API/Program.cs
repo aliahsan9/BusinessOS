@@ -1,8 +1,10 @@
 using System.Text;
 using BusinessOS.API.Endpoints;
 using BusinessOS.API.Middlewares;
-using BusinessOS.Infrastructure;
 using BusinessOS.Application;
+using BusinessOS.Application.Features.Products.Commands.CreateProduct;
+using BusinessOS.Infrastructure;
+using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
@@ -14,6 +16,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddValidatorsFromAssemblyContaining<CreateProductCommandValidator>();
 
 builder.Services.AddHttpContextAccessor(); 
 

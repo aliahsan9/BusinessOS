@@ -2,23 +2,28 @@ using FluentValidation;
 
 namespace BusinessOS.Application.Features.Products.Commands.CreateProduct;
 
-public class CreateProductCommandValidator
-    : AbstractValidator<CreateProductCommand>
+public class CreateProductCommandValidator : AbstractValidator<CreateProductCommand>
 {
     public CreateProductCommandValidator()
     {
+        RuleFor(x => x.CategoryId)
+            .NotEmpty().WithMessage("CategoryId is required");
+
         RuleFor(x => x.Name)
-            .NotEmpty()
+            .NotEmpty().WithMessage("Product name is required")
             .MaximumLength(200);
 
         RuleFor(x => x.SKU)
-            .NotEmpty()
-            .MaximumLength(100);
+            .NotEmpty().WithMessage("SKU is required")
+            .MaximumLength(50);
 
         RuleFor(x => x.CostPrice)
-            .GreaterThanOrEqualTo(0);
+            .GreaterThan(0);
 
         RuleFor(x => x.SalePrice)
             .GreaterThan(0);
+
+        RuleFor(x => x.ReorderLevel)
+            .GreaterThanOrEqualTo(0);
     }
 }
