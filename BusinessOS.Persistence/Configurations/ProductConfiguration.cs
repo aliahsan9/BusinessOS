@@ -2,7 +2,7 @@ using BusinessOS.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace BusinessOS.Infrastructure.Persistence.Configurations;
+namespace BusinessOS.Persistence.Configurations;
 
 public class ProductConfiguration : IEntityTypeConfiguration<Product>
 {
