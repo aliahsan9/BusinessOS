@@ -1,7 +1,8 @@
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Infrastructure.MultiTenancy;
+using System.Text.Json;
 
-namespace BusinessOS.API.Middlewares;
+namespace BusinessOS.API.Middleware;
 
 public class TenantMiddleware
 {
@@ -14,15 +15,42 @@ public class TenantMiddleware
 
     public async Task InvokeAsync(HttpContext context, ITenantProvider tenantProvider)
     {
-        // OPTION 1: From Header (simple for MVP)
-        if (context.Request.Headers.TryGetValue("X-Tenant-ID", out var tenantId)
-            && Guid.TryParse(tenantId, out var parsedTenantId))
+        // Allow swagger/scalar endpoints without tenant (optional safety)
+        var path = context.Request.Path.Value?.ToLower();
+
+        if (path != null &&
+            (path.Contains("swagger") || path.Contains("scalar")))
         {
-            tenantProvider.SetTenantId(parsedTenantId);
+            await _next(context);
+            return;
         }
 
-        // OPTION 2: Later from JWT claim (recommended for production)
+        // Validate header
+        if (!context.Request.Headers.TryGetValue("X-Tenant-ID", out var tenantId) ||
+            !Guid.TryParse(tenantId, out var parsedTenantId))
+        {
+            await WriteJsonResponse(context, StatusCodes.Status400BadRequest, new
+            {
+                error = "Missing or invalid X-Tenant-ID header",
+                code = "TENANT_HEADER_REQUIRED"
+            });
+
+            return;
+        }
+
+        // Set tenant
+        tenantProvider.SetTenantId(parsedTenantId);
 
         await _next(context);
+    }
+
+    private static async Task WriteJsonResponse(HttpContext context, int statusCode, object response)
+    {
+        context.Response.StatusCode = statusCode;
+        context.Response.ContentType = "application/json";
+
+        var json = JsonSerializer.Serialize(response);
+
+        await context.Response.WriteAsync(json);
     }
 }

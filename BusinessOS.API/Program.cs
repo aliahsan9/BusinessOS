@@ -1,6 +1,6 @@
 using System.Text;
 using BusinessOS.API.Endpoints;
-using BusinessOS.API.Middlewares;
+using BusinessOS.API.Middleware;
 using BusinessOS.Application;
 using BusinessOS.Application.Features.Products.Commands.CreateProduct;
 using BusinessOS.Infrastructure;
@@ -11,18 +11,22 @@ using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-#region Services
+#region SERVICES
 
 builder.Services.AddControllers();
+
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+
 builder.Services.AddValidatorsFromAssemblyContaining<CreateProductCommandValidator>();
 
-builder.Services.AddHttpContextAccessor(); 
+builder.Services.AddHttpContextAccessor();
 
+// OpenAPI + Scalar
 builder.Services.AddOpenApi();
 
-// JWT Authentication
+#region JWT AUTH
+
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -45,9 +49,11 @@ builder.Services.AddAuthorization();
 
 #endregion
 
+#endregion
+
 var app = builder.Build();
 
-#region OpenAPI & Scalar
+#region OPENAPI + SCALAR (MUST BE FIRST)
 
 if (app.Environment.IsDevelopment())
 {
@@ -58,30 +64,35 @@ if (app.Environment.IsDevelopment())
         options.Title = "BusinessOS API";
         options.Theme = ScalarTheme.BluePlanet;
 
-        // Shows auth button in Scalar
-        options.DefaultHttpClient = new(ScalarTarget.CSharp, ScalarClient.HttpClient);
+        options.DefaultHttpClient =
+            new(ScalarTarget.CSharp, ScalarClient.HttpClient);
     });
 }
 
 #endregion
 
-#region Middleware
+#region CORE MIDDLEWARE PIPELINE
 
 app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.UseMiddleware<TenantMiddleware>();
-
 #endregion
 
-#region Endpoints
+#region ENDPOINTS
 
 app.MapControllers();
 
+// Minimal API endpoints
 app.MapCategoryEndpoints();
 app.MapProductEndpoints();
+
+#endregion
+
+#region TENANT MIDDLEWARE (IMPORTANT: AFTER OPENAPI + ENDPOINTS)
+
+app.UseMiddleware<TenantMiddleware>();
 
 #endregion
 
