@@ -36,7 +36,7 @@ public static class DependencyInjection
 
             options.UseSqlServer(connectionString);
         });
-
+         
         services.AddScoped<IApplicationDbContext, BusinessOSDbContext>();
 
         services.AddScoped<ICurrentUserService, CurrentUserService>();
