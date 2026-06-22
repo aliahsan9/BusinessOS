@@ -2,6 +2,7 @@ using System.Text;
 using BusinessOS.API.Endpoints;
 using BusinessOS.API.Middlewares;
 using BusinessOS.Infrastructure;
+using BusinessOS.Application;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
@@ -11,7 +12,7 @@ var builder = WebApplication.CreateBuilder(args);
 #region Services
 
 builder.Services.AddControllers();
-
+builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
 builder.Services.AddHttpContextAccessor();

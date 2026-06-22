@@ -18,7 +18,7 @@ public static class DependencyInjection
         services.AddDbContext<BusinessOSDbContext>(options =>
             options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
         services.AddScoped<ICurrentUserService, CurrentUserService>();
-
+  
         return services;
     }
 }

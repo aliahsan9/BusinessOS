@@ -1,6 +1,6 @@
 using FluentValidation;
 
-namespace BusinessOS.Application.Products.Commands.CreateProduct;
+namespace BusinessOS.Application.Features.Products.Commands.CreateProduct;
 
 public class CreateProductCommandValidator
     : AbstractValidator<CreateProductCommand>

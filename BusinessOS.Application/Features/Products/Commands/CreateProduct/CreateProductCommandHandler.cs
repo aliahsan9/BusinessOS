@@ -2,7 +2,7 @@ using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Domain.Entities;
 using MediatR;
 
-namespace BusinessOS.Application.Products.Commands.CreateProduct;
+namespace BusinessOS.Application.Features.Products.Commands.CreateProduct;
 
 public class CreateProductCommandHandler
     : IRequestHandler<CreateProductCommand, Guid>

@@ -1,6 +1,6 @@
 using MediatR;
 
-namespace BusinessOS.Application.Products.Commands.CreateProduct;
+namespace BusinessOS.Application.Features.Products.Commands.CreateProduct;
 
 public record CreateProductCommand(
     Guid CategoryId,

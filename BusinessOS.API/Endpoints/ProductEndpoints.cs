@@ -1,4 +1,4 @@
-using BusinessOS.Application.Products.Commands.CreateProduct;
+using BusinessOS.Application.Features.Products.Commands.CreateProduct;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 

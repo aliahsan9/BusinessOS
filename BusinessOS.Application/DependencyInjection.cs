@@ -1,5 +1,6 @@
 using System.Reflection;
 using BusinessOS.Application.Behaviors;
+using BusinessOS.Application.Features.Products.Commands.CreateProduct;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,7 +19,7 @@ public static class DependencyInjection
         });
 
         services.AddValidatorsFromAssembly(
-            Assembly.GetExecutingAssembly());
+            typeof(CreateProductCommand).Assembly);
         services.AddTransient(
     typeof(IPipelineBehavior<,>),
     typeof(ValidationBehavior<,>));
