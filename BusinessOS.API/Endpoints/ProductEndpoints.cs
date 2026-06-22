@@ -16,7 +16,7 @@ public static class ProductEndpoints
      {
          var id = await sender.Send(command);
          return Results.Ok(id);
-     })
-     .RequireAuthorization();
+     });
+     //.RequireAuthorization();
     }
 }
