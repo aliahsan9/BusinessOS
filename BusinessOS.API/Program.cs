@@ -1,19 +1,27 @@
 using System.Text;
 using BusinessOS.API.Endpoints;
 using BusinessOS.API.Middlewares;
-using Microsoft.IdentityModel.Tokens;
 using BusinessOS.Infrastructure;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+#region Services
 
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+
+builder.Services.AddInfrastructure();
+
+builder.Services.AddHttpContextAccessor();
+
 builder.Services.AddOpenApi();
 
-builder.Services.AddAuthentication("Bearer")
-    .AddJwtBearer("Bearer", options =>
+// JWT Authentication
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
     {
         options.TokenValidationParameters = new TokenValidationParameters
         {
@@ -22,28 +30,54 @@ builder.Services.AddAuthentication("Bearer")
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)
-            )
+                Encoding.UTF8.GetBytes(
+                    builder.Configuration["Jwt:Key"]
+                    ?? throw new InvalidOperationException("Jwt:Key is missing.")
+                ))
         };
     });
 
 builder.Services.AddAuthorization();
-builder.Services.AddHttpContextAccessor();
-builder.Services.AddInfrastructure();
+
+#endregion
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+#region OpenAPI & Scalar
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+
+    app.MapScalarApiReference(options =>
+    {
+        options.Title = "BusinessOS API";
+        options.Theme = ScalarTheme.BluePlanet;
+
+        // Shows auth button in Scalar
+        options.DefaultHttpClient = new(ScalarTarget.CSharp, ScalarClient.HttpClient);
+    });
 }
-app.MapProductEndpoints();
-app.UseMiddleware<TenantMiddleware>();
+
+#endregion
+
+#region Middleware
+
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
+app.UseMiddleware<TenantMiddleware>();
+
+#endregion
+
+#region Endpoints
+
 app.MapControllers();
+
+app.MapProductEndpoints();
+
+#endregion
 
 app.Run();
