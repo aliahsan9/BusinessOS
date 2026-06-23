@@ -2,8 +2,11 @@ using System.Text;
 using BusinessOS.API.Endpoints;
 using BusinessOS.API.Middleware;
 using BusinessOS.Application;
+using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Auth.Services;
 using BusinessOS.Application.Features.Products.Commands.CreateProduct;
 using BusinessOS.Infrastructure;
+using BusinessOS.Infrastructure.Services;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -23,6 +26,12 @@ builder.Services.AddValidatorsFromAssemblyContaining<CreateProductCommandValidat
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddOpenApi();
+builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+builder.Services.AddScoped< 
+    ICurrentUserService,
+    CurrentUserService>();
+
+builder.Services.AddHttpContextAccessor();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -80,7 +89,7 @@ app.UseMiddleware<TenantMiddleware>();
 #region ENDPOINTS
 
 app.MapControllers();
-
+app.MapAuthEndpoints();
 app.MapCategoryEndpoints();
 app.MapProductEndpoints();
 
