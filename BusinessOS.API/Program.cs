@@ -22,10 +22,7 @@ builder.Services.AddValidatorsFromAssemblyContaining<CreateProductCommandValidat
 
 builder.Services.AddHttpContextAccessor();
 
-// OpenAPI + Scalar
 builder.Services.AddOpenApi();
-
-#region JWT AUTH
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -49,11 +46,9 @@ builder.Services.AddAuthorization();
 
 #endregion
 
-#endregion
-
 var app = builder.Build();
 
-#region OPENAPI + SCALAR (MUST BE FIRST)
+#region OPENAPI + SCALAR
 
 if (app.Environment.IsDevelopment())
 {
@@ -63,7 +58,6 @@ if (app.Environment.IsDevelopment())
     {
         options.Title = "BusinessOS API";
         options.Theme = ScalarTheme.BluePlanet;
-
         options.DefaultHttpClient =
             new(ScalarTarget.CSharp, ScalarClient.HttpClient);
     });
@@ -71,12 +65,15 @@ if (app.Environment.IsDevelopment())
 
 #endregion
 
-#region CORE MIDDLEWARE PIPELINE
+#region MIDDLEWARE PIPELINE
 
 app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// MUST RUN BEFORE ENDPOINTS
+app.UseMiddleware<TenantMiddleware>();
 
 #endregion
 
@@ -84,15 +81,8 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// Minimal API endpoints
 app.MapCategoryEndpoints();
 app.MapProductEndpoints();
-
-#endregion
-
-#region TENANT MIDDLEWARE (IMPORTANT: AFTER OPENAPI + ENDPOINTS)
-
-app.UseMiddleware<TenantMiddleware>();
 
 #endregion
 

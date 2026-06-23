@@ -1,7 +1,10 @@
+using System;
+
 namespace BusinessOS.Application.Common.Interfaces;
 
 public interface ITenantProvider
 {
-    Guid GetTenantId();
+    Guid TenantId { get; }
     void SetTenantId(Guid tenantId);
+    bool HasTenant();
 }

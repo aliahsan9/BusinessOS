@@ -2,7 +2,6 @@ using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Infrastructure.Data.Configurations;
 using BusinessOS.Infrastructure.Identity;
-using BusinessOS.Infrastructure.MultiTenancy;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,18 +10,20 @@ namespace BusinessOS.Infrastructure.Data;
 public class BusinessOSDbContext
     : IdentityDbContext<ApplicationUser>, IApplicationDbContext
 {
+    private readonly Guid _tenantId;
+
     public BusinessOSDbContext(
-        DbContextOptions<BusinessOSDbContext> options)
+        DbContextOptions<BusinessOSDbContext> options,
+        ITenantProvider tenantProvider)
         : base(options)
     {
+        _tenantId = tenantProvider.TenantId;
     }
 
+    // DbSets
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Category> Categories => Set<Category>();
-
-    // Required by IApplicationDbContext
     public DbSet<Product> Products => Set<Product>();
-
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Supplier> Suppliers => Set<Supplier>();
     public DbSet<Order> Orders => Set<Order>();
@@ -36,10 +37,38 @@ public class BusinessOSDbContext
     public DbSet<AIConversation> AIConversations => Set<AIConversation>();
     public DbSet<Notification> Notifications => Set<Notification>();
 
-    public new Task<int> SaveChangesAsync(
+    public override Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default)
     {
+        ApplyTenantAndAuditRules();
         return base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void ApplyTenantAndAuditRules()
+    {
+        foreach (var entry in ChangeTracker.Entries())
+        {
+            // Assign TenantId automatically
+            if (entry.State == EntityState.Added)
+            {
+                if (entry.Properties.Any(p => p.Metadata.Name == "TenantId"))
+                {
+                    entry.Property("TenantId").CurrentValue = _tenantId;
+                }
+            }
+
+            // Soft delete handling (if entity has IsDeleted)
+            if (entry.State == EntityState.Deleted)
+            {
+                var isDeletedProp = entry.Properties.FirstOrDefault(p => p.Metadata.Name == "IsDeleted");
+
+                if (isDeletedProp != null)
+                {
+                    entry.State = EntityState.Modified;
+                    isDeletedProp.CurrentValue = true;
+                }
+            }
+        }
     }
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -52,42 +81,47 @@ public class BusinessOSDbContext
         ConfigureGlobalQueryFilters(builder);
     }
 
-    private static void ConfigureGlobalQueryFilters(ModelBuilder builder)
+    private void ConfigureGlobalQueryFilters(ModelBuilder builder)
     {
+        // Tenant + Soft Delete safe filter pattern
+
         builder.Entity<Product>()
-            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId && !x.IsDeleted);
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<Category>()
-            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId && !x.IsDeleted);
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<Customer>()
-            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<Supplier>()
-            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<Order>()
-            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<OrderItem>()
-            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<Expense>()
-            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<Employee>()
-            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<InventoryTransaction>()
-            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<Purchase>()
-            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<PurchaseItem>()
-            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<Payment>()
-            .HasQueryFilter(x => x.TenantId == TenantContext.CurrentTenantId);
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<Tenant>()
+            .HasQueryFilter(x => x.Id == _tenantId && !x.IsDeleted);
     }
 }

@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace BusinessOS.API.Middleware;
 
-public class TenantMiddleware
+public sealed class TenantMiddleware
 {
     private readonly RequestDelegate _next;
 
@@ -13,11 +13,13 @@ public class TenantMiddleware
         _next = next;
     }
 
-    public async Task InvokeAsync(HttpContext context, ITenantProvider tenantProvider)
+    public async Task InvokeAsync(
+        HttpContext context,
+        ITenantProvider tenantProvider)
     {
-        var path = context.Request.Path.Value?.ToLower() ?? "";
+        var path = context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
 
-        // ✅ ALWAYS allow API documentation tools
+        // Allow Swagger / OpenAPI endpoints
         if (path.StartsWith("/swagger") ||
             path.StartsWith("/scalar") ||
             path.StartsWith("/openapi"))
@@ -26,26 +28,31 @@ public class TenantMiddleware
             return;
         }
 
-        // ✅ Validate tenant header ONLY for API calls
-        if (!context.Request.Headers.TryGetValue("X-Tenant-ID", out var tenantId) ||
-            !Guid.TryParse(tenantId, out var parsedTenantId))
+        if (!context.Request.Headers.TryGetValue("X-Tenant-ID", out var tenantHeader) ||
+            !Guid.TryParse(tenantHeader, out var tenantId))
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             context.Response.ContentType = "application/json";
 
-            var error = JsonSerializer.Serialize(new
-            {
-                error = "Missing or invalid X-Tenant-ID header",
-                code = "TENANT_HEADER_REQUIRED"
-            });
+            await context.Response.WriteAsync(
+                JsonSerializer.Serialize(new
+                {
+                    error = "Missing or invalid X-Tenant-ID header",
+                    code = "TENANT_HEADER_REQUIRED"
+                }));
 
-            await context.Response.WriteAsync(error);
             return;
         }
 
-        // ✅ Set tenant
-        tenantProvider.SetTenantId(parsedTenantId);
+        try
+        {
+            tenantProvider.SetTenantId(tenantId);
 
-        await _next(context);
+            await _next(context);
+        }
+        finally
+        {
+            TenantContext.Clear();
+        }
     }
 }

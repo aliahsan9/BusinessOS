@@ -11,7 +11,7 @@ public class PurchaseItem : BaseEntity
     public decimal Quantity { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal Total { get; set; }
-
+    public bool IsDeleted { get; set; } = false;
     public Purchase Purchase { get; set; } = default!;
     public Product? Product { get; set; }
 }

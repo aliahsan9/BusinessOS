@@ -5,21 +5,24 @@ namespace BusinessOS.Infrastructure.MultiTenancy;
 
 public class TenantProvider : ITenantProvider
 {
-    private static readonly AsyncLocal<Guid> _tenantId = new();
+    private static readonly AsyncLocal<Guid?> _tenantId = new();
 
-    public Guid GetTenantId()
+    public Guid TenantId
     {
-        var id = _tenantId.Value;
-
-        if (id == Guid.Empty)
-            throw new Exception("Tenant not resolved for this request");
-
-        return id;
+        get
+        {
+            return _tenantId.Value
+                ?? throw new InvalidOperationException("TenantId has not been set.");
+        }
     }
 
     public void SetTenantId(Guid tenantId)
     {
         _tenantId.Value = tenantId;
-        TenantContext.SetTenantId(tenantId);
+    }
+
+    public bool HasTenant()
+    {
+        return _tenantId.Value.HasValue;
     }
 }
