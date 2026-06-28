@@ -5,10 +5,16 @@ import { provideAnimations } from '@angular/platform-browser/animations';
 import { routes } from './app.routes';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { errorInterceptor, loadingInterceptor } from './core/interceptors/error.interceptor';
-import { ThemeService } from './core/services/theme.service';
+import { ThemeService } from './core/theme/theme.service';
+import { TokenService } from './core/services/token.service';
 
-function initializeTheme(themeService: ThemeService): () => void {
-  return () => themeService.initialize();
+function initializeTheme(themeService: ThemeService, tokenService: TokenService): () => void {
+  return () => {
+    themeService.initialize();
+    if (tokenService.isAuthenticated()) {
+      themeService.syncFromBackend();
+    }
+  };
 }
 
 export const appConfig: ApplicationConfig = {
@@ -20,7 +26,7 @@ export const appConfig: ApplicationConfig = {
     {
       provide: APP_INITIALIZER,
       useFactory: initializeTheme,
-      deps: [ThemeService],
+      deps: [ThemeService, TokenService],
       multi: true,
     },
   ],

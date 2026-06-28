@@ -1,12 +1,12 @@
 <aside
   class="app-sidebar"
-  [class.app-sidebar--collapsed]="collapsed()"
+  [class.app-sidebar--collapsed]="isCollapsedView()"
   [class.app-sidebar--mobile-open]="mobileOpen()"
   aria-label="Main navigation"
 >
   <div class="app-sidebar__brand">
     <span class="app-sidebar__logo" aria-hidden="true">B</span>
-    @if (!collapsed()) {
+    @if (!hideLabels()) {
       <span class="app-sidebar__name">BusinessOS</span>
     }
   </div>
@@ -21,15 +21,15 @@
         (click)="onNavClick()"
       >
         <span class="app-sidebar__icon" aria-hidden="true">{{ item.icon }}</span>
-        @if (!collapsed()) {
+        @if (!hideLabels()) {
           <span class="app-sidebar__label">{{ item.label }}</span>
         }
       </a>
     }
   </nav>
 
-  <button type="button" class="app-sidebar__toggle" (click)="toggleCollapse()" [attr.aria-label]="collapsed() ? 'Expand sidebar' : 'Collapse sidebar'">
-    {{ collapsed() ? '›' : '‹' }}
+  <button type="button" class="app-sidebar__toggle" (click)="toggleCollapse()" [attr.aria-label]="isCollapsedView() ? 'Expand sidebar' : 'Collapse sidebar'">
+    {{ isCollapsedView() ? '›' : '‹' }}
   </button>
 </aside>
 

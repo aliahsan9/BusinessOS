@@ -81,9 +81,37 @@
   color: var(--color-text-muted);
 }
 
+.appearance-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.625rem 1.25rem;
+  background: var(--color-primary);
+  color: #fff;
+  border-radius: var(--radius-md);
+  font-weight: var(--font-weight-medium);
+  text-decoration: none;
+
+  &:hover {
+    background: var(--color-primary-hover);
+    color: #fff;
+  }
+}
+
 .logo-preview {
   max-width: 160px;
   max-height: 80px;
   margin-top: var(--space-3);
   object-fit: contain;
+}
+
+.settings-hub__appearance-link {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.875rem;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary);
+
+  &:hover {
+    color: var(--color-primary-hover);
+  }
 }

@@ -1,0 +1,139 @@
+<section class="theme-selector" aria-label="Theme selection">
+  <div class="theme-selector__toolbar">
+    <label class="theme-selector__search-label" for="theme-search">Search themes</label>
+    <input
+      id="theme-search"
+      type="search"
+      class="theme-selector__search form-control"
+      placeholder="Search by name or description…"
+      [ngModel]="searchQuery()"
+      (ngModelChange)="onSearchChange($event)"
+      aria-describedby="theme-search-hint"
+    />
+    <span id="theme-search-hint" class="theme-selector__hint">Instant preview on hover; click to apply.</span>
+  </div>
+
+  @if (previewThemeId()) {
+    <div class="theme-selector__preview-banner" role="status">
+      <span>Previewing: <strong>{{ previewThemeDefinition()?.name }}</strong></span>
+      <button type="button" class="theme-selector__preview-btn" (click)="cancelPreview()">Cancel preview</button>
+      <button
+        type="button"
+        class="theme-selector__preview-btn theme-selector__preview-btn--apply"
+        (click)="selectTheme(previewThemeId()!)"
+      >
+        Apply theme
+      </button>
+    </div>
+  }
+
+  @if (favoriteThemes().length) {
+    <div class="theme-selector__section">
+      <h3 class="theme-selector__section-title">Favorites</h3>
+      <div class="theme-selector__grid">
+        @for (theme of favoriteThemes(); track theme.id) {
+          <button
+            type="button"
+            class="theme-card"
+            [class.theme-card--active]="isActive(theme.id)"
+            [class.theme-card--preview]="previewThemeId() === theme.id"
+            role="option"
+            [attr.aria-selected]="isActive(theme.id)"
+            (click)="selectTheme(theme.id)"
+            (mouseenter)="onPreviewTheme(theme.id)"
+            (focus)="onPreviewTheme(theme.id)"
+          >
+            <div class="theme-card__swatches" aria-hidden="true">
+              <span class="theme-card__swatch" [style.background]="theme.preview.primary"></span>
+              <span class="theme-card__swatch" [style.background]="theme.preview.secondary"></span>
+              <span class="theme-card__swatch" [style.background]="theme.preview.background"></span>
+              <span class="theme-card__swatch" [style.background]="theme.preview.surface"></span>
+            </div>
+            <div class="theme-card__body">
+              <div class="theme-card__header">
+                <span class="theme-card__name">{{ theme.name }}</span>
+                <button
+                  type="button"
+                  class="theme-card__favorite"
+                  [class.theme-card__favorite--active]="isFavorite(theme.id)"
+                  [attr.aria-label]="isFavorite(theme.id) ? 'Remove from favorites' : 'Add to favorites'"
+                  (click)="toggleFavorite($event, theme.id)"
+                >
+                  ★
+                </button>
+              </div>
+              <p class="theme-card__description">{{ theme.description }}</p>
+              @if (isActive(theme.id)) {
+                <span class="theme-card__badge">Active</span>
+              }
+            </div>
+          </button>
+        }
+      </div>
+    </div>
+  }
+
+  @if (recentThemes().length) {
+    <div class="theme-selector__section">
+      <h3 class="theme-selector__section-title">Recently used</h3>
+      <div class="theme-selector__grid theme-selector__grid--compact">
+        @for (theme of recentThemes(); track theme.id) {
+          <button
+            type="button"
+            class="theme-selector__recent-chip"
+            [class.theme-selector__recent-chip--active]="isActive(theme.id)"
+            (click)="selectTheme(theme.id)"
+          >
+            {{ theme.name }}
+          </button>
+        }
+      </div>
+    </div>
+  }
+
+  <div class="theme-selector__section">
+    <h3 class="theme-selector__section-title">All themes</h3>
+    <div class="theme-selector__grid" role="listbox" aria-label="Available themes">
+      @for (theme of filteredThemes(); track theme.id) {
+        <button
+          type="button"
+          class="theme-card"
+          [class.theme-card--active]="isActive(theme.id)"
+          [class.theme-card--preview]="previewThemeId() === theme.id"
+          role="option"
+          [attr.aria-selected]="isActive(theme.id)"
+          (click)="selectTheme(theme.id)"
+          (mouseenter)="onPreviewTheme(theme.id)"
+          (focus)="onPreviewTheme(theme.id)"
+        >
+          <div class="theme-card__swatches" aria-hidden="true">
+            <span class="theme-card__swatch" [style.background]="theme.preview.primary"></span>
+            <span class="theme-card__swatch" [style.background]="theme.preview.secondary"></span>
+            <span class="theme-card__swatch" [style.background]="theme.preview.background"></span>
+            <span class="theme-card__swatch" [style.background]="theme.preview.surface"></span>
+          </div>
+          <div class="theme-card__body">
+            <div class="theme-card__header">
+              <span class="theme-card__name">{{ theme.name }}</span>
+              <button
+                type="button"
+                class="theme-card__favorite"
+                [class.theme-card__favorite--active]="isFavorite(theme.id)"
+                [attr.aria-label]="isFavorite(theme.id) ? 'Remove from favorites' : 'Add to favorites'"
+                (click)="toggleFavorite($event, theme.id)"
+              >
+                ★
+              </button>
+            </div>
+            <p class="theme-card__description">{{ theme.description }}</p>
+            @if (isActive(theme.id)) {
+              <span class="theme-card__badge">Active</span>
+            }
+          </div>
+        </button>
+      } @empty {
+        <p class="theme-selector__empty">No themes match your search.</p>
+      }
+    </div>
+  </div>
+</section>

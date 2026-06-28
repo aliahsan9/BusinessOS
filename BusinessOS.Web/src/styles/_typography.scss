@@ -1,9 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
 body {
   font-family: var(--font-family);
   font-weight: var(--font-weight-normal);
-  font-size: 0.9375rem;
+  font-size: var(--font-size-base);
   line-height: 1.6;
   color: var(--color-text);
   background-color: var(--color-bg);

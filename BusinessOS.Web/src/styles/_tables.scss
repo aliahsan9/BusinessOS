@@ -67,7 +67,7 @@
   }
 
   thead th {
-    background: var(--color-gray-50);
+    background: var(--table-header-background, var(--color-gray-50));
   }
 }
 

@@ -12,6 +12,7 @@ export { TokenService } from './services/token.service';
 export { BaseApiService } from './services/base-api.service';
 export { LoadingService } from './services/loading.service';
 export { NotificationService } from './services/notification.service';
-export { ThemeService } from './services/theme.service';
+export { ThemeService } from './theme/theme.service';
+export * from './theme';
 
 export * from './enums';

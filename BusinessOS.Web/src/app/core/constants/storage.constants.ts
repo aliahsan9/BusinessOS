@@ -5,4 +5,5 @@ export const STORAGE_KEYS = {
   tenantId: 'businessos.auth.tenantId',
   sidebarCollapsed: 'businessos.ui.sidebarCollapsed',
   theme: 'businessos.ui.theme',
+  themePreferences: 'businessos.ui.themePreferences',
 } as const;

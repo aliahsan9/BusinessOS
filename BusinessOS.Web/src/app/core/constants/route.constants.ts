@@ -140,6 +140,7 @@ export const ROUTES = {
   settings: {
     base: '/settings',
     hub: '/settings',
+    appearance: '/settings/appearance',
   },
   admin: {
     base: '/admin',

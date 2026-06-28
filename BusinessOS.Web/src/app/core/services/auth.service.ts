@@ -17,12 +17,14 @@ import { API_ENDPOINTS } from '../constants/api.constants';
 import { STORAGE_KEYS } from '../constants/storage.constants';
 import { StorageHelper } from '../helpers/storage.helper';
 import { ApiError } from '../models/api-error.model';
+import { ThemeService } from '../theme/theme.service';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService extends BaseApiService {
   private readonly router = inject(Router);
   private readonly tokenService = inject(TokenService);
   private readonly notificationService = inject(NotificationService);
+  private readonly themeService = inject(ThemeService);
 
   private readonly loadingSignal = signal(false);
   readonly loading = this.loadingSignal.asReadonly();
@@ -120,5 +122,6 @@ export class AuthService extends BaseApiService {
 
     this.loadingSignal.set(false);
     this.notificationService.success('Welcome back!');
+    this.themeService.syncFromBackend();
   }
 }

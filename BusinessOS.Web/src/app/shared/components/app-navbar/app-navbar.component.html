@@ -30,6 +30,16 @@
   </nav>
 
   <div class="app-navbar__right">
+    <button
+      type="button"
+      class="app-navbar__icon-btn app-navbar__theme-btn"
+      [attr.aria-label]="isDarkMode() ? 'Switch to light mode' : 'Switch to dark mode'"
+      [attr.aria-pressed]="isDarkMode()"
+      (click)="toggleDarkMode()"
+    >
+      {{ isDarkMode() ? '☀️' : '🌙' }}
+    </button>
+
     <div class="app-navbar__dropdown">
       <button
         type="button"
@@ -71,7 +81,8 @@
         <div class="app-navbar__panel" role="menu">
           <div class="app-navbar__panel-header">{{ currentUser()?.email }}</div>
           <a class="app-navbar__menu-item" role="menuitem" [routerLink]="routes.profile" (click)="closeProfileMenu()">Profile</a>
-          <a class="app-navbar__menu-item" role="menuitem" [routerLink]="routes.settings" (click)="closeProfileMenu()">Settings</a>
+          <a class="app-navbar__menu-item" role="menuitem" [routerLink]="settingsRoutes.settings.appearance" (click)="closeProfileMenu()">Appearance</a>
+          <a class="app-navbar__menu-item" role="menuitem" [routerLink]="settingsRoutes.settings.hub" (click)="closeProfileMenu()">Settings</a>
           <button type="button" class="app-navbar__menu-item app-navbar__menu-item--danger" role="menuitem" (click)="logout()">Sign out</button>
         </div>
       }

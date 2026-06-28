@@ -106,23 +106,14 @@
             </form>
           </app-card>
         }
-        @case ('theme') {
-          <app-card title="Theme">
-            <form [formGroup]="settingsForm" (ngSubmit)="saveSettings()">
-              <div class="form-grid">
-                <div class="form-field">
-                  <label for="theme">Theme</label>
-                  <select id="theme" formControlName="theme" class="form-select">
-                    <option value="light">Light</option>
-                    <option value="dark">Dark</option>
-                    <option value="system">System</option>
-                  </select>
-                </div>
-              </div>
-              @if (canUpdate) {
-                <div class="form-actions"><app-button label="Save" type="submit" [loading]="saving()" /></div>
-              }
-            </form>
+        @case ('appearance') {
+          <app-card title="Appearance" subtitle="Themes, typography, layout, and accessibility.">
+            <app-theme-selector />
+            <div class="form-actions">
+              <a [routerLink]="routes.settings.appearance" class="settings-hub__appearance-link">
+                Open full appearance settings →
+              </a>
+            </div>
           </app-card>
         }
         @case ('security') {

@@ -1,0 +1,29 @@
+// Layout preference styles applied via data attributes on document root
+
+[data-footer-visibility='hidden'] .dashboard-layout__footer {
+  display: none;
+}
+
+[data-compact] .dashboard-layout__content {
+  padding: var(--content-padding-compact);
+}
+
+[data-sidebar-style='mini'] {
+  --sidebar-width: var(--sidebar-mini-width);
+}
+
+[data-sidebar-style='collapsed'] {
+  --sidebar-width: var(--sidebar-collapsed-width);
+}
+
+[data-navbar-style='compact'] {
+  --navbar-height: var(--navbar-compact-height);
+}
+
+[data-navbar-style='static'] .app-navbar {
+  position: relative;
+}
+
+:not([data-animations]) * {
+  transition: none !important;
+}

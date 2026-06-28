@@ -3,7 +3,9 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { TokenService } from '../../../core/services/token.service';
 import { NotificationCenterService } from '../../../core/services/notification-center.service';
+import { ThemeService } from '../../../core/theme/theme.service';
 import { APP_ROUTE_PATHS, NAV_ITEMS } from '../../constants/nav.constants';
+import { ROUTES } from '../../../core/constants/route.constants';
 
 @Component({
   selector: 'app-navbar',
@@ -17,9 +19,14 @@ export class AppNavbarComponent implements OnInit {
   private readonly authService = inject(AuthService);
   private readonly tokenService = inject(TokenService);
   private readonly notificationCenter = inject(NotificationCenterService);
+  private readonly themeService = inject(ThemeService);
 
   readonly menuToggle = output<void>();
   readonly routes = APP_ROUTE_PATHS;
+  readonly settingsRoutes = ROUTES;
+
+  readonly resolvedAppearance = this.themeService.resolvedAppearance;
+  readonly isDarkMode = computed(() => this.resolvedAppearance() === 'dark');
 
   readonly navItems = NAV_ITEMS.filter((item) => {
     if (!item.permissions?.length) {
@@ -67,6 +74,10 @@ export class AppNavbarComponent implements OnInit {
   toggleProfile(): void {
     this.showProfile.update((v) => !v);
     this.showNotifications.set(false);
+  }
+
+  toggleDarkMode(): void {
+    this.themeService.toggleDarkMode();
   }
 
   closeProfileMenu(): void {

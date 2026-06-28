@@ -5,4 +5,5 @@ export const environment = {
   tokenRefreshBufferMs: 60_000,
   defaultPageSize: 20,
   maxPageSize: 100,
+  devCredentials: undefined as { email: string; password: string } | undefined,
 };

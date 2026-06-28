@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { SettingsService } from '../../../core/services/settings.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { TokenService } from '../../../core/services/token.service';
@@ -14,6 +15,7 @@ import { AppInputComponent } from '../../../shared/components/app-input/app-inpu
 import { AppButtonComponent } from '../../../shared/components/app-button/app-button.component';
 import { AppSkeletonComponent } from '../../../shared/components/app-skeleton/app-skeleton.component';
 import { AppAlertComponent } from '../../../shared/components/app-alert/app-alert.component';
+import { ThemeSelectorComponent } from '../../../shared/components/theme-selector/theme-selector.component';
 import { getFieldError } from '../../../shared/validators/form.validators';
 
 type SettingsTab =
@@ -23,7 +25,7 @@ type SettingsTab =
   | 'invoice'
   | 'email'
   | 'notifications'
-  | 'theme'
+  | 'appearance'
   | 'security'
   | 'branding';
 
@@ -32,6 +34,7 @@ type SettingsTab =
   standalone: true,
   imports: [
     ReactiveFormsModule,
+    RouterLink,
     AppBreadcrumbComponent,
     AppPageHeaderComponent,
     AppCardComponent,
@@ -39,6 +42,7 @@ type SettingsTab =
     AppButtonComponent,
     AppSkeletonComponent,
     AppAlertComponent,
+    ThemeSelectorComponent,
   ],
   templateUrl: './settings-hub.component.html',
   styleUrl: './settings-hub.component.scss',
@@ -68,7 +72,7 @@ export class SettingsHubComponent implements OnInit {
     { id: 'invoice', label: 'Invoice' },
     { id: 'email', label: 'Email' },
     { id: 'notifications', label: 'Notifications' },
-    { id: 'theme', label: 'Theme' },
+    { id: 'appearance', label: 'Appearance' },
     { id: 'security', label: 'Security' },
     { id: 'branding', label: 'Branding' },
   ];

@@ -29,7 +29,7 @@
     height: 2rem;
     border-radius: var(--radius-md);
     background: var(--color-primary);
-    color: #fff;
+    color: var(--text-on-primary-color);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -99,7 +99,7 @@
   &__backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.4);
+    background: var(--overlay-backdrop-color);
     z-index: 1035;
 
     @media (min-width: 992px) {

@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
+import { themeGuard } from './core/theme/theme.guard';
 import { buildFeatureRoutes } from './app-feature.routes';
 import { ROUTES } from './core/constants/route.constants';
 
@@ -29,7 +30,7 @@ export const routes: Routes = [
     path: '',
     loadComponent: () =>
       import('./shared/layouts/dashboard-layout/dashboard-layout.component').then((m) => m.DashboardLayoutComponent),
-    canActivate: [authGuard],
+    canActivate: [authGuard, themeGuard],
     children: [
       {
         path: 'dashboard',

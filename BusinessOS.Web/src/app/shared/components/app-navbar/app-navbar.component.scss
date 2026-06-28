@@ -7,7 +7,7 @@
   justify-content: space-between;
   height: var(--navbar-height);
   padding: 0 1.5rem;
-  background: var(--color-surface);
+  background: var(--navbar-background, var(--color-surface));
   border-bottom: 1px solid var(--color-border);
   gap: 1rem;
 
@@ -124,7 +124,7 @@
     &:focus {
       outline: none;
       border-color: var(--color-primary);
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
     }
 
     @media (min-width: 1200px) {
@@ -176,7 +176,7 @@
     height: 2rem;
     border-radius: 50%;
     background: var(--color-primary);
-    color: #fff;
+    color: var(--text-on-primary-color);
     display: flex;
     align-items: center;
     justify-content: center;
