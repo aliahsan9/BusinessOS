@@ -1,16 +1,24 @@
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Infrastructure.MultiTenancy;
+using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 
 namespace BusinessOS.API.Middleware;
 
 public sealed class TenantMiddleware
 {
-    private readonly RequestDelegate _next;
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
 
-    public TenantMiddleware(RequestDelegate next)
+    private readonly RequestDelegate _next;
+    private readonly ILogger<TenantMiddleware> _logger;
+
+    public TenantMiddleware(RequestDelegate next, ILogger<TenantMiddleware> logger)
     {
         _next = next;
+        _logger = logger;
     }
 
     public async Task InvokeAsync(
@@ -51,17 +59,26 @@ public sealed class TenantMiddleware
             return;
         }
 
+        _logger.LogWarning(
+            "Authenticated request missing tenant context for {Path} (TraceId: {TraceId})",
+            context.Request.Path,
+            context.TraceIdentifier);
+
         context.Response.StatusCode = StatusCodes.Status400BadRequest;
         context.Response.ContentType = "application/problem+json";
 
-        await context.Response.WriteAsync(
-            JsonSerializer.Serialize(new
-            {
-                type = "https://tools.ietf.org/html/rfc9110#section-15.5.1",
-                title = "Missing or invalid X-Tenant-ID header",
-                status = 400,
-                code = "TENANT_HEADER_REQUIRED"
-            }));
+        var problem = new ProblemDetails
+        {
+            Type = "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+            Title = "Missing or invalid X-Tenant-ID header",
+            Status = StatusCodes.Status400BadRequest,
+            Instance = context.Request.Path
+        };
+
+        problem.Extensions["code"] = "TENANT_HEADER_REQUIRED";
+        problem.Extensions["traceId"] = context.TraceIdentifier;
+
+        await context.Response.WriteAsync(JsonSerializer.Serialize(problem, JsonOptions));
 
         TenantContext.Clear();
     }

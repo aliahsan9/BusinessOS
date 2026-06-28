@@ -25,5 +25,8 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(x => new { x.TenantId, x.SKU }).IsUnique();
+        builder.HasIndex(x => new { x.TenantId, x.CategoryId });
+        builder.HasIndex(x => new { x.TenantId, x.Name });
+        builder.HasIndex(x => new { x.TenantId, x.IsActive });
     }
 }

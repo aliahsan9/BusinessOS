@@ -1,8 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using BusinessOS.Application.Common.Models;
 using BusinessOS.Application.Features.Auth.DTOs;
 using BusinessOS.Application.Features.Categories.Queries;
+using BusinessOS.Application.Features.Products.Queries;
 using FluentAssertions;
 
 namespace BusinessOS.IntegrationTests;
@@ -29,6 +31,7 @@ public class AuthIntegrationTests : IntegrationTestBase
         });
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
+        response.Content.Headers.ContentType?.MediaType.Should().Contain("json");
 
         var auth = await response.Content.ReadFromJsonAsync<AuthResponse>();
         auth.Should().NotBeNull();
@@ -55,7 +58,7 @@ public class AuthIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Login_WithInvalidCredentials_ReturnsUnauthorized()
+    public async Task Login_WithInvalidCredentials_ReturnsUnauthorizedProblemDetails()
     {
         var response = await Client.PostAsJsonAsync("/api/auth/login", new
         {
@@ -64,6 +67,23 @@ public class AuthIntegrationTests : IntegrationTestBase
         });
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
+    }
+
+    [Fact]
+    public async Task Register_WithInvalidEmail_ReturnsValidationProblemDetails()
+    {
+        var response = await Client.PostAsJsonAsync("/api/auth/register", new
+        {
+            email = "not-an-email",
+            password = "Password1!",
+            firstName = "Test",
+            lastName = "User",
+            businessName = "Test Business"
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
     }
 
     [Fact]
@@ -128,6 +148,29 @@ public class CategoryIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task GetCategories_ReturnsPagedResult()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        await CreateCategoryAsync(auth, "Books");
+        await CreateCategoryAsync(auth, "Games");
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            "/api/categories?page=1&pageSize=1&sortBy=name",
+            auth);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var page = await response.Content.ReadFromJsonAsync<PagedResult<CategoryDto>>();
+        page.Should().NotBeNull();
+        page!.Items.Should().HaveCount(1);
+        page.TotalCount.Should().BeGreaterOrEqualTo(2);
+        page.Page.Should().Be(1);
+        page.PageSize.Should().Be(1);
+    }
+
+    [Fact]
     public async Task GetCategory_ReturnsCategory()
     {
         var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
@@ -152,6 +195,21 @@ public class CategoryIntegrationTests : IntegrationTestBase
 
         var category = await response.Content.ReadFromJsonAsync<CategoryDto>();
         category!.Name.Should().Be("Books");
+    }
+
+    [Fact]
+    public async Task GetCategory_WithUnknownId_ReturnsNotFoundProblemDetails()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            $"/api/categories/{Guid.NewGuid()}",
+            auth);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
     }
 
     [Fact]
@@ -198,6 +256,36 @@ public class CategoryIntegrationTests : IntegrationTestBase
             new { name = "", description = "Invalid" });
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task DeleteCategory_WithProducts_ReturnsConflict()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var categoryId = await CreateCategoryAsync(auth, "With Products");
+
+        await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/products",
+            auth,
+            new
+            {
+                categoryId,
+                name = "Item",
+                sku = "SKU-DEL",
+                costPrice = 1,
+                salePrice = 2,
+                reorderLevel = 1
+            });
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Delete,
+            $"/api/categories/{categoryId}",
+            auth);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
 
     private async Task<Guid> CreateCategoryAsync(AuthResponse auth, string name)
@@ -248,6 +336,27 @@ public class ProductIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task GetProducts_ReturnsPagedFilteredResults()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var categoryId = await CreateCategoryAsync(auth, "Paged Category");
+        await CreateProductAsync(auth, categoryId, "Alpha", "SKU-A");
+        await CreateProductAsync(auth, categoryId, "Beta", "SKU-B");
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            $"/api/products?categoryId={categoryId}&search=Alpha&page=1&pageSize=10&sortBy=name",
+            auth);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var page = await response.Content.ReadFromJsonAsync<PagedResult<ProductDto>>();
+        page!.Items.Should().ContainSingle(x => x.Name == "Alpha");
+        page.TotalCount.Should().Be(1);
+    }
+
+    [Fact]
     public async Task GetProduct_ReturnsProduct()
     {
         var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
@@ -261,6 +370,39 @@ public class ProductIntegrationTests : IntegrationTestBase
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task GetProduct_WithUnknownId_ReturnsNotFound()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            $"/api/products/{Guid.NewGuid()}",
+            auth);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task GetProductsByCategory_ReturnsPagedResult()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var categoryId = await CreateCategoryAsync(auth, "By Category");
+        await CreateProductAsync(auth, categoryId, "Item 1", "SKU-C1");
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            $"/api/products/by-category/{categoryId}?page=1&pageSize=10",
+            auth);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var page = await response.Content.ReadFromJsonAsync<PagedResult<ProductDto>>();
+        page!.Items.Should().NotBeEmpty();
     }
 
     [Fact]

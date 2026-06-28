@@ -22,5 +22,7 @@ public sealed class CategoryConfiguration : IEntityTypeConfiguration<Category>
         builder.HasIndex(x => new { x.TenantId, x.Name })
             .IsUnique()
             .HasFilter("[IsDeleted] = 0");
+
+        builder.HasIndex(x => new { x.TenantId, x.CreatedAt });
     }
 }

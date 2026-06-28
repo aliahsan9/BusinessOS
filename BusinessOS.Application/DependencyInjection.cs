@@ -20,9 +20,14 @@ public static class DependencyInjection
 
         services.AddValidatorsFromAssembly(
             typeof(CreateProductCommand).Assembly);
+
         services.AddTransient(
-    typeof(IPipelineBehavior<,>),
-    typeof(ValidationBehavior<,>));
+            typeof(IPipelineBehavior<,>),
+            typeof(LoggingBehavior<,>));
+
+        services.AddTransient(
+            typeof(IPipelineBehavior<,>),
+            typeof(ValidationBehavior<,>));
 
         return services;
     }

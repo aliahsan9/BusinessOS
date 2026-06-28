@@ -1,6 +1,9 @@
+using BusinessOS.Application.Common.Extensions;
+using BusinessOS.Application.Common.Models;
 using BusinessOS.Application.Features.Products.Commands.CreateProduct;
 using BusinessOS.Application.Features.Products.Commands.DeleteProduct;
 using BusinessOS.Application.Features.Products.Commands.UpdateProduct;
+using BusinessOS.Application.Features.Products.Queries;
 using BusinessOS.Application.Features.Products.Queries.GetAllProducts;
 using BusinessOS.Application.Features.Products.Queries.GetProductById;
 using BusinessOS.Application.Features.Products.Queries.GetProductsByCategory;
@@ -8,90 +11,158 @@ using MediatR;
 
 namespace BusinessOS.API.Endpoints;
 
+/// <summary>
+/// Product management endpoints.
+/// </summary>
 public static class ProductEndpoints
 {
+    /// <summary>
+    /// Maps product CRUD and list endpoints under <c>/api/products</c>.
+    /// </summary>
     public static void MapProductEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/products")
             .WithTags("Products")
             .RequireAuthorization();
 
-        group.MapPost("", async (CreateProductCommand command, ISender sender) =>
-            {
-                var id = await sender.Send(command);
-                return Results.Created($"/api/products/{id}", new { id });
-            })
+        group.MapPost("", CreateProduct)
+            .WithName("CreateProduct")
             .WithSummary("Create a product")
+            .WithDescription("Creates a new product in the specified category.")
             .Produces(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+
+        group.MapGet("", GetAllProducts)
+            .WithName("GetAllProducts")
+            .WithSummary("List products")
+            .WithDescription("Returns a paginated, searchable, and sortable list of products.")
+            .Produces<PagedResult<ProductDto>>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest);
 
-        group.MapGet("", async (
-                Guid? categoryId,
-                string? search,
-                int page,
-                int pageSize,
-                ISender sender) =>
-            {
-                var result = await sender.Send(new GetAllProductsQuery(
-                    categoryId,
-                    search,
-                    page == 0 ? 1 : page,
-                    pageSize == 0 ? 20 : pageSize));
-
-                return Results.Ok(result);
-            })
-            .WithSummary("Get products with optional filtering and pagination")
-            .Produces(StatusCodes.Status200OK);
-
-        group.MapGet("/{id:guid}", async (Guid id, ISender sender) =>
-            {
-                var result = await sender.Send(new GetProductByIdQuery(id));
-                return result is null
-                    ? Results.Problem(
-                        title: "Product not found",
-                        statusCode: StatusCodes.Status404NotFound)
-                    : Results.Ok(result);
-            })
+        group.MapGet("/{id:guid}", GetProductById)
+            .WithName("GetProductById")
             .WithSummary("Get product by id")
-            .Produces(StatusCodes.Status200OK)
+            .WithDescription("Returns a single product by its unique identifier.")
+            .Produces<ProductDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
-        group.MapGet("/by-category/{categoryId:guid}", async (Guid categoryId, ISender sender) =>
-            {
-                var result = await sender.Send(new GetProductsByCategoryQuery(categoryId));
-                return Results.Ok(result);
-            })
-            .WithSummary("Get products by category")
-            .Produces(StatusCodes.Status200OK);
+        group.MapGet("/by-category/{categoryId:guid}", GetProductsByCategory)
+            .WithName("GetProductsByCategory")
+            .WithSummary("List products by category")
+            .WithDescription("Returns a paginated list of products belonging to the specified category.")
+            .Produces<PagedResult<ProductDto>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound);
 
-        group.MapPut("/{id:guid}", async (Guid id, UpdateProductRequest request, ISender sender) =>
-            {
-                await sender.Send(new UpdateProductCommand(
-                    id,
-                    request.CategoryId,
-                    request.Name,
-                    request.SKU,
-                    request.Description,
-                    request.CostPrice,
-                    request.SalePrice,
-                    request.ReorderLevel,
-                    request.IsActive));
-
-                return Results.NoContent();
-            })
+        group.MapPut("/{id:guid}", UpdateProduct)
+            .WithName("UpdateProduct")
             .WithSummary("Update a product")
+            .WithDescription("Updates an existing product's details.")
             .Produces(StatusCodes.Status204NoContent)
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status400BadRequest);
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound);
 
-        group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
-            {
-                await sender.Send(new DeleteProductCommand(id));
-                return Results.NoContent();
-            })
+        group.MapDelete("/{id:guid}", DeleteProduct)
+            .WithName("DeleteProduct")
             .WithSummary("Delete a product")
+            .WithDescription("Soft-deletes a product.")
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound);
+    }
+
+    private static async Task<IResult> CreateProduct(
+        CreateProductCommand command,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var id = await sender.Send(command, cancellationToken);
+        return Results.Created($"/api/products/{id}", new { id });
+    }
+
+    private static async Task<IResult> GetAllProducts(
+        Guid? categoryId,
+        string? search,
+        int page,
+        int pageSize,
+        string? sortBy,
+        string? sortDirection,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new GetAllProductsQuery(
+                categoryId,
+                search,
+                page,
+                pageSize,
+                sortBy,
+                QueryableSortingExtensions.ParseSortDirection(sortDirection)),
+            cancellationToken);
+
+        return Results.Ok(result);
+    }
+
+    private static async Task<IResult> GetProductById(
+        Guid id,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(new GetProductByIdQuery(id), cancellationToken);
+        return Results.Ok(result);
+    }
+
+    private static async Task<IResult> GetProductsByCategory(
+        Guid categoryId,
+        string? search,
+        int page,
+        int pageSize,
+        string? sortBy,
+        string? sortDirection,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new GetProductsByCategoryQuery(
+                categoryId,
+                search,
+                page,
+                pageSize,
+                sortBy,
+                QueryableSortingExtensions.ParseSortDirection(sortDirection)),
+            cancellationToken);
+
+        return Results.Ok(result);
+    }
+
+    private static async Task<IResult> UpdateProduct(
+        Guid id,
+        UpdateProductRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        await sender.Send(
+            new UpdateProductCommand(
+                id,
+                request.CategoryId,
+                request.Name,
+                request.SKU,
+                request.Description,
+                request.CostPrice,
+                request.SalePrice,
+                request.ReorderLevel,
+                request.IsActive),
+            cancellationToken);
+
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> DeleteProduct(
+        Guid id,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        await sender.Send(new DeleteProductCommand(id), cancellationToken);
+        return Results.NoContent();
     }
 
     private sealed record UpdateProductRequest(
