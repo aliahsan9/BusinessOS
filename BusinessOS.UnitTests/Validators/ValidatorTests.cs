@@ -5,6 +5,7 @@ using BusinessOS.Application.Features.Customers.Queries.GetAllCustomers;
 using BusinessOS.Application.Features.Customers.Queries.GetCustomerById;
 using BusinessOS.Application.Features.Customers.Queries.GetCustomerAnalytics;
 using BusinessOS.Application.Features.Customers.Queries.GetCustomerOrders;
+using BusinessOS.Application.Features.Auth.Commands.Login;
 using BusinessOS.Application.Features.Auth.Commands.Register;
 using BusinessOS.Application.Features.Categories.Commands.CreateCategory;
 using BusinessOS.Application.Features.Categories.Commands.DeleteCategory;
