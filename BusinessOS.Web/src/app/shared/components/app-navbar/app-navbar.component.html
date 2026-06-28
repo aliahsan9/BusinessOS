@@ -56,8 +56,8 @@
       @if (showProfile()) {
         <div class="app-navbar__panel" role="menu">
           <div class="app-navbar__panel-header">{{ currentUser()?.email }}</div>
-          <button type="button" class="app-navbar__menu-item" role="menuitem">Profile</button>
-          <button type="button" class="app-navbar__menu-item" role="menuitem">Settings</button>
+          <a class="app-navbar__menu-item" role="menuitem" [routerLink]="routes.profile" (click)="closeProfileMenu()">Profile</a>
+          <a class="app-navbar__menu-item" role="menuitem" [routerLink]="routes.settings" (click)="closeProfileMenu()">Settings</a>
           <button type="button" class="app-navbar__menu-item app-navbar__menu-item--danger" role="menuitem" (click)="logout()">Sign out</button>
         </div>
       }
