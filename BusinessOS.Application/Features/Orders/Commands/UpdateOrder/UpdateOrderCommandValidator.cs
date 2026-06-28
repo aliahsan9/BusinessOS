@@ -1,4 +1,3 @@
-using BusinessOS.Application.Features.Orders.Commands.CreateOrder;
 using BusinessOS.Application.Features.Orders.Constants;
 using BusinessOS.Application.Features.Orders.Queries;
 using FluentValidation;
@@ -11,21 +10,6 @@ public sealed class UpdateOrderCommandValidator : AbstractValidator<UpdateOrderC
     {
         RuleFor(x => x.Id)
             .NotEmpty().WithMessage("Order id is required.");
-
-        RuleFor(x => x.CustomerName)
-            .NotEmpty().WithMessage("Customer name is required.")
-            .MaximumLength(200);
-
-        RuleFor(x => x.CustomerEmail)
-            .NotEmpty().WithMessage("Customer email is required.")
-            .EmailAddress().WithMessage("Customer email must be a valid email address.")
-            .MaximumLength(200);
-
-        RuleFor(x => x.CustomerPhone)
-            .MaximumLength(50);
-
-        RuleFor(x => x.CustomerAddress)
-            .MaximumLength(500);
 
         RuleFor(x => x.Discount)
             .GreaterThanOrEqualTo(0).WithMessage("Discount cannot be negative.");

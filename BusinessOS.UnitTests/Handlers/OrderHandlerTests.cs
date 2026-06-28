@@ -21,19 +21,32 @@ public class CreateOrderHandlerTests
     [Fact]
     public async Task Handle_WithInvalidProduct_ThrowsBadRequestException()
     {
-        var context = CreateContext(
-            customers: [],
-            products: [],
-            orders: []);
+        var customerId = Guid.NewGuid();
+        var customers = new List<Customer>
+        {
+            new()
+            {
+                Id = customerId,
+                FirstName = "Ali",
+                LastName = "Ahsan",
+                Email = "ali@test.com",
+                PhoneNumber = "123",
+                Address = "Address",
+                City = "Lahore",
+                Country = "Pakistan",
+                PostalCode = "54000",
+                IsActive = true,
+                TenantId = Guid.NewGuid()
+            }
+        };
+
+        var context = CreateContext(customers, [], []);
 
         var handler = CreateHandler(context);
 
         var act = () => handler.Handle(
             new CreateOrderCommand(
-                "Ali",
-                "ali@test.com",
-                "123",
-                "Address",
+                customerId,
                 0,
                 0,
                 [new CreateOrderItemDto(Guid.NewGuid(), 1)]),
@@ -44,14 +57,48 @@ public class CreateOrderHandlerTests
     }
 
     [Fact]
+    public async Task Handle_WithInactiveCustomer_ThrowsBadRequestException()
+    {
+        var customerId = Guid.NewGuid();
+        var customers = new List<Customer>
+        {
+            new()
+            {
+                Id = customerId,
+                FirstName = "Ali",
+                LastName = "Ahsan",
+                Email = "ali@test.com",
+                PhoneNumber = "123",
+                Address = "Address",
+                City = "Lahore",
+                Country = "Pakistan",
+                PostalCode = "54000",
+                IsActive = false,
+                TenantId = Guid.NewGuid()
+            }
+        };
+
+        var context = CreateContext(customers, [], []);
+        var handler = CreateHandler(context);
+
+        var act = () => handler.Handle(
+            new CreateOrderCommand(
+                customerId,
+                0,
+                0,
+                [new CreateOrderItemDto(Guid.NewGuid(), 1)]),
+            CancellationToken.None);
+
+        await act.Should().ThrowAsync<BadRequestException>()
+            .WithMessage("*not active*");
+    }
+
+    [Fact]
     public async Task Handle_WithInvalidQuantity_ThrowsValidationException()
     {
         var validator = new CreateOrderCommandValidator();
         var result = validator.Validate(new CreateOrderCommand(
-            "Ali",
-            "ali@test.com",
-            "",
-            "",
+            Guid.NewGuid(),
             0,
             0,
             [new CreateOrderItemDto(Guid.NewGuid(), 0)]));
@@ -62,7 +109,26 @@ public class CreateOrderHandlerTests
     [Fact]
     public async Task Handle_WithValidData_ReturnsIdAndCalculatesTotals()
     {
+        var customerId = Guid.NewGuid();
         var productId = Guid.NewGuid();
+        var customers = new List<Customer>
+        {
+            new()
+            {
+                Id = customerId,
+                FirstName = "Ali",
+                LastName = "Ahsan",
+                Email = "ali@test.com",
+                PhoneNumber = "123",
+                Address = "Address",
+                City = "Lahore",
+                Country = "Pakistan",
+                PostalCode = "54000",
+                IsActive = true,
+                TenantId = Guid.NewGuid()
+            }
+        };
+
         var products = new List<Product>
         {
             new()
@@ -76,7 +142,7 @@ public class CreateOrderHandlerTests
             }
         };
 
-        var context = CreateContext([], products, []);
+        var context = CreateContext(customers, products, []);
         context.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
         var orderNumberGenerator = new Mock<IOrderNumberGenerator>();
@@ -91,10 +157,7 @@ public class CreateOrderHandlerTests
 
         var id = await handler.Handle(
             new CreateOrderCommand(
-                "Ali",
-                "ali@test.com",
-                "123",
-                "Address",
+                customerId,
                 1,
                 2,
                 [new CreateOrderItemDto(productId, 3)]),
@@ -107,7 +170,8 @@ public class CreateOrderHandlerTests
             o.Tax == 2 &&
             o.GrandTotal == 31 &&
             o.OrderNumber == "ORD-2026-000001" &&
-            o.Status == OrderStatusNames.Pending)), Times.Once);
+            o.Status == OrderStatusNames.Pending &&
+            o.CustomerId == customerId)), Times.Once);
     }
 
     private static CreateOrderCommandHandler CreateHandler(Mock<IApplicationDbContext> context)
@@ -152,10 +216,6 @@ public class UpdateOrderHandlerTests
         var act = () => handler.Handle(
             new UpdateOrderCommand(
                 Guid.NewGuid(),
-                "Ali",
-                "ali@test.com",
-                "",
-                "",
                 0,
                 0,
                 [new CreateOrderItemDto(Guid.NewGuid(), 1)]),
@@ -185,10 +245,14 @@ public class UpdateOrderHandlerTests
         {
             Id = customerId,
             TenantId = tenantId,
-            Name = "Ali",
+            FirstName = "Ali",
+            LastName = "Ahsan",
             Email = "ali@test.com",
-            Phone = "123",
-            Address = "Street"
+            PhoneNumber = "123",
+            Address = "Street",
+            City = "Lahore",
+            Country = "Pakistan",
+            PostalCode = "54000"
         });
 
         db.Products.Add(new Product
@@ -235,10 +299,6 @@ public class UpdateOrderHandlerTests
         await handler.Handle(
             new UpdateOrderCommand(
                 orderId,
-                "Ali Updated",
-                "ali@test.com",
-                "123",
-                "Street",
                 0,
                 0,
                 [new CreateOrderItemDto(productId, 3)]),

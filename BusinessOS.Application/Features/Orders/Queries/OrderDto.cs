@@ -22,9 +22,13 @@ public class OrderDto
     public DateTime? UpdatedAt { get; set; }
     public string Status { get; set; } = default!;
     public string CustomerName { get; set; } = default!;
+    public string CustomerFirstName { get; set; } = default!;
+    public string CustomerLastName { get; set; } = default!;
     public string CustomerEmail { get; set; } = default!;
     public string CustomerPhone { get; set; } = default!;
     public string CustomerAddress { get; set; } = default!;
+    public string CustomerCity { get; set; } = default!;
+    public string CustomerCountry { get; set; } = default!;
     public decimal TotalAmount { get; set; }
     public decimal Discount { get; set; }
     public decimal Tax { get; set; }

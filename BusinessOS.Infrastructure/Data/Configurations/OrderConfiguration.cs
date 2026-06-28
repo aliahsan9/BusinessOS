@@ -20,7 +20,7 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(x => x.GrandTotal).AsMoney();
 
         builder.HasOne(x => x.Customer)
-            .WithMany()
+            .WithMany(x => x.Orders)
             .HasForeignKey(x => x.CustomerId)
             .OnDelete(DeleteBehavior.Restrict);
 

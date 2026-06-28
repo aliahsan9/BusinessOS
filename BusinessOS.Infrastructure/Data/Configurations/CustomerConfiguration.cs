@@ -12,10 +12,23 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
 
         builder.HasKey(x => x.Id);
 
-        builder.Property(x => x.Name).HasMaxLength(200).IsRequired();
+        builder.Property(x => x.FirstName).HasMaxLength(100).IsRequired();
+        builder.Property(x => x.LastName).HasMaxLength(100).IsRequired();
         builder.Property(x => x.Email).HasMaxLength(256).IsRequired();
-        builder.Property(x => x.Phone).HasMaxLength(50).IsRequired();
+        builder.Property(x => x.PhoneNumber).HasMaxLength(50).IsRequired();
         builder.Property(x => x.Address).HasMaxLength(500).IsRequired();
-        builder.Property(x => x.CreditLimit).AsMoney();
+        builder.Property(x => x.City).HasMaxLength(100).IsRequired();
+        builder.Property(x => x.Country).HasMaxLength(100).IsRequired();
+        builder.Property(x => x.PostalCode).HasMaxLength(20).IsRequired();
+        builder.Property(x => x.IsActive).IsRequired();
+
+        builder.HasMany(x => x.Orders)
+            .WithOne(x => x.Customer)
+            .HasForeignKey(x => x.CustomerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(x => new { x.TenantId, x.Email }).IsUnique();
+        builder.HasIndex(x => x.PhoneNumber);
+        builder.HasIndex(x => new { x.TenantId, x.CreatedAt });
     }
 }

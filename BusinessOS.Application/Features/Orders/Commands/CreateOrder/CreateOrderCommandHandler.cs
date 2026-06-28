@@ -1,6 +1,5 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
-using BusinessOS.Application.Features.Orders.Queries;
 using BusinessOS.Application.Features.Orders.Services;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
@@ -29,29 +28,13 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
     public async Task<Guid> Handle(CreateOrderCommand request, CancellationToken cancellationToken)
     {
         var customer = await _context.Customers
-            .FirstOrDefaultAsync(
-                x => x.Email == request.CustomerEmail.Trim(),
-                cancellationToken);
+            .FirstOrDefaultAsync(x => x.Id == request.CustomerId, cancellationToken);
 
         if (customer is null)
-        {
-            customer = new Customer
-            {
-                Id = Guid.NewGuid(),
-                Name = request.CustomerName.Trim(),
-                Email = request.CustomerEmail.Trim(),
-                Phone = request.CustomerPhone.Trim(),
-                Address = request.CustomerAddress.Trim()
-            };
+            throw new NotFoundException("Customer not found.");
 
-            _context.Customers.Add(customer);
-        }
-        else
-        {
-            customer.Name = request.CustomerName.Trim();
-            customer.Phone = request.CustomerPhone.Trim();
-            customer.Address = request.CustomerAddress.Trim();
-        }
+        if (!customer.IsActive)
+            throw new BadRequestException("Customer is not active.");
 
         var productIds = request.Items.Select(x => x.ProductId).Distinct().ToList();
 
@@ -61,16 +44,12 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
             .ToDictionaryAsync(x => x.Id, cancellationToken);
 
         if (products.Count != productIds.Count)
-        {
             throw new BadRequestException("One or more products do not exist.");
-        }
 
         foreach (var product in products.Values)
         {
             if (!product.IsActive)
-            {
                 throw new BadRequestException($"Product '{product.Name}' is not active.");
-            }
         }
 
         var orderItems = new List<OrderItem>();
@@ -98,9 +77,7 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
         var grandTotal = Math.Round(totalAmount - discount + tax, 2);
 
         if (grandTotal < 0)
-        {
             throw new BadRequestException("Order grand total cannot be negative.");
-        }
 
         var order = new Order
         {
@@ -120,10 +97,10 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
         await _context.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
-            "Created order {OrderNumber} ({OrderId}) for customer {CustomerEmail}",
+            "Created order {OrderNumber} ({OrderId}) for customer {CustomerId}",
             order.OrderNumber,
             order.Id,
-            customer.Email);
+            customer.Id);
 
         return order.Id;
     }

@@ -25,7 +25,6 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
     {
         var order = await _context.Orders
             .Include(x => x.OrderItems)
-            .Include(x => x.Customer)
             .FirstOrDefaultAsync(x => x.Id == request.Id, cancellationToken);
 
         if (order is null)
@@ -40,11 +39,6 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
                 $"Order in '{order.Status}' status cannot be updated.");
         }
 
-        order.Customer.Name = request.CustomerName.Trim();
-        order.Customer.Email = request.CustomerEmail.Trim();
-        order.Customer.Phone = request.CustomerPhone.Trim();
-        order.Customer.Address = request.CustomerAddress.Trim();
-
         var productIds = request.Items.Select(x => x.ProductId).Distinct().ToList();
 
         var products = await _context.Products
@@ -53,16 +47,12 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
             .ToDictionaryAsync(x => x.Id, cancellationToken);
 
         if (products.Count != productIds.Count)
-        {
             throw new BadRequestException("One or more products do not exist.");
-        }
 
         foreach (var product in products.Values)
         {
             if (!product.IsActive)
-            {
                 throw new BadRequestException($"Product '{product.Name}' is not active.");
-            }
         }
 
         var requestedProductIds = request.Items.Select(x => x.ProductId).ToHashSet();
@@ -98,18 +88,14 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
         }
 
         foreach (var item in order.OrderItems.Where(x => !requestedProductIds.Contains(x.ProductId)).ToList())
-        {
             _context.OrderItems.Remove(item);
-        }
 
         var discount = Math.Round(request.Discount, 2);
         var tax = Math.Round(request.Tax, 2);
         var grandTotal = Math.Round(totalAmount - discount + tax, 2);
 
         if (grandTotal < 0)
-        {
             throw new BadRequestException("Order grand total cannot be negative.");
-        }
 
         order.TotalAmount = totalAmount;
         order.Discount = discount;

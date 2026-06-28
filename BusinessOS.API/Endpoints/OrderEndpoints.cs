@@ -29,7 +29,7 @@ public static class OrderEndpoints
             .WithName("CreateOrder")
             .WithSummary("Create an order")
             .WithDescription(
-                "Creates a new order with customer details and line items. " +
+                "Creates a new order for an existing active customer with line items. " +
                 "Product prices are loaded automatically and totals are calculated.")
             .Produces(StatusCodes.Status201Created)
             .ProducesProblem(StatusCodes.Status400BadRequest)
@@ -133,10 +133,6 @@ public static class OrderEndpoints
         await sender.Send(
             new UpdateOrderCommand(
                 id,
-                request.CustomerName,
-                request.CustomerEmail,
-                request.CustomerPhone,
-                request.CustomerAddress,
                 request.Discount,
                 request.Tax,
                 request.Items),
@@ -165,10 +161,6 @@ public static class OrderEndpoints
     }
 
     private sealed record UpdateOrderRequest(
-        string CustomerName,
-        string CustomerEmail,
-        string CustomerPhone,
-        string CustomerAddress,
         decimal Discount,
         decimal Tax,
         IReadOnlyList<CreateOrderItemDto> Items);
