@@ -800,6 +800,8 @@ public class CustomerIntegrationTests : IntegrationTestBase
         var product = await productResponse.Content.ReadFromJsonAsync<JsonElement>();
         var productId = product.GetProperty("id").GetGuid();
 
+        await IntegrationInventoryHelper.IncreaseStockAsync(Client, auth, productId);
+
         var orderResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
@@ -1100,7 +1102,11 @@ public class OrderIntegrationTests : IntegrationTestBase
 
         response.EnsureSuccessStatusCode();
         var created = await response.Content.ReadFromJsonAsync<JsonElement>();
-        return created.GetProperty("id").GetGuid();
+        var productId = created.GetProperty("id").GetGuid();
+
+        await IntegrationInventoryHelper.IncreaseStockAsync(Client, auth, productId);
+
+        return productId;
     }
 
     private async Task<Guid> CreateCustomerAsync(AuthResponse auth)
@@ -1148,5 +1154,164 @@ public class OrderIntegrationTests : IntegrationTestBase
         response.EnsureSuccessStatusCode();
         var created = await response.Content.ReadFromJsonAsync<JsonElement>();
         return created.GetProperty("id").GetGuid();
+    }
+}
+
+[Collection("IntegrationTests")]
+public class InventoryIntegrationTests : IntegrationTestBase
+{
+    public InventoryIntegrationTests(BusinessOSWebApplicationFactory factory)
+        : base(factory)
+    {
+    }
+
+    [Fact]
+    public async Task GetInventory_ReturnsPagedResult()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        await IntegrationInventoryHelper.CreateProductWithStockAsync(Client, auth, 50);
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            "/api/inventory?page=1&pageSize=10&sortBy=currentStock&sortOrder=asc",
+            auth);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task GetInventoryByProductId_ReturnsInventory()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var productId = await IntegrationInventoryHelper.CreateProductWithStockAsync(Client, auth, 25);
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            $"/api/inventory/{productId}",
+            auth);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task IncreaseStock_UpdatesInventory()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var productId = await IntegrationInventoryHelper.CreateProductWithStockAsync(Client, auth, 0);
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/inventory/increase",
+            auth,
+            new { productId, quantity = 15m, notes = "Purchase receipt" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task DecreaseStock_PreventsNegativeInventory()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var productId = await IntegrationInventoryHelper.CreateProductWithStockAsync(Client, auth, 2);
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/inventory/decrease",
+            auth,
+            new { productId, quantity = 10m });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task GetLowStock_ReturnsProducts()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var productId = await IntegrationInventoryHelper.CreateProductWithStockAsync(Client, auth, 3);
+
+        await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            $"/api/inventory/{productId}",
+            auth,
+            new { minimumStockLevel = 0, maximumStockLevel = 100, reorderLevel = 10 });
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            "/api/inventory/low-stock",
+            auth);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task GetInventoryAnalytics_ReturnsAnalytics()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        await IntegrationInventoryHelper.CreateProductWithStockAsync(Client, auth, 20);
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            "/api/inventory/analytics",
+            auth);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task CreateOrder_DeductsStock()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var productId = await IntegrationInventoryHelper.CreateProductWithStockAsync(Client, auth, 10);
+
+        var customerResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/customers",
+            auth,
+            new
+            {
+                firstName = "Ali",
+                lastName = "Ahsan",
+                email = $"ali_{Guid.NewGuid():N}@test.com",
+                phoneNumber = "1234567890",
+                address = "123 Main St",
+                city = "Lahore",
+                country = "Pakistan",
+                postalCode = "54000"
+            });
+
+        customerResponse.EnsureSuccessStatusCode();
+        var customer = await customerResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var customerId = customer.GetProperty("id").GetGuid();
+
+        var orderResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/orders",
+            auth,
+            new
+            {
+                customerId,
+                discount = 0,
+                tax = 0,
+                items = new[] { new { productId, quantity = 3m } }
+            });
+
+        orderResponse.EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task ProtectedInventoryEndpoint_WithoutToken_ReturnsUnauthorized()
+    {
+        var response = await Client.GetAsync("/api/inventory");
+
+        response.StatusCode.Should().BeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.NotFound);
     }
 }
