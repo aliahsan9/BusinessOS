@@ -63,6 +63,23 @@ try
     builder.Services.AddPermissionAuthorization();
     builder.Services.AddDashboardAuthorization();
 
+    const string corsPolicyName = "BusinessCorsPolicy";
+    var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy(corsPolicyName, policy =>
+        {
+            if (allowedOrigins.Length > 0)
+            {
+                policy.WithOrigins(allowedOrigins)
+                    .AllowAnyHeader()
+                    .AllowAnyMethod()
+                    .AllowCredentials();
+            }
+        });
+    });
+
     var app = builder.Build();
 
     await DbInitializer.SeedAsync(app.Services);
@@ -86,6 +103,7 @@ try
     app.UseSerilogRequestLogging();
     app.UseMiddleware<ExceptionHandlingMiddleware>();
     app.UseHttpsRedirection();
+    app.UseCors(corsPolicyName);
     app.UseAuthentication();
     app.UseMiddleware<TenantMiddleware>();
     app.UseAuthorization();
