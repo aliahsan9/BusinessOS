@@ -5,6 +5,13 @@ using BusinessOS.Application.Features.Categories.Commands.DeleteCategory;
 using BusinessOS.Application.Features.Categories.Commands.UpdateCategory;
 using BusinessOS.Application.Features.Categories.Queries.GetAllCategories;
 using BusinessOS.Application.Features.Categories.Queries.GetCategoryById;
+using BusinessOS.Application.Features.Orders.Commands.CreateOrder;
+using BusinessOS.Application.Features.Orders.Commands.DeleteOrder;
+using BusinessOS.Application.Features.Orders.Commands.UpdateOrder;
+using BusinessOS.Application.Features.Orders.Commands.UpdateOrderStatus;
+using BusinessOS.Application.Features.Orders.Queries;
+using BusinessOS.Application.Features.Orders.Queries.GetAllOrders;
+using BusinessOS.Application.Features.Orders.Queries.GetOrderById;
 using BusinessOS.Application.Features.Products.Commands.CreateProduct;
 using BusinessOS.Application.Features.Products.Commands.DeleteProduct;
 using BusinessOS.Application.Features.Products.Commands.UpdateProduct;
@@ -148,5 +155,100 @@ public class ProductValidatorTests
         var validator = new GetProductsByCategoryQueryValidator();
         var result = validator.TestValidate(new GetProductsByCategoryQuery(Guid.Empty));
         result.ShouldHaveValidationErrorFor(x => x.CategoryId);
+    }
+}
+
+public class OrderValidatorTests
+{
+    [Fact]
+    public void CreateOrderValidator_RejectsMissingCustomerName()
+    {
+        var validator = new CreateOrderCommandValidator();
+        var result = validator.TestValidate(new CreateOrderCommand(
+            "",
+            "ali@test.com",
+            "",
+            "",
+            0,
+            0,
+            [new CreateOrderItemDto(Guid.NewGuid(), 1)]));
+        result.ShouldHaveValidationErrorFor(x => x.CustomerName);
+    }
+
+    [Fact]
+    public void CreateOrderValidator_RejectsInvalidEmail()
+    {
+        var validator = new CreateOrderCommandValidator();
+        var result = validator.TestValidate(new CreateOrderCommand(
+            "Ali",
+            "not-an-email",
+            "",
+            "",
+            0,
+            0,
+            [new CreateOrderItemDto(Guid.NewGuid(), 1)]));
+        result.ShouldHaveValidationErrorFor(x => x.CustomerEmail);
+    }
+
+    [Fact]
+    public void CreateOrderValidator_RejectsEmptyItems()
+    {
+        var validator = new CreateOrderCommandValidator();
+        var result = validator.TestValidate(new CreateOrderCommand(
+            "Ali",
+            "ali@test.com",
+            "",
+            "",
+            0,
+            0,
+            []));
+        result.ShouldHaveValidationErrorFor(x => x.Items);
+    }
+
+    [Fact]
+    public void CreateOrderValidator_RejectsInvalidQuantity()
+    {
+        var validator = new CreateOrderCommandValidator();
+        var result = validator.TestValidate(new CreateOrderCommand(
+            "Ali",
+            "ali@test.com",
+            "",
+            "",
+            0,
+            0,
+            [new CreateOrderItemDto(Guid.NewGuid(), 0)]));
+        result.ShouldHaveValidationErrorFor("Items[0].Quantity");
+    }
+
+    [Fact]
+    public void UpdateOrderStatusValidator_RejectsInvalidStatus()
+    {
+        var validator = new UpdateOrderStatusCommandValidator();
+        var result = validator.TestValidate(new UpdateOrderStatusCommand(Guid.NewGuid(), "Invalid"));
+        result.ShouldHaveValidationErrorFor(x => x.Status);
+    }
+
+    [Fact]
+    public void GetAllOrdersQueryValidator_RejectsInvalidSortBy()
+    {
+        var validator = new GetAllOrdersQueryValidator();
+        var result = validator.TestValidate(new GetAllOrdersQuery(SortBy: "invalid"));
+        result.ShouldHaveValidationErrorFor(x => x.SortBy);
+    }
+
+    [Fact]
+    public void GetOrderByIdQueryValidator_RejectsEmptyId()
+    {
+        var validator = new GetOrderByIdQueryValidator();
+        var result = validator.TestValidate(new GetOrderByIdQuery(Guid.Empty));
+        result.ShouldHaveValidationErrorFor(x => x.Id);
+    }
+
+    [Fact]
+    public void DeleteOrderValidator_RejectsEmptyId()
+    {
+        var validator = new DeleteOrderCommandValidator();
+        var result = validator.TestValidate(new DeleteOrderCommand(Guid.Empty));
+        result.ShouldHaveValidationErrorFor(x => x.Id);
     }
 }

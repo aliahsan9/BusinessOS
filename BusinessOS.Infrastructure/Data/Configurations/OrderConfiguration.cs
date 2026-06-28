@@ -25,5 +25,8 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(x => new { x.TenantId, x.OrderNumber }).IsUnique();
+        builder.HasIndex(x => new { x.TenantId, x.CreatedAt });
+        builder.HasIndex(x => new { x.TenantId, x.Status });
+        builder.HasIndex(x => x.OrderNumber);
     }
 }

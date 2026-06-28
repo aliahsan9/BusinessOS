@@ -88,6 +88,7 @@ try
     app.MapAuthEndpoints();
     app.MapCategoryEndpoints();
     app.MapProductEndpoints();
+    app.MapOrderEndpoints();
 
     app.Run();
 }

@@ -1,7 +1,9 @@
 using BusinessOS.Application.Common.Models;
 using BusinessOS.Application.Features.Categories.Queries.GetAllCategories;
+using BusinessOS.Application.Features.Orders.Queries.GetAllOrders;
 using BusinessOS.Application.Features.Products.Queries.GetAllProducts;
 using BusinessOS.Domain.Entities;
+using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.Data;
 using BusinessOS.Infrastructure.MultiTenancy;
 using FluentAssertions;
@@ -62,6 +64,45 @@ public class QueryHandlerTests : IDisposable
 
         result.Items.Should().HaveCount(2);
         result.Items.First().Name.Should().Be("Monitor");
+    }
+
+    [Fact]
+    public async Task GetAllOrdersQueryHandler_ReturnsPagedFilteredResults()
+    {
+        var customerId = Guid.NewGuid();
+        _context.Customers.Add(new Customer
+        {
+            Id = customerId,
+            TenantId = _tenantId,
+            Name = "Ali Customer",
+            Email = "ali@test.com",
+            Phone = "123",
+            Address = "Street"
+        });
+
+        _context.Orders.Add(new Order
+        {
+            Id = Guid.NewGuid(),
+            TenantId = _tenantId,
+            CustomerId = customerId,
+            OrderNumber = "ORD-2026-000001",
+            Status = OrderStatusNames.Pending,
+            GrandTotal = 100,
+            TotalAmount = 100
+        });
+
+        _context.SaveChanges();
+
+        var handler = new GetAllOrdersQueryHandler(
+            _context,
+            Mock.Of<ILogger<GetAllOrdersQueryHandler>>());
+
+        var result = await handler.Handle(
+            new GetAllOrdersQuery(Search: "Ali", Status: OrderStatusNames.Pending, Page: 1, PageSize: 10),
+            CancellationToken.None);
+
+        result.Items.Should().ContainSingle(x => x.CustomerName == "Ali Customer");
+        result.TotalCount.Should().Be(1);
     }
 
     public void Dispose() => _context.Dispose();

@@ -4,6 +4,7 @@ using System.Text.Json;
 using BusinessOS.Application.Common.Models;
 using BusinessOS.Application.Features.Auth.DTOs;
 using BusinessOS.Application.Features.Categories.Queries;
+using BusinessOS.Application.Features.Orders.Queries;
 using BusinessOS.Application.Features.Products.Queries;
 using FluentAssertions;
 
@@ -528,6 +529,305 @@ public class ProductIntegrationTests : IntegrationTestBase
                 costPrice = 10,
                 salePrice = 20,
                 reorderLevel = 1
+            });
+
+        response.EnsureSuccessStatusCode();
+        var created = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return created.GetProperty("id").GetGuid();
+    }
+}
+
+public class OrderIntegrationTests : IntegrationTestBase
+{
+    public OrderIntegrationTests(BusinessOSWebApplicationFactory factory)
+        : base(factory)
+    {
+    }
+
+    [Fact]
+    public async Task CreateOrder_ReturnsCreated()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var productId = await CreateProductAsync(auth);
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/orders",
+            auth,
+            new
+            {
+                customerName = "Ali Ahsan",
+                customerEmail = "ali@test.com",
+                customerPhone = "1234567890",
+                customerAddress = "123 Main St",
+                discount = 0,
+                tax = 0,
+                items = new[] { new { productId, quantity = 2m } }
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+    }
+
+    [Fact]
+    public async Task GetOrders_ReturnsPagedResult()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        await CreateOrderAsync(auth);
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            "/api/orders?page=1&pageSize=10&sortBy=createdAt&sortOrder=desc",
+            auth);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var page = await response.Content.ReadFromJsonAsync<PagedResult<OrderSummaryDto>>();
+        page.Should().NotBeNull();
+        page!.Items.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task GetOrder_ReturnsOrderDetails()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var orderId = await CreateOrderAsync(auth);
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            $"/api/orders/{orderId}",
+            auth);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var order = await response.Content.ReadFromJsonAsync<OrderDto>();
+        order!.Items.Should().NotBeEmpty();
+        order.CustomerName.Should().Be("Ali Ahsan");
+    }
+
+    [Fact]
+    public async Task GetOrder_WithUnknownId_ReturnsNotFound()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            $"/api/orders/{Guid.NewGuid()}",
+            auth);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task UpdateOrder_ReturnsNoContent()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var productId = await CreateProductAsync(auth);
+        var orderId = await CreateOrderAsync(auth);
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            $"/api/orders/{orderId}",
+            auth,
+            new
+            {
+                customerName = "Ali Updated",
+                customerEmail = "ali@test.com",
+                customerPhone = "123",
+                customerAddress = "Address",
+                discount = 1,
+                tax = 1,
+                items = new[] { new { productId, quantity = 3m } }
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task DeleteOrder_ReturnsNoContent()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var orderId = await CreateOrderAsync(auth);
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Delete,
+            $"/api/orders/{orderId}",
+            auth);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task UpdateOrderStatus_ReturnsNoContent()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var orderId = await CreateOrderAsync(auth);
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Patch,
+            $"/api/orders/{orderId}/status",
+            auth,
+            new { status = "Confirmed" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task UpdateOrderStatus_WithInvalidTransition_ReturnsBadRequest()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var orderId = await CreateOrderAsync(auth);
+
+        await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Patch,
+            $"/api/orders/{orderId}/status",
+            auth,
+            new { status = "Confirmed" });
+
+        await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Patch,
+            $"/api/orders/{orderId}/status",
+            auth,
+            new { status = "Processing" });
+
+        await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Patch,
+            $"/api/orders/{orderId}/status",
+            auth,
+            new { status = "Completed" });
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Patch,
+            $"/api/orders/{orderId}/status",
+            auth,
+            new { status = "Pending" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task CreateOrder_WithInvalidProduct_ReturnsBadRequest()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/orders",
+            auth,
+            new
+            {
+                customerName = "Ali",
+                customerEmail = "ali@test.com",
+                customerPhone = "",
+                customerAddress = "",
+                discount = 0,
+                tax = 0,
+                items = new[] { new { productId = Guid.NewGuid(), quantity = 1m } }
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task CreateOrder_WithInvalidQuantity_ReturnsBadRequest()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var productId = await CreateProductAsync(auth);
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/orders",
+            auth,
+            new
+            {
+                customerName = "Ali",
+                customerEmail = "ali@test.com",
+                customerPhone = "",
+                customerAddress = "",
+                discount = 0,
+                tax = 0,
+                items = new[] { new { productId, quantity = 0m } }
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task ProtectedOrdersEndpoint_WithoutToken_ReturnsUnauthorized()
+    {
+        var response = await Client.GetAsync("/api/orders");
+
+        response.StatusCode.Should().BeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.NotFound);
+    }
+
+    private async Task<Guid> CreateCategoryAsync(AuthResponse auth, string name)
+    {
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/categories",
+            auth,
+            new { name });
+
+        response.EnsureSuccessStatusCode();
+        var created = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return created.GetProperty("id").GetGuid();
+    }
+
+    private async Task<Guid> CreateProductAsync(AuthResponse auth)
+    {
+        var categoryId = await CreateCategoryAsync(auth, $"Order Cat {Guid.NewGuid():N}");
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/products",
+            auth,
+            new
+            {
+                categoryId,
+                name = "Order Product",
+                sku = $"SKU-{Guid.NewGuid():N}",
+                costPrice = 10,
+                salePrice = 25,
+                reorderLevel = 1
+            });
+
+        response.EnsureSuccessStatusCode();
+        var created = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return created.GetProperty("id").GetGuid();
+    }
+
+    private async Task<Guid> CreateOrderAsync(AuthResponse auth)
+    {
+        var productId = await CreateProductAsync(auth);
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/orders",
+            auth,
+            new
+            {
+                customerName = "Ali Ahsan",
+                customerEmail = $"ali_{Guid.NewGuid():N}@test.com",
+                customerPhone = "123",
+                customerAddress = "Address",
+                discount = 0,
+                tax = 0,
+                items = new[] { new { productId, quantity = 1m } }
             });
 
         response.EnsureSuccessStatusCode();

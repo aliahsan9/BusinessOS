@@ -1,5 +1,6 @@
 using System.Reflection;
 using BusinessOS.Application.Behaviors;
+using BusinessOS.Application.Features.Orders.Services;
 using BusinessOS.Application.Features.Products.Commands.CreateProduct;
 using FluentValidation;
 using MediatR;
@@ -20,6 +21,8 @@ public static class DependencyInjection
 
         services.AddValidatorsFromAssembly(
             typeof(CreateProductCommand).Assembly);
+
+        services.AddScoped<IOrderNumberGenerator, OrderNumberGenerator>();
 
         services.AddTransient(
             typeof(IPipelineBehavior<,>),
