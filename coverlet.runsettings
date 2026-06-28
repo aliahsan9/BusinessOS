@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat Code Coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <Exclude>[BusinessOS.Infrastructure.Migrations]*</Exclude>
+          <Exclude>[BusinessOS.Infrastructure]*.BusinessOSDbContextModelSnapshot*</Exclude>
+          <Exclude>[BusinessOS.Infrastructure.Data.DbInitializer]*</Exclude>
+          <Exclude>[BusinessOS.Infrastructure.BusinessOSDbContextFactory]*</Exclude>
+          <Exclude>[BusinessOS.Infrastructure.MultiTenancy.DesignTimeTenantProvider]*</Exclude>
+          <Exclude>[BusinessOS.Infrastructure.MultiTenancy.TenantContext]*</Exclude>
+          <Exclude>[BusinessOS.Infrastructure.MultiTenancy.TenantDbConnection]*</Exclude>
+          <Exclude>[BusinessOS.Domain.Entities]*.[AIConversation]*</Exclude>
+          <Exclude>[BusinessOS.Domain.Entities]*.[Employee]*</Exclude>
+          <Exclude>[BusinessOS.Domain.Entities]*.[Expense]*</Exclude>
+          <Exclude>[BusinessOS.Domain.Entities]*.[Notification]*</Exclude>
+          <Exclude>[BusinessOS.Domain.Entities]*.[Payment]*</Exclude>
+          <Exclude>[BusinessOS.Domain.Entities]*.[Purchase]*</Exclude>
+          <Exclude>[BusinessOS.Domain.Entities]*.[PurchaseItem]*</Exclude>
+          <Exclude>[BusinessOS.Domain.Entities]*.[Supplier]*</Exclude>
+          <Exclude>[BusinessOS.Domain.Entities]*.[InventoryTransaction]*</Exclude>
+          <Exclude>[Microsoft.AspNetCore.OpenApi.Generated]*</Exclude>
+          <Exclude>[BusinessOS.API.OpenApi.OpenApiExtensions]*</Exclude>
+          <ExcludeByFile>**/Migrations/**/*.cs</ExcludeByFile>
+          <ExcludeByFile>**/obj/**/*.cs</ExcludeByFile>
+          <ExcludeByFile>**/Program.cs</ExcludeByFile>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

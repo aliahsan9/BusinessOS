@@ -7,8 +7,11 @@
     <IsPackable>false</IsPackable>
     <CollectCoverage>true</CollectCoverage>
     <CoverletOutputFormat>cobertura</CoverletOutputFormat>
+    <ExcludeByFile>**/Migrations/**/*.cs;**/obj/**/*.cs;**/Program.cs</ExcludeByFile>
+    <Exclude>[BusinessOS.Infrastructure.Migrations]*;[BusinessOS.Infrastructure.Data.DbInitializer]*;[Microsoft.AspNetCore.OpenApi.Generated]*</Exclude>
     <Threshold>80</Threshold>
     <ThresholdType>line</ThresholdType>
+    <RunSettingsFilePath>$(MSBuildThisFileDirectory)..\coverlet.runsettings</RunSettingsFilePath>
   </PropertyGroup>
 
   <ItemGroup>
