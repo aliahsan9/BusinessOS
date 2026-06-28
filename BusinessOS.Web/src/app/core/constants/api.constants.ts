@@ -43,6 +43,32 @@ export const API_ENDPOINTS = {
   quotations: '/quotations',
   invoices: '/invoices',
   payments: '/payments',
+  expenses: {
+    base: '/expenses',
+    analytics: '/expenses/analytics',
+  },
+  expenseCategories: '/expense-categories',
+  finance: {
+    dashboard: '/finance/dashboard',
+    profitLoss: '/finance/profit-loss',
+    revenueBreakdown: '/finance/revenue-breakdown',
+    expenseBreakdown: '/finance/expense-breakdown',
+  },
+  auditLogs: '/audit-logs',
+  notifications: {
+    base: '/notifications',
+    preferences: '/notifications/preferences',
+    readAll: '/notifications/read-all',
+  },
+  settings: {
+    base: '/settings',
+    businessProfile: '/settings/business-profile',
+  },
+  system: {
+    health: '/system/health',
+    stats: '/system/stats',
+    environment: '/system/environment',
+  },
 } as const;
 
 export const HTTP_HEADERS = {

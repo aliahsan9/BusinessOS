@@ -1,0 +1,30 @@
+.permission-grid {
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.permission-item {
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+
+  strong {
+    display: block;
+    margin-bottom: var(--space-1);
+  }
+
+  code {
+    display: block;
+    font-size: var(--font-size-xs);
+    color: var(--color-primary);
+    margin-bottom: var(--space-1);
+  }
+
+  p {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+  }
+}

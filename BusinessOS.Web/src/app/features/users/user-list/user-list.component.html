@@ -1,0 +1,69 @@
+<app-breadcrumb [items]="breadcrumbs" />
+
+<app-page-header title="Users" subtitle="Manage user accounts and access." [actions]="headerActions" />
+
+@if (error()) {
+  <app-alert variant="danger" [message]="error()!" [dismissible]="false" />
+  <div class="mb-3"><app-button label="Retry" [variant]="ButtonVariant.Outline" (clicked)="retry()" /></div>
+}
+
+<div class="toolbar">
+  <app-search-bar placeholder="Search by name or email..." [value]="searchTerm()" (search)="onSearch($event)" />
+  <select class="form-select filter-input" [ngModel]="activeFilter()" (ngModelChange)="activeFilter.set($event); onFilterChange()">
+    <option value="">All statuses</option>
+    <option value="active">Active</option>
+    <option value="inactive">Inactive</option>
+  </select>
+</div>
+
+@if (loading()) {
+  <div class="loading-stack">
+    @for (i of [1, 2, 3, 4, 5]; track i) {
+      <app-skeleton height="2.5rem" />
+    }
+  </div>
+} @else if (items().length === 0) {
+  <app-empty-state icon="👥" title="No users found" description="Add your first user or adjust your filters." />
+} @else {
+  <div class="bos-table-wrapper">
+    <table class="bos-table bos-table--striped bos-table--hover bos-table--compact">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Roles</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (user of items(); track user.id) {
+          <tr>
+            <td>
+              <a [routerLink]="[routes.users.base, user.id]" class="link-primary">{{ user.fullName }}</a>
+            </td>
+            <td>{{ user.email }}</td>
+            <td>{{ user.roles.join(', ') || '—' }}</td>
+            <td>
+              <app-badge [label]="user.isActive ? 'Active' : 'Inactive'" [variant]="user.isActive ? 'success' : 'neutral'" />
+            </td>
+            <td class="bos-table__actions">
+              <a [routerLink]="[routes.users.base, user.id]">View</a>
+              @if (canUpdate) {
+                <a [routerLink]="[routes.users.base, user.id, 'edit']">Edit</a>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <app-pagination
+    [page]="page()"
+    [pageSize]="pageSize()"
+    [totalCount]="totalCount()"
+    [totalPages]="totalPages()"
+    (pageChange)="onPageChange($event)"
+  />
+}

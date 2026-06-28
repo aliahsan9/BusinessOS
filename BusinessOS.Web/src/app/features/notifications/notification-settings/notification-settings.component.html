@@ -1,0 +1,28 @@
+<app-breadcrumb [items]="breadcrumbs" />
+
+<app-page-header title="Notification Settings" subtitle="Choose which notifications you receive." />
+
+@if (error()) {
+  <app-alert variant="danger" [message]="error()!" [dismissible]="false" />
+}
+
+@if (loading()) {
+  <app-skeleton height="16rem" variant="rect" />
+} @else {
+  <form [formGroup]="form" (ngSubmit)="submit()" class="settings-form">
+    <app-card title="Alert Preferences">
+      <div class="toggle-list">
+        <label class="toggle-item"><input type="checkbox" formControlName="emailNotificationsEnabled" /> Email notifications</label>
+        <label class="toggle-item"><input type="checkbox" formControlName="systemNotificationsEnabled" /> System notifications</label>
+        <label class="toggle-item"><input type="checkbox" formControlName="orderNotificationsEnabled" /> Order notifications</label>
+        <label class="toggle-item"><input type="checkbox" formControlName="inventoryAlertsEnabled" /> Inventory alerts</label>
+        <label class="toggle-item"><input type="checkbox" formControlName="paymentAlertsEnabled" /> Payment alerts</label>
+      </div>
+    </app-card>
+
+    <div class="settings-form__actions">
+      <a [routerLink]="routes.notifications.list"><app-button label="Back" [variant]="ButtonVariant.Outline" type="button" /></a>
+      <app-button label="Save Preferences" type="submit" [loading]="saving()" />
+    </div>
+  </form>
+}

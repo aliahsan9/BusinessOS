@@ -1,0 +1,155 @@
+<app-breadcrumb [items]="breadcrumbs" />
+
+<app-page-header title="Settings" subtitle="Configure your tenant, business profile, and preferences." />
+
+@if (error()) {
+  <app-alert variant="danger" [message]="error()!" [dismissible]="false" />
+}
+
+@if (loading()) {
+  <app-skeleton height="24rem" variant="rect" />
+} @else {
+  <div class="settings-hub">
+    <div class="settings-hub__tabs" role="tablist">
+      @for (tab of tabs; track tab.id) {
+        <button
+          type="button"
+          class="settings-hub__tab"
+          [class.settings-hub__tab--active]="activeTab() === tab.id"
+          role="tab"
+          (click)="selectTab(tab.id)"
+        >
+          {{ tab.label }}
+        </button>
+      }
+    </div>
+
+    <div class="settings-hub__content">
+      @switch (activeTab()) {
+        @case ('general') {
+          <app-card title="General Settings">
+            <form [formGroup]="settingsForm" (ngSubmit)="saveSettings()">
+              <div class="form-grid">
+                <app-input label="Language" formControlName="language" [error]="settingsFieldError('language') ?? undefined" />
+              </div>
+              @if (canUpdate) {
+                <div class="form-actions"><app-button label="Save" type="submit" [loading]="saving()" /></div>
+              }
+            </form>
+          </app-card>
+        }
+        @case ('business') {
+          <app-card title="Business Profile">
+            <form [formGroup]="profileForm" (ngSubmit)="saveProfile()">
+              <div class="form-grid">
+                <app-input label="Business Name *" formControlName="name" [error]="profileFieldError('name') ?? undefined" />
+                <app-input label="Business Type *" formControlName="businessType" [error]="profileFieldError('businessType') ?? undefined" />
+                <app-input label="Email *" type="email" formControlName="email" [error]="profileFieldError('email') ?? undefined" />
+                <app-input label="Phone *" formControlName="phone" [error]="profileFieldError('phone') ?? undefined" />
+                <div class="form-field form-field--full">
+                  <label for="address">Address *</label>
+                  <textarea id="address" formControlName="address" class="form-control" rows="2"></textarea>
+                </div>
+              </div>
+              @if (canUpdate) {
+                <div class="form-actions"><app-button label="Save Profile" type="submit" [loading]="saving()" /></div>
+              }
+            </form>
+          </app-card>
+        }
+        @case ('currency') {
+          <app-card title="Currency & Tax">
+            <form [formGroup]="settingsForm" (ngSubmit)="saveSettings()">
+              <div class="form-grid">
+                <app-input label="Currency *" formControlName="currency" [error]="settingsFieldError('currency') ?? undefined" />
+                <app-input label="Tax Rate (%)" type="number" formControlName="taxRate" [error]="settingsFieldError('taxRate') ?? undefined" />
+              </div>
+              @if (canUpdate) {
+                <div class="form-actions"><app-button label="Save" type="submit" [loading]="saving()" /></div>
+              }
+            </form>
+          </app-card>
+        }
+        @case ('invoice') {
+          <app-card title="Invoice Preferences">
+            <form [formGroup]="settingsForm" (ngSubmit)="saveSettings()">
+              <app-input label="Invoice Prefix" formControlName="invoicePrefix" />
+              @if (canUpdate) {
+                <div class="form-actions"><app-button label="Save" type="submit" [loading]="saving()" /></div>
+              }
+            </form>
+          </app-card>
+        }
+        @case ('email') {
+          <app-card title="Email Settings">
+            <form [formGroup]="settingsForm" (ngSubmit)="saveSettings()">
+              <app-input label="From Address" type="email" formControlName="emailFromAddress" [error]="settingsFieldError('emailFromAddress') ?? undefined" />
+              @if (canUpdate) {
+                <div class="form-actions"><app-button label="Save" type="submit" [loading]="saving()" /></div>
+              }
+            </form>
+          </app-card>
+        }
+        @case ('notifications') {
+          <app-card title="Notification Settings">
+            <form [formGroup]="settingsForm" (ngSubmit)="saveSettings()">
+              <div class="toggle-list">
+                <label class="toggle-item"><input type="checkbox" formControlName="emailNotificationsEnabled" /> Email notifications</label>
+                <label class="toggle-item"><input type="checkbox" formControlName="systemNotificationsEnabled" /> System notifications</label>
+                <label class="toggle-item"><input type="checkbox" formControlName="orderNotificationsEnabled" /> Order notifications</label>
+                <label class="toggle-item"><input type="checkbox" formControlName="inventoryAlertsEnabled" /> Inventory alerts</label>
+                <label class="toggle-item"><input type="checkbox" formControlName="paymentAlertsEnabled" /> Payment alerts</label>
+              </div>
+              @if (canUpdate) {
+                <div class="form-actions"><app-button label="Save" type="submit" [loading]="saving()" /></div>
+              }
+            </form>
+          </app-card>
+        }
+        @case ('theme') {
+          <app-card title="Theme">
+            <form [formGroup]="settingsForm" (ngSubmit)="saveSettings()">
+              <div class="form-grid">
+                <div class="form-field">
+                  <label for="theme">Theme</label>
+                  <select id="theme" formControlName="theme" class="form-select">
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                    <option value="system">System</option>
+                  </select>
+                </div>
+              </div>
+              @if (canUpdate) {
+                <div class="form-actions"><app-button label="Save" type="submit" [loading]="saving()" /></div>
+              }
+            </form>
+          </app-card>
+        }
+        @case ('security') {
+          <app-card title="Security">
+            <p class="text-muted">Security settings such as password policies and session management are managed at the system level.</p>
+            @if (profile(); as p) {
+              <dl class="detail-list">
+                <div><dt>Subscription Plan</dt><dd>{{ p.subscriptionPlan }}</dd></div>
+                <div><dt>Account Status</dt><dd>{{ p.isActive ? 'Active' : 'Inactive' }}</dd></div>
+              </dl>
+            }
+          </app-card>
+        }
+        @case ('branding') {
+          <app-card title="Branding">
+            <form [formGroup]="settingsForm" (ngSubmit)="saveSettings()">
+              <app-input label="Logo URL" formControlName="logoUrl" />
+              @if (settings()?.logoUrl) {
+                <img [src]="settings()!.logoUrl!" alt="Logo preview" class="logo-preview" />
+              }
+              @if (canUpdate) {
+                <div class="form-actions"><app-button label="Save" type="submit" [loading]="saving()" /></div>
+              }
+            </form>
+          </app-card>
+        }
+      }
+    </div>
+  </div>
+}

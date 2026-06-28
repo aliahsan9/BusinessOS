@@ -1,0 +1,55 @@
+<app-breadcrumb [items]="breadcrumbs" />
+
+<app-page-header title="Notifications" subtitle="View and manage your notifications." [actions]="headerActions" />
+
+@if (error()) {
+  <app-alert variant="danger" [message]="error()!" [dismissible]="false" />
+  <div class="mb-3"><app-button label="Retry" [variant]="ButtonVariant.Outline" (clicked)="retry()" /></div>
+}
+
+<div class="toolbar">
+  <label class="checkbox-label">
+    <input type="checkbox" [ngModel]="unreadOnly()" (ngModelChange)="unreadOnly.set($event); onFilterChange()" />
+    Unread only
+  </label>
+  <app-button label="Mark All Read" [variant]="ButtonVariant.Outline" (clicked)="markAllRead()" />
+</div>
+
+@if (loading()) {
+  <div class="loading-stack">
+    @for (i of [1, 2, 3, 4, 5]; track i) {
+      <app-skeleton height="2.5rem" />
+    }
+  </div>
+} @else if (items().length === 0) {
+  <app-empty-state icon="🔔" title="No notifications" description="You're all caught up." />
+} @else {
+  <div class="notification-list">
+    @for (item of items(); track item.id) {
+      <article class="notification-item" [class.notification-item--unread]="!item.isRead">
+        <div class="notification-item__header">
+          <strong>{{ item.title }}</strong>
+          @if (!item.isRead) {
+            <app-badge label="Unread" variant="primary" />
+          }
+        </div>
+        <p>{{ item.message }}</p>
+        <div class="notification-item__meta">
+          <span>{{ item.type }}</span>
+          <span>{{ item.createdAt | date: 'medium' }}</span>
+          @if (!item.isRead) {
+            <button type="button" class="link-primary" (click)="markRead(item)">Mark read</button>
+          }
+        </div>
+      </article>
+    }
+  </div>
+
+  <app-pagination
+    [page]="page()"
+    [pageSize]="pageSize()"
+    [totalCount]="totalCount()"
+    [totalPages]="totalPages()"
+    (pageChange)="onPageChange($event)"
+  />
+}

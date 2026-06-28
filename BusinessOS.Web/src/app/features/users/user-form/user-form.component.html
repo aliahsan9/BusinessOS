@@ -1,0 +1,41 @@
+<app-breadcrumb
+  [items]="[
+    { label: 'Users', route: routes.users.list },
+    { label: isEdit() ? 'Edit User' : 'Create User' },
+  ]"
+/>
+
+<app-page-header
+  [title]="isEdit() ? 'Edit User' : 'Create User'"
+  subtitle="Manage user account details and status."
+/>
+
+@if (loading()) {
+  <app-skeleton height="20rem" variant="rect" />
+} @else {
+  <form [formGroup]="form" (ngSubmit)="submit()" class="entity-form">
+    <app-card title="User Information">
+      <div class="form-grid">
+        <app-input label="First Name *" formControlName="firstName" [error]="fieldError('firstName') ?? undefined" />
+        <app-input label="Last Name *" formControlName="lastName" [error]="fieldError('lastName') ?? undefined" />
+        <app-input label="Email *" type="email" formControlName="email" [error]="fieldError('email') ?? undefined" />
+        @if (!isEdit()) {
+          <app-input label="Password *" type="password" formControlName="password" [error]="fieldError('password') ?? undefined" />
+        }
+        @if (isEdit()) {
+          <div class="form-field">
+            <label class="checkbox-label">
+              <input type="checkbox" formControlName="isActive" />
+              Active user
+            </label>
+          </div>
+        }
+      </div>
+    </app-card>
+
+    <div class="entity-form__actions">
+      <a [routerLink]="routes.users.list"><app-button label="Cancel" [variant]="ButtonVariant.Outline" type="button" /></a>
+      <app-button [label]="isEdit() ? 'Save Changes' : 'Create User'" type="submit" [loading]="saving()" />
+    </div>
+  </form>
+}

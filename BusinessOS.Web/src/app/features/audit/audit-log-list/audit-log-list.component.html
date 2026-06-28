@@ -1,0 +1,58 @@
+<app-breadcrumb [items]="breadcrumbs" />
+
+<app-page-header title="Audit Logs" subtitle="Track system actions and entity changes." />
+
+@if (error()) {
+  <app-alert variant="danger" [message]="error()!" [dismissible]="false" />
+  <div class="mb-3"><app-button label="Retry" [variant]="ButtonVariant.Outline" (clicked)="retry()" /></div>
+}
+
+<div class="toolbar">
+  <input type="text" class="form-control filter-input" placeholder="Action" [ngModel]="actionFilter()" (ngModelChange)="actionFilter.set($event); onFilterChange()" />
+  <input type="text" class="form-control filter-input" placeholder="Entity type" [ngModel]="entityTypeFilter()" (ngModelChange)="entityTypeFilter.set($event); onFilterChange()" />
+  <input type="date" class="form-control filter-input" [ngModel]="dateFrom()" (ngModelChange)="dateFrom.set($event); onFilterChange()" />
+  <input type="date" class="form-control filter-input" [ngModel]="dateTo()" (ngModelChange)="dateTo.set($event); onFilterChange()" />
+</div>
+
+@if (loading()) {
+  <div class="loading-stack">
+    @for (i of [1, 2, 3, 4, 5]; track i) {
+      <app-skeleton height="2.5rem" />
+    }
+  </div>
+} @else if (items().length === 0) {
+  <app-empty-state icon="📋" title="No audit logs found" description="Adjust filters or check back later." />
+} @else {
+  <div class="bos-table-wrapper">
+    <table class="bos-table bos-table--striped bos-table--compact">
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Action</th>
+          <th>Entity Type</th>
+          <th>Entity ID</th>
+          <th>User ID</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (log of items(); track log.id) {
+          <tr>
+            <td>{{ log.createdAt | date: 'medium' }}</td>
+            <td>{{ log.action }}</td>
+            <td>{{ log.entityType }}</td>
+            <td><code>{{ log.entityId }}</code></td>
+            <td><code>{{ log.actorUserId }}</code></td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <app-pagination
+    [page]="page()"
+    [pageSize]="pageSize()"
+    [totalCount]="totalCount()"
+    [totalPages]="totalPages()"
+    (pageChange)="onPageChange($event)"
+  />
+}

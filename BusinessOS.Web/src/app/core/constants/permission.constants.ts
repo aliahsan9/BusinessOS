@@ -70,6 +70,38 @@ export const PermissionCodes = {
     update: 'Role.Update',
     delete: 'Role.Delete',
   },
+  expense: {
+    create: 'Expense.Create',
+    view: 'Expense.View',
+    update: 'Expense.Update',
+    delete: 'Expense.Delete',
+  },
+  expenseCategory: {
+    create: 'ExpenseCategory.Create',
+    view: 'ExpenseCategory.View',
+    update: 'ExpenseCategory.Update',
+    delete: 'ExpenseCategory.Delete',
+  },
+  finance: {
+    view: 'Finance.View',
+  },
+  audit: {
+    view: 'Audit.View',
+  },
+  notification: {
+    view: 'Notification.View',
+    update: 'Notification.Update',
+  },
+  report: {
+    view: 'Report.View',
+  },
+  settings: {
+    view: 'Settings.View',
+    update: 'Settings.Update',
+  },
+  systemAdmin: {
+    view: 'SystemAdmin.View',
+  },
 } as const;
 
 export const RoleNames = {

@@ -1,0 +1,72 @@
+<app-breadcrumb [items]="breadcrumbs" />
+
+<app-page-header title="Expenses" subtitle="Track and manage business expenses." [actions]="headerActions" />
+
+@if (error()) {
+  <app-alert variant="danger" [message]="error()!" [dismissible]="false" />
+  <div class="mb-3"><app-button label="Retry" [variant]="ButtonVariant.Outline" (clicked)="retry()" /></div>
+}
+
+<div class="toolbar">
+  <app-search-bar placeholder="Search expenses..." [value]="searchTerm()" (search)="onSearch($event)" />
+  <select class="form-select filter-input" [ngModel]="categoryFilter()" (ngModelChange)="categoryFilter.set($event); onFilterChange()">
+    <option value="">All categories</option>
+    @for (cat of categories(); track cat.id) {
+      <option [value]="cat.id">{{ cat.name }}</option>
+    }
+  </select>
+  <select class="form-select filter-input" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event); onFilterChange()">
+    <option value="">All statuses</option>
+    <option [value]="ExpenseStatus.Pending">Pending</option>
+    <option [value]="ExpenseStatus.Approved">Approved</option>
+    <option [value]="ExpenseStatus.Rejected">Rejected</option>
+    <option [value]="ExpenseStatus.Paid">Paid</option>
+  </select>
+  <input type="date" class="form-control filter-input" [ngModel]="dateFrom()" (ngModelChange)="dateFrom.set($event); onFilterChange()" />
+  <input type="date" class="form-control filter-input" [ngModel]="dateTo()" (ngModelChange)="dateTo.set($event); onFilterChange()" />
+</div>
+
+@if (loading()) {
+  <div class="loading-stack">@for (i of [1, 2, 3, 4, 5]; track i) { <app-skeleton height="2.5rem" /> }</div>
+} @else if (items().length === 0) {
+  <app-empty-state icon="💸" title="No expenses found" description="Add your first expense or adjust filters." />
+} @else {
+  <div class="bos-table-wrapper">
+    <table class="bos-table bos-table--striped bos-table--hover bos-table--compact">
+      <thead>
+        <tr>
+          <th><button type="button" class="sort-btn" (click)="toggleSort('title')">Title</button></th>
+          <th><button type="button" class="sort-btn" (click)="toggleSort('amount')">Amount</button></th>
+          <th><button type="button" class="sort-btn" (click)="toggleSort('expenseDate')">Date</button></th>
+          <th>Category</th>
+          <th>Vendor</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (expense of items(); track expense.id) {
+          <tr>
+            <td><a [routerLink]="[routes.expenses.base, expense.id]" class="link-primary">{{ expense.title }}</a></td>
+            <td>{{ expense.amount | currency }}</td>
+            <td>{{ expense.expenseDate | date: 'mediumDate' }}</td>
+            <td>{{ expense.categoryName }}</td>
+            <td>{{ expense.vendor || '—' }}</td>
+            <td><app-badge [label]="expense.status" [variant]="statusVariant(expense.status)" /></td>
+            <td class="bos-table__actions">
+              <a [routerLink]="[routes.expenses.base, expense.id]">View</a>
+              @if (canUpdate) { <a [routerLink]="[routes.expenses.base, expense.id, 'edit']">Edit</a> }
+              @if (canDelete) { <button type="button" class="link-danger" (click)="confirmDelete(expense)">Delete</button> }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  <app-pagination [page]="page()" [pageSize]="pageSize()" [totalCount]="totalCount()" [totalPages]="totalPages()" (pageChange)="onPageChange($event)" />
+}
+
+@if (deleteTarget()) {
+  <app-confirm-dialog title="Delete Expense" [message]="'Delete ' + deleteTarget()!.title + '?'"
+    confirmLabel="Delete" [loading]="deleting()" (confirmed)="deleteExpense()" (cancelled)="deleteTarget.set(null)" />
+}

@@ -5,10 +5,20 @@ import { OrderService } from '../../../core/services/order.service';
 import { InvoiceService } from '../../../core/services/invoice.service';
 import { PaymentService } from '../../../core/services/payment.service';
 import { DashboardService } from '../../../core/services/dashboard.service';
+import { ExpenseService } from '../../../core/services/expense.service';
+import { SupplierService } from '../../../core/services/supplier.service';
+import { InventoryService } from '../../../core/services/inventory.service';
+import { AuditService } from '../../../core/services/audit.service';
+import { UserService } from '../../../core/services/user.service';
 import { CustomerSummaryDto } from '../../../core/models/customer.model';
 import { OrderSummaryDto } from '../../../core/models/order.model';
 import { InvoiceSummaryDto } from '../../../core/models/invoice.model';
 import { PaymentSummaryDto } from '../../../core/models/payment.model';
+import { ExpenseSummaryDto } from '../../../core/models/expense.model';
+import { SupplierDto } from '../../../core/models/supplier.model';
+import { InventorySummary } from '../../../core/models/inventory.model';
+import { AuditLogDto } from '../../../core/models/audit.model';
+import { UserSummaryDto } from '../../../core/models/user.model';
 import { RevenueTrend, SalesAnalyticsResponse } from '../../../core/models/dashboard.model';
 import { ButtonVariant, InvoiceStatus } from '../../../core/enums';
 import { ExportColumn, ExportHelper } from '../../../core/helpers/export.helper';
@@ -20,7 +30,18 @@ import { AppSkeletonComponent } from '../../../shared/components/app-skeleton/ap
 import { AppAlertComponent } from '../../../shared/components/app-alert/app-alert.component';
 import { AppEmptyStateComponent } from '../../../shared/components/app-empty-state/app-empty-state.component';
 
-type ReportTab = 'customers' | 'sales' | 'invoices' | 'payments' | 'revenue' | 'outstanding';
+type ReportTab =
+  | 'customers'
+  | 'sales'
+  | 'invoices'
+  | 'payments'
+  | 'revenue'
+  | 'outstanding'
+  | 'expenses'
+  | 'suppliers'
+  | 'inventory'
+  | 'audit'
+  | 'users';
 
 @Component({
   selector: 'app-reports',
@@ -47,6 +68,11 @@ export class ReportsComponent implements OnInit {
   private readonly invoiceService = inject(InvoiceService);
   private readonly paymentService = inject(PaymentService);
   private readonly dashboardService = inject(DashboardService);
+  private readonly expenseService = inject(ExpenseService);
+  private readonly supplierService = inject(SupplierService);
+  private readonly inventoryService = inject(InventoryService);
+  private readonly auditService = inject(AuditService);
+  private readonly userService = inject(UserService);
 
   readonly activeTab = signal<ReportTab>('customers');
   readonly loading = signal(false);
@@ -59,6 +85,11 @@ export class ReportsComponent implements OnInit {
   readonly sales = signal<SalesAnalyticsResponse | null>(null);
   readonly revenueTrends = signal<RevenueTrend[]>([]);
   readonly outstanding = signal<InvoiceSummaryDto[]>([]);
+  readonly expenses = signal<ExpenseSummaryDto[]>([]);
+  readonly suppliers = signal<SupplierDto[]>([]);
+  readonly inventory = signal<InventorySummary[]>([]);
+  readonly auditLogs = signal<AuditLogDto[]>([]);
+  readonly users = signal<UserSummaryDto[]>([]);
 
   readonly routes = ROUTES;
   readonly tabs: { id: ReportTab; label: string }[] = [
@@ -68,6 +99,11 @@ export class ReportsComponent implements OnInit {
     { id: 'payments', label: 'Payments' },
     { id: 'revenue', label: 'Revenue' },
     { id: 'outstanding', label: 'Outstanding' },
+    { id: 'expenses', label: 'Expenses' },
+    { id: 'suppliers', label: 'Suppliers' },
+    { id: 'inventory', label: 'Inventory' },
+    { id: 'audit', label: 'Audit' },
+    { id: 'users', label: 'Users' },
   ];
 
   readonly breadcrumbs = [{ label: 'Reports', route: ROUTES.reports }];
@@ -123,10 +159,38 @@ export class ReportsComponent implements OnInit {
       case 'outstanding':
         this.invoiceService.getAll({ pageSize: 500 }).subscribe({
           next: (r) =>
-            this.finishLoad(() =>
-              this.outstanding.set(r.items.filter((i) => i.outstandingAmount > 0)),
-            ),
+            this.finishLoad(() => this.outstanding.set(r.items.filter((i) => i.outstandingAmount > 0))),
           error: () => this.failLoad('Failed to load outstanding report.'),
+        });
+        break;
+      case 'expenses':
+        this.expenseService.getAll({ pageSize: 500 }).subscribe({
+          next: (r) => this.finishLoad(() => this.expenses.set(r.items)),
+          error: () => this.failLoad('Failed to load expense report.'),
+        });
+        break;
+      case 'suppliers':
+        this.supplierService.getAll({ pageSize: 500 }).subscribe({
+          next: (r) => this.finishLoad(() => this.suppliers.set(r.items)),
+          error: () => this.failLoad('Failed to load supplier report.'),
+        });
+        break;
+      case 'inventory':
+        this.inventoryService.getAll({ pageSize: 500 }).subscribe({
+          next: (r) => this.finishLoad(() => this.inventory.set(r.items)),
+          error: () => this.failLoad('Failed to load inventory report.'),
+        });
+        break;
+      case 'audit':
+        this.auditService.getAll({ pageSize: 500 }).subscribe({
+          next: (r) => this.finishLoad(() => this.auditLogs.set(r.items)),
+          error: () => this.failLoad('Failed to load audit report.'),
+        });
+        break;
+      case 'users':
+        this.userService.getAll({ pageSize: 500 }).subscribe({
+          next: (r) => this.finishLoad(() => this.users.set(r.items)),
+          error: () => this.failLoad('Failed to load user report.'),
         });
         break;
     }
@@ -202,6 +266,49 @@ export class ReportsComponent implements OnInit {
         { header: 'Outstanding', accessor: (r) => r.outstandingAmount },
       ];
       this.download(format, filename, this.outstanding(), columns);
+    } else if (tab === 'expenses') {
+      const columns: ExportColumn<ExpenseSummaryDto>[] = [
+        { header: 'Title', accessor: (r) => r.title },
+        { header: 'Category', accessor: (r) => r.categoryName },
+        { header: 'Date', accessor: (r) => r.expenseDate },
+        { header: 'Amount', accessor: (r) => r.amount },
+        { header: 'Status', accessor: (r) => r.status },
+      ];
+      this.download(format, filename, this.expenses(), columns);
+    } else if (tab === 'suppliers') {
+      const columns: ExportColumn<SupplierDto>[] = [
+        { header: 'Name', accessor: (r) => r.name },
+        { header: 'Email', accessor: (r) => r.email },
+        { header: 'Phone', accessor: (r) => r.phone },
+        { header: 'Contact', accessor: (r) => r.contactPerson ?? '' },
+      ];
+      this.download(format, filename, this.suppliers(), columns);
+    } else if (tab === 'inventory') {
+      const columns: ExportColumn<InventorySummary>[] = [
+        { header: 'Product', accessor: (r) => r.productName },
+        { header: 'SKU', accessor: (r) => r.productSku },
+        { header: 'Stock', accessor: (r) => r.currentStock },
+        { header: 'Reorder Level', accessor: (r) => r.reorderLevel },
+        { header: 'Low Stock', accessor: (r) => (r.isLowStock ? 'Yes' : 'No') },
+      ];
+      this.download(format, filename, this.inventory(), columns);
+    } else if (tab === 'audit') {
+      const columns: ExportColumn<AuditLogDto>[] = [
+        { header: 'Timestamp', accessor: (r) => r.createdAt },
+        { header: 'Action', accessor: (r) => r.action },
+        { header: 'Entity Type', accessor: (r) => r.entityType },
+        { header: 'Entity ID', accessor: (r) => r.entityId },
+        { header: 'User ID', accessor: (r) => r.actorUserId },
+      ];
+      this.download(format, filename, this.auditLogs(), columns);
+    } else if (tab === 'users') {
+      const columns: ExportColumn<UserSummaryDto>[] = [
+        { header: 'Name', accessor: (r) => r.fullName },
+        { header: 'Email', accessor: (r) => r.email },
+        { header: 'Roles', accessor: (r) => r.roles.join(', ') },
+        { header: 'Active', accessor: (r) => (r.isActive ? 'Yes' : 'No') },
+      ];
+      this.download(format, filename, this.users(), columns);
     }
   }
 

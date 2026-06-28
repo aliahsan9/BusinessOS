@@ -79,6 +79,47 @@ export const routes: Routes = [
         path: 'reports',
         loadChildren: () => import('./features/reports/reports.routes').then((m) => m.REPORT_ROUTES),
       },
+      {
+        path: 'expenses',
+        loadChildren: () => import('./features/expenses/expenses.routes').then((m) => m.EXPENSE_ROUTES),
+      },
+      {
+        path: 'expense-categories',
+        loadChildren: () =>
+          import('./features/expense-categories/expense-categories.routes').then((m) => m.EXPENSE_CATEGORY_ROUTES),
+      },
+      {
+        path: 'finance',
+        loadChildren: () => import('./features/finance/finance.routes').then((m) => m.FINANCE_ROUTES),
+      },
+      {
+        path: 'users',
+        loadChildren: () => import('./features/users/users.routes').then((m) => m.USER_ROUTES),
+      },
+      {
+        path: 'roles',
+        loadChildren: () => import('./features/roles/roles.routes').then((m) => m.ROLE_ROUTES),
+      },
+      {
+        path: 'permissions',
+        loadChildren: () => import('./features/permissions/permissions.routes').then((m) => m.PERMISSION_ROUTES),
+      },
+      {
+        path: 'audit',
+        loadChildren: () => import('./features/audit/audit.routes').then((m) => m.AUDIT_ROUTES),
+      },
+      {
+        path: 'notifications',
+        loadChildren: () => import('./features/notifications/notifications.routes').then((m) => m.NOTIFICATION_ROUTES),
+      },
+      {
+        path: 'settings',
+        loadChildren: () => import('./features/settings/settings.routes').then((m) => m.SETTINGS_ROUTES),
+      },
+      {
+        path: 'admin',
+        loadChildren: () => import('./features/admin/admin.routes').then((m) => m.ADMIN_ROUTES),
+      },
       ...buildFeatureRoutes(),
     ],
   },

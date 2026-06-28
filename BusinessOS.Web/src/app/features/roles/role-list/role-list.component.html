@@ -1,0 +1,64 @@
+<app-breadcrumb [items]="breadcrumbs" />
+
+<app-page-header title="Roles" subtitle="Configure roles and assign permissions." [actions]="headerActions" />
+
+@if (error()) {
+  <app-alert variant="danger" [message]="error()!" [dismissible]="false" />
+  <div class="mb-3"><app-button label="Retry" [variant]="ButtonVariant.Outline" (clicked)="retry()" /></div>
+}
+
+@if (loading()) {
+  <div class="loading-stack">
+    @for (i of [1, 2, 3, 4, 5]; track i) {
+      <app-skeleton height="2.5rem" />
+    }
+  </div>
+} @else if (items().length === 0) {
+  <app-empty-state icon="🛡️" title="No roles found" description="Create your first role to manage permissions." />
+} @else {
+  <div class="bos-table-wrapper">
+    <table class="bos-table bos-table--striped bos-table--hover bos-table--compact">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+          <th>Permissions</th>
+          <th>Status</th>
+          <th>Created</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (role of items(); track role.id) {
+          <tr>
+            <td><a [routerLink]="[routes.roles.base, role.id]" class="link-primary">{{ role.name }}</a></td>
+            <td>{{ role.description || '—' }}</td>
+            <td>{{ role.permissions.length }}</td>
+            <td><app-badge [label]="role.isActive ? 'Active' : 'Inactive'" [variant]="role.isActive ? 'success' : 'neutral'" /></td>
+            <td>{{ role.createdAt | date: 'mediumDate' }}</td>
+            <td class="bos-table__actions">
+              <a [routerLink]="[routes.roles.base, role.id]">View</a>
+              @if (canUpdate) {
+                <a [routerLink]="[routes.roles.base, role.id, 'edit']">Edit</a>
+              }
+              @if (canDelete) {
+                <button type="button" class="link-danger" (click)="confirmDelete(role)">Delete</button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+@if (deleteTarget()) {
+  <app-confirm-dialog
+    title="Delete Role"
+    [message]="'Are you sure you want to delete ' + deleteTarget()!.name + '?'"
+    confirmLabel="Delete"
+    [loading]="deleting()"
+    (confirmed)="deleteRole()"
+    (cancelled)="deleteTarget.set(null)"
+  />
+}

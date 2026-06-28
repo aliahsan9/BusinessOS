@@ -91,3 +91,10 @@ export enum ThemeMode {
   Dark = 'dark',
   System = 'system',
 }
+
+export enum ExpenseStatus {
+  Pending = 'Pending',
+  Approved = 'Approved',
+  Rejected = 'Rejected',
+  Paid = 'Paid',
+}

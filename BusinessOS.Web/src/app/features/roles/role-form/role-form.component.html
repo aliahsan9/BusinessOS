@@ -1,0 +1,35 @@
+<app-breadcrumb
+  [items]="[
+    { label: 'Roles', route: routes.roles.list },
+    { label: isEdit() ? 'Edit Role' : 'Create Role' },
+  ]"
+/>
+
+<app-page-header [title]="isEdit() ? 'Edit Role' : 'Create Role'" subtitle="Define role name and description." />
+
+@if (loading()) {
+  <app-skeleton height="16rem" variant="rect" />
+} @else {
+  <form [formGroup]="form" (ngSubmit)="submit()" class="entity-form">
+    <app-card title="Role Details">
+      <div class="form-grid">
+        <app-input label="Name *" formControlName="name" [error]="fieldError('name') ?? undefined" />
+        <div class="form-field form-field--full">
+          <label for="description">Description</label>
+          <textarea id="description" formControlName="description" class="form-control" rows="3"></textarea>
+        </div>
+        <div class="form-field">
+          <label class="checkbox-label">
+            <input type="checkbox" formControlName="isActive" />
+            Active role
+          </label>
+        </div>
+      </div>
+    </app-card>
+
+    <div class="entity-form__actions">
+      <a [routerLink]="routes.roles.list"><app-button label="Cancel" [variant]="ButtonVariant.Outline" type="button" /></a>
+      <app-button [label]="isEdit() ? 'Save Changes' : 'Create Role'" type="submit" [loading]="saving()" />
+    </div>
+  </form>
+}

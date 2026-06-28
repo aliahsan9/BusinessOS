@@ -20,6 +20,16 @@ const IMPLEMENTED_PATHS = new Set([
   pathFromRoute(ROUTES.payments.base),
   pathFromRoute(ROUTES.sales.base),
   pathFromRoute(ROUTES.reports),
+  pathFromRoute(ROUTES.expenses.base),
+  pathFromRoute(ROUTES.expenseCategories.base),
+  pathFromRoute(ROUTES.finance.base),
+  pathFromRoute(ROUTES.users.base),
+  pathFromRoute(ROUTES.roles.base),
+  pathFromRoute(ROUTES.permissions.base),
+  pathFromRoute(ROUTES.audit.base),
+  pathFromRoute(ROUTES.notifications.base),
+  pathFromRoute(ROUTES.settings.base),
+  pathFromRoute(ROUTES.admin.base),
 ]);
 
 export function buildFeatureRoutes(): Routes {
