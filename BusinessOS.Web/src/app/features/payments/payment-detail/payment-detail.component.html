@@ -1,0 +1,67 @@
+@if (loading()) {
+  <app-skeleton height="12rem" variant="rect" />
+} @else if (!payment()) {
+  <app-empty-state icon="💳" title="Payment not found" description="This payment may have been removed." />
+} @else {
+  <app-breadcrumb
+    [items]="[
+      { label: 'Payments', route: routes.payments.list },
+      { label: payment()!.referenceNo || payment()!.id.slice(0, 8) },
+    ]"
+  />
+
+  <app-page-header
+    [title]="'Payment — ' + (payment()!.amount | currency)"
+    [subtitle]="payment()!.customerName"
+    [actions]="headerActions()"
+  />
+
+  @if (canDelete) {
+    <div class="workflow-actions">
+      <app-button label="Delete" [variant]="ButtonVariant.Danger" (clicked)="confirmDeleteOpen.set(true)" />
+    </div>
+  }
+
+  <div class="detail-grid">
+    <app-card title="Payment Details">
+      <dl class="detail-list">
+        <div>
+          <dt>Customer</dt>
+          <dd>
+            <a [routerLink]="[routes.customers.base, payment()!.customerId]" class="link-primary">
+              {{ payment()!.customerName }}
+            </a>
+          </dd>
+        </div>
+        <div>
+          <dt>Order</dt>
+          <dd>
+            <a [routerLink]="[routes.orders.base, payment()!.orderId]" class="link-primary">
+              {{ payment()!.orderNumber }}
+            </a>
+          </dd>
+        </div>
+        <div><dt>Amount</dt><dd>{{ payment()!.amount | currency }}</dd></div>
+        <div>
+          <dt>Method</dt>
+          <dd><app-badge [label]="payment()!.paymentMethod" variant="info" /></dd>
+        </div>
+        <div><dt>Payment Date</dt><dd>{{ payment()!.paymentDate | date: 'mediumDate' }}</dd></div>
+        <div><dt>Reference</dt><dd>{{ payment()!.referenceNo || '—' }}</dd></div>
+        <div><dt>Recorded</dt><dd>{{ payment()!.createdAt | date: 'medium' }}</dd></div>
+      </dl>
+    </app-card>
+  </div>
+}
+
+@if (confirmDeleteOpen()) {
+  <app-confirm-dialog
+    title="Delete Payment"
+    message="Are you sure you want to delete this payment record?"
+    confirmLabel="Delete"
+    [variant]="ButtonVariant.Danger"
+    [loading]="deleting()"
+    (confirmed)="deletePayment()"
+    (cancelled)="confirmDeleteOpen.set(false)"
+  />
+}

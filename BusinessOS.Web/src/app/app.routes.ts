@@ -51,6 +51,34 @@ export const routes: Routes = [
         path: 'purchase-orders',
         loadChildren: () => import('./features/purchase-orders/purchase-orders.routes').then((m) => m.PURCHASE_ORDER_ROUTES),
       },
+      {
+        path: 'customers',
+        loadChildren: () => import('./features/customers/customers.routes').then((m) => m.CUSTOMER_ROUTES),
+      },
+      {
+        path: 'orders',
+        loadChildren: () => import('./features/orders/orders.routes').then((m) => m.ORDER_ROUTES),
+      },
+      {
+        path: 'quotations',
+        loadChildren: () => import('./features/quotations/quotations.routes').then((m) => m.QUOTATION_ROUTES),
+      },
+      {
+        path: 'invoices',
+        loadChildren: () => import('./features/invoices/invoices.routes').then((m) => m.INVOICE_ROUTES),
+      },
+      {
+        path: 'payments',
+        loadChildren: () => import('./features/payments/payments.routes').then((m) => m.PAYMENT_ROUTES),
+      },
+      {
+        path: 'sales',
+        loadChildren: () => import('./features/sales/sales.routes').then((m) => m.SALES_ROUTES),
+      },
+      {
+        path: 'reports',
+        loadChildren: () => import('./features/reports/reports.routes').then((m) => m.REPORT_ROUTES),
+      },
       ...buildFeatureRoutes(),
     ],
   },

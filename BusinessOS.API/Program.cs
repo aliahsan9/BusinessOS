@@ -104,6 +104,13 @@ try
     app.MapInventoryEndpoints();
     app.MapDashboardEndpoints();
     app.MapRoleEndpoints();
+    app.MapExpenseEndpoints();
+    app.MapFinanceEndpoints();
+    app.MapUserEndpoints();
+    app.MapAuditEndpoints();
+    app.MapNotificationEndpoints();
+    app.MapSettingsEndpoints();
+    app.MapSystemAdminEndpoints();
 
     app.Run();
 }

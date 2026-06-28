@@ -1,0 +1,91 @@
+@if (loading()) {
+  <app-skeleton height="16rem" variant="rect" />
+} @else if (!customer()) {
+  <app-empty-state icon="🤝" title="Customer not found" description="This customer may have been removed." />
+} @else {
+  <app-breadcrumb
+    [items]="[
+      { label: 'Customers', route: routes.customers.list },
+      { label: customer()!.fullName },
+    ]"
+  />
+
+  <app-page-header
+    [title]="customer()!.fullName"
+    [subtitle]="customer()!.email"
+    [actions]="headerActions()"
+  />
+
+  <div class="detail-grid">
+    <app-card title="Contact Information">
+      <dl class="detail-list">
+        <div><dt>Phone</dt><dd>{{ customer()!.phoneNumber }}</dd></div>
+        <div><dt>Address</dt><dd>{{ customer()!.address }}</dd></div>
+        <div><dt>City</dt><dd>{{ customer()!.city }}</dd></div>
+        <div><dt>Country</dt><dd>{{ customer()!.country }}</dd></div>
+        <div><dt>Postal Code</dt><dd>{{ customer()!.postalCode }}</dd></div>
+        <div>
+          <dt>Status</dt>
+          <dd>
+            <app-badge [label]="customer()!.isActive ? 'Active' : 'Inactive'" [variant]="customer()!.isActive ? 'success' : 'neutral'" />
+          </dd>
+        </div>
+      </dl>
+    </app-card>
+
+    <app-card title="Analytics">
+      @if (analyticsLoading()) {
+        <app-skeleton height="8rem" />
+      } @else if (analytics()) {
+        <dl class="detail-list">
+          <div><dt>Total Orders</dt><dd>{{ analytics()!.totalOrders }}</dd></div>
+          <div><dt>Total Spending</dt><dd>{{ analytics()!.totalSpending | currency }}</dd></div>
+          <div><dt>Average Order Value</dt><dd>{{ analytics()!.averageOrderValue | currency }}</dd></div>
+          <div><dt>Last Order</dt><dd>{{ analytics()!.lastOrderDate ? (analytics()!.lastOrderDate | date: 'mediumDate') : '—' }}</dd></div>
+        </dl>
+      }
+    </app-card>
+  </div>
+
+  <app-card title="Order History" class="section-card">
+    @if (ordersLoading()) {
+      <app-skeleton height="8rem" />
+    } @else if (orders().length === 0) {
+      <app-empty-state icon="🛒" title="No orders yet" description="Create an order for this customer." />
+    } @else {
+      <div class="bos-table-wrapper">
+        <table class="bos-table bos-table--striped bos-table--compact">
+          <thead>
+            <tr>
+              <th>Order #</th>
+              <th>Date</th>
+              <th>Status</th>
+              <th>Total</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (order of orders(); track order.id) {
+              <tr>
+                <td>
+                  <a [routerLink]="[routes.orders.base, order.id]" class="link-primary">{{ order.orderNumber }}</a>
+                </td>
+                <td>{{ order.orderDate | date: 'mediumDate' }}</td>
+                <td><app-badge [label]="order.status" [variant]="orderStatusVariant(order.status)" /></td>
+                <td>{{ order.grandTotal | currency }}</td>
+                <td><a [routerLink]="[routes.orders.base, order.id]">View</a></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <app-pagination
+        [page]="orderPage()"
+        [pageSize]="5"
+        [totalCount]="orderTotalCount()"
+        [totalPages]="orderTotalPages()"
+        (pageChange)="onOrderPageChange($event)"
+      />
+    }
+  </app-card>
+}

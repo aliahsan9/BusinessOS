@@ -61,6 +61,30 @@ public static class PermissionCodes
     public const string RoleUpdate = "Role.Update";
     public const string RoleDelete = "Role.Delete";
 
+    public const string ExpenseCreate = "Expense.Create";
+    public const string ExpenseView = "Expense.View";
+    public const string ExpenseUpdate = "Expense.Update";
+    public const string ExpenseDelete = "Expense.Delete";
+
+    public const string ExpenseCategoryCreate = "ExpenseCategory.Create";
+    public const string ExpenseCategoryView = "ExpenseCategory.View";
+    public const string ExpenseCategoryUpdate = "ExpenseCategory.Update";
+    public const string ExpenseCategoryDelete = "ExpenseCategory.Delete";
+
+    public const string FinanceView = "Finance.View";
+
+    public const string AuditView = "Audit.View";
+
+    public const string NotificationView = "Notification.View";
+    public const string NotificationUpdate = "Notification.Update";
+
+    public const string ReportView = "Report.View";
+
+    public const string SettingsView = "Settings.View";
+    public const string SettingsUpdate = "Settings.Update";
+
+    public const string SystemAdminView = "SystemAdmin.View";
+
     public static readonly IReadOnlyList<PermissionDefinition> All =
     [
         new("Create Category", CategoryCreate, "Create product categories", "Category"),
@@ -120,7 +144,26 @@ public static class PermissionCodes
         new("Create Role", RoleCreate, "Create roles", "Role"),
         new("View Roles", RoleView, "View roles and permissions", "Role"),
         new("Update Role", RoleUpdate, "Update roles", "Role"),
-        new("Delete Role", RoleDelete, "Delete roles", "Role")
+        new("Delete Role", RoleDelete, "Delete roles", "Role"),
+
+        new("Create Expense", ExpenseCreate, "Create expenses", "Expense"),
+        new("View Expenses", ExpenseView, "View expenses", "Expense"),
+        new("Update Expense", ExpenseUpdate, "Update expenses", "Expense"),
+        new("Delete Expense", ExpenseDelete, "Delete expenses", "Expense"),
+
+        new("Create Expense Category", ExpenseCategoryCreate, "Create expense categories", "ExpenseCategory"),
+        new("View Expense Categories", ExpenseCategoryView, "View expense categories", "ExpenseCategory"),
+        new("Update Expense Category", ExpenseCategoryUpdate, "Update expense categories", "ExpenseCategory"),
+        new("Delete Expense Category", ExpenseCategoryDelete, "Delete expense categories", "ExpenseCategory"),
+
+        new("View Finance", FinanceView, "View financial dashboard and P&L", "Finance"),
+        new("View Audit Logs", AuditView, "View system audit logs", "Audit"),
+        new("View Notifications", NotificationView, "View notifications", "Notification"),
+        new("Update Notifications", NotificationUpdate, "Manage notification preferences", "Notification"),
+        new("View Reports", ReportView, "View and export reports", "Report"),
+        new("View Settings", SettingsView, "View business settings", "Settings"),
+        new("Update Settings", SettingsUpdate, "Update business settings", "Settings"),
+        new("View System Admin", SystemAdminView, "View system administration", "SystemAdmin")
     ];
 
     public static readonly IReadOnlySet<string> ViewOnly = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -136,7 +179,15 @@ public static class PermissionCodes
         QuotationView,
         InventoryView,
         UserView,
-        RoleView
+        RoleView,
+        ExpenseView,
+        ExpenseCategoryView,
+        FinanceView,
+        AuditView,
+        NotificationView,
+        ReportView,
+        SettingsView,
+        SystemAdminView
     };
 
     public static readonly IReadOnlySet<string> ManagerPermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)

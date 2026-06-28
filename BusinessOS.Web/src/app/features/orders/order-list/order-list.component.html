@@ -1,0 +1,106 @@
+<app-breadcrumb [items]="breadcrumbs" />
+
+<app-page-header
+  title="Orders"
+  subtitle="View and manage customer orders from placement through completion."
+  [actions]="headerActions"
+/>
+
+@if (error()) {
+  <app-alert variant="danger" [message]="error()!" [dismissible]="false" />
+  <div class="mb-3"><app-button label="Retry" [variant]="ButtonVariant.Outline" (clicked)="retry()" /></div>
+}
+
+<div class="toolbar">
+  <app-search-bar
+    placeholder="Search by order number or customer..."
+    [value]="searchTerm()"
+    (search)="onSearch($event)"
+  />
+
+  <div class="toolbar__filters">
+    <select class="form-select form-select-sm" [ngModel]="statusFilter()" (ngModelChange)="onStatusFilter($event)">
+      <option value="">All Statuses</option>
+      @for (status of statusOptions; track status) {
+        <option [value]="status">{{ status }}</option>
+      }
+    </select>
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="loading-stack">
+    @for (i of [1, 2, 3, 4, 5]; track i) {
+      <app-skeleton height="2.5rem" />
+    }
+  </div>
+} @else if (items().length === 0) {
+  <app-empty-state
+    icon="🛒"
+    title="No orders found"
+    description="Create an order or adjust your filters."
+  />
+} @else {
+  <div class="bos-table-wrapper">
+    <table class="bos-table bos-table--striped bos-table--hover bos-table--compact">
+      <thead>
+        <tr>
+          <th>Order #</th>
+          <th>Customer</th>
+          <th>Date</th>
+          <th>Status</th>
+          <th>Total</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (order of items(); track order.id) {
+          <tr>
+            <td>
+              <a [routerLink]="[routes.orders.base, order.id]" class="link-primary">
+                {{ order.orderNumber }}
+              </a>
+            </td>
+            <td>
+              <div>{{ order.customerName }}</div>
+              <small class="text-muted">{{ order.customerEmail }}</small>
+            </td>
+            <td>{{ order.orderDate | date: 'mediumDate' }}</td>
+            <td>
+              <app-badge [label]="order.status" [variant]="statusVariant(order.status)" />
+            </td>
+            <td>{{ order.grandTotal | currency }}</td>
+            <td class="bos-table__actions">
+              <a [routerLink]="[routes.orders.base, order.id]">View</a>
+              @if (canEditItem(order)) {
+                <a [routerLink]="[routes.orders.base, order.id, 'edit']">Edit</a>
+              }
+              @if (canDeleteItem(order)) {
+                <button type="button" class="link-danger" (click)="confirmDelete(order)">Delete</button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <app-pagination
+    [page]="page()"
+    [pageSize]="pageSize()"
+    [totalCount]="totalCount()"
+    [totalPages]="totalPages()"
+    (pageChange)="onPageChange($event)"
+  />
+}
+
+@if (deleteTarget()) {
+  <app-confirm-dialog
+    title="Delete Order"
+    [message]="'Are you sure you want to delete order ' + deleteTarget()!.orderNumber + '? This cannot be undone.'"
+    confirmLabel="Delete"
+    [loading]="deleting()"
+    (confirmed)="deleteOrder()"
+    (cancelled)="deleteTarget.set(null)"
+  />
+}

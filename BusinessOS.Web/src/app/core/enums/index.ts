@@ -32,6 +32,32 @@ export enum PurchaseOrderStatus {
   Cancelled = 'Cancelled',
 }
 
+export enum InvoiceStatus {
+  Draft = 'Draft',
+  Sent = 'Sent',
+  Paid = 'Paid',
+  PartiallyPaid = 'PartiallyPaid',
+  Overdue = 'Overdue',
+  Cancelled = 'Cancelled',
+}
+
+export enum QuotationStatus {
+  Draft = 'Draft',
+  Sent = 'Sent',
+  Accepted = 'Accepted',
+  Rejected = 'Rejected',
+  Expired = 'Expired',
+}
+
+export enum PaymentMethod {
+  Cash = 'Cash',
+  BankTransfer = 'BankTransfer',
+  CreditCard = 'CreditCard',
+  DebitCard = 'DebitCard',
+  Cheque = 'Cheque',
+  OnlinePayment = 'OnlinePayment',
+}
+
 export enum ProductStatus {
   Active = 'Active',
   Inactive = 'Inactive',

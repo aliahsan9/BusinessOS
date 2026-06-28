@@ -40,6 +40,24 @@ export const PermissionCodes = {
     update: 'PurchaseOrder.Update',
     delete: 'PurchaseOrder.Delete',
   },
+  payment: {
+    create: 'Payment.Create',
+    view: 'Payment.View',
+    update: 'Payment.Update',
+    delete: 'Payment.Delete',
+  },
+  invoice: {
+    create: 'Invoice.Create',
+    view: 'Invoice.View',
+    update: 'Invoice.Update',
+    delete: 'Invoice.Delete',
+  },
+  quotation: {
+    create: 'Quotation.Create',
+    view: 'Quotation.View',
+    update: 'Quotation.Update',
+    delete: 'Quotation.Delete',
+  },
   user: {
     create: 'User.Create',
     view: 'User.View',

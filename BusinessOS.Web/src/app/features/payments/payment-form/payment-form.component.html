@@ -1,0 +1,70 @@
+<app-breadcrumb
+  [items]="[
+    { label: 'Payments', route: routes.payments.list },
+    { label: isEdit() ? 'Edit Payment' : 'Record Payment' },
+  ]"
+/>
+
+<app-page-header
+  [title]="isEdit() ? 'Edit Payment' : 'Record Payment'"
+  subtitle="Apply a customer payment against an order."
+/>
+
+@if (loading()) {
+  <app-skeleton height="12rem" variant="rect" />
+} @else {
+  <app-card>
+    <form class="payment-form" [formGroup]="form" (ngSubmit)="submit()">
+      <div class="form-grid">
+        <div class="form-field">
+          <label for="orderId" class="form-label">Order</label>
+          <select
+            id="orderId"
+            class="form-select"
+            formControlName="orderId"
+            (change)="onOrderChange(form.controls.orderId.value)"
+          >
+            <option value="">Select order</option>
+            @for (order of orders(); track order.id) {
+              <option [value]="order.id">{{ order.orderNumber }} — {{ order.customerName }}</option>
+            }
+          </select>
+          @if (fieldError('orderId')) {
+            <span class="form-error">{{ fieldError('orderId') }}</span>
+          }
+        </div>
+
+        <div class="form-field">
+          <label class="form-label">Customer</label>
+          <input class="form-control" [value]="selectedCustomerName() || '—'" readonly />
+        </div>
+
+        <app-input label="Amount *" type="number" formControlName="amount" [error]="fieldError('amount') ?? undefined" />
+
+        <div class="form-field">
+          <label for="paymentMethod" class="form-label">Payment Method</label>
+          <select id="paymentMethod" class="form-select" formControlName="paymentMethod">
+            @for (method of methodOptions; track method) {
+              <option [value]="method">{{ method }}</option>
+            }
+          </select>
+        </div>
+
+        <app-input label="Payment Date *" type="date" formControlName="paymentDate" [error]="fieldError('paymentDate') ?? undefined" />
+
+        <app-input label="Reference No" formControlName="referenceNo" [error]="fieldError('referenceNo') ?? undefined" />
+      </div>
+
+      <div class="form-actions">
+        <app-button
+          type="submit"
+          [label]="isEdit() ? 'Save Changes' : 'Record Payment'"
+          [loading]="saving()"
+        />
+        <a [routerLink]="routes.payments.list">
+          <app-button label="Cancel" [variant]="ButtonVariant.Outline" type="button" />
+        </a>
+      </div>
+    </form>
+  </app-card>
+}

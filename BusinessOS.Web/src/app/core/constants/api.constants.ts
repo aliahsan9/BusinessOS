@@ -40,6 +40,9 @@ export const API_ENDPOINTS = {
   suppliers: '/suppliers',
   purchaseOrders: '/purchase-orders',
   orders: '/orders',
+  quotations: '/quotations',
+  invoices: '/invoices',
+  payments: '/payments',
 } as const;
 
 export const HTTP_HEADERS = {

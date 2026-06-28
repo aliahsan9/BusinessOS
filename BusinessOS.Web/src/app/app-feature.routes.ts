@@ -13,6 +13,13 @@ const IMPLEMENTED_PATHS = new Set([
   pathFromRoute(ROUTES.inventory.base),
   pathFromRoute(ROUTES.suppliers.base),
   pathFromRoute(ROUTES.purchaseOrders.base),
+  pathFromRoute(ROUTES.customers.base),
+  pathFromRoute(ROUTES.orders.base),
+  pathFromRoute(ROUTES.quotations.base),
+  pathFromRoute(ROUTES.invoices.base),
+  pathFromRoute(ROUTES.payments.base),
+  pathFromRoute(ROUTES.sales.base),
+  pathFromRoute(ROUTES.reports),
 ]);
 
 export function buildFeatureRoutes(): Routes {

@@ -37,6 +37,8 @@ public class BusinessOSDbContext
     public DbSet<Quotation> Quotations => Set<Quotation>();
     public DbSet<QuotationItem> QuotationItems => Set<QuotationItem>();
     public DbSet<Expense> Expenses => Set<Expense>();
+    public DbSet<ExpenseCategory> ExpenseCategories => Set<ExpenseCategory>();
+    public DbSet<TenantSettings> TenantSettings => Set<TenantSettings>();
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<Inventory> Inventories => Set<Inventory>();
     public DbSet<StockTransaction> StockTransactions => Set<StockTransaction>();
@@ -122,6 +124,15 @@ public class BusinessOSDbContext
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<Expense>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<ExpenseCategory>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<Notification>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<TenantSettings>()
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<Employee>()
