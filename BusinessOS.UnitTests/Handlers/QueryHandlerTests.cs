@@ -74,10 +74,14 @@ public class QueryHandlerTests : IDisposable
         {
             Id = customerId,
             TenantId = _tenantId,
-            Name = "Ali Customer",
+            FirstName = "Ali",
+            LastName = "Customer",
             Email = "ali@test.com",
-            Phone = "123",
-            Address = "Street"
+            PhoneNumber = "123",
+            Address = "Street",
+            City = "Lahore",
+            Country = "Pakistan",
+            PostalCode = "54000"
         });
 
         _context.Orders.Add(new Order

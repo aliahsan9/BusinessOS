@@ -1,4 +1,10 @@
-using BusinessOS.Application.Features.Auth.Commands.Login;
+using BusinessOS.Application.Features.Customers.Commands.CreateCustomer;
+using BusinessOS.Application.Features.Customers.Commands.DeleteCustomer;
+using BusinessOS.Application.Features.Customers.Commands.UpdateCustomer;
+using BusinessOS.Application.Features.Customers.Queries.GetAllCustomers;
+using BusinessOS.Application.Features.Customers.Queries.GetCustomerById;
+using BusinessOS.Application.Features.Customers.Queries.GetCustomerAnalytics;
+using BusinessOS.Application.Features.Customers.Queries.GetCustomerOrders;
 using BusinessOS.Application.Features.Auth.Commands.Register;
 using BusinessOS.Application.Features.Categories.Commands.CreateCategory;
 using BusinessOS.Application.Features.Categories.Commands.DeleteCategory;
@@ -161,33 +167,15 @@ public class ProductValidatorTests
 public class OrderValidatorTests
 {
     [Fact]
-    public void CreateOrderValidator_RejectsMissingCustomerName()
+    public void CreateOrderValidator_RejectsMissingCustomerId()
     {
         var validator = new CreateOrderCommandValidator();
         var result = validator.TestValidate(new CreateOrderCommand(
-            "",
-            "ali@test.com",
-            "",
-            "",
+            Guid.Empty,
             0,
             0,
             [new CreateOrderItemDto(Guid.NewGuid(), 1)]));
-        result.ShouldHaveValidationErrorFor(x => x.CustomerName);
-    }
-
-    [Fact]
-    public void CreateOrderValidator_RejectsInvalidEmail()
-    {
-        var validator = new CreateOrderCommandValidator();
-        var result = validator.TestValidate(new CreateOrderCommand(
-            "Ali",
-            "not-an-email",
-            "",
-            "",
-            0,
-            0,
-            [new CreateOrderItemDto(Guid.NewGuid(), 1)]));
-        result.ShouldHaveValidationErrorFor(x => x.CustomerEmail);
+        result.ShouldHaveValidationErrorFor(x => x.CustomerId);
     }
 
     [Fact]
@@ -195,10 +183,7 @@ public class OrderValidatorTests
     {
         var validator = new CreateOrderCommandValidator();
         var result = validator.TestValidate(new CreateOrderCommand(
-            "Ali",
-            "ali@test.com",
-            "",
-            "",
+            Guid.NewGuid(),
             0,
             0,
             []));
@@ -210,10 +195,7 @@ public class OrderValidatorTests
     {
         var validator = new CreateOrderCommandValidator();
         var result = validator.TestValidate(new CreateOrderCommand(
-            "Ali",
-            "ali@test.com",
-            "",
-            "",
+            Guid.NewGuid(),
             0,
             0,
             [new CreateOrderItemDto(Guid.NewGuid(), 0)]));
@@ -249,6 +231,82 @@ public class OrderValidatorTests
     {
         var validator = new DeleteOrderCommandValidator();
         var result = validator.TestValidate(new DeleteOrderCommand(Guid.Empty));
+        result.ShouldHaveValidationErrorFor(x => x.Id);
+    }
+}
+
+public class CustomerValidatorTests
+{
+    [Fact]
+    public void CreateCustomerValidator_RejectsMissingFirstName()
+    {
+        var validator = new CreateCustomerCommandValidator();
+        var result = validator.TestValidate(new CreateCustomerCommand(
+            "",
+            "Ahsan",
+            "ali@test.com",
+            "123",
+            "Street",
+            "Lahore",
+            "Pakistan",
+            "54000"));
+        result.ShouldHaveValidationErrorFor(x => x.FirstName);
+    }
+
+    [Fact]
+    public void CreateCustomerValidator_RejectsInvalidEmail()
+    {
+        var validator = new CreateCustomerCommandValidator();
+        var result = validator.TestValidate(new CreateCustomerCommand(
+            "Ali",
+            "Ahsan",
+            "not-an-email",
+            "123",
+            "Street",
+            "Lahore",
+            "Pakistan",
+            "54000"));
+        result.ShouldHaveValidationErrorFor(x => x.Email);
+    }
+
+    [Fact]
+    public void CreateCustomerValidator_RejectsMissingCountry()
+    {
+        var validator = new CreateCustomerCommandValidator();
+        var result = validator.TestValidate(new CreateCustomerCommand(
+            "Ali",
+            "Ahsan",
+            "ali@test.com",
+            "123",
+            "Street",
+            "Lahore",
+            "",
+            "54000"));
+        result.ShouldHaveValidationErrorFor(x => x.Country);
+    }
+
+    [Fact]
+    public void GetAllCustomersQueryValidator_RejectsInvalidSortBy()
+    {
+        var validator = new GetAllCustomersQueryValidator();
+        var result = validator.TestValidate(new GetAllCustomersQuery(
+            null, null, null, 1, 10, "invalid", BusinessOS.Application.Common.Models.SortDirection.Asc));
+        result.ShouldHaveValidationErrorFor(x => x.SortBy);
+    }
+
+    [Fact]
+    public void GetCustomerByIdQueryValidator_RejectsEmptyId()
+    {
+        var validator = new GetCustomerByIdQueryValidator();
+        var result = validator.TestValidate(new GetCustomerByIdQuery(Guid.Empty));
+        result.ShouldHaveValidationErrorFor(x => x.Id);
+    }
+
+    [Fact]
+    public void DeleteCustomerValidator_RejectsEmptyId()
+    {
+        var validator = new DeleteCustomerCommandValidator();
+        var result = validator.TestValidate(new DeleteCustomerCommand(Guid.Empty));
         result.ShouldHaveValidationErrorFor(x => x.Id);
     }
 }

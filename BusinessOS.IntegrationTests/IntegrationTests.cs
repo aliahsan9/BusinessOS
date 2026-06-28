@@ -4,6 +4,7 @@ using System.Text.Json;
 using BusinessOS.Application.Common.Models;
 using BusinessOS.Application.Features.Auth.DTOs;
 using BusinessOS.Application.Features.Categories.Queries;
+using BusinessOS.Application.Features.Customers.Queries;
 using BusinessOS.Application.Features.Orders.Queries;
 using BusinessOS.Application.Features.Products.Queries;
 using FluentAssertions;
@@ -541,6 +542,296 @@ public class ProductIntegrationTests : IntegrationTestBase
 }
 
 [Collection("IntegrationTests")]
+public class CustomerIntegrationTests : IntegrationTestBase
+{
+    public CustomerIntegrationTests(BusinessOSWebApplicationFactory factory)
+        : base(factory)
+    {
+    }
+
+    [Fact]
+    public async Task CreateCustomer_ReturnsCreated()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/customers",
+            auth,
+            new
+            {
+                firstName = "Ali",
+                lastName = "Ahsan",
+                email = $"ali_{Guid.NewGuid():N}@test.com",
+                phoneNumber = "1234567890",
+                address = "123 Main St",
+                city = "Lahore",
+                country = "Pakistan",
+                postalCode = "54000"
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+    }
+
+    [Fact]
+    public async Task CreateCustomer_WithDuplicateEmail_ReturnsConflict()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var email = $"dup_{Guid.NewGuid():N}@test.com";
+        await CreateCustomerAsync(auth, email);
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/customers",
+            auth,
+            new
+            {
+                firstName = "Other",
+                lastName = "User",
+                email,
+                phoneNumber = "123",
+                address = "Street",
+                city = "Lahore",
+                country = "Pakistan",
+                postalCode = "54000"
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task GetCustomers_ReturnsPagedResult()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        await CreateCustomerAsync(auth, $"c1_{Guid.NewGuid():N}@test.com", "Ali");
+        await CreateCustomerAsync(auth, $"c2_{Guid.NewGuid():N}@test.com", "Ahmed");
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            "/api/customers?page=1&pageSize=10&sortBy=createdAt&sortOrder=desc",
+            auth);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var page = await response.Content.ReadFromJsonAsync<PagedResult<CustomerSummaryResponse>>();
+        page!.Items.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task GetCustomer_ReturnsCustomer()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var customerId = await CreateCustomerAsync(auth, $"get_{Guid.NewGuid():N}@test.com");
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            $"/api/customers/{customerId}",
+            auth);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var customer = await response.Content.ReadFromJsonAsync<CustomerResponse>();
+        customer!.FirstName.Should().Be("Ali");
+    }
+
+    [Fact]
+    public async Task UpdateCustomer_ReturnsNoContent()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var customerId = await CreateCustomerAsync(auth, $"upd_{Guid.NewGuid():N}@test.com");
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            $"/api/customers/{customerId}",
+            auth,
+            new
+            {
+                firstName = "Ali",
+                lastName = "Updated",
+                email = $"upd_{Guid.NewGuid():N}@test.com",
+                phoneNumber = "999",
+                address = "New Address",
+                city = "Karachi",
+                country = "Pakistan",
+                postalCode = "75000",
+                isActive = true
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task DeleteCustomer_ReturnsNoContent()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var customerId = await CreateCustomerAsync(auth, $"del_{Guid.NewGuid():N}@test.com");
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Delete,
+            $"/api/customers/{customerId}",
+            auth);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task GetCustomerOrders_ReturnsPagedResult()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var customerId = await CreateCustomerAsync(auth, $"ord_{Guid.NewGuid():N}@test.com");
+        await CreateOrderForCustomerAsync(auth, customerId);
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            $"/api/customers/{customerId}/orders?page=1&pageSize=10",
+            auth);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var page = await response.Content.ReadFromJsonAsync<PagedResult<CustomerOrderResponse>>();
+        page!.Items.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task GetCustomerAnalytics_ReturnsAnalytics()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var customerId = await CreateCustomerAsync(auth, $"ana_{Guid.NewGuid():N}@test.com");
+        await CreateOrderForCustomerAsync(auth, customerId);
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            $"/api/customers/{customerId}/analytics",
+            auth);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var analytics = await response.Content.ReadFromJsonAsync<CustomerAnalyticsResponse>();
+        analytics!.TotalOrders.Should().BeGreaterThanOrEqualTo(1);
+    }
+
+    [Fact]
+    public async Task CreateCustomer_WithInvalidEmail_ReturnsBadRequest()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/customers",
+            auth,
+            new
+            {
+                firstName = "Ali",
+                lastName = "Ahsan",
+                email = "not-an-email",
+                phoneNumber = "123",
+                address = "Street",
+                city = "Lahore",
+                country = "Pakistan",
+                postalCode = "54000"
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task ProtectedCustomersEndpoint_WithoutToken_ReturnsUnauthorized()
+    {
+        var response = await Client.GetAsync("/api/customers");
+        response.StatusCode.Should().BeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.NotFound);
+    }
+
+    private async Task<Guid> CreateCustomerAsync(
+        AuthResponse auth,
+        string email,
+        string firstName = "Ali")
+    {
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/customers",
+            auth,
+            new
+            {
+                firstName,
+                lastName = "Ahsan",
+                email,
+                phoneNumber = "1234567890",
+                address = "123 Main St",
+                city = "Lahore",
+                country = "Pakistan",
+                postalCode = "54000"
+            });
+
+        response.EnsureSuccessStatusCode();
+        var created = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return created.GetProperty("id").GetGuid();
+    }
+
+    private async Task CreateOrderForCustomerAsync(AuthResponse auth, Guid customerId)
+    {
+        var categoryId = await CreateCategoryAsync(auth, $"Cat {Guid.NewGuid():N}");
+
+        var productResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/products",
+            auth,
+            new
+            {
+                categoryId,
+                name = "Order Product",
+                sku = $"SKU-{Guid.NewGuid():N}",
+                costPrice = 10,
+                salePrice = 25,
+                reorderLevel = 1
+            });
+
+        productResponse.EnsureSuccessStatusCode();
+        var product = await productResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var productId = product.GetProperty("id").GetGuid();
+
+        var orderResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/orders",
+            auth,
+            new
+            {
+                customerId,
+                discount = 0,
+                tax = 0,
+                items = new[] { new { productId, quantity = 1m } }
+            });
+
+        orderResponse.EnsureSuccessStatusCode();
+    }
+
+    private async Task<Guid> CreateCategoryAsync(AuthResponse auth, string name)
+    {
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/categories",
+            auth,
+            new { name });
+
+        response.EnsureSuccessStatusCode();
+        var created = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return created.GetProperty("id").GetGuid();
+    }
+}
+
+[Collection("IntegrationTests")]
 public class OrderIntegrationTests : IntegrationTestBase
 {
     public OrderIntegrationTests(BusinessOSWebApplicationFactory factory)
@@ -552,6 +843,7 @@ public class OrderIntegrationTests : IntegrationTestBase
     public async Task CreateOrder_ReturnsCreated()
     {
         var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var customerId = await CreateCustomerAsync(auth);
         var productId = await CreateProductAsync(auth);
 
         var response = await IntegrationHttp.SendAuthorizedAsync(
@@ -561,10 +853,7 @@ public class OrderIntegrationTests : IntegrationTestBase
             auth,
             new
             {
-                customerName = "Ali Ahsan",
-                customerEmail = "ali@test.com",
-                customerPhone = "1234567890",
-                customerAddress = "123 Main St",
+                customerId,
                 discount = 0,
                 tax = 0,
                 items = new[] { new { productId, quantity = 2m } }
@@ -647,10 +936,6 @@ public class OrderIntegrationTests : IntegrationTestBase
             auth,
             new
             {
-                customerName = "Ali Updated",
-                customerEmail = order.CustomerEmail,
-                customerPhone = order.CustomerPhone,
-                customerAddress = order.CustomerAddress,
                 discount = 1,
                 tax = 1,
                 items = new[] { new { productId, quantity = 3m } }
@@ -731,6 +1016,7 @@ public class OrderIntegrationTests : IntegrationTestBase
     public async Task CreateOrder_WithInvalidProduct_ReturnsBadRequest()
     {
         var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var customerId = await CreateCustomerAsync(auth);
 
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
@@ -739,10 +1025,7 @@ public class OrderIntegrationTests : IntegrationTestBase
             auth,
             new
             {
-                customerName = "Ali",
-                customerEmail = "ali@test.com",
-                customerPhone = "",
-                customerAddress = "",
+                customerId,
                 discount = 0,
                 tax = 0,
                 items = new[] { new { productId = Guid.NewGuid(), quantity = 1m } }
@@ -755,6 +1038,7 @@ public class OrderIntegrationTests : IntegrationTestBase
     public async Task CreateOrder_WithInvalidQuantity_ReturnsBadRequest()
     {
         var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var customerId = await CreateCustomerAsync(auth);
         var productId = await CreateProductAsync(auth);
 
         var response = await IntegrationHttp.SendAuthorizedAsync(
@@ -764,10 +1048,7 @@ public class OrderIntegrationTests : IntegrationTestBase
             auth,
             new
             {
-                customerName = "Ali",
-                customerEmail = "ali@test.com",
-                customerPhone = "",
-                customerAddress = "",
+                customerId,
                 discount = 0,
                 tax = 0,
                 items = new[] { new { productId, quantity = 0m } }
@@ -822,8 +1103,33 @@ public class OrderIntegrationTests : IntegrationTestBase
         return created.GetProperty("id").GetGuid();
     }
 
+    private async Task<Guid> CreateCustomerAsync(AuthResponse auth)
+    {
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/customers",
+            auth,
+            new
+            {
+                firstName = "Ali",
+                lastName = "Ahsan",
+                email = $"ali_{Guid.NewGuid():N}@test.com",
+                phoneNumber = "1234567890",
+                address = "123 Main St",
+                city = "Lahore",
+                country = "Pakistan",
+                postalCode = "54000"
+            });
+
+        response.EnsureSuccessStatusCode();
+        var created = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return created.GetProperty("id").GetGuid();
+    }
+
     private async Task<Guid> CreateOrderAsync(AuthResponse auth)
     {
+        var customerId = await CreateCustomerAsync(auth);
         var productId = await CreateProductAsync(auth);
 
         var response = await IntegrationHttp.SendAuthorizedAsync(
@@ -833,10 +1139,7 @@ public class OrderIntegrationTests : IntegrationTestBase
             auth,
             new
             {
-                customerName = "Ali Ahsan",
-                customerEmail = $"ali_{Guid.NewGuid():N}@test.com",
-                customerPhone = "123",
-                customerAddress = "Address",
+                customerId,
                 discount = 0,
                 tax = 0,
                 items = new[] { new { productId, quantity = 1m } }
