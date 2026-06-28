@@ -35,9 +35,34 @@ public static class DbInitializer
         }
         else
         {
-            await context.Database.MigrateAsync();
+            await MigrateWithRetryAsync(context, logger);
         }
 
         await RbacSeeder.SeedAsync(context, roleManager, userManager, logger);
+    }
+
+    private static async Task MigrateWithRetryAsync(
+        BusinessOSDbContext context,
+        ILogger logger,
+        int maxAttempts = 5)
+    {
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                await context.Database.MigrateAsync();
+                return;
+            }
+            catch (Exception ex) when (attempt < maxAttempts)
+            {
+                logger.LogWarning(
+                    ex,
+                    "Database migration attempt {Attempt}/{MaxAttempts} failed. Retrying...",
+                    attempt,
+                    maxAttempts);
+
+                await Task.Delay(TimeSpan.FromSeconds(attempt * 2));
+            }
+        }
     }
 }
