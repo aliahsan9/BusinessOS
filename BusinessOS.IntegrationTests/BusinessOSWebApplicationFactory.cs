@@ -45,7 +45,7 @@ public class BusinessOSWebApplicationFactory : WebApplicationFactory<Program>
     }
 }
 
-public abstract class IntegrationTestBase : IClassFixture<BusinessOSWebApplicationFactory>
+public abstract class IntegrationTestBase
 {
     protected IntegrationTestBase(BusinessOSWebApplicationFactory factory)
     {
@@ -55,3 +55,6 @@ public abstract class IntegrationTestBase : IClassFixture<BusinessOSWebApplicati
 
     protected HttpClient Client { get; }
 }
+
+[CollectionDefinition("IntegrationTests")]
+public class IntegrationTestCollection : ICollectionFixture<BusinessOSWebApplicationFactory>;

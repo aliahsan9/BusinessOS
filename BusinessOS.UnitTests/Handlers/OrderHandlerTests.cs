@@ -163,6 +163,91 @@ public class UpdateOrderHandlerTests
 
         await act.Should().ThrowAsync<NotFoundException>();
     }
+
+    [Fact]
+    public async Task Handle_WithValidOrder_UpdatesTotals()
+    {
+        var tenantId = Guid.NewGuid();
+        var tenantProvider = new BusinessOS.Infrastructure.MultiTenancy.TenantProvider();
+        tenantProvider.SetTenantId(tenantId);
+
+        var options = new DbContextOptionsBuilder<BusinessOS.Infrastructure.Data.BusinessOSDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+
+        await using var db = new BusinessOS.Infrastructure.Data.BusinessOSDbContext(options, tenantProvider);
+
+        var customerId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+
+        db.Customers.Add(new Customer
+        {
+            Id = customerId,
+            TenantId = tenantId,
+            Name = "Ali",
+            Email = "ali@test.com",
+            Phone = "123",
+            Address = "Street"
+        });
+
+        db.Products.Add(new Product
+        {
+            Id = productId,
+            TenantId = tenantId,
+            CategoryId = Guid.NewGuid(),
+            Name = "Widget",
+            SKU = "W-1",
+            SalePrice = 10,
+            CostPrice = 5,
+            IsActive = true
+        });
+
+        db.Orders.Add(new Order
+        {
+            Id = orderId,
+            TenantId = tenantId,
+            CustomerId = customerId,
+            OrderNumber = "ORD-2026-000001",
+            Status = OrderStatusNames.Pending,
+            TotalAmount = 10,
+            GrandTotal = 10,
+            OrderItems =
+            [
+                new OrderItem
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantId,
+                    ProductId = productId,
+                    Quantity = 1,
+                    UnitPrice = 10,
+                    Total = 10
+                }
+            ]
+        });
+
+        await db.SaveChangesAsync();
+
+        var handler = new UpdateOrderCommandHandler(
+            db,
+            Mock.Of<ILogger<UpdateOrderCommandHandler>>());
+
+        await handler.Handle(
+            new UpdateOrderCommand(
+                orderId,
+                "Ali Updated",
+                "ali@test.com",
+                "123",
+                "Street",
+                0,
+                0,
+                [new CreateOrderItemDto(productId, 3)]),
+            CancellationToken.None);
+
+        var updated = await db.Orders.FindAsync(orderId);
+        updated!.TotalAmount.Should().Be(30);
+        updated.GrandTotal.Should().Be(30);
+    }
 }
 
 public class DeleteOrderHandlerTests

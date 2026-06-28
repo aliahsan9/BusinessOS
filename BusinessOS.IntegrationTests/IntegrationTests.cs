@@ -10,6 +10,7 @@ using FluentAssertions;
 
 namespace BusinessOS.IntegrationTests;
 
+[Collection("IntegrationTests")]
 public class AuthIntegrationTests : IntegrationTestBase
 {
     public AuthIntegrationTests(BusinessOSWebApplicationFactory factory)
@@ -126,6 +127,7 @@ public class AuthIntegrationTests : IntegrationTestBase
     }
 }
 
+[Collection("IntegrationTests")]
 public class CategoryIntegrationTests : IntegrationTestBase
 {
     public CategoryIntegrationTests(BusinessOSWebApplicationFactory factory)
@@ -304,6 +306,7 @@ public class CategoryIntegrationTests : IntegrationTestBase
     }
 }
 
+[Collection("IntegrationTests")]
 public class ProductIntegrationTests : IntegrationTestBase
 {
     public ProductIntegrationTests(BusinessOSWebApplicationFactory factory)
@@ -537,6 +540,7 @@ public class ProductIntegrationTests : IntegrationTestBase
     }
 }
 
+[Collection("IntegrationTests")]
 public class OrderIntegrationTests : IntegrationTestBase
 {
     public OrderIntegrationTests(BusinessOSWebApplicationFactory factory)
@@ -625,8 +629,16 @@ public class OrderIntegrationTests : IntegrationTestBase
     public async Task UpdateOrder_ReturnsNoContent()
     {
         var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
-        var productId = await CreateProductAsync(auth);
         var orderId = await CreateOrderAsync(auth);
+
+        var getResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            $"/api/orders/{orderId}",
+            auth);
+
+        var order = await getResponse.Content.ReadFromJsonAsync<OrderDto>();
+        var productId = order!.Items.First().ProductId;
 
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
@@ -636,9 +648,9 @@ public class OrderIntegrationTests : IntegrationTestBase
             new
             {
                 customerName = "Ali Updated",
-                customerEmail = "ali@test.com",
-                customerPhone = "123",
-                customerAddress = "Address",
+                customerEmail = order.CustomerEmail,
+                customerPhone = order.CustomerPhone,
+                customerAddress = order.CustomerAddress,
                 discount = 1,
                 tax = 1,
                 items = new[] { new { productId, quantity = 3m } }
