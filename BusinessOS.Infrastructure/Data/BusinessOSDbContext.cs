@@ -33,6 +33,9 @@ public class BusinessOSDbContext
     public DbSet<Purchase> Purchases => Set<Purchase>();
     public DbSet<PurchaseItem> PurchaseItems => Set<PurchaseItem>();
     public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<Quotation> Quotations => Set<Quotation>();
+    public DbSet<QuotationItem> QuotationItems => Set<QuotationItem>();
     public DbSet<Expense> Expenses => Set<Expense>();
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<Inventory> Inventories => Set<Inventory>();
@@ -137,6 +140,15 @@ public class BusinessOSDbContext
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<Payment>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<Invoice>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<Quotation>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<QuotationItem>()
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<Tenant>()

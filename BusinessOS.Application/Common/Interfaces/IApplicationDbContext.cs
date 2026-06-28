@@ -13,6 +13,10 @@ public interface IApplicationDbContext
     DbSet<PurchaseItem> PurchaseItems { get; }
     DbSet<Order> Orders { get; }
     DbSet<OrderItem> OrderItems { get; }
+    DbSet<Payment> Payments { get; }
+    DbSet<Invoice> Invoices { get; }
+    DbSet<Quotation> Quotations { get; }
+    DbSet<QuotationItem> QuotationItems { get; }
     DbSet<Inventory> Inventories { get; }
     DbSet<StockTransaction> StockTransactions { get; }
     DbSet<Role> RbacRoles { get; }

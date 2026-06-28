@@ -32,6 +32,21 @@ public static class PermissionCodes
     public const string PurchaseOrderUpdate = "PurchaseOrder.Update";
     public const string PurchaseOrderDelete = "PurchaseOrder.Delete";
 
+    public const string PaymentCreate = "Payment.Create";
+    public const string PaymentView = "Payment.View";
+    public const string PaymentUpdate = "Payment.Update";
+    public const string PaymentDelete = "Payment.Delete";
+
+    public const string InvoiceCreate = "Invoice.Create";
+    public const string InvoiceView = "Invoice.View";
+    public const string InvoiceUpdate = "Invoice.Update";
+    public const string InvoiceDelete = "Invoice.Delete";
+
+    public const string QuotationCreate = "Quotation.Create";
+    public const string QuotationView = "Quotation.View";
+    public const string QuotationUpdate = "Quotation.Update";
+    public const string QuotationDelete = "Quotation.Delete";
+
     public const string InventoryView = "Inventory.View";
     public const string InventoryUpdate = "Inventory.Update";
     public const string InventoryAdjust = "Inventory.Adjust";
@@ -78,6 +93,21 @@ public static class PermissionCodes
         new("Update Purchase Order", PurchaseOrderUpdate, "Update purchase orders", "PurchaseOrder"),
         new("Delete Purchase Order", PurchaseOrderDelete, "Delete purchase orders", "PurchaseOrder"),
 
+        new("Create Payment", PaymentCreate, "Create payments", "Payment"),
+        new("View Payments", PaymentView, "View payments", "Payment"),
+        new("Update Payment", PaymentUpdate, "Update payments", "Payment"),
+        new("Delete Payment", PaymentDelete, "Delete payments", "Payment"),
+
+        new("Create Invoice", InvoiceCreate, "Create invoices", "Invoice"),
+        new("View Invoices", InvoiceView, "View invoices", "Invoice"),
+        new("Update Invoice", InvoiceUpdate, "Update invoices", "Invoice"),
+        new("Delete Invoice", InvoiceDelete, "Delete invoices", "Invoice"),
+
+        new("Create Quotation", QuotationCreate, "Create quotations", "Quotation"),
+        new("View Quotations", QuotationView, "View quotations", "Quotation"),
+        new("Update Quotation", QuotationUpdate, "Update quotations", "Quotation"),
+        new("Delete Quotation", QuotationDelete, "Delete quotations", "Quotation"),
+
         new("View Inventory", InventoryView, "View inventory records", "Inventory"),
         new("Update Inventory", InventoryUpdate, "Update inventory thresholds", "Inventory"),
         new("Adjust Inventory", InventoryAdjust, "Adjust stock levels", "Inventory"),
@@ -101,6 +131,9 @@ public static class PermissionCodes
         OrderView,
         SupplierView,
         PurchaseOrderView,
+        PaymentView,
+        InvoiceView,
+        QuotationView,
         InventoryView,
         UserView,
         RoleView
@@ -113,13 +146,19 @@ public static class PermissionCodes
         OrderCreate, OrderView, OrderUpdate, OrderDelete,
         SupplierCreate, SupplierView, SupplierUpdate, SupplierDelete,
         PurchaseOrderCreate, PurchaseOrderView, PurchaseOrderUpdate, PurchaseOrderDelete,
+        PaymentCreate, PaymentView, PaymentUpdate, PaymentDelete,
+        InvoiceCreate, InvoiceView, InvoiceUpdate, InvoiceDelete,
+        QuotationCreate, QuotationView, QuotationUpdate, QuotationDelete,
         InventoryView, InventoryUpdate, InventoryAdjust
     };
 
     public static readonly IReadOnlySet<string> SalesPermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         CustomerCreate, CustomerView, CustomerUpdate, CustomerDelete,
-        OrderCreate, OrderView, OrderUpdate, OrderDelete
+        OrderCreate, OrderView, OrderUpdate, OrderDelete,
+        PaymentCreate, PaymentView, PaymentUpdate, PaymentDelete,
+        InvoiceCreate, InvoiceView, InvoiceUpdate, InvoiceDelete,
+        QuotationCreate, QuotationView, QuotationUpdate, QuotationDelete
     };
 
     public static readonly IReadOnlySet<string> InventoryManagerPermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
