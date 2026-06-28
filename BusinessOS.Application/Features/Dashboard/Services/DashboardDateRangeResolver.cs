@@ -10,8 +10,7 @@ public sealed class DashboardDateRangeResolver : IDashboardDateRangeResolver
             ? null
             : period.Trim().ToLowerInvariant();
 
-        if (normalizedPeriod is DateRangePeriods.Custom ||
-            (normalizedPeriod is null && startDate.HasValue && endDate.HasValue))
+        if (normalizedPeriod is DateRangePeriods.Custom)
         {
             if (!startDate.HasValue || !endDate.HasValue)
                 throw new Application.Common.Exceptions.BadRequestException(
@@ -19,6 +18,9 @@ public sealed class DashboardDateRangeResolver : IDashboardDateRangeResolver
 
             return CreateRange(startDate.Value, endDate.Value, DateRangePeriods.Custom);
         }
+
+        if (startDate.HasValue && endDate.HasValue)
+            return CreateRange(startDate.Value, endDate.Value, DateRangePeriods.Custom);
 
         var utcNow = DateTime.UtcNow;
 
@@ -49,9 +51,7 @@ public sealed class DashboardDateRangeResolver : IDashboardDateRangeResolver
                 utcNow,
                 DateRangePeriods.All),
 
-            null or DateRangePeriods.Custom => startDate.HasValue || endDate.HasValue
-                ? Resolve(startDate, endDate, DateRangePeriods.Custom)
-                : CreateRange(DateTime.UnixEpoch, utcNow, DateRangePeriods.All),
+            null => CreateRange(DateTime.UnixEpoch, utcNow, DateRangePeriods.All),
 
             _ => throw new Application.Common.Exceptions.BadRequestException(
                 $"Invalid period '{period}'. Valid values: today, week, month, year, all, custom.")

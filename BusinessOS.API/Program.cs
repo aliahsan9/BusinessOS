@@ -1,4 +1,5 @@
 using System.Text;
+using BusinessOS.API.Authorization;
 using BusinessOS.API.Endpoints;
 using BusinessOS.API.Middleware;
 using BusinessOS.API.OpenApi;
@@ -27,6 +28,9 @@ try
     builder.Services.AddControllers();
     builder.Services.AddApplication();
     builder.Services.AddInfrastructure(builder.Configuration);
+    builder.Services.Configure<BusinessOS.Application.Features.Dashboard.Services.DashboardCacheOptions>(
+        builder.Configuration.GetSection(BusinessOS.Application.Features.Dashboard.Services.DashboardCacheOptions.SectionName));
+    builder.Services.AddMemoryCache();
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddProblemDetails();
     builder.Services.AddBusinessOpenApi();
@@ -56,6 +60,7 @@ try
         });
 
     builder.Services.AddAuthorization();
+    builder.Services.AddDashboardAuthorization();
 
     var app = builder.Build();
 
@@ -91,6 +96,7 @@ try
     app.MapCustomerEndpoints();
     app.MapOrderEndpoints();
     app.MapInventoryEndpoints();
+    app.MapDashboardEndpoints();
 
     app.Run();
 }

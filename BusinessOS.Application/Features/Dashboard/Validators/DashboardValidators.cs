@@ -41,23 +41,3 @@ public record DashboardDateRangeQuery(DateTime? StartDate, DateTime? EndDate, st
 
 public record DashboardTopLimitQuery(DateTime? StartDate, DateTime? EndDate, string? Period, int Top = 10)
     : DashboardDateRangeQuery(StartDate, EndDate, Period);
-
-public sealed class ChartDataQueryValidator : AbstractValidator<ChartDataQuery>
-{
-    public ChartDataQueryValidator()
-    {
-        Include(new DashboardTopLimitQueryValidator());
-
-        RuleFor(x => x.ChartType)
-            .NotEmpty()
-            .Must(x => DTOs.ChartTypes.All.Contains(x.ToLowerInvariant()))
-            .WithMessage("Invalid chart type.");
-    }
-}
-
-public record ChartDataQuery(
-    string ChartType,
-    DateTime? StartDate,
-    DateTime? EndDate,
-    string? Period,
-    int Top = 10) : DashboardTopLimitQuery(StartDate, EndDate, Period, Top);

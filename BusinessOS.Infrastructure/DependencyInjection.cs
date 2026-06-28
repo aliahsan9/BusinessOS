@@ -63,6 +63,7 @@ public static class DependencyInjection
         services.AddScoped<IIdentityService, IdentityService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<ITenantRegistrationService, TenantRegistrationService>();
+        services.AddScoped<IUserAnalyticsService, UserAnalyticsService>();
 
         return services;
     }

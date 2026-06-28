@@ -24,4 +24,13 @@ public static class ChartTypes
     public const string Customers = "customers";
     public const string Products = "products";
     public const string Inventory = "inventory";
+
+    public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        Revenue,
+        Orders,
+        Customers,
+        Products,
+        Inventory
+    };
 }

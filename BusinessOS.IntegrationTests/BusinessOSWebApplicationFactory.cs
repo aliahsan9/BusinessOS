@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Authorization;
 using BusinessOS.Infrastructure.Data;
 using BusinessOS.Infrastructure.Identity;
 using Microsoft.AspNetCore.Hosting;
@@ -34,11 +35,14 @@ public class BusinessOSWebApplicationFactory : WebApplicationFactory<Program>
 
         context.Database.EnsureCreated();
 
-        if (!roleManager.RoleExistsAsync("Admin").GetAwaiter().GetResult())
+        foreach (var role in RoleNames.All)
         {
-            roleManager.CreateAsync(new ApplicationRole { Name = "Admin" })
-                .GetAwaiter()
-                .GetResult();
+            if (!roleManager.RoleExistsAsync(role).GetAwaiter().GetResult())
+            {
+                roleManager.CreateAsync(new ApplicationRole { Name = role })
+                    .GetAwaiter()
+                    .GetResult();
+            }
         }
 
         _seeded = true;

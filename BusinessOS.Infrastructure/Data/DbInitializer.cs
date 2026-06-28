@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Authorization;
 using BusinessOS.Infrastructure.Data;
 using BusinessOS.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
@@ -36,11 +37,13 @@ public static class DbInitializer
             await context.Database.MigrateAsync();
         }
 
-        const string adminRole = "Admin";
-        if (!await roleManager.RoleExistsAsync(adminRole))
+        foreach (var role in RoleNames.All)
         {
-            await roleManager.CreateAsync(new ApplicationRole { Name = adminRole });
-            logger.LogInformation("Seeded role {Role}", adminRole);
+            if (!await roleManager.RoleExistsAsync(role))
+            {
+                await roleManager.CreateAsync(new ApplicationRole { Name = role });
+                logger.LogInformation("Seeded role {Role}", role);
+            }
         }
     }
 }
