@@ -170,12 +170,12 @@ public static class DashboardEndpoints
         DateTime? startDate,
         DateTime? endDate,
         string? period,
-        int top,
-        ISender sender,
-        CancellationToken cancellationToken)
+        int top = 10,
+        ISender sender = default!,
+        CancellationToken cancellationToken = default)
     {
         var result = await sender.Send(
-            new GetProductAnalyticsDashboardQuery(startDate, endDate, period, top == 0 ? 10 : top),
+            new GetProductAnalyticsDashboardQuery(startDate, endDate, period, top),
             cancellationToken);
 
         return Results.Ok(result);
@@ -213,45 +213,45 @@ public static class DashboardEndpoints
         DateTime? startDate,
         DateTime? endDate,
         string? period,
-        int top,
-        ISender sender,
-        CancellationToken cancellationToken) =>
+        int top = 10,
+        ISender sender = default!,
+        CancellationToken cancellationToken = default) =>
         GetChart("revenue", startDate, endDate, period, top, sender, cancellationToken);
 
     private static Task<IResult> GetOrdersChart(
         DateTime? startDate,
         DateTime? endDate,
         string? period,
-        int top,
-        ISender sender,
-        CancellationToken cancellationToken) =>
+        int top = 10,
+        ISender sender = default!,
+        CancellationToken cancellationToken = default) =>
         GetChart("orders", startDate, endDate, period, top, sender, cancellationToken);
 
     private static Task<IResult> GetCustomersChart(
         DateTime? startDate,
         DateTime? endDate,
         string? period,
-        int top,
-        ISender sender,
-        CancellationToken cancellationToken) =>
+        int top = 10,
+        ISender sender = default!,
+        CancellationToken cancellationToken = default) =>
         GetChart("customers", startDate, endDate, period, top, sender, cancellationToken);
 
     private static Task<IResult> GetProductsChart(
         DateTime? startDate,
         DateTime? endDate,
         string? period,
-        int top,
-        ISender sender,
-        CancellationToken cancellationToken) =>
+        int top = 10,
+        ISender sender = default!,
+        CancellationToken cancellationToken = default) =>
         GetChart("products", startDate, endDate, period, top, sender, cancellationToken);
 
     private static Task<IResult> GetInventoryChart(
         DateTime? startDate,
         DateTime? endDate,
         string? period,
-        int top,
-        ISender sender,
-        CancellationToken cancellationToken) =>
+        int top = 10,
+        ISender sender = default!,
+        CancellationToken cancellationToken = default) =>
         GetChart("inventory", startDate, endDate, period, top, sender, cancellationToken);
 
     private static async Task<IResult> GetChart(
@@ -264,7 +264,7 @@ public static class DashboardEndpoints
         CancellationToken cancellationToken)
     {
         var result = await sender.Send(
-            new GetChartDataQuery(chartType, startDate, endDate, period, top == 0 ? 10 : top),
+            new GetChartDataQuery(chartType, startDate, endDate, period, top),
             cancellationToken);
 
         return Results.Ok(result);
