@@ -62,16 +62,27 @@ public sealed class GetExpenseAnalyticsQueryHandler
                 : 0;
         }
 
-        var trends = await query
+        var trendRows = await query
             .GroupBy(x => new { x.ExpenseDate.Year, x.ExpenseDate.Month })
-            .Select(g => new ExpenseTrendPoint
+            .Select(g => new
             {
-                Period = g.Key.Year.ToString() + "-" + g.Key.Month.ToString("D2"),
-                Amount = Math.Round(g.Sum(x => x.Amount), 2),
+                g.Key.Year,
+                g.Key.Month,
+                Amount = g.Sum(x => x.Amount),
                 Count = g.Count()
             })
-            .OrderBy(x => x.Period)
             .ToListAsync(cancellationToken);
+
+        var trends = trendRows
+            .OrderBy(x => x.Year)
+            .ThenBy(x => x.Month)
+            .Select(x => new ExpenseTrendPoint
+            {
+                Period = $"{x.Year}-{x.Month:D2}",
+                Amount = Math.Round(x.Amount, 2),
+                Count = x.Count
+            })
+            .ToList();
 
         return new ExpenseAnalyticsResponse
         {

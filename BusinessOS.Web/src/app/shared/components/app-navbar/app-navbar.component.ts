@@ -4,7 +4,7 @@ import { AuthService } from '../../../core/services/auth.service';
 import { TokenService } from '../../../core/services/token.service';
 import { NotificationCenterService } from '../../../core/services/notification-center.service';
 import { ThemeService } from '../../../core/theme/theme.service';
-import { APP_ROUTE_PATHS, NAV_ITEMS } from '../../constants/nav.constants';
+import { APP_ROUTE_PATHS, TOP_NAV_ITEMS } from '../../constants/nav.constants';
 import { ROUTES } from '../../../core/constants/route.constants';
 
 @Component({
@@ -28,14 +28,13 @@ export class AppNavbarComponent implements OnInit {
   readonly resolvedAppearance = this.themeService.resolvedAppearance;
   readonly isDarkMode = computed(() => this.resolvedAppearance() === 'dark');
 
-  readonly navItems = NAV_ITEMS.filter((item) => {
+  readonly navItems = TOP_NAV_ITEMS.filter((item) => {
     if (!item.permissions?.length) {
       return true;
     }
     return this.tokenService.hasAnyPermission(item.permissions);
   });
 
-  readonly searchQuery = signal('');
   readonly showNotifications = signal(false);
   readonly showProfile = signal(false);
 
@@ -44,6 +43,12 @@ export class AppNavbarComponent implements OnInit {
   readonly notifications = signal<{ id: string; title: string; message: string; read: boolean }[]>([]);
 
   readonly hasUnreadNotifications = computed(() => this.notifications().some((n) => !n.read));
+
+  readonly userDisplayName = computed(() => {
+    const email = this.currentUser()?.email;
+    if (!email) return 'User';
+    return email.split('@')[0];
+  });
 
   ngOnInit(): void {
     if (this.tokenService.hasPermission('Notification.View')) {
@@ -63,11 +68,6 @@ export class AppNavbarComponent implements OnInit {
         },
       });
     }
-  }
-
-  onSearch(event: Event): void {
-    const value = (event.target as HTMLInputElement).value;
-    this.searchQuery.set(value);
   }
 
   toggleNotifications(): void {

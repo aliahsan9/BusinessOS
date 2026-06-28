@@ -1,12 +1,12 @@
 <div class="dashboard page-container">
-  <div class="page-header">
-    <div>
+  <div class="dashboard__header">
+    <div class="dashboard__header-content">
       <app-breadcrumb [items]="breadcrumbs" />
       <h1 class="page-title">Dashboard</h1>
       <p class="page-subtitle">Overview of your business performance</p>
     </div>
     <div class="dashboard__period-select">
-      <label for="period-select" class="text-label">Period</label>
+      <label for="period-select">Time period</label>
       <select id="period-select" class="form-select form-select-sm" [value]="period()" (change)="onPeriodChange($event)" aria-label="Select dashboard period">
         @for (p of periods; track p.value) {
           <option [value]="p.value">{{ p.label }}</option>
@@ -31,23 +31,35 @@
   } @else {
     <!-- KPI Cards -->
     <div class="card-grid dashboard__stats">
-      <div class="stat-card dashboard__stat">
-        <span class="dashboard__stat-label">Total Revenue</span>
+      <div class="stat-card dashboard__stat dashboard__stat--revenue">
+        <div class="dashboard__stat-top">
+          <span class="dashboard__stat-label">Total Revenue</span>
+          <span class="dashboard__stat-icon" aria-hidden="true">💰</span>
+        </div>
         <span class="dashboard__stat-value">{{ overview()?.totalRevenue | currency }}</span>
         <span class="dashboard__stat-meta">Monthly: {{ sales()?.monthlySales | currency }}</span>
       </div>
-      <div class="stat-card dashboard__stat">
-        <span class="dashboard__stat-label">Orders</span>
+      <div class="stat-card dashboard__stat dashboard__stat--orders">
+        <div class="dashboard__stat-top">
+          <span class="dashboard__stat-label">Orders</span>
+          <span class="dashboard__stat-icon" aria-hidden="true">🛒</span>
+        </div>
         <span class="dashboard__stat-value">{{ overview()?.totalOrders | number }}</span>
         <span class="dashboard__stat-meta">Avg: {{ sales()?.averageOrderValue | currency }}</span>
       </div>
-      <div class="stat-card dashboard__stat">
-        <span class="dashboard__stat-label">Customers</span>
+      <div class="stat-card dashboard__stat dashboard__stat--customers">
+        <div class="dashboard__stat-top">
+          <span class="dashboard__stat-label">Customers</span>
+          <span class="dashboard__stat-icon" aria-hidden="true">🤝</span>
+        </div>
         <span class="dashboard__stat-value">{{ overview()?.totalCustomers | number }}</span>
         <span class="dashboard__stat-meta">New: {{ customers()?.newCustomers | number }}</span>
       </div>
-      <div class="stat-card dashboard__stat">
-        <span class="dashboard__stat-label">Products</span>
+      <div class="stat-card dashboard__stat dashboard__stat--products">
+        <div class="dashboard__stat-top">
+          <span class="dashboard__stat-label">Products</span>
+          <span class="dashboard__stat-icon" aria-hidden="true">📦</span>
+        </div>
         <span class="dashboard__stat-value">{{ overview()?.totalProducts | number }}</span>
         <span class="dashboard__stat-meta">Categories: {{ overview()?.totalCategories | number }}</span>
       </div>

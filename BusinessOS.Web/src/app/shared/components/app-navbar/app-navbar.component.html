@@ -1,27 +1,19 @@
 <header class="app-navbar">
-  <div class="app-navbar__left">
+  <div class="app-navbar__start">
     <button type="button" class="app-navbar__menu-btn" aria-label="Toggle navigation menu" (click)="menuToggle.emit()">
-      ☰
+      <span class="app-navbar__menu-icon" aria-hidden="true"></span>
     </button>
-    <div class="app-navbar__search">
-      <span class="app-navbar__search-icon" aria-hidden="true">🔍</span>
-      <input
-        type="search"
-        class="app-navbar__search-input"
-        placeholder="Search..."
-        aria-label="Global search"
-        (input)="onSearch($event)"
-      />
-    </div>
+    <span class="app-navbar__brand">BusinessOS</span>
   </div>
 
-  <nav class="app-navbar__nav" aria-label="Main navigation">
+  <nav class="app-navbar__nav" aria-label="Quick navigation">
     @for (item of navItems; track item.route) {
       <a
         class="app-navbar__nav-link"
         [routerLink]="item.route"
         routerLinkActive="app-navbar__nav-link--active"
-        [routerLinkActiveOptions]="{ exact: item.route === routes.dashboard }"
+        [routerLinkActiveOptions]="{ exact: true }"
+        [title]="item.description"
       >
         <span class="app-navbar__nav-icon" aria-hidden="true">{{ item.icon }}</span>
         <span class="app-navbar__nav-label">{{ item.label }}</span>
@@ -29,10 +21,10 @@
     }
   </nav>
 
-  <div class="app-navbar__right">
+  <div class="app-navbar__actions">
     <button
       type="button"
-      class="app-navbar__icon-btn app-navbar__theme-btn"
+      class="app-navbar__action-btn"
       [attr.aria-label]="isDarkMode() ? 'Switch to light mode' : 'Switch to dark mode'"
       [attr.aria-pressed]="isDarkMode()"
       (click)="toggleDarkMode()"
@@ -43,7 +35,7 @@
     <div class="app-navbar__dropdown">
       <button
         type="button"
-        class="app-navbar__icon-btn"
+        class="app-navbar__action-btn"
         aria-label="Notifications"
         [attr.aria-expanded]="showNotifications()"
         (click)="toggleNotifications()"
@@ -56,11 +48,15 @@
       @if (showNotifications()) {
         <div class="app-navbar__panel" role="menu">
           <div class="app-navbar__panel-header">Notifications</div>
-          @for (n of notifications(); track n.id) {
-            <div class="app-navbar__notification" [class.app-navbar__notification--unread]="!n.read">
-              <strong>{{ n.title }}</strong>
-              <p>{{ n.message }}</p>
-            </div>
+          @if (notifications().length === 0) {
+            <p class="app-navbar__panel-empty">No notifications yet.</p>
+          } @else {
+            @for (n of notifications(); track n.id) {
+              <div class="app-navbar__notification" [class.app-navbar__notification--unread]="!n.read">
+                <strong>{{ n.title }}</strong>
+                <p>{{ n.message }}</p>
+              </div>
+            }
           }
         </div>
       }
@@ -75,7 +71,10 @@
         (click)="toggleProfile()"
       >
         <span class="app-navbar__avatar" aria-hidden="true">{{ currentUser()?.email?.charAt(0)?.toUpperCase() ?? 'U' }}</span>
-        <span class="app-navbar__email d-none d-md-inline">{{ currentUser()?.email }}</span>
+        <span class="app-navbar__profile-text">
+          <span class="app-navbar__profile-name">{{ userDisplayName() }}</span>
+          <span class="app-navbar__profile-role">Account</span>
+        </span>
       </button>
       @if (showProfile()) {
         <div class="app-navbar__panel" role="menu">

@@ -328,38 +328,60 @@ public sealed class FinanceService : IFinanceService
         DashboardDateRange range,
         CancellationToken cancellationToken)
     {
-        return await _context.Orders
+        var rows = await _context.Orders
             .AsNoTracking()
             .Where(x => x.OrderDate >= range.StartDate
                 && x.OrderDate <= range.EndDate
                 && x.Status == OrderStatusNames.Completed)
             .GroupBy(x => new { x.OrderDate.Year, x.OrderDate.Month })
-            .Select(g => new TrendPoint
+            .Select(g => new
             {
-                Period = g.Key.Year.ToString() + "-" + g.Key.Month.ToString("D2"),
-                Amount = Math.Round(g.Sum(x => x.GrandTotal), 2),
+                g.Key.Year,
+                g.Key.Month,
+                Amount = g.Sum(x => x.GrandTotal),
                 Count = g.Count()
             })
-            .OrderBy(x => x.Period)
             .ToListAsync(cancellationToken);
+
+        return rows
+            .OrderBy(x => x.Year)
+            .ThenBy(x => x.Month)
+            .Select(x => new TrendPoint
+            {
+                Period = $"{x.Year}-{x.Month:D2}",
+                Amount = Math.Round(x.Amount, 2),
+                Count = x.Count
+            })
+            .ToList();
     }
 
     private async Task<IReadOnlyList<TrendPoint>> BuildExpenseTrendAsync(
         DashboardDateRange range,
         CancellationToken cancellationToken)
     {
-        return await _context.Expenses
+        var rows = await _context.Expenses
             .AsNoTracking()
             .Where(x => x.ExpenseDate >= range.StartDate && x.ExpenseDate <= range.EndDate)
             .GroupBy(x => new { x.ExpenseDate.Year, x.ExpenseDate.Month })
-            .Select(g => new TrendPoint
+            .Select(g => new
             {
-                Period = g.Key.Year.ToString() + "-" + g.Key.Month.ToString("D2"),
-                Amount = Math.Round(g.Sum(x => x.Amount), 2),
+                g.Key.Year,
+                g.Key.Month,
+                Amount = g.Sum(x => x.Amount),
                 Count = g.Count()
             })
-            .OrderBy(x => x.Period)
             .ToListAsync(cancellationToken);
+
+        return rows
+            .OrderBy(x => x.Year)
+            .ThenBy(x => x.Month)
+            .Select(x => new TrendPoint
+            {
+                Period = $"{x.Year}-{x.Month:D2}",
+                Amount = Math.Round(x.Amount, 2),
+                Count = x.Count
+            })
+            .ToList();
     }
 
     private static string NormalizeGroupBy(string? groupBy)
