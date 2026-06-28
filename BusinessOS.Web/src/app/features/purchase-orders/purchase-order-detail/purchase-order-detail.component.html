@@ -1,0 +1,109 @@
+@if (loading()) {
+  <app-skeleton height="16rem" variant="rect" />
+} @else if (!purchaseOrder()) {
+  <app-empty-state icon="📋" title="Purchase order not found" description="This purchase order may have been removed." />
+} @else {
+  <app-breadcrumb
+    [items]="[
+      { label: 'Purchase Orders', route: routes.purchaseOrders.list },
+      { label: purchaseOrder()!.referenceNumber || 'Order Details' },
+    ]"
+  />
+
+  <app-page-header
+    [title]="purchaseOrder()!.referenceNumber || 'Purchase Order'"
+    [subtitle]="purchaseOrder()!.supplierName || ''"
+    [actions]="headerActions()"
+  />
+
+  @if (canSubmit() || canApprove() || canReceive() || canCancel()) {
+    <div class="workflow-actions">
+      @if (canSubmit()) {
+        <app-button label="Submit" [variant]="ButtonVariant.Primary" (clicked)="openConfirm('submit')" />
+      }
+      @if (canApprove()) {
+        <app-button label="Approve" [variant]="ButtonVariant.Success" (clicked)="openConfirm('approve')" />
+      }
+      @if (canReceive()) {
+        <app-button label="Receive" [variant]="ButtonVariant.Primary" (clicked)="openConfirm('receive')" />
+      }
+      @if (canCancel()) {
+        <app-button label="Cancel" [variant]="ButtonVariant.Danger" (clicked)="openConfirm('cancel')" />
+      }
+    </div>
+  }
+
+  <div class="detail-grid">
+    <app-card title="Order Summary">
+      <dl class="detail-list">
+        <div>
+          <dt>Status</dt>
+          <dd>
+            <app-badge [label]="purchaseOrder()!.status" [variant]="statusVariant(purchaseOrder()!.status)" />
+          </dd>
+        </div>
+        <div>
+          <dt>Supplier</dt>
+          <dd>
+            <a [routerLink]="[routes.suppliers.base, purchaseOrder()!.supplierId]" class="link-primary">
+              {{ purchaseOrder()!.supplierName || '—' }}
+            </a>
+          </dd>
+        </div>
+        <div><dt>Purchase Date</dt><dd>{{ purchaseOrder()!.purchaseDate | date: 'mediumDate' }}</dd></div>
+        <div><dt>Reference</dt><dd>{{ purchaseOrder()!.referenceNumber || '—' }}</dd></div>
+        <div><dt>Notes</dt><dd>{{ purchaseOrder()!.notes || '—' }}</dd></div>
+        <div><dt>Total Amount</dt><dd>{{ purchaseOrder()!.totalAmount | currency }}</dd></div>
+      </dl>
+    </app-card>
+  </div>
+
+  <app-card title="Line Items" class="section-card">
+    <div class="bos-table-wrapper">
+      <table class="bos-table bos-table--striped bos-table--compact">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>SKU</th>
+            <th>Qty</th>
+            <th>Unit Price</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of purchaseOrder()!.items; track item.id ?? item.productId) {
+            <tr>
+              <td>
+                <a [routerLink]="[routes.products.base, item.productId]" class="link-primary">
+                  {{ item.productName || '—' }}
+                </a>
+              </td>
+              <td>{{ item.productSku || '—' }}</td>
+              <td>{{ item.quantity }}</td>
+              <td>{{ item.unitPrice | currency }}</td>
+              <td>{{ item.total | currency }}</td>
+            </tr>
+          }
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4" class="text-end"><strong>Grand Total</strong></td>
+            <td><strong>{{ purchaseOrder()!.totalAmount | currency }}</strong></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </app-card>
+}
+
+@if (confirmAction()) {
+  <app-confirm-dialog
+    [title]="confirmTitle()"
+    [message]="confirmMessage()"
+    [confirmLabel]="confirmAction() === 'cancel' ? 'Cancel Order' : 'Confirm'"
+    [variant]="confirmVariant()"
+    [loading]="actionLoading()"
+    (confirmed)="executeAction()"
+    (cancelled)="confirmAction.set(null)"
+  />
+}

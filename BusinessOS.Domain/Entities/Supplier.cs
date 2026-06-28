@@ -10,4 +10,6 @@ public class Supplier : AuditableEntity
     public string Email { get; set; } = default!;
     public string Phone { get; set; } = default!;
     public string Address { get; set; } = default!;
+    public string? ContactPerson { get; set; }
+    public string? Notes { get; set; }
 }

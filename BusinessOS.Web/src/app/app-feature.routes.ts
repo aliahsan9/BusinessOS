@@ -1,13 +1,24 @@
 import { Routes } from '@angular/router';
 import { permissionGuard } from './core/guards/permission.guard';
 import { APP_ROUTE_PATHS, NAV_ITEMS } from './shared/constants/nav.constants';
+import { ROUTES } from './core/constants/route.constants';
 
 function pathFromRoute(route: string): string {
   return route.replace(/^\//, '');
 }
 
+const IMPLEMENTED_PATHS = new Set([
+  pathFromRoute(ROUTES.dashboard),
+  pathFromRoute(ROUTES.products.base),
+  pathFromRoute(ROUTES.inventory.base),
+  pathFromRoute(ROUTES.suppliers.base),
+  pathFromRoute(ROUTES.purchaseOrders.base),
+]);
+
 export function buildFeatureRoutes(): Routes {
-  const placeholderRoutes = NAV_ITEMS.filter((item) => item.route !== APP_ROUTE_PATHS.dashboard).map((item) => ({
+  const placeholderRoutes = NAV_ITEMS.filter(
+    (item) => item.route !== APP_ROUTE_PATHS.dashboard && !IMPLEMENTED_PATHS.has(pathFromRoute(item.route)),
+  ).map((item) => ({
     path: pathFromRoute(item.route),
     loadComponent: () =>
       import('./shared/pages/feature-page/feature-page.component').then((m) => m.FeaturePageComponent),

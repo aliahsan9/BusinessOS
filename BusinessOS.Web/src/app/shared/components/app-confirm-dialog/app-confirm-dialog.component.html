@@ -1,0 +1,15 @@
+<div class="confirm-dialog-backdrop" role="dialog" aria-modal="true">
+  <div class="confirm-dialog">
+    <h3 class="confirm-dialog__title">{{ title() }}</h3>
+    <p class="confirm-dialog__message">{{ message() }}</p>
+    <div class="confirm-dialog__actions">
+      <app-button [label]="cancelLabel()" [variant]="ButtonVariant.Outline" [disabled]="loading()" (clicked)="onCancel()" />
+      <app-button
+        [label]="confirmLabel()"
+        [variant]="variant()"
+        [loading]="loading()"
+        (clicked)="onConfirm()"
+      />
+    </div>
+  </div>
+</div>

@@ -31,12 +31,15 @@ export class SupplierService extends BaseApiService {
     return this.put<void>(`${API_ENDPOINTS.suppliers}/${id}`, request);
   }
 
-  delete(id: string): Observable<void> {
-    return this.delete<void>(`${API_ENDPOINTS.suppliers}/${id}`);
+  remove(id: string): Observable<void> {
+    return super.delete<void>(`${API_ENDPOINTS.suppliers}/${id}`);
   }
 
   getPurchaseHistory(id: string, params?: SupplierQueryParams): Observable<PagedResult<SupplierPurchaseSummary>> {
-    return this.get<PagedResult<SupplierPurchaseSummary>>(`${API_ENDPOINTS.suppliers}/${id}/purchases`, params);
+    return this.get<PagedResult<SupplierPurchaseSummary>>(
+      `${API_ENDPOINTS.suppliers}/${id}/purchases`,
+      params as SupplierQueryParams,
+    );
   }
 
   getProducts(id: string): Observable<SupplierProductSummary[]> {

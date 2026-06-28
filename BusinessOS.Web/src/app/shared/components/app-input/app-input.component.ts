@@ -18,7 +18,7 @@ import { ControlValueAccessor, NG_VALUE_ACCESSOR, ReactiveFormsModule } from '@a
 })
 export class AppInputComponent implements ControlValueAccessor {
   readonly label = input<string>();
-  readonly type = input<'text' | 'email' | 'password' | 'number' | 'tel' | 'search'>('text');
+  readonly type = input<'text' | 'email' | 'password' | 'number' | 'tel' | 'search' | 'date'>('text');
   readonly placeholder = input<string>('');
   readonly hint = input<string>();
   readonly error = input<string>();

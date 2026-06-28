@@ -13,7 +13,7 @@ export class BaseApiService {
   protected readonly http = inject(HttpClient);
   protected readonly baseUrl = environment.apiUrl;
 
-  protected get<T>(endpoint: string, params?: PaginationParams & Record<string, unknown>): Observable<T> {
+  protected get<T>(endpoint: string, params?: PaginationParams | Record<string, unknown>): Observable<T> {
     return this.request<T>('GET', endpoint, undefined, params);
   }
 
@@ -37,7 +37,7 @@ export class BaseApiService {
     method: string,
     endpoint: string,
     body?: unknown,
-    params?: PaginationParams & Record<string, unknown>,
+    params?: PaginationParams | Record<string, unknown>,
   ): Observable<T> {
     const url = `${this.baseUrl}${endpoint}`;
     const httpParams = params ? PaginationHelper.toHttpParams(params) : undefined;

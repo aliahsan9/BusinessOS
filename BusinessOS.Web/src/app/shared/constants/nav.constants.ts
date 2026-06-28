@@ -7,8 +7,10 @@ export const APP_ROUTE_PATHS = {
   roles: ROUTES.roles,
   permissions: ROUTES.permissions,
   customers: ROUTES.customers,
-  products: ROUTES.products,
-  inventory: ROUTES.inventory,
+  products: ROUTES.products.base,
+  inventory: ROUTES.inventory.base,
+  suppliers: ROUTES.suppliers.base,
+  purchaseOrders: ROUTES.purchaseOrders.base,
   orders: ROUTES.orders,
   invoices: ROUTES.invoices,
   reports: ROUTES.reports,
@@ -67,16 +69,30 @@ export const NAV_ITEMS: NavItem[] = [
   {
     label: 'Products',
     icon: '📦',
-    route: ROUTES.products,
+    route: ROUTES.products.base,
     description: 'Manage product catalog and pricing.',
     permissions: ['Product.View'],
   },
   {
     label: 'Inventory',
     icon: '🏭',
-    route: ROUTES.inventory,
+    route: ROUTES.inventory.base,
     description: 'Track stock levels and inventory movements.',
     permissions: ['Inventory.View'],
+  },
+  {
+    label: 'Suppliers',
+    icon: '🚚',
+    route: ROUTES.suppliers.base,
+    description: 'Manage supplier contacts and purchase relationships.',
+    permissions: ['Supplier.View'],
+  },
+  {
+    label: 'Purchase Orders',
+    icon: '📋',
+    route: ROUTES.purchaseOrders.base,
+    description: 'Create and track purchase orders from suppliers.',
+    permissions: ['PurchaseOrder.View'],
   },
   {
     label: 'Orders',
@@ -106,3 +122,4 @@ export const NAV_ITEMS: NavItem[] = [
     description: 'Configure application and tenant settings.',
   },
 ];
+

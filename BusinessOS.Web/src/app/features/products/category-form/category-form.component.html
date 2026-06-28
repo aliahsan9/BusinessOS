@@ -1,0 +1,27 @@
+<app-breadcrumb
+  [items]="[
+    { label: 'Products', route: routes.products.list },
+    { label: 'Categories', route: routes.products.categories.list },
+    { label: isEdit() ? 'Edit' : 'Create' },
+  ]"
+/>
+
+<app-page-header [title]="isEdit() ? 'Edit Category' : 'Create Category'" />
+
+@if (loading()) {
+  <app-skeleton height="10rem" variant="rect" />
+} @else {
+  <form [formGroup]="form" (ngSubmit)="submit()" class="category-form">
+    <app-card title="Category Details">
+      <app-input label="Name *" formControlName="name" [error]="fieldError('name') ?? undefined" />
+      <div class="form-field">
+        <label for="description">Description</label>
+        <textarea id="description" formControlName="description" class="form-control" rows="3"></textarea>
+      </div>
+    </app-card>
+    <div class="category-form__actions">
+      <a [routerLink]="routes.products.categories.list"><app-button label="Cancel" [variant]="ButtonVariant.Outline" type="button" /></a>
+      <app-button [label]="isEdit() ? 'Save' : 'Create'" type="submit" [loading]="saving()" />
+    </div>
+  </form>
+}

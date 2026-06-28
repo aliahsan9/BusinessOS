@@ -3,7 +3,7 @@ import { PaginationParams } from '../models/pagination.model';
 import { environment } from '../../../environments/environment';
 
 export class PaginationHelper {
-  static toHttpParams(params: PaginationParams & Record<string, unknown> = {}): HttpParams {
+  static toHttpParams(params: PaginationParams | Record<string, unknown> = {}): HttpParams {
     let httpParams = new HttpParams();
 
     Object.entries(params).forEach(([key, value]) => {

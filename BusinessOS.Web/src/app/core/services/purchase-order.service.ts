@@ -30,8 +30,8 @@ export class PurchaseOrderService extends BaseApiService {
     return this.put<void>(`${API_ENDPOINTS.purchaseOrders}/${id}`, request);
   }
 
-  delete(id: string): Observable<void> {
-    return this.delete<void>(`${API_ENDPOINTS.purchaseOrders}/${id}`);
+  remove(id: string): Observable<void> {
+    return super.delete<void>(`${API_ENDPOINTS.purchaseOrders}/${id}`);
   }
 
   updateStatus(id: string, status: PurchaseOrderStatus): Observable<void> {

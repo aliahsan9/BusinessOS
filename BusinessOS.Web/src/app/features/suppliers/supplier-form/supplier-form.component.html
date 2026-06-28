@@ -1,0 +1,42 @@
+<app-breadcrumb
+  [items]="[
+    { label: 'Suppliers', route: routes.suppliers.list },
+    { label: isEdit() ? 'Edit Supplier' : 'Create Supplier' },
+  ]"
+/>
+
+<app-page-header
+  [title]="isEdit() ? 'Edit Supplier' : 'Create Supplier'"
+  subtitle="Maintain vendor contact and address details."
+/>
+
+@if (loading()) {
+  <app-skeleton height="20rem" variant="rect" />
+} @else {
+  <form [formGroup]="form" (ngSubmit)="submit()" class="supplier-form">
+    <app-card title="Supplier Information">
+      <div class="form-grid">
+        <app-input label="Name *" formControlName="name" [error]="fieldError('name') ?? undefined" />
+        <app-input label="Email *" type="email" formControlName="email" [error]="fieldError('email') ?? undefined" />
+        <app-input label="Phone *" formControlName="phone" [error]="fieldError('phone') ?? undefined" />
+        <app-input label="Contact Person" formControlName="contactPerson" [error]="fieldError('contactPerson') ?? undefined" />
+        <div class="form-field form-field--full">
+          <label for="address">Address *</label>
+          <textarea id="address" formControlName="address" class="form-control" rows="2"></textarea>
+          @if (fieldError('address'); as err) {
+            <span class="field-error">{{ err }}</span>
+          }
+        </div>
+        <div class="form-field form-field--full">
+          <label for="notes">Notes</label>
+          <textarea id="notes" formControlName="notes" class="form-control" rows="3"></textarea>
+        </div>
+      </div>
+    </app-card>
+
+    <div class="supplier-form__actions">
+      <a [routerLink]="routes.suppliers.list"><app-button label="Cancel" [variant]="ButtonVariant.Outline" type="button" /></a>
+      <app-button [label]="isEdit() ? 'Save Changes' : 'Create Supplier'" type="submit" [loading]="saving()" />
+    </div>
+  </form>
+}

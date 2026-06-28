@@ -10,6 +10,9 @@ public class Purchase : AuditableEntity
     public DateTime PurchaseDate { get; set; } = DateTime.UtcNow;
 
     public decimal TotalAmount { get; set; }
+    public string Status { get; set; } = default!;
+    public string? ReferenceNumber { get; set; }
+    public string? Notes { get; set; }
 
     public Supplier Supplier { get; set; } = default!;
     public ICollection<PurchaseItem> PurchaseItems { get; set; } = new List<PurchaseItem>();

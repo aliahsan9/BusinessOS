@@ -96,6 +96,8 @@ try
     app.MapProductEndpoints();
     app.MapCustomerEndpoints();
     app.MapOrderEndpoints();
+    app.MapSupplierEndpoints();
+    app.MapPurchaseOrderEndpoints();
     app.MapInventoryEndpoints();
     app.MapDashboardEndpoints();
     app.MapRoleEndpoints();

@@ -1,0 +1,71 @@
+<app-breadcrumb [items]="breadcrumbs" />
+
+<app-page-header
+  title="Inventory Reports"
+  subtitle="Analyze inventory value and profit potential across your catalog."
+  [actions]="headerActions"
+/>
+
+@if (reportError()) {
+  <app-alert variant="danger" [message]="reportError()!" [dismissible]="false" />
+  <div class="mb-3"><app-button label="Retry" [variant]="ButtonVariant.Outline" (clicked)="retry()" /></div>
+}
+
+@if (analyticsLoading() || reportLoading()) {
+  <div class="reports__summary">
+    @for (i of [1, 2, 3]; track i) {
+      <app-skeleton variant="rect" height="100px" />
+    }
+  </div>
+  <app-skeleton variant="rect" height="320px" />
+} @else {
+  <div class="reports__summary">
+    <div class="stat-card reports__stat">
+      <span class="reports__stat-label">Inventory Value (Analytics)</span>
+      <span class="reports__stat-value">{{ analytics()?.inventoryValue | currency }}</span>
+    </div>
+    <div class="stat-card reports__stat">
+      <span class="reports__stat-label">Stock Value (Calculated)</span>
+      <span class="reports__stat-value">{{ totalStockValue() | currency }}</span>
+    </div>
+    <div class="stat-card reports__stat">
+      <span class="reports__stat-label">Total Profit Potential</span>
+      <span class="reports__stat-value reports__stat-value--success">{{ totalProfitPotential() | currency }}</span>
+    </div>
+  </div>
+
+  <app-card title="Product Breakdown" subtitle="Stock value and profit potential by product">
+    @if (reportRows().length === 0) {
+      <app-empty-state title="No products found" description="Add products to generate inventory reports." />
+    } @else {
+      <div class="bos-table-wrapper">
+        <table class="bos-table bos-table--striped bos-table--hover bos-table--compact">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>SKU</th>
+              <th>Stock</th>
+              <th>Cost</th>
+              <th>Sale Price</th>
+              <th>Stock Value</th>
+              <th>Profit Potential</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of reportRows(); track row.productId) {
+              <tr>
+                <td>{{ row.productName }}</td>
+                <td>{{ row.sku }}</td>
+                <td>{{ row.currentStock | number: '1.0-2' }}</td>
+                <td>{{ row.costPrice | currency }}</td>
+                <td>{{ row.salePrice | currency }}</td>
+                <td>{{ row.stockValue | currency }}</td>
+                <td>{{ row.profitPotential | currency }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </app-card>
+}

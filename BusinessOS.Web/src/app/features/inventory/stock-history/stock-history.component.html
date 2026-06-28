@@ -1,0 +1,84 @@
+<app-breadcrumb [items]="breadcrumbs" />
+
+<app-page-header
+  title="Stock History"
+  subtitle="Audit trail of all stock movements and adjustments."
+  [actions]="headerActions"
+/>
+
+<div class="toolbar">
+  <app-search-bar placeholder="Search transactions..." [value]="searchTerm()" (search)="onSearch($event)" />
+
+  <div class="toolbar__filters">
+    <input
+      type="text"
+      class="form-control form-control-sm"
+      placeholder="Product ID"
+      [ngModel]="productIdFilter()"
+      (ngModelChange)="onProductIdFilter($event)"
+    />
+    <select class="form-select form-select-sm" [ngModel]="typeFilter()" (ngModelChange)="onTypeFilter($event)">
+      <option value="">All Types</option>
+      @for (type of transactionTypes; track type) {
+        <option [value]="type">{{ type }}</option>
+      }
+    </select>
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="loading-stack">
+    @for (i of [1, 2, 3, 4, 5]; track i) {
+      <app-skeleton height="2.5rem" />
+    }
+  </div>
+} @else if (transactions().length === 0) {
+  <app-empty-state
+    icon="📜"
+    title="No transactions found"
+    description="Stock movements will appear here once inventory changes occur."
+  />
+} @else {
+  <div class="bos-table-wrapper">
+    <table class="bos-table bos-table--striped bos-table--hover bos-table--compact">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Product</th>
+          <th>Type</th>
+          <th>Quantity</th>
+          <th>Previous</th>
+          <th>New Stock</th>
+          <th>Reference</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (tx of transactions(); track tx.id) {
+          <tr>
+            <td>{{ tx.createdAt | date: 'medium' }}</td>
+            <td>{{ tx.productName }}</td>
+            <td>
+              <app-badge [label]="tx.transactionType" [variant]="getTypeVariant(tx.transactionType)" />
+            </td>
+            <td [class.text-success]="tx.quantity > 0" [class.text-danger]="tx.quantity < 0">
+              {{ tx.quantity > 0 ? '+' : '' }}{{ tx.quantity | number: '1.0-2' }}
+            </td>
+            <td>{{ tx.previousStock | number: '1.0-2' }}</td>
+            <td>{{ tx.newStock | number: '1.0-2' }}</td>
+            <td>{{ tx.referenceNumber || '—' }}</td>
+            <td>{{ tx.notes || '—' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <app-pagination
+    [page]="page()"
+    [pageSize]="20"
+    [totalCount]="totalCount()"
+    [totalPages]="totalPages()"
+    (pageChange)="onPageChange($event)"
+  />
+}

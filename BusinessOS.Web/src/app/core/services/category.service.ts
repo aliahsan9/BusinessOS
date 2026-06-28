@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { map, Observable } from 'rxjs';
 import { BaseApiService } from './base-api.service';
 import { API_ENDPOINTS } from '../constants/api.constants';
 import { PagedResult } from '../models/pagination.model';
@@ -17,19 +17,8 @@ export class CategoryService extends BaseApiService {
     return this.get<PagedResult<CategoryDto>>(API_ENDPOINTS.categories, params);
   }
 
-  getAllUnpaged(): Observable<CategoryDto[]> {
-    return this.get<PagedResult<CategoryDto>>(API_ENDPOINTS.categories, { page: 1, pageSize: 100 }).pipe(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (source: any) => new Observable<CategoryDto[]>((subscriber) => {
-        source.subscribe({
-          next: (result: PagedResult<CategoryDto>) => {
-            subscriber.next(result.items);
-            subscriber.complete();
-          },
-          error: (err: unknown) => subscriber.error(err),
-        });
-      }),
-    );
+  getAllForSelect(): Observable<CategoryDto[]> {
+    return this.getAll({ page: 1, pageSize: 100 }).pipe(map((result) => result.items));
   }
 
   getById(id: string): Observable<CategoryDto> {
@@ -44,7 +33,7 @@ export class CategoryService extends BaseApiService {
     return this.put<void>(`${API_ENDPOINTS.categories}/${id}`, request);
   }
 
-  delete(id: string): Observable<void> {
-    return this.delete<void>(`${API_ENDPOINTS.categories}/${id}`);
+  remove(id: string): Observable<void> {
+    return super.delete<void>(`${API_ENDPOINTS.categories}/${id}`);
   }
 }

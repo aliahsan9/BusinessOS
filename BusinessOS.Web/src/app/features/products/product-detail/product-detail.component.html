@@ -1,0 +1,59 @@
+@if (loading()) {
+  <app-skeleton height="16rem" variant="rect" />
+} @else if (!product()) {
+  <app-empty-state icon="📦" title="Product not found" description="This product may have been removed." />
+} @else {
+  <app-breadcrumb
+    [items]="[
+      { label: 'Products', route: routes.products.list },
+      { label: product()!.name },
+    ]"
+  />
+
+  <app-page-header [title]="product()!.name" [subtitle]="product()!.sku" [actions]="headerActions()" />
+
+  <div class="detail-grid">
+    <app-card title="Product Details">
+      <dl class="detail-list">
+        <div><dt>Category</dt><dd>{{ categoryName() }}</dd></div>
+        <div><dt>Description</dt><dd>{{ product()!.description || '—' }}</dd></div>
+        <div><dt>Status</dt>
+          <dd>
+            <app-badge [label]="product()!.isActive ? 'Active' : 'Inactive'" [variant]="product()!.isActive ? 'success' : 'neutral'" />
+          </dd>
+        </div>
+      </dl>
+    </app-card>
+
+    <app-card title="Pricing">
+      <dl class="detail-list">
+        <div><dt>Cost Price</dt><dd>{{ product()!.costPrice | currency }}</dd></div>
+        <div><dt>Selling Price</dt><dd>{{ product()!.salePrice | currency }}</dd></div>
+        <div><dt>Profit Margin</dt><dd>{{ margin() | number: '1.1-1' }}%</dd></div>
+        <div><dt>Stock Value</dt><dd>{{ stockValue() | currency }}</dd></div>
+      </dl>
+    </app-card>
+
+    <app-card title="Inventory">
+      <dl class="detail-list">
+        <div><dt>Current Stock</dt><dd>{{ product()!.currentStock | number: '1.0-2' }}</dd></div>
+        <div><dt>Reorder Level</dt><dd>{{ product()!.reorderLevel | number: '1.0-2' }}</dd></div>
+        @if (inventory()) {
+          <div><dt>Min / Max</dt><dd>{{ inventory()!.minimumStockLevel }} / {{ inventory()!.maximumStockLevel }}</dd></div>
+          <div><dt>Stock Status</dt>
+            <dd>
+              @if (inventory()!.isOutOfStock) {
+                <app-badge label="Out of Stock" variant="danger" />
+              } @else if (inventory()!.isLowStock) {
+                <app-badge label="Low Stock" variant="warning" />
+              } @else {
+                <app-badge label="In Stock" variant="success" />
+              }
+            </dd>
+          </div>
+        }
+      </dl>
+      <a [routerLink]="routes.inventory.stockLevels" class="link">View in inventory →</a>
+    </app-card>
+  </div>
+}

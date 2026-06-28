@@ -1,0 +1,31 @@
+<div class="page-header">
+  <div class="page-header__content">
+    <h1 class="page-header__title">{{ title() }}</h1>
+    @if (subtitle()) {
+      <p class="page-header__subtitle">{{ subtitle() }}</p>
+    }
+  </div>
+  @if (actions().length) {
+    <div class="page-header__actions">
+      @for (action of actions(); track action.label) {
+        @if (action.route) {
+          <a [routerLink]="action.route">
+            <app-button
+              [label]="action.label"
+              [icon]="action.icon"
+              [variant]="action.variant ?? ButtonVariant.Primary"
+              (clicked)="onAction(action)"
+            />
+          </a>
+        } @else {
+          <app-button
+            [label]="action.label"
+            [icon]="action.icon"
+            [variant]="action.variant ?? ButtonVariant.Primary"
+            (clicked)="onAction(action)"
+          />
+        }
+      }
+    </div>
+  }
+</div>

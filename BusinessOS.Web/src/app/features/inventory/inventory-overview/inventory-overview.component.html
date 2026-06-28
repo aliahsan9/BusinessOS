@@ -1,0 +1,46 @@
+<app-breadcrumb [items]="breadcrumbs" />
+
+<app-page-header
+  title="Inventory Overview"
+  subtitle="Monitor stock levels, movements, and inventory health across your catalog."
+/>
+
+@if (analyticsLoading()) {
+  <div class="overview__stats">
+    @for (i of [1, 2, 3, 4]; track i) {
+      <app-skeleton variant="rect" height="100px" />
+    }
+  </div>
+} @else if (analytics()) {
+  <div class="overview__stats">
+    <div class="stat-card overview__stat">
+      <span class="overview__stat-label">Total Products</span>
+      <span class="overview__stat-value">{{ analytics()!.totalProducts | number }}</span>
+    </div>
+    <div class="stat-card overview__stat">
+      <span class="overview__stat-label">Inventory Value</span>
+      <span class="overview__stat-value">{{ analytics()!.inventoryValue | currency }}</span>
+    </div>
+    <div class="stat-card overview__stat">
+      <span class="overview__stat-label">Low Stock</span>
+      <span class="overview__stat-value overview__stat-value--warning">{{ analytics()!.lowStockCount | number }}</span>
+    </div>
+    <div class="stat-card overview__stat">
+      <span class="overview__stat-label">Out of Stock</span>
+      <span class="overview__stat-value overview__stat-value--danger">{{ analytics()!.outOfStockCount | number }}</span>
+    </div>
+  </div>
+} @else {
+  <app-alert variant="warning" message="Unable to load inventory analytics." [dismissible]="false" />
+  <button type="button" class="btn btn-outline-primary btn-sm" (click)="retry()">Retry</button>
+}
+
+<div class="overview__nav-grid">
+  @for (card of navCards; track card.route) {
+    <a [routerLink]="card.route" class="overview__nav-link">
+      <app-card [title]="card.title" [subtitle]="card.description" [hoverable]="true">
+        <span class="overview__nav-icon">{{ card.icon }}</span>
+      </app-card>
+    </a>
+  }
+</div>

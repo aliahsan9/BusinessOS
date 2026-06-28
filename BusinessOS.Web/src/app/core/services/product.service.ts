@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { forkJoin, Observable } from 'rxjs';
+import { forkJoin, Observable, switchMap } from 'rxjs';
 import { BaseApiService } from './base-api.service';
 import { API_ENDPOINTS } from '../constants/api.constants';
 import { PagedResult } from '../models/pagination.model';
@@ -34,42 +34,30 @@ export class ProductService extends BaseApiService {
     return this.put<void>(`${API_ENDPOINTS.products}/${id}`, request);
   }
 
-  delete(id: string): Observable<void> {
-    return this.delete<void>(`${API_ENDPOINTS.products}/${id}`);
+  remove(id: string): Observable<void> {
+    return super.delete<void>(`${API_ENDPOINTS.products}/${id}`);
   }
 
   bulkDelete(ids: string[]): Observable<void[]> {
-    return forkJoin(ids.map((id) => this.delete(id)));
+    return forkJoin(ids.map((id) => this.remove(id)));
   }
 
   bulkUpdate(ids: string[], changes: BulkUpdateProductRequest): Observable<void[]> {
     return forkJoin(
       ids.map((id) =>
         this.getById(id).pipe(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (source: any) => new Observable<void>((subscriber) => {
-            source.subscribe({
-              next: (product: ProductDto) => {
-                const request: UpdateProductRequest = {
-                  categoryId: changes.categoryId ?? product.categoryId,
-                  name: product.name,
-                  sku: product.sku,
-                  description: product.description,
-                  costPrice: product.costPrice,
-                  salePrice: product.salePrice,
-                  reorderLevel: changes.reorderLevel ?? product.reorderLevel,
-                  isActive: changes.isActive ?? product.isActive,
-                };
-                this.update(id, request).subscribe({
-                  next: () => {
-                    subscriber.next();
-                    subscriber.complete();
-                  },
-                  error: (err: unknown) => subscriber.error(err),
-                });
-              },
-              error: (err: unknown) => subscriber.error(err),
-            });
+          switchMap((product) => {
+            const request: UpdateProductRequest = {
+              categoryId: changes.categoryId ?? product.categoryId,
+              name: product.name,
+              sku: product.sku,
+              description: product.description,
+              costPrice: product.costPrice,
+              salePrice: product.salePrice,
+              reorderLevel: changes.reorderLevel ?? product.reorderLevel,
+              isActive: changes.isActive ?? product.isActive,
+            };
+            return this.update(id, request);
           }),
         ),
       ),

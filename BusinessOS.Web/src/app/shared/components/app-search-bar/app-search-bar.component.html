@@ -1,0 +1,11 @@
+<form class="search-bar" (submit)="onSubmit($event)">
+  <span class="search-bar__icon" aria-hidden="true">🔍</span>
+  <input
+    type="search"
+    class="search-bar__input"
+    [placeholder]="placeholder()"
+    [value]="value()"
+    (input)="onInput($event)"
+    aria-label="Search"
+  />
+</form>

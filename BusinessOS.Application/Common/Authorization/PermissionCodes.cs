@@ -22,6 +22,16 @@ public static class PermissionCodes
     public const string OrderUpdate = "Order.Update";
     public const string OrderDelete = "Order.Delete";
 
+    public const string SupplierCreate = "Supplier.Create";
+    public const string SupplierView = "Supplier.View";
+    public const string SupplierUpdate = "Supplier.Update";
+    public const string SupplierDelete = "Supplier.Delete";
+
+    public const string PurchaseOrderCreate = "PurchaseOrder.Create";
+    public const string PurchaseOrderView = "PurchaseOrder.View";
+    public const string PurchaseOrderUpdate = "PurchaseOrder.Update";
+    public const string PurchaseOrderDelete = "PurchaseOrder.Delete";
+
     public const string InventoryView = "Inventory.View";
     public const string InventoryUpdate = "Inventory.Update";
     public const string InventoryAdjust = "Inventory.Adjust";
@@ -58,6 +68,16 @@ public static class PermissionCodes
         new("Update Order", OrderUpdate, "Update orders", "Order"),
         new("Delete Order", OrderDelete, "Delete orders", "Order"),
 
+        new("Create Supplier", SupplierCreate, "Create suppliers", "Supplier"),
+        new("View Suppliers", SupplierView, "View suppliers", "Supplier"),
+        new("Update Supplier", SupplierUpdate, "Update suppliers", "Supplier"),
+        new("Delete Supplier", SupplierDelete, "Delete suppliers", "Supplier"),
+
+        new("Create Purchase Order", PurchaseOrderCreate, "Create purchase orders", "PurchaseOrder"),
+        new("View Purchase Orders", PurchaseOrderView, "View purchase orders", "PurchaseOrder"),
+        new("Update Purchase Order", PurchaseOrderUpdate, "Update purchase orders", "PurchaseOrder"),
+        new("Delete Purchase Order", PurchaseOrderDelete, "Delete purchase orders", "PurchaseOrder"),
+
         new("View Inventory", InventoryView, "View inventory records", "Inventory"),
         new("Update Inventory", InventoryUpdate, "Update inventory thresholds", "Inventory"),
         new("Adjust Inventory", InventoryAdjust, "Adjust stock levels", "Inventory"),
@@ -79,6 +99,8 @@ public static class PermissionCodes
         ProductView,
         CustomerView,
         OrderView,
+        SupplierView,
+        PurchaseOrderView,
         InventoryView,
         UserView,
         RoleView
@@ -89,6 +111,8 @@ public static class PermissionCodes
         ProductCreate, ProductView, ProductUpdate, ProductDelete,
         CustomerCreate, CustomerView, CustomerUpdate, CustomerDelete,
         OrderCreate, OrderView, OrderUpdate, OrderDelete,
+        SupplierCreate, SupplierView, SupplierUpdate, SupplierDelete,
+        PurchaseOrderCreate, PurchaseOrderView, PurchaseOrderUpdate, PurchaseOrderDelete,
         InventoryView, InventoryUpdate, InventoryAdjust
     };
 
@@ -101,7 +125,9 @@ public static class PermissionCodes
     public static readonly IReadOnlySet<string> InventoryManagerPermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         InventoryView, InventoryUpdate, InventoryAdjust,
-        ProductCreate, ProductView, ProductUpdate, ProductDelete
+        ProductCreate, ProductView, ProductUpdate, ProductDelete,
+        SupplierCreate, SupplierView, SupplierUpdate, SupplierDelete,
+        PurchaseOrderCreate, PurchaseOrderView, PurchaseOrderUpdate, PurchaseOrderDelete
     };
 }
 
