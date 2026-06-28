@@ -8,6 +8,7 @@ using BusinessOS.Application.Features.Orders.Queries;
 using BusinessOS.Application.Features.Orders.Services;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
+using BusinessOS.UnitTests;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -25,7 +26,7 @@ public class CreateOrderHandlerTests
             products: [],
             orders: []);
 
-        var handler = CreateHandler(context.Object);
+        var handler = CreateHandler(context);
 
         var act = () => handler.Handle(
             new CreateOrderCommand(

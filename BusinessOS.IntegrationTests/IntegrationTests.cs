@@ -166,7 +166,7 @@ public class CategoryIntegrationTests : IntegrationTestBase
         var page = await response.Content.ReadFromJsonAsync<PagedResult<CategoryDto>>();
         page.Should().NotBeNull();
         page!.Items.Should().HaveCount(1);
-        page.TotalCount.Should().BeGreaterOrEqualTo(2);
+        page.TotalCount.Should().BeGreaterThanOrEqualTo(2);
         page.Page.Should().Be(1);
         page.PageSize.Should().Be(1);
     }
