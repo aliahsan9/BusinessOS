@@ -1,0 +1,38 @@
+<aside
+  class="app-sidebar"
+  [class.app-sidebar--collapsed]="collapsed()"
+  [class.app-sidebar--mobile-open]="mobileOpen()"
+  aria-label="Main navigation"
+>
+  <div class="app-sidebar__brand">
+    <span class="app-sidebar__logo" aria-hidden="true">B</span>
+    @if (!collapsed()) {
+      <span class="app-sidebar__name">BusinessOS</span>
+    }
+  </div>
+
+  <nav class="app-sidebar__nav">
+    @for (item of navItems; track item.route) {
+      <a
+        [routerLink]="item.route"
+        routerLinkActive="app-sidebar__link--active"
+        class="app-sidebar__link"
+        [attr.aria-label]="item.label"
+        (click)="onNavClick()"
+      >
+        <span class="app-sidebar__icon" aria-hidden="true">{{ item.icon }}</span>
+        @if (!collapsed()) {
+          <span class="app-sidebar__label">{{ item.label }}</span>
+        }
+      </a>
+    }
+  </nav>
+
+  <button type="button" class="app-sidebar__toggle" (click)="toggleCollapse()" [attr.aria-label]="collapsed() ? 'Expand sidebar' : 'Collapse sidebar'">
+    {{ collapsed() ? '›' : '‹' }}
+  </button>
+</aside>
+
+@if (mobileOpen()) {
+  <div class="app-sidebar__backdrop" (click)="mobileClose.emit()" aria-hidden="true"></div>
+}

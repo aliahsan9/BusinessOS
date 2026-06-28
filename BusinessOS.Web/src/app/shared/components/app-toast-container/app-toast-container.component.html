@@ -1,0 +1,13 @@
+<div class="toast-container" aria-live="polite" aria-atomic="true">
+  @for (toast of toasts(); track toast.id) {
+    <div class="app-toast" [class]="'app-toast--' + toast.type" role="alert">
+      <div class="app-toast__content">
+        <strong class="app-toast__title">{{ toast.title }}</strong>
+        @if (toast.message) {
+          <p class="app-toast__message">{{ toast.message }}</p>
+        }
+      </div>
+      <button type="button" class="app-toast__close" aria-label="Dismiss notification" (click)="dismiss(toast.id)">×</button>
+    </div>
+  }
+</div>

@@ -1,0 +1,84 @@
+.auth-layout {
+  display: grid;
+  min-height: 100vh;
+
+  @media (min-width: 992px) {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  &__panel--brand {
+    display: none;
+    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #3b82f6 100%);
+    color: #fff;
+    padding: 3rem;
+
+    @media (min-width: 992px) {
+      display: flex;
+      align-items: center;
+    }
+  }
+
+  &__brand-content {
+    max-width: 420px;
+  }
+
+  &__logo {
+    width: 3rem;
+    height: 3rem;
+    border-radius: var(--radius-lg);
+    background: rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: var(--font-weight-bold);
+    margin-bottom: 2rem;
+  }
+
+  &__headline {
+    font-size: 2rem;
+    font-weight: var(--font-weight-bold);
+    line-height: 1.2;
+    margin-bottom: 1rem;
+  }
+
+  &__tagline {
+    font-size: 1rem;
+    opacity: 0.9;
+    line-height: 1.6;
+    margin-bottom: 2rem;
+  }
+
+  &__features {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+
+    li {
+      padding: 0.5rem 0;
+      padding-left: 1.5rem;
+      position: relative;
+      opacity: 0.95;
+
+      &::before {
+        content: '✓';
+        position: absolute;
+        left: 0;
+        font-weight: var(--font-weight-bold);
+      }
+    }
+  }
+
+  &__panel--form {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1.5rem;
+    background: var(--color-bg);
+  }
+
+  &__form-container {
+    width: 100%;
+    max-width: 420px;
+  }
+}

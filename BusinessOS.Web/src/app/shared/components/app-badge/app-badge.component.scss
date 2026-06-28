@@ -1,0 +1,34 @@
+.app-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-medium);
+  line-height: 1.4;
+
+  &--primary {
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+  }
+  &--success {
+    background: var(--color-success-light);
+    color: #15803d;
+  }
+  &--danger {
+    background: var(--color-danger-light);
+    color: var(--color-danger);
+  }
+  &--warning {
+    background: var(--color-warning-light);
+    color: #b45309;
+  }
+  &--info {
+    background: var(--color-info-light);
+    color: #0e7490;
+  }
+  &--neutral {
+    background: var(--color-gray-100);
+    color: var(--color-gray-600);
+  }
+}

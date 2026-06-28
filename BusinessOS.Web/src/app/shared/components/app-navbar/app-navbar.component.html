@@ -1,0 +1,66 @@
+<header class="app-navbar">
+  <div class="app-navbar__left">
+    <button type="button" class="app-navbar__menu-btn" aria-label="Toggle navigation menu" (click)="menuToggle.emit()">
+      ☰
+    </button>
+    <div class="app-navbar__search">
+      <span class="app-navbar__search-icon" aria-hidden="true">🔍</span>
+      <input
+        type="search"
+        class="app-navbar__search-input"
+        placeholder="Search..."
+        aria-label="Global search"
+        (input)="onSearch($event)"
+      />
+    </div>
+  </div>
+
+  <div class="app-navbar__right">
+    <div class="app-navbar__dropdown">
+      <button
+        type="button"
+        class="app-navbar__icon-btn"
+        aria-label="Notifications"
+        [attr.aria-expanded]="showNotifications()"
+        (click)="toggleNotifications()"
+      >
+        🔔
+        @if (hasUnreadNotifications()) {
+          <span class="app-navbar__badge" aria-hidden="true"></span>
+        }
+      </button>
+      @if (showNotifications()) {
+        <div class="app-navbar__panel" role="menu">
+          <div class="app-navbar__panel-header">Notifications</div>
+          @for (n of notifications(); track n.id) {
+            <div class="app-navbar__notification" [class.app-navbar__notification--unread]="!n.read">
+              <strong>{{ n.title }}</strong>
+              <p>{{ n.message }}</p>
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+    <div class="app-navbar__dropdown">
+      <button
+        type="button"
+        class="app-navbar__profile"
+        aria-label="User menu"
+        [attr.aria-expanded]="showProfile()"
+        (click)="toggleProfile()"
+      >
+        <span class="app-navbar__avatar" aria-hidden="true">{{ currentUser()?.email?.charAt(0)?.toUpperCase() ?? 'U' }}</span>
+        <span class="app-navbar__email d-none d-md-inline">{{ currentUser()?.email }}</span>
+      </button>
+      @if (showProfile()) {
+        <div class="app-navbar__panel" role="menu">
+          <div class="app-navbar__panel-header">{{ currentUser()?.email }}</div>
+          <button type="button" class="app-navbar__menu-item" role="menuitem">Profile</button>
+          <button type="button" class="app-navbar__menu-item" role="menuitem">Settings</button>
+          <button type="button" class="app-navbar__menu-item app-navbar__menu-item--danger" role="menuitem" (click)="logout()">Sign out</button>
+        </div>
+      }
+    </div>
+  </div>
+</header>

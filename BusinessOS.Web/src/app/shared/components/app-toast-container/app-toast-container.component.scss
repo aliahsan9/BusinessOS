@@ -1,0 +1,57 @@
+.app-toast {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-lg);
+  animation: slideIn 0.2s ease;
+
+  &__title {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: var(--font-weight-semibold);
+  }
+
+  &__message {
+    margin: 0.25rem 0 0;
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  &__close {
+    background: none;
+    border: none;
+    font-size: 1.125rem;
+    cursor: pointer;
+    opacity: 0.6;
+    line-height: 1;
+  }
+
+  &--success {
+    border-left: 4px solid var(--color-success);
+  }
+  &--error {
+    border-left: 4px solid var(--color-danger);
+  }
+  &--warning {
+    border-left: 4px solid var(--color-warning);
+  }
+  &--info {
+    border-left: 4px solid var(--color-info);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}

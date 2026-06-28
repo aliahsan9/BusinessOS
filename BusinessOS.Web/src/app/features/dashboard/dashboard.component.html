@@ -1,0 +1,207 @@
+<div class="dashboard page-container">
+  <div class="page-header">
+    <div>
+      <app-breadcrumb [items]="breadcrumbs" />
+      <h1 class="page-title">Dashboard</h1>
+      <p class="page-subtitle">Overview of your business performance</p>
+    </div>
+    <div class="dashboard__period-select">
+      <label for="period-select" class="text-label">Period</label>
+      <select id="period-select" class="form-select form-select-sm" [value]="period()" (change)="onPeriodChange($event)" aria-label="Select dashboard period">
+        @for (p of periods; track p.value) {
+          <option [value]="p.value">{{ p.label }}</option>
+        }
+      </select>
+    </div>
+  </div>
+
+  @if (error()) {
+    <app-alert [message]="error()!" variant="danger" [dismissible]="false" />
+    <app-empty-state title="Unable to load dashboard" description="There was a problem fetching your data." actionLabel="Retry" (action)="retry()" />
+  } @else if (loading()) {
+    <div class="card-grid dashboard__stats">
+      @for (i of [1,2,3,4]; track i) {
+        <app-skeleton variant="rect" height="120px" />
+      }
+    </div>
+    <div class="dashboard__charts">
+      <app-skeleton variant="rect" height="320px" />
+      <app-skeleton variant="rect" height="320px" />
+    </div>
+  } @else {
+    <!-- KPI Cards -->
+    <div class="card-grid dashboard__stats">
+      <div class="stat-card dashboard__stat">
+        <span class="dashboard__stat-label">Total Revenue</span>
+        <span class="dashboard__stat-value">{{ overview()?.totalRevenue | currency }}</span>
+        <span class="dashboard__stat-meta">Monthly: {{ sales()?.monthlySales | currency }}</span>
+      </div>
+      <div class="stat-card dashboard__stat">
+        <span class="dashboard__stat-label">Orders</span>
+        <span class="dashboard__stat-value">{{ overview()?.totalOrders | number }}</span>
+        <span class="dashboard__stat-meta">Avg: {{ sales()?.averageOrderValue | currency }}</span>
+      </div>
+      <div class="stat-card dashboard__stat">
+        <span class="dashboard__stat-label">Customers</span>
+        <span class="dashboard__stat-value">{{ overview()?.totalCustomers | number }}</span>
+        <span class="dashboard__stat-meta">New: {{ customers()?.newCustomers | number }}</span>
+      </div>
+      <div class="stat-card dashboard__stat">
+        <span class="dashboard__stat-label">Products</span>
+        <span class="dashboard__stat-value">{{ overview()?.totalProducts | number }}</span>
+        <span class="dashboard__stat-meta">Categories: {{ overview()?.totalCategories | number }}</span>
+      </div>
+    </div>
+
+    <!-- Secondary KPIs -->
+    <div class="card-grid dashboard__stats dashboard__stats--secondary">
+      <div class="stat-card dashboard__stat dashboard__stat--compact">
+        <span class="dashboard__stat-label">Inventory Value</span>
+        <span class="dashboard__stat-value dashboard__stat-value--sm">{{ overview()?.totalInventoryValue | currency }}</span>
+      </div>
+      <div class="stat-card dashboard__stat dashboard__stat--compact">
+        <span class="dashboard__stat-label">Low Stock</span>
+        <span class="dashboard__stat-value dashboard__stat-value--sm dashboard__stat-value--warning">{{ overview()?.lowStockProducts | number }}</span>
+      </div>
+      <div class="stat-card dashboard__stat dashboard__stat--compact">
+        <span class="dashboard__stat-label">Out of Stock</span>
+        <span class="dashboard__stat-value dashboard__stat-value--sm dashboard__stat-value--danger">{{ overview()?.outOfStockProducts | number }}</span>
+      </div>
+      <div class="stat-card dashboard__stat dashboard__stat--compact">
+        <span class="dashboard__stat-label">Completed Orders</span>
+        <span class="dashboard__stat-value dashboard__stat-value--sm dashboard__stat-value--success">{{ sales()?.completedOrders | number }}</span>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="dashboard__charts">
+      <app-card title="Revenue Trend" [subtitle]="revenueChart()?.dateRange?.period">
+        @if (revenueChart()) {
+          <app-chart [data]="revenueChart()" />
+        } @else {
+          <app-empty-state title="No revenue data" description="Revenue data will appear once orders are completed." />
+        }
+      </app-card>
+      <app-card title="Orders Trend" [subtitle]="ordersChart()?.dateRange?.period">
+        @if (ordersChart()) {
+          <app-chart [data]="ordersChart()" />
+        } @else {
+          <app-empty-state title="No order data" description="Order trends will appear once you have orders." />
+        }
+      </app-card>
+    </div>
+
+    <div class="dashboard__grid">
+      <!-- Inventory Status -->
+      <app-card title="Inventory Status" subtitle="Stock levels overview">
+        <div class="dashboard__inventory-summary">
+          <div class="dashboard__inventory-item">
+            <span>Total Stock Qty</span>
+            <strong>{{ inventory()?.totalStockQuantity | number }}</strong>
+          </div>
+          <div class="dashboard__inventory-item">
+            <span>Low Stock Items</span>
+            <strong class="text-warning">{{ inventory()?.lowStockCount | number }}</strong>
+          </div>
+          <div class="dashboard__inventory-item">
+            <span>Out of Stock</span>
+            <strong class="text-danger">{{ inventory()?.outOfStockCount | number }}</strong>
+          </div>
+        </div>
+        @if (inventory()?.reorderRecommendations?.length) {
+          <div class="dashboard__reorder-list">
+            <h4 class="h6">Reorder Recommendations</h4>
+            @for (item of inventory()!.reorderRecommendations.slice(0, 5); track item.productId) {
+              <div class="dashboard__reorder-item">
+                <span>{{ item.productName }}</span>
+                <app-badge [label]="'Qty: ' + item.suggestedReorderQuantity" variant="warning" />
+              </div>
+            }
+          </div>
+        }
+      </app-card>
+
+      <!-- Orders by Status -->
+      <app-card title="Orders Summary" subtitle="Status breakdown">
+        @if (orders()?.ordersByStatus?.length) {
+          <div class="dashboard__status-list">
+            @for (status of orders()!.ordersByStatus; track status.status) {
+              <div class="dashboard__status-item">
+                <app-badge [label]="status.status" [variant]="getStatusVariant(status.status)" />
+                <span class="dashboard__status-count">{{ status.count }}</span>
+              </div>
+            }
+          </div>
+          <div class="dashboard__rates">
+            <span>Success rate: <strong>{{ orders()?.successRate | number:'1.0-1' }}%</strong></span>
+            <span>Cancellation: <strong>{{ orders()?.cancellationRate | number:'1.0-1' }}%</strong></span>
+          </div>
+        } @else {
+          <app-empty-state title="No orders yet" description="Order statistics will appear here." />
+        }
+      </app-card>
+
+      <!-- Top Customers -->
+      <app-card title="Top Customers" subtitle="By total spending">
+        @if (customers()?.topCustomers?.length) {
+          <div class="table-responsive-wrapper">
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th scope="col">Customer</th>
+                  <th scope="col">Orders</th>
+                  <th scope="col" class="text-end">Spending</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (customer of customers()!.topCustomers; track customer.customerId) {
+                  <tr>
+                    <td>
+                      <strong>{{ customer.fullName }}</strong>
+                      <br /><small class="text-muted">{{ customer.email }}</small>
+                    </td>
+                    <td>{{ customer.totalOrders }}</td>
+                    <td class="text-end">{{ customer.totalSpending | currency }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <app-empty-state title="No customer data" />
+        }
+      </app-card>
+
+      <!-- Top Products -->
+      <app-card title="Best Selling Products" subtitle="Top performers">
+        @if (products()?.bestSellingProducts?.length) {
+          <div class="table-responsive-wrapper">
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th scope="col">Product</th>
+                  <th scope="col">Sold</th>
+                  <th scope="col" class="text-end">Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (product of products()!.bestSellingProducts; track product.productId) {
+                  <tr>
+                    <td>
+                      <strong>{{ product.productName }}</strong>
+                      <br /><small class="text-muted">{{ product.sku }}</small>
+                    </td>
+                    <td>{{ product.totalQuantitySold }}</td>
+                    <td class="text-end">{{ product.totalRevenue | currency }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <app-empty-state title="No product data" />
+        }
+      </app-card>
+    </div>
+  }
+</div>
