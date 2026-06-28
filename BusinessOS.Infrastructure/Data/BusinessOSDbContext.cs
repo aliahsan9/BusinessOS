@@ -37,6 +37,11 @@ public class BusinessOSDbContext
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<Inventory> Inventories => Set<Inventory>();
     public DbSet<StockTransaction> StockTransactions => Set<StockTransaction>();
+    public DbSet<Role> RbacRoles => Set<Role>();
+    public DbSet<Permission> Permissions => Set<Permission>();
+    public DbSet<UserRole> RbacUserRoles => Set<UserRole>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+    public DbSet<RbacAuditLog> RbacAuditLogs => Set<RbacAuditLog>();
     public DbSet<AIConversation> AIConversations => Set<AIConversation>();
     public DbSet<Notification> Notifications => Set<Notification>();
 

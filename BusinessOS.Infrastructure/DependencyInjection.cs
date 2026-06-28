@@ -1,6 +1,7 @@
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Infrastructure.Repositories;
 using BusinessOS.Application.Features.Auth.Services;
+using BusinessOS.Application.Features.Roles.Services;
 using BusinessOS.Infrastructure.Data;
 using BusinessOS.Infrastructure.Identity;
 using BusinessOS.Infrastructure.MultiTenancy;
@@ -57,6 +58,8 @@ public static class DependencyInjection
 
         services.AddScoped<IInventoryRepository, InventoryRepository>();
         services.AddScoped<IStockTransactionRepository, StockTransactionRepository>();
+        services.AddScoped<IRoleRepository, RoleRepository>();
+        services.AddScoped<IPermissionRepository, PermissionRepository>();
 
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
@@ -64,6 +67,9 @@ public static class DependencyInjection
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<ITenantRegistrationService, TenantRegistrationService>();
         services.AddScoped<IUserAnalyticsService, UserAnalyticsService>();
+        services.AddScoped<IRoleService, RoleService>();
+        services.AddScoped<IPermissionService, PermissionService>();
+        services.AddScoped<IRbacAuditService, RbacAuditService>();
 
         return services;
     }

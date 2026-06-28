@@ -60,6 +60,7 @@ try
         });
 
     builder.Services.AddAuthorization();
+    builder.Services.AddPermissionAuthorization();
     builder.Services.AddDashboardAuthorization();
 
     var app = builder.Build();
@@ -97,6 +98,7 @@ try
     app.MapOrderEndpoints();
     app.MapInventoryEndpoints();
     app.MapDashboardEndpoints();
+    app.MapRoleEndpoints();
 
     app.Run();
 }

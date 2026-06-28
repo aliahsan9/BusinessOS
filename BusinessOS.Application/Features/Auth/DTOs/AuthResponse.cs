@@ -10,5 +10,9 @@ public sealed class AuthResponse
 
     public Guid TenantId { get; set; }
 
+    public IReadOnlyList<string> Roles { get; set; } = [];
+
+    public IReadOnlyList<string> Permissions { get; set; } = [];
+
     public DateTime ExpiresAt { get; set; }
 }

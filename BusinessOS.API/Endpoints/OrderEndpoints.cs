@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Authorization;
 using BusinessOS.Application.Common.Extensions;
 using BusinessOS.Application.Common.Models;
 using BusinessOS.Application.Features.Orders.Commands.CreateOrder;
@@ -7,6 +8,7 @@ using BusinessOS.Application.Features.Orders.Commands.UpdateOrderStatus;
 using BusinessOS.Application.Features.Orders.Queries;
 using BusinessOS.Application.Features.Orders.Queries.GetAllOrders;
 using BusinessOS.Application.Features.Orders.Queries.GetOrderById;
+using BusinessOS.API.Authorization;
 using MediatR;
 
 namespace BusinessOS.API.Endpoints;
@@ -26,6 +28,7 @@ public static class OrderEndpoints
             .RequireAuthorization();
 
         group.MapPost("", CreateOrder)
+            .RequirePermission(PermissionCodes.OrderCreate)
             .WithName("CreateOrder")
             .WithSummary("Create an order")
             .WithDescription(
@@ -36,6 +39,7 @@ public static class OrderEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapGet("", GetAllOrders)
+            .RequirePermission(PermissionCodes.OrderView)
             .WithName("GetAllOrders")
             .WithSummary("List orders")
             .WithDescription(
@@ -45,6 +49,7 @@ public static class OrderEndpoints
             .ProducesProblem(StatusCodes.Status400BadRequest);
 
         group.MapGet("/{id:guid}", GetOrderById)
+            .RequirePermission(PermissionCodes.OrderView)
             .WithName("GetOrderById")
             .WithSummary("Get order by id")
             .WithDescription("Returns complete order details including line items and product information.")
@@ -52,6 +57,7 @@ public static class OrderEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapPut("/{id:guid}", UpdateOrder)
+            .RequirePermission(PermissionCodes.OrderUpdate)
             .WithName("UpdateOrder")
             .WithSummary("Update an order")
             .WithDescription(
@@ -63,6 +69,7 @@ public static class OrderEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapDelete("/{id:guid}", DeleteOrder)
+            .RequirePermission(PermissionCodes.OrderDelete)
             .WithName("DeleteOrder")
             .WithSummary("Delete an order")
             .WithDescription(
@@ -72,6 +79,7 @@ public static class OrderEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapPatch("/{id:guid}/status", UpdateOrderStatus)
+            .RequirePermission(PermissionCodes.OrderUpdate)
             .WithName("UpdateOrderStatus")
             .WithSummary("Update order status")
             .WithDescription(

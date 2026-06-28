@@ -1,11 +1,12 @@
 using BusinessOS.Application.Common.Authorization;
 using BusinessOS.Infrastructure.Data;
 using BusinessOS.Infrastructure.Identity;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace BusinessOS.IntegrationTests;
 
@@ -32,18 +33,17 @@ public class BusinessOSWebApplicationFactory : WebApplicationFactory<Program>
         using var scope = Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<BusinessOSDbContext>();
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
         context.Database.EnsureCreated();
 
-        foreach (var role in RoleNames.All)
-        {
-            if (!roleManager.RoleExistsAsync(role).GetAwaiter().GetResult())
-            {
-                roleManager.CreateAsync(new ApplicationRole { Name = role })
-                    .GetAwaiter()
-                    .GetResult();
-            }
-        }
+        RbacSeeder.SeedAsync(
+                context,
+                roleManager,
+                userManager,
+                NullLogger.Instance)
+            .GetAwaiter()
+            .GetResult();
 
         _seeded = true;
     }
@@ -53,9 +53,12 @@ public abstract class IntegrationTestBase
 {
     protected IntegrationTestBase(BusinessOSWebApplicationFactory factory)
     {
+        Factory = factory;
         factory.EnsureSeeded();
         Client = factory.CreateClient();
     }
+
+    protected BusinessOSWebApplicationFactory Factory { get; }
 
     protected HttpClient Client { get; }
 }

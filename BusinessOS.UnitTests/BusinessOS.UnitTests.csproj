@@ -24,6 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\BusinessOS.API\BusinessOS.API.csproj" />
     <ProjectReference Include="..\BusinessOS.Application\BusinessOS.Application.csproj" />
     <ProjectReference Include="..\BusinessOS.Infrastructure\BusinessOS.Infrastructure.csproj" />
   </ItemGroup>

@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Authorization;
 using BusinessOS.Application.Common.Extensions;
 using BusinessOS.Application.Common.Models;
 using BusinessOS.Application.Features.Inventory.Commands.AdjustStock;
@@ -12,6 +13,7 @@ using BusinessOS.Application.Features.Inventory.Queries.GetLowStockProducts;
 using BusinessOS.Application.Features.Inventory.Queries.GetOutOfStockProducts;
 using BusinessOS.Application.Features.Inventory.Queries.GetReorderProducts;
 using BusinessOS.Application.Features.Inventory.Queries.GetStockTransactions;
+using BusinessOS.API.Authorization;
 using MediatR;
 
 namespace BusinessOS.API.Endpoints;
@@ -31,6 +33,7 @@ public static class InventoryEndpoints
             .RequireAuthorization();
 
         group.MapGet("", GetAllInventory)
+            .RequirePermission(PermissionCodes.InventoryView)
             .WithName("GetAllInventory")
             .WithSummary("List inventory records")
             .WithDescription(
@@ -40,6 +43,7 @@ public static class InventoryEndpoints
             .ProducesProblem(StatusCodes.Status400BadRequest);
 
         group.MapGet("/{productId:guid}", GetInventoryByProductId)
+            .RequirePermission(PermissionCodes.InventoryView)
             .WithName("GetInventoryByProductId")
             .WithSummary("Get inventory by product id")
             .WithDescription("Returns inventory details for a specific product.")
@@ -47,6 +51,7 @@ public static class InventoryEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapPut("/{productId:guid}", UpdateInventory)
+            .RequirePermission(PermissionCodes.InventoryUpdate)
             .WithName("UpdateInventory")
             .WithSummary("Update inventory thresholds")
             .WithDescription(
@@ -56,6 +61,7 @@ public static class InventoryEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapPost("/increase", IncreaseStock)
+            .RequirePermission(PermissionCodes.InventoryAdjust)
             .WithName("IncreaseStock")
             .WithSummary("Increase stock")
             .WithDescription(
@@ -66,6 +72,7 @@ public static class InventoryEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapPost("/decrease", DecreaseStock)
+            .RequirePermission(PermissionCodes.InventoryAdjust)
             .WithName("DecreaseStock")
             .WithSummary("Decrease stock")
             .WithDescription(
@@ -76,6 +83,7 @@ public static class InventoryEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapPost("/adjust", AdjustStock)
+            .RequirePermission(PermissionCodes.InventoryAdjust)
             .WithName("AdjustStock")
             .WithSummary("Adjust stock with transaction type")
             .WithDescription(
@@ -85,6 +93,7 @@ public static class InventoryEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapGet("/transactions", GetStockTransactions)
+            .RequirePermission(PermissionCodes.InventoryView)
             .WithName("GetStockTransactions")
             .WithSummary("Get stock transaction history")
             .WithDescription("Returns paginated stock transaction audit trail with optional product and type filters.")
@@ -92,6 +101,7 @@ public static class InventoryEndpoints
             .ProducesProblem(StatusCodes.Status400BadRequest);
 
         group.MapGet("/analytics", GetInventoryAnalytics)
+            .RequirePermission(PermissionCodes.InventoryView)
             .WithName("GetInventoryAnalytics")
             .WithSummary("Get inventory analytics")
             .WithDescription(
@@ -99,18 +109,21 @@ public static class InventoryEndpoints
             .Produces<InventoryAnalyticsResponse>(StatusCodes.Status200OK);
 
         group.MapGet("/low-stock", GetLowStockProducts)
+            .RequirePermission(PermissionCodes.InventoryView)
             .WithName("GetLowStockProducts")
             .WithSummary("Get low stock products")
             .WithDescription("Returns products where current stock is above zero but at or below reorder level.")
             .Produces<IReadOnlyList<InventorySummaryResponse>>(StatusCodes.Status200OK);
 
         group.MapGet("/out-of-stock", GetOutOfStockProducts)
+            .RequirePermission(PermissionCodes.InventoryView)
             .WithName("GetOutOfStockProducts")
             .WithSummary("Get out of stock products")
             .WithDescription("Returns products with zero or negative stock.")
             .Produces<IReadOnlyList<InventorySummaryResponse>>(StatusCodes.Status200OK);
 
         group.MapGet("/reorder-products", GetReorderProducts)
+            .RequirePermission(PermissionCodes.InventoryView)
             .WithName("GetReorderProducts")
             .WithSummary("Get products needing reorder")
             .WithDescription("Returns products at or below reorder level with suggested reorder quantities.")

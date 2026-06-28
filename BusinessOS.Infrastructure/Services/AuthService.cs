@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Authorization;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Auth.DTOs;
@@ -14,19 +15,22 @@ public sealed class AuthService : IAuthService
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
     private readonly ITenantProvider _tenantProvider;
     private readonly IDbContextFactory<BusinessOSDbContext> _dbContextFactory;
+    private readonly IRoleRepository _roleRepository;
 
     public AuthService(
         IIdentityService identityService,
         ITenantRegistrationService tenantRegistrationService,
         IJwtTokenGenerator jwtTokenGenerator,
         ITenantProvider tenantProvider,
-        IDbContextFactory<BusinessOSDbContext> dbContextFactory)
+        IDbContextFactory<BusinessOSDbContext> dbContextFactory,
+        IRoleRepository roleRepository)
     {
         _identityService = identityService;
         _tenantRegistrationService = tenantRegistrationService;
         _jwtTokenGenerator = jwtTokenGenerator;
         _tenantProvider = tenantProvider;
         _dbContextFactory = dbContextFactory;
+        _roleRepository = roleRepository;
     }
 
     public async Task<AuthResponse> LoginAsync(
@@ -44,8 +48,14 @@ public sealed class AuthService : IAuthService
 
         _tenantProvider.SetTenantId(user.TenantId);
 
-        var roles = await _identityService.GetRolesAsync(user, cancellationToken);
-        var token = _jwtTokenGenerator.GenerateToken(user.Id, user.Email, user.TenantId, roles);
+        var roles = await _roleRepository.GetUserRoleNamesAsync(user.Id, cancellationToken);
+        if (roles.Count == 0)
+        {
+            roles = await _identityService.GetRolesAsync(user, cancellationToken);
+        }
+
+        var permissions = await _roleRepository.GetUserPermissionCodesAsync(user.Id, cancellationToken);
+        var token = _jwtTokenGenerator.GenerateToken(user.Id, user.Email, user.TenantId, roles, permissions);
 
         return new AuthResponse
         {
@@ -53,6 +63,8 @@ public sealed class AuthService : IAuthService
             UserId = user.Id,
             Email = user.Email,
             TenantId = user.TenantId,
+            Roles = roles,
+            Permissions = permissions,
             ExpiresAt = _jwtTokenGenerator.GetTokenExpiration()
         };
     }
@@ -91,7 +103,8 @@ public sealed class AuthService : IAuthService
         var user = await _identityService.FindByEmailAsync(email, cancellationToken)
             ?? throw new BadRequestException("User registration failed.");
 
-        await _identityService.AddToRoleAsync(user, "Admin", cancellationToken);
+        await _identityService.AddToRoleAsync(user, RoleNames.Admin, cancellationToken);
+        await AssignRbacRoleAsync(user.Id, RoleNames.Admin, cancellationToken);
 
         var tenant = await dbContext.Tenants
             .IgnoreQueryFilters()
@@ -100,8 +113,9 @@ public sealed class AuthService : IAuthService
         tenant.OwnerUserId = user.Id;
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var roles = await _identityService.GetRolesAsync(user, cancellationToken);
-        var token = _jwtTokenGenerator.GenerateToken(user.Id, user.Email, user.TenantId, roles);
+        var roles = await _roleRepository.GetUserRoleNamesAsync(user.Id, cancellationToken);
+        var permissions = await _roleRepository.GetUserPermissionCodesAsync(user.Id, cancellationToken);
+        var token = _jwtTokenGenerator.GenerateToken(user.Id, user.Email, user.TenantId, roles, permissions);
 
         return new AuthResponse
         {
@@ -109,7 +123,18 @@ public sealed class AuthService : IAuthService
             UserId = user.Id,
             Email = user.Email,
             TenantId = user.TenantId,
+            Roles = roles,
+            Permissions = permissions,
             ExpiresAt = _jwtTokenGenerator.GetTokenExpiration()
         };
+    }
+
+    private async Task AssignRbacRoleAsync(string userId, string roleName, CancellationToken cancellationToken)
+    {
+        var role = await _roleRepository.GetRoleByNameAsync(roleName, cancellationToken);
+        if (role is not null)
+        {
+            await _roleRepository.AssignRoleToUserAsync(userId, role.Id, cancellationToken);
+        }
     }
 }

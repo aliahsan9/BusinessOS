@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Authorization;
 using BusinessOS.Application.Common.Extensions;
 using BusinessOS.Application.Common.Models;
 using BusinessOS.Application.Features.Products.Commands.CreateProduct;
@@ -7,6 +8,7 @@ using BusinessOS.Application.Features.Products.Queries;
 using BusinessOS.Application.Features.Products.Queries.GetAllProducts;
 using BusinessOS.Application.Features.Products.Queries.GetProductById;
 using BusinessOS.Application.Features.Products.Queries.GetProductsByCategory;
+using BusinessOS.API.Authorization;
 using MediatR;
 
 namespace BusinessOS.API.Endpoints;
@@ -26,6 +28,7 @@ public static class ProductEndpoints
             .RequireAuthorization();
 
         group.MapPost("", CreateProduct)
+            .RequirePermission(PermissionCodes.ProductCreate)
             .WithName("CreateProduct")
             .WithSummary("Create a product")
             .WithDescription("Creates a new product in the specified category.")
@@ -34,6 +37,7 @@ public static class ProductEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapGet("", GetAllProducts)
+            .RequirePermission(PermissionCodes.ProductView)
             .WithName("GetAllProducts")
             .WithSummary("List products")
             .WithDescription("Returns a paginated, searchable, and sortable list of products.")
@@ -41,6 +45,7 @@ public static class ProductEndpoints
             .ProducesProblem(StatusCodes.Status400BadRequest);
 
         group.MapGet("/{id:guid}", GetProductById)
+            .RequirePermission(PermissionCodes.ProductView)
             .WithName("GetProductById")
             .WithSummary("Get product by id")
             .WithDescription("Returns a single product by its unique identifier.")
@@ -48,6 +53,7 @@ public static class ProductEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapGet("/by-category/{categoryId:guid}", GetProductsByCategory)
+            .RequirePermission(PermissionCodes.ProductView)
             .WithName("GetProductsByCategory")
             .WithSummary("List products by category")
             .WithDescription("Returns a paginated list of products belonging to the specified category.")
@@ -55,6 +61,7 @@ public static class ProductEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapPut("/{id:guid}", UpdateProduct)
+            .RequirePermission(PermissionCodes.ProductUpdate)
             .WithName("UpdateProduct")
             .WithSummary("Update a product")
             .WithDescription("Updates an existing product's details.")
@@ -63,6 +70,7 @@ public static class ProductEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapDelete("/{id:guid}", DeleteProduct)
+            .RequirePermission(PermissionCodes.ProductDelete)
             .WithName("DeleteProduct")
             .WithSummary("Delete a product")
             .WithDescription("Soft-deletes a product.")

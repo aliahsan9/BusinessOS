@@ -25,6 +25,7 @@ public static class DbInitializer
 
         var context = services.GetRequiredService<BusinessOSDbContext>();
         var roleManager = services.GetRequiredService<RoleManager<ApplicationRole>>();
+        var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
         var logger = services.GetRequiredService<ILogger<BusinessOSDbContext>>();
         var configuration = services.GetRequiredService<IConfiguration>();
 
@@ -37,13 +38,6 @@ public static class DbInitializer
             await context.Database.MigrateAsync();
         }
 
-        foreach (var role in RoleNames.All)
-        {
-            if (!await roleManager.RoleExistsAsync(role))
-            {
-                await roleManager.CreateAsync(new ApplicationRole { Name = role });
-                logger.LogInformation("Seeded role {Role}", role);
-            }
-        }
+        await RbacSeeder.SeedAsync(context, roleManager, userManager, logger);
     }
 }

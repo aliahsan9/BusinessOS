@@ -23,7 +23,8 @@ public class AuthServiceRegistrationTests
             Mock.Of<ITenantRegistrationService>(),
             Mock.Of<BusinessOS.Application.Features.Auth.Services.IJwtTokenGenerator>(),
             Mock.Of<ITenantProvider>(),
-            Mock.Of<IDbContextFactory<BusinessOS.Infrastructure.Data.BusinessOSDbContext>>());
+            Mock.Of<IDbContextFactory<BusinessOS.Infrastructure.Data.BusinessOSDbContext>>(),
+            Mock.Of<IRoleRepository>());
 
         var act = () => sut.RegisterAsync(
             "a@test.com",
@@ -53,7 +54,8 @@ public class AuthServiceRegistrationTests
             Mock.Of<ITenantRegistrationService>(),
             Mock.Of<BusinessOS.Application.Features.Auth.Services.IJwtTokenGenerator>(),
             Mock.Of<ITenantProvider>(),
-            Mock.Of<IDbContextFactory<BusinessOS.Infrastructure.Data.BusinessOSDbContext>>());
+            Mock.Of<IDbContextFactory<BusinessOS.Infrastructure.Data.BusinessOSDbContext>>(),
+            Mock.Of<IRoleRepository>());
 
         var act = () => sut.LoginAsync("a@test.com", "WrongPass1!", CancellationToken.None);
 

@@ -48,11 +48,24 @@ public class AuthServiceTests
             .ReturnsAsync(new List<string> { "Admin" });
 
         var jwt = new Mock<IJwtTokenGenerator>();
-        jwt.Setup(x => x.GenerateToken(user.Id, user.Email, user.TenantId, It.IsAny<IReadOnlyList<string>>()))
+        jwt.Setup(x => x.GenerateToken(
+                user.Id,
+                user.Email,
+                user.TenantId,
+                It.IsAny<IReadOnlyList<string>>(),
+                It.IsAny<IReadOnlyList<string>>()))
             .Returns("token");
         jwt.Setup(x => x.GetTokenExpiration()).Returns(DateTime.UtcNow.AddHours(1));
 
-        var sut = CreateAuthService(identityService.Object, jwt.Object);
+        var roleRepository = new Mock<IRoleRepository>();
+        roleRepository
+            .Setup(x => x.GetUserRoleNamesAsync(user.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<string> { "Admin" });
+        roleRepository
+            .Setup(x => x.GetUserPermissionCodesAsync(user.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<string> { "Product.View" });
+
+        var sut = CreateAuthService(identityService.Object, jwt.Object, roleRepository.Object);
         var result = await sut.LoginAsync("a@test.com", "Password1!", CancellationToken.None);
 
         result.Token.Should().Be("token");
@@ -61,9 +74,11 @@ public class AuthServiceTests
 
     private static AuthService CreateAuthService(
         IIdentityService identityService,
-        IJwtTokenGenerator? jwtTokenGenerator = null)
+        IJwtTokenGenerator? jwtTokenGenerator = null,
+        IRoleRepository? roleRepository = null)
     {
         jwtTokenGenerator ??= Mock.Of<IJwtTokenGenerator>();
+        roleRepository ??= Mock.Of<IRoleRepository>();
         var tenantProvider = new Mock<ITenantProvider>();
         var tenantRegistration = Mock.Of<ITenantRegistrationService>();
         return new AuthService(
@@ -71,7 +86,8 @@ public class AuthServiceTests
             tenantRegistration,
             jwtTokenGenerator,
             tenantProvider.Object,
-            Mock.Of<IDbContextFactory<BusinessOS.Infrastructure.Data.BusinessOSDbContext>>());
+            Mock.Of<IDbContextFactory<BusinessOS.Infrastructure.Data.BusinessOSDbContext>>(),
+            roleRepository);
     }
 }
 

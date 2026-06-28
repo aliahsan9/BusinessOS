@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Authorization;
 using BusinessOS.Application.Common.Extensions;
 using BusinessOS.Application.Common.Models;
 using BusinessOS.Application.Features.Customers.Commands.CreateCustomer;
@@ -8,6 +9,7 @@ using BusinessOS.Application.Features.Customers.Queries.GetAllCustomers;
 using BusinessOS.Application.Features.Customers.Queries.GetCustomerAnalytics;
 using BusinessOS.Application.Features.Customers.Queries.GetCustomerById;
 using BusinessOS.Application.Features.Customers.Queries.GetCustomerOrders;
+using BusinessOS.API.Authorization;
 using MediatR;
 
 namespace BusinessOS.API.Endpoints;
@@ -27,6 +29,7 @@ public static class CustomerEndpoints
             .RequireAuthorization();
 
         group.MapPost("", CreateCustomer)
+            .RequirePermission(PermissionCodes.CustomerCreate)
             .WithName("CreateCustomer")
             .WithSummary("Create a customer")
             .WithDescription(
@@ -37,6 +40,7 @@ public static class CustomerEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapGet("", GetAllCustomers)
+            .RequirePermission(PermissionCodes.CustomerView)
             .WithName("GetAllCustomers")
             .WithSummary("List customers")
             .WithDescription(
@@ -46,6 +50,7 @@ public static class CustomerEndpoints
             .ProducesProblem(StatusCodes.Status400BadRequest);
 
         group.MapGet("/{id:guid}", GetCustomerById)
+            .RequirePermission(PermissionCodes.CustomerView)
             .WithName("GetCustomerById")
             .WithSummary("Get customer by id")
             .WithDescription("Returns complete customer details by unique identifier.")
@@ -53,6 +58,7 @@ public static class CustomerEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapPut("/{id:guid}", UpdateCustomer)
+            .RequirePermission(PermissionCodes.CustomerUpdate)
             .WithName("UpdateCustomer")
             .WithSummary("Update a customer")
             .WithDescription("Updates an existing customer's profile and active status.")
@@ -62,6 +68,7 @@ public static class CustomerEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapDelete("/{id:guid}", DeleteCustomer)
+            .RequirePermission(PermissionCodes.CustomerDelete)
             .WithName("DeleteCustomer")
             .WithSummary("Delete a customer")
             .WithDescription(
@@ -71,6 +78,7 @@ public static class CustomerEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapGet("/{id:guid}/orders", GetCustomerOrders)
+            .RequirePermission(PermissionCodes.CustomerView)
             .WithName("GetCustomerOrders")
             .WithSummary("Get customer orders")
             .WithDescription("Returns a paginated list of orders for the specified customer.")
@@ -78,6 +86,7 @@ public static class CustomerEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapGet("/{id:guid}/analytics", GetCustomerAnalytics)
+            .RequirePermission(PermissionCodes.CustomerView)
             .WithName("GetCustomerAnalytics")
             .WithSummary("Get customer analytics")
             .WithDescription(

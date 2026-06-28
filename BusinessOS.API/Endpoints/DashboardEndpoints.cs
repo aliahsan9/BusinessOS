@@ -7,6 +7,7 @@ using BusinessOS.Application.Features.Dashboard.Queries.GetInventoryAnalytics;
 using BusinessOS.Application.Features.Dashboard.Queries.GetOrderAnalytics;
 using BusinessOS.Application.Features.Dashboard.Queries.GetProductAnalytics;
 using BusinessOS.Application.Features.Dashboard.Queries.GetSalesAnalytics;
+using BusinessOS.API.Authorization;
 using MediatR;
 
 namespace BusinessOS.API.Endpoints;
@@ -26,7 +27,7 @@ public static class DashboardEndpoints
             .RequireAuthorization();
 
         group.MapGet("/overview", GetOverview)
-            .RequireAuthorization(DashboardPolicies.Overview)
+            .RequirePermission(PermissionCodes.OrderView)
             .WithName("GetDashboardOverview")
             .WithSummary("Get executive dashboard overview")
             .WithDescription(
@@ -37,7 +38,7 @@ public static class DashboardEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden);
 
         group.MapGet("/sales", GetSales)
-            .RequireAuthorization(DashboardPolicies.SalesReports)
+            .RequirePermission(PermissionCodes.OrderView)
             .WithName("GetSalesAnalytics")
             .WithSummary("Get sales analytics")
             .WithDescription(
@@ -47,7 +48,7 @@ public static class DashboardEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden);
 
         group.MapGet("/customers", GetCustomers)
-            .RequireAuthorization(DashboardPolicies.BusinessAnalytics)
+            .RequirePermission(PermissionCodes.CustomerView)
             .WithName("GetCustomerAnalyticsDashboard")
             .WithSummary("Get customer analytics")
             .WithDescription(
@@ -57,7 +58,7 @@ public static class DashboardEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden);
 
         group.MapGet("/products", GetProducts)
-            .RequireAuthorization(DashboardPolicies.BusinessAnalytics)
+            .RequirePermission(PermissionCodes.ProductView)
             .WithName("GetProductAnalyticsDashboard")
             .WithSummary("Get product analytics")
             .WithDescription(
@@ -67,7 +68,7 @@ public static class DashboardEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden);
 
         group.MapGet("/inventory", GetInventory)
-            .RequireAuthorization(DashboardPolicies.InventoryAnalytics)
+            .RequirePermission(PermissionCodes.InventoryView)
             .WithName("GetInventoryAnalyticsDashboard")
             .WithSummary("Get inventory analytics")
             .WithDescription(
@@ -77,7 +78,7 @@ public static class DashboardEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden);
 
         group.MapGet("/orders", GetOrders)
-            .RequireAuthorization(DashboardPolicies.BusinessAnalytics)
+            .RequirePermission(PermissionCodes.OrderView)
             .WithName("GetOrderAnalytics")
             .WithSummary("Get order analytics")
             .WithDescription(
@@ -89,35 +90,35 @@ public static class DashboardEndpoints
         var charts = group.MapGroup("/charts");
 
         charts.MapGet("/revenue", GetRevenueChart)
-            .RequireAuthorization(DashboardPolicies.SalesReports)
+            .RequirePermission(PermissionCodes.OrderView)
             .WithName("GetRevenueChart")
             .WithSummary("Get revenue chart data")
             .WithDescription("Returns line/bar chart datasets for revenue and order trends.")
             .Produces<ChartDataResponse>(StatusCodes.Status200OK);
 
         charts.MapGet("/orders", GetOrdersChart)
-            .RequireAuthorization(DashboardPolicies.SalesReports)
+            .RequirePermission(PermissionCodes.OrderView)
             .WithName("GetOrdersChart")
             .WithSummary("Get orders chart data")
             .WithDescription("Returns bar/doughnut chart datasets for order status distribution.")
             .Produces<ChartDataResponse>(StatusCodes.Status200OK);
 
         charts.MapGet("/customers", GetCustomersChart)
-            .RequireAuthorization(DashboardPolicies.BusinessAnalytics)
+            .RequirePermission(PermissionCodes.CustomerView)
             .WithName("GetCustomersChart")
             .WithSummary("Get customers chart data")
             .WithDescription("Returns line/bar chart datasets for customer growth and top spenders.")
             .Produces<ChartDataResponse>(StatusCodes.Status200OK);
 
         charts.MapGet("/products", GetProductsChart)
-            .RequireAuthorization(DashboardPolicies.BusinessAnalytics)
+            .RequirePermission(PermissionCodes.ProductView)
             .WithName("GetProductsChart")
             .WithSummary("Get products chart data")
             .WithDescription("Returns bar/line chart datasets for top product revenue and quantity sold.")
             .Produces<ChartDataResponse>(StatusCodes.Status200OK);
 
         charts.MapGet("/inventory", GetInventoryChart)
-            .RequireAuthorization(DashboardPolicies.InventoryAnalytics)
+            .RequirePermission(PermissionCodes.InventoryView)
             .WithName("GetInventoryChart")
             .WithSummary("Get inventory chart data")
             .WithDescription("Returns pie/line chart datasets for stock status and movement trends.")

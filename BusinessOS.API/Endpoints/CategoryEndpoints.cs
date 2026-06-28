@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Authorization;
 using BusinessOS.Application.Common.Extensions;
 using BusinessOS.Application.Common.Models;
 using BusinessOS.Application.Features.Categories.Commands.CreateCategory;
@@ -5,6 +6,7 @@ using BusinessOS.Application.Features.Categories.Commands.DeleteCategory;
 using BusinessOS.Application.Features.Categories.Commands.UpdateCategory;
 using BusinessOS.Application.Features.Categories.Queries.GetAllCategories;
 using BusinessOS.Application.Features.Categories.Queries.GetCategoryById;
+using BusinessOS.API.Authorization;
 using MediatR;
 
 namespace BusinessOS.API.Endpoints;
@@ -24,6 +26,7 @@ public static class CategoryEndpoints
             .RequireAuthorization();
 
         group.MapPost("", CreateCategory)
+            .RequirePermission(PermissionCodes.CategoryCreate)
             .WithName("CreateCategory")
             .WithSummary("Create a category")
             .WithDescription("Creates a new product category for the current tenant.")
@@ -32,6 +35,7 @@ public static class CategoryEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapGet("", GetAllCategories)
+            .RequirePermission(PermissionCodes.CategoryView)
             .WithName("GetAllCategories")
             .WithSummary("List categories")
             .WithDescription("Returns a paginated, searchable, and sortable list of categories.")
@@ -39,6 +43,7 @@ public static class CategoryEndpoints
             .ProducesProblem(StatusCodes.Status400BadRequest);
 
         group.MapGet("/{id:guid}", GetCategoryById)
+            .RequirePermission(PermissionCodes.CategoryView)
             .WithName("GetCategoryById")
             .WithSummary("Get category by id")
             .WithDescription("Returns a single category by its unique identifier.")
@@ -46,6 +51,7 @@ public static class CategoryEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapPut("/{id:guid}", UpdateCategory)
+            .RequirePermission(PermissionCodes.CategoryUpdate)
             .WithName("UpdateCategory")
             .WithSummary("Update a category")
             .WithDescription("Updates an existing category's name and description.")
@@ -55,6 +61,7 @@ public static class CategoryEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapDelete("/{id:guid}", DeleteCategory)
+            .RequirePermission(PermissionCodes.CategoryDelete)
             .WithName("DeleteCategory")
             .WithSummary("Delete a category")
             .WithDescription("Soft-deletes a category when it has no associated products.")

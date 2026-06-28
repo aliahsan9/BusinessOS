@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using BusinessOS.Application.Common.Authorization;
 using BusinessOS.Application.Features.Auth.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
@@ -20,16 +21,27 @@ public sealed class JwtTokenGenerator : IJwtTokenGenerator
         string userId,
         string email,
         Guid tenantId,
-        IReadOnlyList<string> roles)
+        IReadOnlyList<string> roles,
+        IReadOnlyList<string> permissions)
     {
+        var username = email.Split('@')[0];
+
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, userId),
             new(ClaimTypes.Email, email),
+            new(ClaimTypesConstants.Username, username),
             new("TenantId", tenantId.ToString())
         };
 
         claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
+
+        if (permissions.Count > 0)
+        {
+            claims.Add(new Claim(
+                ClaimTypesConstants.Permissions,
+                string.Join(',', permissions.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))));
+        }
 
         var key = new SymmetricSecurityKey(
             Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
