@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, computed, inject, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, output, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { TokenService } from '../../../core/services/token.service';
+import { NotificationCenterService } from '../../../core/services/notification-center.service';
 import { APP_ROUTE_PATHS, NAV_ITEMS } from '../../constants/nav.constants';
 
 @Component({
@@ -12,9 +13,10 @@ import { APP_ROUTE_PATHS, NAV_ITEMS } from '../../constants/nav.constants';
   styleUrl: './app-navbar.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class AppNavbarComponent {
+export class AppNavbarComponent implements OnInit {
   private readonly authService = inject(AuthService);
   private readonly tokenService = inject(TokenService);
+  private readonly notificationCenter = inject(NotificationCenterService);
 
   readonly menuToggle = output<void>();
   readonly routes = APP_ROUTE_PATHS;
@@ -32,13 +34,25 @@ export class AppNavbarComponent {
 
   readonly currentUser = this.authService.currentUser;
 
-  readonly notifications = signal([
-    { id: '1', title: 'Low stock alert', message: '3 products need reordering', read: false },
-    { id: '2', title: 'New order', message: 'Order #1042 received', read: false },
-    { id: '3', title: 'Welcome', message: 'Your dashboard is ready', read: true },
-  ]);
+  readonly notifications = signal<{ id: string; title: string; message: string; read: boolean }[]>([]);
 
   readonly hasUnreadNotifications = computed(() => this.notifications().some((n) => !n.read));
+
+  ngOnInit(): void {
+    if (this.tokenService.hasPermission('Notification.View')) {
+      this.notificationCenter.getAll({ page: 1, pageSize: 5 }).subscribe({
+        next: (result) =>
+          this.notifications.set(
+            result.items.map((n) => ({
+              id: n.id,
+              title: n.title,
+              message: n.message,
+              read: n.isRead,
+            })),
+          ),
+      });
+    }
+  }
 
   onSearch(event: Event): void {
     const value = (event.target as HTMLInputElement).value;

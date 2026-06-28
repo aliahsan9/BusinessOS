@@ -200,7 +200,20 @@ public static class PermissionCodes
         PaymentCreate, PaymentView, PaymentUpdate, PaymentDelete,
         InvoiceCreate, InvoiceView, InvoiceUpdate, InvoiceDelete,
         QuotationCreate, QuotationView, QuotationUpdate, QuotationDelete,
-        InventoryView, InventoryUpdate, InventoryAdjust
+        InventoryView, InventoryUpdate, InventoryAdjust,
+        ExpenseCreate, ExpenseView, ExpenseUpdate, ExpenseDelete,
+        ExpenseCategoryCreate, ExpenseCategoryView, ExpenseCategoryUpdate, ExpenseCategoryDelete,
+        FinanceView, ReportView, NotificationView, NotificationUpdate,
+        SettingsView, SettingsUpdate
+    };
+
+    public static readonly IReadOnlySet<string> AccountantPermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ExpenseCreate, ExpenseView, ExpenseUpdate, ExpenseDelete,
+        ExpenseCategoryCreate, ExpenseCategoryView, ExpenseCategoryUpdate, ExpenseCategoryDelete,
+        FinanceView, ReportView,
+        PaymentView, InvoiceView, OrderView,
+        NotificationView, NotificationUpdate
     };
 
     public static readonly IReadOnlySet<string> SalesPermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)

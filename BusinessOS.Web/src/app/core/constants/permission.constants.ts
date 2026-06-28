@@ -107,6 +107,7 @@ export const PermissionCodes = {
 export const RoleNames = {
   admin: 'Admin',
   manager: 'Manager',
+  accountant: 'Accountant',
   sales: 'Sales',
   inventoryManager: 'InventoryManager',
   viewer: 'Viewer',

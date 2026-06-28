@@ -112,6 +112,7 @@ public static class RbacSeeder
         {
             [RoleNames.Admin] = permissions.Select(x => x.Code).ToHashSet(StringComparer.OrdinalIgnoreCase),
             [RoleNames.Manager] = PermissionCodes.ManagerPermissions,
+            [RoleNames.Accountant] = PermissionCodes.AccountantPermissions,
             [RoleNames.Sales] = PermissionCodes.SalesPermissions,
             [RoleNames.InventoryManager] = PermissionCodes.InventoryManagerPermissions,
             [RoleNames.Viewer] = PermissionCodes.ViewOnly
@@ -196,7 +197,8 @@ public static class RbacSeeder
         roleName switch
         {
             RoleNames.Admin => "Full system access with all permissions.",
-            RoleNames.Manager => "Manages products, customers, orders, and inventory.",
+            RoleNames.Manager => "Manages products, customers, orders, inventory, and finance.",
+            RoleNames.Accountant => "Manages expenses, financial reports, and accounting.",
             RoleNames.Sales => "Manages customers and orders.",
             RoleNames.InventoryManager => "Manages inventory and products.",
             RoleNames.Viewer => "Read-only access across modules.",

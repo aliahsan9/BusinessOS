@@ -39,6 +39,8 @@ public sealed class TenantRegistrationService : ITenantRegistrationService
         dbContext.Tenants.Add(tenant);
         await dbContext.SaveChangesAsync(cancellationToken);
 
+        await ExpenseCategorySeeder.SeedForTenantAsync(dbContext, tenantId, cancellationToken: cancellationToken);
+
         return tenant.Id;
     }
 }
