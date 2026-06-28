@@ -1,0 +1,17 @@
+<section class="error-page">
+  <div class="error-page__content">
+    <span class="error-page__code" aria-hidden="true">403</span>
+    <h1 class="error-page__title">Access denied</h1>
+    <p class="error-page__message">
+      You do not have permission to view this page. Contact your administrator if you believe this is a mistake.
+    </p>
+    <div class="error-page__actions">
+      <a [routerLink]="routes.dashboard">
+        <app-button label="Go to Dashboard" />
+      </a>
+      <a [routerLink]="routes.auth.login">
+        <app-button label="Sign in with another account" [variant]="ButtonVariant.Outline" />
+      </a>
+    </div>
+  </div>
+</section>

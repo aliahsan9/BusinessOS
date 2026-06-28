@@ -24,6 +24,19 @@ export enum StockTransactionType {
   Transfer = 'Transfer',
 }
 
+export enum PurchaseOrderStatus {
+  Draft = 'Draft',
+  Pending = 'Pending',
+  Approved = 'Approved',
+  Received = 'Received',
+  Cancelled = 'Cancelled',
+}
+
+export enum ProductStatus {
+  Active = 'Active',
+  Inactive = 'Inactive',
+}
+
 export enum ToastType {
   Success = 'success',
   Error = 'error',
@@ -45,4 +58,10 @@ export enum ButtonSize {
   Sm = 'sm',
   Md = 'md',
   Lg = 'lg',
+}
+
+export enum ThemeMode {
+  Light = 'light',
+  Dark = 'dark',
+  System = 'system',
 }

@@ -28,6 +28,11 @@ export const AUTH_ROUTES: Routes = [
         loadComponent: () => import('./reset-password/reset-password.component').then((m) => m.ResetPasswordComponent),
         title: 'Reset Password | BusinessOS',
       },
+      {
+        path: 'verify-email',
+        loadComponent: () => import('./verify-email/verify-email.component').then((m) => m.VerifyEmailComponent),
+        title: 'Verify Email | BusinessOS',
+      },
     ],
   },
 ];

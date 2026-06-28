@@ -15,6 +15,20 @@
     </div>
   </div>
 
+  <nav class="app-navbar__nav" aria-label="Main navigation">
+    @for (item of navItems; track item.route) {
+      <a
+        class="app-navbar__nav-link"
+        [routerLink]="item.route"
+        routerLinkActive="app-navbar__nav-link--active"
+        [routerLinkActiveOptions]="{ exact: item.route === routes.dashboard }"
+      >
+        <span class="app-navbar__nav-icon" aria-hidden="true">{{ item.icon }}</span>
+        <span class="app-navbar__nav-label">{{ item.label }}</span>
+      </a>
+    }
+  </nav>
+
   <div class="app-navbar__right">
     <div class="app-navbar__dropdown">
       <button

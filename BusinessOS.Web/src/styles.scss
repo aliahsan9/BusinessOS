@@ -1,5 +1,11 @@
 @use 'styles/variables';
+@use 'styles/mixins';
+@use 'styles/spacing';
 @use 'styles/typography';
+@use 'styles/cards';
+@use 'styles/buttons';
+@use 'styles/forms';
+@use 'styles/tables';
 @use 'styles/utilities';
 
 @import 'bootstrap/scss/bootstrap';
@@ -37,24 +43,24 @@ a {
 .form-control:focus,
 .form-select:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.15);
+  box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--color-primary) 15%, transparent);
 }
 
 .toast-container {
   position: fixed;
-  top: 1rem;
-  right: 1rem;
-  z-index: 1080;
+  top: var(--space-4);
+  right: var(--space-4);
+  z-index: var(--z-toast);
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
   max-width: min(420px, calc(100vw - 2rem));
 }
 
 .global-loader {
   position: fixed;
   inset: 0;
-  background: rgba(255, 255, 255, 0.65);
+  background: color-mix(in srgb, var(--color-surface) 65%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;

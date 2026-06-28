@@ -1,0 +1,27 @@
+.feature-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  &__icon {
+    font-size: 2rem;
+    line-height: 1;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 1.75rem;
+    font-weight: var(--font-weight-semibold);
+  }
+
+  &__description {
+    margin: 0.25rem 0 0;
+    color: var(--color-text-muted);
+  }
+}

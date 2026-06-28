@@ -1,21 +1,30 @@
 import { ChangeDetectionStrategy, Component, computed, inject, output, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
-import { APP_ROUTE_PATHS } from '../../constants/nav.constants';
+import { TokenService } from '../../../core/services/token.service';
+import { APP_ROUTE_PATHS, NAV_ITEMS } from '../../constants/nav.constants';
 
 @Component({
   selector: 'app-navbar',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, RouterLinkActive],
   templateUrl: './app-navbar.component.html',
   styleUrl: './app-navbar.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AppNavbarComponent {
   private readonly authService = inject(AuthService);
+  private readonly tokenService = inject(TokenService);
 
   readonly menuToggle = output<void>();
   readonly routes = APP_ROUTE_PATHS;
+
+  readonly navItems = NAV_ITEMS.filter((item) => {
+    if (!item.permissions?.length) {
+      return true;
+    }
+    return this.tokenService.hasAnyPermission(item.permissions);
+  });
 
   readonly searchQuery = signal('');
   readonly showNotifications = signal(false);

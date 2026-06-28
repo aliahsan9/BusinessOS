@@ -28,6 +28,18 @@ export const PermissionCodes = {
     update: 'Inventory.Update',
     adjust: 'Inventory.Adjust',
   },
+  supplier: {
+    create: 'Supplier.Create',
+    view: 'Supplier.View',
+    update: 'Supplier.Update',
+    delete: 'Supplier.Delete',
+  },
+  purchaseOrder: {
+    create: 'PurchaseOrder.Create',
+    view: 'PurchaseOrder.View',
+    update: 'PurchaseOrder.Update',
+    delete: 'PurchaseOrder.Delete',
+  },
   user: {
     create: 'User.Create',
     view: 'User.View',

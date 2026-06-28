@@ -18,7 +18,7 @@ export const permissionGuard = (requiredPermissions: string[], requireAll = fals
     }
 
     notificationService.warning('Access denied', 'You do not have permission to view this page.');
-    return router.createUrlTree(['/dashboard']);
+    return router.createUrlTree(['/forbidden']);
   };
 };
 

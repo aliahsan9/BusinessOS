@@ -26,7 +26,19 @@ export const API_ENDPOINTS = {
   customers: '/customers',
   products: '/products',
   categories: '/categories',
-  inventory: '/inventory',
+  inventory: {
+    base: '/inventory',
+    increase: '/inventory/increase',
+    decrease: '/inventory/decrease',
+    adjust: '/inventory/adjust',
+    transactions: '/inventory/transactions',
+    analytics: '/inventory/analytics',
+    lowStock: '/inventory/low-stock',
+    outOfStock: '/inventory/out-of-stock',
+    reorderProducts: '/inventory/reorder-products',
+  },
+  suppliers: '/suppliers',
+  purchaseOrders: '/purchase-orders',
   orders: '/orders',
 } as const;
 
