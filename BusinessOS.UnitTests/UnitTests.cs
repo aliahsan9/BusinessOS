@@ -3,8 +3,10 @@ using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Auth.DTOs;
 using BusinessOS.Application.Features.Auth.Services;
 using BusinessOS.Application.Features.Categories.Commands.CreateCategory;
+using BusinessOS.Application.Features.Inventory.Services;
 using BusinessOS.Application.Features.Products.Commands.CreateProduct;
 using BusinessOS.Domain.Entities;
+using BusinessOS.UnitTests.Handlers;
 using BusinessOS.Infrastructure.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -142,7 +144,9 @@ public class ProductHandlerTests
         context.Setup(x => x.Categories).Returns(categories.Object);
         context.Setup(x => x.Products).Returns(products.Object);
 
-        var handler = new CreateProductCommandHandler(context.Object);
+        var handler = new CreateProductCommandHandler(
+            context.Object,
+            InventoryServiceTestHelper.CreateMock().Object);
 
         var act = () => handler.Handle(
             new CreateProductCommand(Guid.NewGuid(), "Item", "SKU", null, 1, 2, 1),

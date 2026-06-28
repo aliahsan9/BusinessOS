@@ -1,5 +1,6 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Inventory.Services;
 using BusinessOS.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -9,10 +10,14 @@ namespace BusinessOS.Application.Features.Products.Commands.CreateProduct;
 public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand, Guid>
 {
     private readonly IApplicationDbContext _context;
+    private readonly IInventoryService _inventoryService;
 
-    public CreateProductCommandHandler(IApplicationDbContext context)
+    public CreateProductCommandHandler(
+        IApplicationDbContext context,
+        IInventoryService inventoryService)
     {
         _context = context;
+        _inventoryService = inventoryService;
     }
 
     public async Task<Guid> Handle(CreateProductCommand request, CancellationToken cancellationToken)
@@ -37,6 +42,8 @@ public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand,
 
         _context.Products.Add(product);
         await _context.SaveChangesAsync(cancellationToken);
+
+        await _inventoryService.CreateInventoryForProductAsync(product, cancellationToken);
 
         return product.Id;
     }

@@ -90,6 +90,7 @@ try
     app.MapProductEndpoints();
     app.MapCustomerEndpoints();
     app.MapOrderEndpoints();
+    app.MapInventoryEndpoints();
 
     app.Run();
 }

@@ -3,6 +3,7 @@ using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Categories.Commands.DeleteCategory;
 using BusinessOS.Application.Features.Categories.Commands.UpdateCategory;
 using BusinessOS.Application.Features.Categories.Queries.GetCategoryById;
+using BusinessOS.Application.Features.Inventory.Services;
 using BusinessOS.Application.Features.Products.Commands.CreateProduct;
 using BusinessOS.Domain.Entities;
 using FluentAssertions;
@@ -96,7 +97,9 @@ public class CreateProductSuccessHandlerTests
         context.Setup(x => x.Products).Returns(products.Object);
         context.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
-        var handler = new CreateProductCommandHandler(context.Object);
+        var handler = new CreateProductCommandHandler(
+            context.Object,
+            InventoryServiceTestHelper.CreateMock().Object);
 
         var id = await handler.Handle(
             new CreateProductCommand(categoryId, "Laptop", "SKU-1", null, 100, 200, 5),

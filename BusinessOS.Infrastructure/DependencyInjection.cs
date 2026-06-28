@@ -1,4 +1,5 @@
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Infrastructure.Repositories;
 using BusinessOS.Application.Features.Auth.Services;
 using BusinessOS.Infrastructure.Data;
 using BusinessOS.Infrastructure.Identity;
@@ -53,6 +54,9 @@ public static class DependencyInjection
 
         services.AddScoped<IApplicationDbContext>(sp =>
             sp.GetRequiredService<BusinessOSDbContext>());
+
+        services.AddScoped<IInventoryRepository, InventoryRepository>();
+        services.AddScoped<IStockTransactionRepository, StockTransactionRepository>();
 
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();

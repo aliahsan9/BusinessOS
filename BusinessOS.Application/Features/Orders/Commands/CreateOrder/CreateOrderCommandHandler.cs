@@ -1,5 +1,6 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Inventory.Services;
 using BusinessOS.Application.Features.Orders.Services;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
@@ -13,15 +14,18 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
 {
     private readonly IApplicationDbContext _context;
     private readonly IOrderNumberGenerator _orderNumberGenerator;
+    private readonly IInventoryService _inventoryService;
     private readonly ILogger<CreateOrderCommandHandler> _logger;
 
     public CreateOrderCommandHandler(
         IApplicationDbContext context,
         IOrderNumberGenerator orderNumberGenerator,
+        IInventoryService inventoryService,
         ILogger<CreateOrderCommandHandler> logger)
     {
         _context = context;
         _orderNumberGenerator = orderNumberGenerator;
+        _inventoryService = inventoryService;
         _logger = logger;
     }
 
@@ -79,6 +83,12 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
         if (grandTotal < 0)
             throw new BadRequestException("Order grand total cannot be negative.");
 
+        var stockRequirements = request.Items
+            .GroupBy(x => x.ProductId)
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.Quantity));
+
+        await _inventoryService.EnsureStockAvailableAsync(stockRequirements, cancellationToken);
+
         var order = new Order
         {
             Id = Guid.NewGuid(),
@@ -95,6 +105,8 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
 
         _context.Orders.Add(order);
         await _context.SaveChangesAsync(cancellationToken);
+
+        await _inventoryService.DeductForOrderAsync(order, orderItems, cancellationToken);
 
         _logger.LogInformation(
             "Created order {OrderNumber} ({OrderId}) for customer {CustomerId}",

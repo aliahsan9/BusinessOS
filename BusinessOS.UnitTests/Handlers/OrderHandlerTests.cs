@@ -1,5 +1,6 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Inventory.Services;
 using BusinessOS.Application.Features.Orders.Commands.CreateOrder;
 using BusinessOS.Application.Features.Orders.Commands.DeleteOrder;
 using BusinessOS.Application.Features.Orders.Commands.UpdateOrder;
@@ -153,6 +154,7 @@ public class CreateOrderHandlerTests
         var handler = new CreateOrderCommandHandler(
             context.Object,
             orderNumberGenerator.Object,
+            InventoryServiceTestHelper.CreateMock().Object,
             Mock.Of<ILogger<CreateOrderCommandHandler>>());
 
         var id = await handler.Handle(
@@ -184,8 +186,12 @@ public class CreateOrderHandlerTests
         return new CreateOrderCommandHandler(
             context.Object,
             orderNumberGenerator.Object,
+            InventoryServiceTestHelper.CreateMock().Object,
             Mock.Of<ILogger<CreateOrderCommandHandler>>());
     }
+
+    private static Mock<IInventoryService> CreateInventoryServiceMock() =>
+        InventoryServiceTestHelper.CreateMock();
 
     private static Mock<IApplicationDbContext> CreateContext(
         List<Customer> customers,
@@ -364,6 +370,7 @@ public class UpdateOrderStatusHandlerTests
 
         var handler = new UpdateOrderStatusCommandHandler(
             context.Object,
+            InventoryServiceTestHelper.CreateMock().Object,
             Mock.Of<ILogger<UpdateOrderStatusCommandHandler>>());
 
         var act = () => handler.Handle(
@@ -393,6 +400,7 @@ public class UpdateOrderStatusHandlerTests
 
         var handler = new UpdateOrderStatusCommandHandler(
             context.Object,
+            InventoryServiceTestHelper.CreateMock().Object,
             Mock.Of<ILogger<UpdateOrderStatusCommandHandler>>());
 
         await handler.Handle(
@@ -457,5 +465,36 @@ public class OrderStatusRulesTests
     {
         OrderStatusRules.CanTransition(OrderStatusNames.Pending, OrderStatusNames.Confirmed)
             .Should().BeTrue();
+    }
+}
+
+internal static class InventoryServiceTestHelper
+{
+    public static Mock<IInventoryService> CreateMock()
+    {
+        var mock = new Mock<IInventoryService>();
+        mock.Setup(x => x.EnsureStockAvailableAsync(
+                It.IsAny<IReadOnlyDictionary<Guid, decimal>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        mock.Setup(x => x.DeductForOrderAsync(
+                It.IsAny<Order>(),
+                It.IsAny<IEnumerable<OrderItem>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        mock.Setup(x => x.RestoreForCancelledOrderAsync(
+                It.IsAny<Order>(),
+                It.IsAny<IEnumerable<OrderItem>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        mock.Setup(x => x.FinalizeOrderAsync(
+                It.IsAny<Order>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        mock.Setup(x => x.CreateInventoryForProductAsync(
+                It.IsAny<Product>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        return mock;
     }
 }

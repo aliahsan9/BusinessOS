@@ -35,7 +35,8 @@ public class BusinessOSDbContext
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<Expense> Expenses => Set<Expense>();
     public DbSet<Employee> Employees => Set<Employee>();
-    public DbSet<InventoryTransaction> InventoryTransactions => Set<InventoryTransaction>();
+    public DbSet<Inventory> Inventories => Set<Inventory>();
+    public DbSet<StockTransaction> StockTransactions => Set<StockTransaction>();
     public DbSet<AIConversation> AIConversations => Set<AIConversation>();
     public DbSet<Notification> Notifications => Set<Notification>();
 
@@ -118,7 +119,10 @@ public class BusinessOSDbContext
         builder.Entity<Employee>()
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
-        builder.Entity<InventoryTransaction>()
+        builder.Entity<Inventory>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<StockTransaction>()
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<Purchase>()

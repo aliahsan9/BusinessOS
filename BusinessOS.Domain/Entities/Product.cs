@@ -21,4 +21,5 @@ public class Product : AuditableEntity
     public bool IsActive { get; set; } = true;
 
     public Category Category { get; set; } = default!;
+    public Inventory? Inventory { get; set; }
 }
