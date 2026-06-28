@@ -1,17 +1,18 @@
 using BusinessOS.Application.Common.Interfaces;
+using Microsoft.Extensions.Configuration;
 
 namespace BusinessOS.Infrastructure.MultiTenancy;
 
 public class TenantDbConnection : ITenantDbConnection
 {
-    public string GetConnectionString(Guid tenantId)
-    {
-        return tenantId switch
-        {
-            var id when id != Guid.Empty =>
-                "Server=DESKTOP-GVA6N7B\\SQLEXPRESS;Database=BusinessOS;Trusted_Connection=True;TrustServerCertificate=True",
+    private readonly IConfiguration _configuration;
 
-            _ => throw new Exception("Invalid tenant")
-        };
+    public TenantDbConnection(IConfiguration configuration)
+    {
+        _configuration = configuration;
     }
+
+    public string GetConnectionString(Guid tenantId) =>
+        _configuration.GetConnectionString("DefaultConnection")
+        ?? throw new InvalidOperationException("DefaultConnection is not configured.");
 }

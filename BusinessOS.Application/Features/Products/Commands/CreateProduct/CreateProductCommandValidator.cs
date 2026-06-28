@@ -23,6 +23,9 @@ public class CreateProductCommandValidator : AbstractValidator<CreateProductComm
         RuleFor(x => x.SalePrice)
             .GreaterThan(0);
 
+        RuleFor(x => x.Description)
+            .MaximumLength(2000).When(x => x.Description is not null);
+
         RuleFor(x => x.ReorderLevel)
             .GreaterThanOrEqualTo(0);
     }

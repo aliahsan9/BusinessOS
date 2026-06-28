@@ -20,7 +20,7 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(x => x.ReorderLevel).AsMoney();
 
         builder.HasOne(x => x.Category)
-            .WithMany()
+            .WithMany(x => x.Products)
             .HasForeignKey(x => x.CategoryId)
             .OnDelete(DeleteBehavior.Restrict);
 

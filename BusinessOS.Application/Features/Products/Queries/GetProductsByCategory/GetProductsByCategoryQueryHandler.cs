@@ -15,16 +15,26 @@ public class GetProductsByCategoryQueryHandler
         _context = context;
     }
 
-    public async Task<List<ProductDto>> Handle(GetProductsByCategoryQuery request, CancellationToken cancellationToken)
+    public async Task<List<ProductDto>> Handle(
+        GetProductsByCategoryQuery request,
+        CancellationToken cancellationToken)
     {
         return await _context.Products
+            .AsNoTracking()
             .Where(x => x.CategoryId == request.CategoryId)
+            .OrderBy(x => x.Name)
             .Select(x => new ProductDto
             {
                 Id = x.Id,
+                CategoryId = x.CategoryId,
                 Name = x.Name,
                 SKU = x.SKU,
-                SalePrice = x.SalePrice
+                Description = x.Description,
+                CostPrice = x.CostPrice,
+                SalePrice = x.SalePrice,
+                CurrentStock = x.CurrentStock,
+                ReorderLevel = x.ReorderLevel,
+                IsActive = x.IsActive
             })
             .ToListAsync(cancellationToken);
     }

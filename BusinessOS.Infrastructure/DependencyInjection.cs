@@ -1,7 +1,10 @@
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Auth.Services;
 using BusinessOS.Infrastructure.Data;
+using BusinessOS.Infrastructure.Identity;
 using BusinessOS.Infrastructure.MultiTenancy;
 using BusinessOS.Infrastructure.Services;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,27 +20,45 @@ public static class DependencyInjection
         services.AddScoped<ITenantProvider, TenantProvider>();
         services.AddScoped<ITenantDbConnection, TenantDbConnection>();
 
-        services.AddDbContext<BusinessOSDbContext>((sp, options) =>
+        void ConfigureOptions(DbContextOptionsBuilder options)
         {
-            var tenantProvider = sp.GetRequiredService<ITenantProvider>();
-            var tenantDb = sp.GetRequiredService<ITenantDbConnection>();
-
-            Guid tenantId = Guid.Empty;
-
-            if (tenantProvider.HasTenant())
+            if (configuration.GetValue<bool>("UseInMemoryDatabase"))
             {
-                tenantId = tenantProvider.TenantId;
+                options.UseInMemoryDatabase(configuration["InMemoryDatabaseName"] ?? "BusinessOS_Test");
+                return;
             }
 
-            var connectionString = tenantDb.GetConnectionString(tenantId);
+            var connectionString = configuration.GetConnectionString("DefaultConnection")
+                ?? throw new InvalidOperationException("DefaultConnection is not configured.");
 
             options.UseSqlServer(connectionString);
-        });
+        }
+
+        services.AddDbContext<BusinessOSDbContext>((_, options) => ConfigureOptions(options));
+        services.AddDbContextFactory<BusinessOSDbContext>(
+            (_, options) => ConfigureOptions(options),
+            ServiceLifetime.Scoped);
+
+        services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
+            {
+                options.Password.RequiredLength = 8;
+                options.Password.RequireDigit = true;
+                options.Password.RequireLowercase = true;
+                options.Password.RequireUppercase = true;
+                options.Password.RequireNonAlphanumeric = false;
+                options.User.RequireUniqueEmail = true;
+            })
+            .AddEntityFrameworkStores<BusinessOSDbContext>()
+            .AddDefaultTokenProviders();
 
         services.AddScoped<IApplicationDbContext>(sp =>
             sp.GetRequiredService<BusinessOSDbContext>());
 
         services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+        services.AddScoped<IIdentityService, IdentityService>();
+        services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<ITenantRegistrationService, TenantRegistrationService>();
 
         return services;
     }

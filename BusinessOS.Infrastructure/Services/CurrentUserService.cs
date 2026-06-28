@@ -22,11 +22,19 @@ public class CurrentUserService : ICurrentUserService
         _httpContextAccessor.HttpContext?
             .User?
             .FindFirstValue(ClaimTypes.Email);
-    public Guid TenantId =>
-       Guid.Parse(
-           _httpContextAccessor
-               .HttpContext!
-               .User
-               .FindFirst("TenantId")!
-               .Value);
+
+    public Guid? TenantId
+    {
+        get
+        {
+            var value = _httpContextAccessor.HttpContext?
+                .User?
+                .FindFirst("TenantId")?
+                .Value;
+
+            return Guid.TryParse(value, out var tenantId)
+                ? tenantId
+                : null;
+        }
+    }
 }

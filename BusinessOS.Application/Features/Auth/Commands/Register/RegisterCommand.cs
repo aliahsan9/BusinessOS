@@ -8,5 +8,5 @@ public sealed record RegisterCommand(
     string Password,
     string FirstName,
     string LastName,
-    Guid TenantId)
+    string BusinessName)
     : IRequest<AuthResponse>;

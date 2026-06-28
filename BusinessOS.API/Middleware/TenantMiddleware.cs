@@ -19,40 +19,50 @@ public sealed class TenantMiddleware
     {
         var path = context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
 
-        // Allow Swagger / OpenAPI endpoints
         if (path.StartsWith("/swagger") ||
             path.StartsWith("/scalar") ||
-            path.StartsWith("/openapi"))
+            path.StartsWith("/openapi") ||
+            path.StartsWith("/api/auth"))
         {
             await _next(context);
             return;
         }
 
-        if (!context.Request.Headers.TryGetValue("X-Tenant-ID", out var tenantHeader) ||
-            !Guid.TryParse(tenantHeader, out var tenantId))
-        {
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            context.Response.ContentType = "application/json";
-
-            await context.Response.WriteAsync(
-                JsonSerializer.Serialize(new
-                {
-                    error = "Missing or invalid X-Tenant-ID header",
-                    code = "TENANT_HEADER_REQUIRED"
-                }));
-
-            return;
-        }
-
-        try
+        if (context.Request.Headers.TryGetValue("X-Tenant-ID", out var tenantHeader) &&
+            Guid.TryParse(tenantHeader, out var tenantId))
         {
             tenantProvider.SetTenantId(tenantId);
-
             await _next(context);
+            return;
         }
-        finally
+
+        var tenantClaim = context.User.FindFirst("TenantId")?.Value;
+        if (!string.IsNullOrWhiteSpace(tenantClaim) &&
+            Guid.TryParse(tenantClaim, out var claimTenantId))
         {
-            TenantContext.Clear();
+            tenantProvider.SetTenantId(claimTenantId);
+            await _next(context);
+            return;
         }
+
+        if (context.User.Identity?.IsAuthenticated != true)
+        {
+            await _next(context);
+            return;
+        }
+
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        context.Response.ContentType = "application/problem+json";
+
+        await context.Response.WriteAsync(
+            JsonSerializer.Serialize(new
+            {
+                type = "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+                title = "Missing or invalid X-Tenant-ID header",
+                status = 400,
+                code = "TENANT_HEADER_REQUIRED"
+            }));
+
+        TenantContext.Clear();
     }
 }

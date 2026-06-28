@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -18,8 +19,14 @@ public class DeleteCategoryCommandHandler : IRequestHandler<DeleteCategoryComman
         var category = await _context.Categories
             .FirstOrDefaultAsync(x => x.Id == request.Id, cancellationToken);
 
-        if (category == null)
-            throw new Exception("Category not found");
+        if (category is null)
+            throw new NotFoundException("Category not found");
+
+        var hasProducts = await _context.Products
+            .AnyAsync(x => x.CategoryId == request.Id, cancellationToken);
+
+        if (hasProducts)
+            throw new ConflictException("Cannot delete category that has associated products.");
 
         _context.Categories.Remove(category);
 

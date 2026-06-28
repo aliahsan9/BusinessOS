@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 namespace BusinessOS.Infrastructure.Data;
 
 public class BusinessOSDbContext
-    : IdentityDbContext<ApplicationUser>, IApplicationDbContext
+    : IdentityDbContext<ApplicationUser, ApplicationRole, string>, IApplicationDbContext
 {
     private readonly Guid _tenantId;
 
@@ -17,7 +17,9 @@ public class BusinessOSDbContext
         ITenantProvider tenantProvider)
         : base(options)
     {
-        _tenantId = tenantProvider.TenantId;
+        _tenantId = tenantProvider.HasTenant()
+            ? tenantProvider.TenantId
+            : Guid.Empty;
     }
 
     // DbSets
@@ -51,9 +53,16 @@ public class BusinessOSDbContext
             // Assign TenantId automatically
             if (entry.State == EntityState.Added)
             {
-                if (entry.Properties.Any(p => p.Metadata.Name == "TenantId"))
+                var tenantIdProp = entry.Properties
+                    .FirstOrDefault(p => p.Metadata.Name == "TenantId");
+
+                if (tenantIdProp is not null)
                 {
-                    entry.Property("TenantId").CurrentValue = _tenantId;
+                    var currentValue = tenantIdProp.CurrentValue as Guid? ?? Guid.Empty;
+                    if (currentValue == Guid.Empty && _tenantId != Guid.Empty)
+                    {
+                        tenantIdProp.CurrentValue = _tenantId;
+                    }
                 }
             }
 

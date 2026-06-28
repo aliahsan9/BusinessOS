@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -18,8 +19,14 @@ public class UpdateCategoryCommandHandler : IRequestHandler<UpdateCategoryComman
         var category = await _context.Categories
             .FirstOrDefaultAsync(x => x.Id == request.Id, cancellationToken);
 
-        if (category == null)
-            throw new Exception("Category not found");
+        if (category is null)
+            throw new NotFoundException("Category not found");
+
+        var duplicateExists = await _context.Categories
+            .AnyAsync(x => x.Id != request.Id && x.Name == request.Name, cancellationToken);
+
+        if (duplicateExists)
+            throw new ConflictException($"A category named '{request.Name}' already exists.");
 
         category.Name = request.Name;
         category.Description = request.Description;

@@ -7,7 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace BusinessOS.Infrastructure.Services;
 
-public class JwtTokenGenerator : IJwtTokenGenerator
+public sealed class JwtTokenGenerator : IJwtTokenGenerator
 {
     private readonly IConfiguration _configuration;
 
@@ -19,34 +19,34 @@ public class JwtTokenGenerator : IJwtTokenGenerator
     public string GenerateToken(
         string userId,
         string email,
-        IList<string> roles)
+        Guid tenantId,
+        IReadOnlyList<string> roles)
     {
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, userId),
-            new(ClaimTypes.Email, email)
+            new(ClaimTypes.Email, email),
+            new("TenantId", tenantId.ToString())
         };
 
-        claims.AddRange(
-            roles.Select(role =>
-                new Claim(ClaimTypes.Role, role)));
+        claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
 
         var key = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(
-                _configuration["Jwt:Key"]!));
+            Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
 
-        var credentials = new SigningCredentials(
-            key,
-            SecurityAlgorithms.HmacSha256);
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var token = new JwtSecurityToken(
             issuer: _configuration["Jwt:Issuer"],
             audience: _configuration["Jwt:Audience"],
             claims: claims,
-            expires: DateTime.UtcNow.AddHours(1),
+            expires: GetTokenExpiration(),
             signingCredentials: credentials);
 
-        return new JwtSecurityTokenHandler()
-            .WriteToken(token);
+        return new JwtSecurityTokenHandler().WriteToken(token);
     }
+
+    public DateTime GetTokenExpiration() =>
+        DateTime.UtcNow.AddMinutes(
+            Convert.ToDouble(_configuration["Jwt:ExpiryMinutes"] ?? "60"));
 }

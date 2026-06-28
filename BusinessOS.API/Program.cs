@@ -2,62 +2,50 @@ using System.Text;
 using BusinessOS.API.Endpoints;
 using BusinessOS.API.Middleware;
 using BusinessOS.Application;
-using BusinessOS.Application.Common.Interfaces;
-using BusinessOS.Application.Features.Auth.Services;
-using BusinessOS.Application.Features.Products.Commands.CreateProduct;
 using BusinessOS.Infrastructure;
-using BusinessOS.Infrastructure.Services;
-using FluentValidation;
+using BusinessOS.Infrastructure.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-#region SERVICES
-
 builder.Services.AddControllers();
-
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
-
-builder.Services.AddValidatorsFromAssemblyContaining<CreateProductCommandValidator>();
-
 builder.Services.AddHttpContextAccessor();
-
+builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
-builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
-builder.Services.AddScoped< 
-    ICurrentUserService,
-    CurrentUserService>();
 
-builder.Services.AddHttpContextAccessor();
+var jwtKey = builder.Configuration["Jwt:Key"]
+    ?? throw new InvalidOperationException("Jwt:Key is missing.");
 
 builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
     .AddJwtBearer(options =>
     {
         options.TokenValidationParameters = new TokenValidationParameters
         {
-            ValidateIssuer = false,
-            ValidateAudience = false,
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidateAudience = true,
+            ValidAudience = builder.Configuration["Jwt:Audience"],
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(
-                    builder.Configuration["Jwt:Key"]
-                    ?? throw new InvalidOperationException("Jwt:Key is missing.")
-                ))
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ClockSkew = TimeSpan.Zero
         };
     });
 
 builder.Services.AddAuthorization();
 
-#endregion
-
 var app = builder.Build();
 
-#region OPENAPI + SCALAR
+await DbInitializer.SeedAsync(app.Services);
 
 if (app.Environment.IsDevelopment())
 {
@@ -67,32 +55,25 @@ if (app.Environment.IsDevelopment())
     {
         options.Title = "BusinessOS API";
         options.Theme = ScalarTheme.BluePlanet;
-        options.DefaultHttpClient =
-            new(ScalarTarget.CSharp, ScalarClient.HttpClient);
+        options.DefaultHttpClient = new(ScalarTarget.CSharp, ScalarClient.HttpClient);
+        options.Authentication = new()
+        {
+            PreferredSecuritySchemes = ["Bearer"]
+        };
     });
 }
 
-#endregion
-
-#region MIDDLEWARE PIPELINE
-
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
-
 app.UseAuthentication();
-app.UseAuthorization();
-
-// MUST RUN BEFORE ENDPOINTS
 app.UseMiddleware<TenantMiddleware>();
-
-#endregion
-
-#region ENDPOINTS
+app.UseAuthorization();
 
 app.MapControllers();
 app.MapAuthEndpoints();
 app.MapCategoryEndpoints();
 app.MapProductEndpoints();
 
-#endregion
-
 app.Run();
+
+public partial class Program;
