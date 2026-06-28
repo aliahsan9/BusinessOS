@@ -144,9 +144,16 @@ export class AppearanceSettingsComponent {
 
   saveAndSync(): void {
     this.saving.set(true);
-    this.themeService.syncToBackend();
-    this.notification.success('Appearance settings saved.');
-    this.saving.set(false);
+    this.themeService.syncToBackend().subscribe({
+      next: () => {
+        this.notification.success('Appearance settings saved.');
+        this.saving.set(false);
+      },
+      error: () => {
+        this.notification.error('Failed to save appearance settings.');
+        this.saving.set(false);
+      },
+    });
   }
 
   resetTheme(): void {

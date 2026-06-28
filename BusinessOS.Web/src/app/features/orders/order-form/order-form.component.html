@@ -10,8 +10,13 @@
   subtitle="Line totals use current product sale prices. Discount and tax apply to the subtotal."
 />
 
-@if (loading()) {
+@if (loading() || lookupLoading()) {
   <app-skeleton height="24rem" variant="rect" />
+} @else if (lookupError()) {
+  <app-alert [message]="lookupError()!" variant="danger" [dismissible]="false" />
+  <div class="order-form__actions">
+    <app-button label="Retry" type="button" (clicked)="loadLookups()" />
+  </div>
 } @else {
   <form [formGroup]="form" (ngSubmit)="submit()" class="order-form">
     <app-card title="Order Details">

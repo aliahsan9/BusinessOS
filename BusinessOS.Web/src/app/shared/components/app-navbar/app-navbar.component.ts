@@ -57,6 +57,10 @@ export class AppNavbarComponent implements OnInit {
               read: n.isRead,
             })),
           ),
+        error: () => {
+          // Keep navbar usable when notifications cannot be loaded.
+          this.notifications.set([]);
+        },
       });
     }
   }

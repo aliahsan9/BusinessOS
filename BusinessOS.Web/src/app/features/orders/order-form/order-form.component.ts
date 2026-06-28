@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { CurrencyPipe } from '@angular/common';
 import { FormArray, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { forkJoin } from 'rxjs';
 import { OrderService } from '../../../core/services/order.service';
 import { CustomerService } from '../../../core/services/customer.service';
 import { ProductService } from '../../../core/services/product.service';
@@ -16,6 +17,7 @@ import { AppInputComponent } from '../../../shared/components/app-input/app-inpu
 import { AppButtonComponent } from '../../../shared/components/app-button/app-button.component';
 import { AppCardComponent } from '../../../shared/components/app-card/app-card.component';
 import { AppSkeletonComponent } from '../../../shared/components/app-skeleton/app-skeleton.component';
+import { AppAlertComponent } from '../../../shared/components/app-alert/app-alert.component';
 import { getFieldError } from '../../../shared/validators/form.validators';
 
 @Component({
@@ -31,6 +33,7 @@ import { getFieldError } from '../../../shared/validators/form.validators';
     AppButtonComponent,
     AppCardComponent,
     AppSkeletonComponent,
+    AppAlertComponent,
   ],
   templateUrl: './order-form.component.html',
   styleUrl: './order-form.component.scss',
@@ -49,6 +52,8 @@ export class OrderFormComponent implements OnInit {
   readonly customers = signal<CustomerSummaryDto[]>([]);
   readonly products = signal<ProductDto[]>([]);
   readonly loading = signal(false);
+  readonly lookupLoading = signal(true);
+  readonly lookupError = signal<string | null>(null);
   readonly saving = signal(false);
   readonly isEdit = signal(false);
   readonly orderId = signal<string | null>(null);
@@ -72,12 +77,7 @@ export class OrderFormComponent implements OnInit {
       this.form.patchValue({ customerId: customerIdFromQuery });
     }
 
-    this.customerService.getAll({ pageSize: 100 }).subscribe({
-      next: (result) => this.customers.set(result.items),
-    });
-    this.productService.getAll({ pageSize: 500 }).subscribe({
-      next: (result) => this.products.set(result.items),
-    });
+    this.loadLookups();
 
     if (this.isEdit() && id) {
       this.loading.set(true);
@@ -108,6 +108,27 @@ export class OrderFormComponent implements OnInit {
         },
       });
     }
+  }
+
+  loadLookups(): void {
+    this.lookupLoading.set(true);
+    this.lookupError.set(null);
+
+    forkJoin({
+      customers: this.customerService.getAllForSelect(),
+      products: this.productService.getAllForSelect(),
+    }).subscribe({
+      next: ({ customers, products }) => {
+        this.customers.set(customers);
+        this.products.set(products);
+        this.lookupLoading.set(false);
+      },
+      error: () => {
+        this.lookupError.set('Failed to load customers and products.');
+        this.lookupLoading.set(false);
+        this.notification.error('Failed to load customers and products for this form.');
+      },
+    });
   }
 
   get items(): FormArray {

@@ -2,7 +2,7 @@ import { Injectable, PLATFORM_ID, computed, effect, inject, signal } from '@angu
 import { isPlatformBrowser } from '@angular/common';
 import { ThemeMode } from '../enums';
 import { SettingsService } from '../services/settings.service';
-import { catchError, of } from 'rxjs';
+import { catchError, map, Observable, of, switchMap, throwError } from 'rxjs';
 import {
   BUILT_IN_THEMES,
   BUILT_IN_THEME_LIST,
@@ -126,32 +126,35 @@ export class ThemeService {
   }
 
   /** Persist full preferences to backend via tenant settings */
-  syncToBackend(): void {
-    if (!this.isBrowser) return;
+  syncToBackend(): Observable<void> {
+    if (!this.isBrowser) {
+      return of(undefined);
+    }
+
     const prefs = this._preferences();
-    this.settingsService
-      .getSettings()
-      .pipe(catchError(() => of(null)))
-      .subscribe((current) => {
-        if (!current) return;
-        this.settingsService
-          .updateSettings({
-            currency: current.currency,
-            language: current.language,
-            taxRate: current.taxRate,
-            invoicePrefix: current.invoicePrefix,
-            emailFromAddress: current.emailFromAddress,
-            theme: JSON.stringify(prefs),
-            logoUrl: current.logoUrl,
-            emailNotificationsEnabled: current.emailNotificationsEnabled,
-            systemNotificationsEnabled: current.systemNotificationsEnabled,
-            orderNotificationsEnabled: current.orderNotificationsEnabled,
-            inventoryAlertsEnabled: current.inventoryAlertsEnabled,
-            paymentAlertsEnabled: current.paymentAlertsEnabled,
-          })
-          .pipe(catchError(() => of(null)))
-          .subscribe();
-      });
+    return this.settingsService.getSettings().pipe(
+      switchMap((current) => {
+        if (!current) {
+          return throwError(() => new Error('Unable to load current settings.'));
+        }
+
+        return this.settingsService.updateSettings({
+          currency: current.currency,
+          language: current.language,
+          taxRate: current.taxRate,
+          invoicePrefix: current.invoicePrefix,
+          emailFromAddress: current.emailFromAddress,
+          theme: JSON.stringify(prefs),
+          logoUrl: current.logoUrl,
+          emailNotificationsEnabled: current.emailNotificationsEnabled,
+          systemNotificationsEnabled: current.systemNotificationsEnabled,
+          orderNotificationsEnabled: current.orderNotificationsEnabled,
+          inventoryAlertsEnabled: current.inventoryAlertsEnabled,
+          paymentAlertsEnabled: current.paymentAlertsEnabled,
+        });
+      }),
+      map(() => undefined),
+    );
   }
 
   setThemeId(themeId: ThemeId, options?: { persist?: boolean; trackRecent?: boolean; syncBackend?: boolean }): void {
@@ -199,7 +202,7 @@ export class ThemeService {
       ThemeStorage.save(this._preferences());
     }
     if (syncBackend) {
-      this.syncToBackend();
+      this.syncToBackend().subscribe();
     }
   }
 

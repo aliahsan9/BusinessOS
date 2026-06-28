@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { forkJoin, Observable, switchMap } from 'rxjs';
+import { forkJoin, map, Observable, switchMap } from 'rxjs';
 import { BaseApiService } from './base-api.service';
 import { API_ENDPOINTS } from '../constants/api.constants';
 import { PagedResult } from '../models/pagination.model';
@@ -16,6 +16,12 @@ import {
 export class ProductService extends BaseApiService {
   getAll(params?: ProductQueryParams): Observable<PagedResult<ProductDto>> {
     return this.get<PagedResult<ProductDto>>(API_ENDPOINTS.products, params);
+  }
+
+  getAllForSelect(): Observable<ProductDto[]> {
+    return this.getAll({ page: 1, pageSize: 100, sortBy: 'name', sortDirection: 'asc' }).pipe(
+      map((result) => result.items ?? []),
+    );
   }
 
   getByCategory(categoryId: string, params?: ProductQueryParams): Observable<PagedResult<ProductDto>> {

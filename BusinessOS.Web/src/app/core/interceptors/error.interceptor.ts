@@ -12,7 +12,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
-      const apiError = (error.error ?? {}) as ApiError;
+      const apiError = toApiError(error);
 
       if (error.status === 401 && !req.url.includes('/auth/login')) {
         authService.logout(false);
@@ -29,6 +29,39 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
     }),
   );
 };
+
+function toApiError(error: HttpErrorResponse): ApiError {
+  if (error.status === 0) {
+    return {
+      status: 0,
+      title: 'Cannot reach server',
+      detail:
+        'The API is unavailable. Start the backend with "dotnet run" in BusinessOS.API (http://localhost:5162), then try again.',
+    };
+  }
+
+  if (error.error && typeof error.error === 'object') {
+    const body = error.error as ApiError;
+    if (body.status || body.title || body.detail) {
+      return body;
+    }
+  }
+
+  if (error.status === 500) {
+    return {
+      status: 500,
+      title: 'Server unavailable',
+      detail:
+        'The API may not be running. Start the backend with "dotnet run" in BusinessOS.API (http://localhost:5162), then try again.',
+    };
+  }
+
+  return {
+    status: error.status,
+    title: error.statusText || 'An unexpected error occurred',
+    detail: error.message,
+  };
+}
 
 export const loadingInterceptor: HttpInterceptorFn = (req, next) => {
   const loadingService = inject(LoadingService);

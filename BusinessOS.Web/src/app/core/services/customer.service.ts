@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { map, Observable } from 'rxjs';
 import { BaseApiService } from './base-api.service';
 import { API_ENDPOINTS } from '../constants/api.constants';
 import { PagedResult } from '../models/pagination.model';
@@ -18,6 +18,12 @@ import {
 export class CustomerService extends BaseApiService {
   getAll(params?: CustomerQueryParams): Observable<PagedResult<CustomerSummaryDto>> {
     return this.get<PagedResult<CustomerSummaryDto>>(API_ENDPOINTS.customers, params);
+  }
+
+  getAllForSelect(): Observable<CustomerSummaryDto[]> {
+    return this.getAll({ page: 1, pageSize: 100, sortBy: 'firstName', sortDirection: 'asc' }).pipe(
+      map((result) => result.items ?? []),
+    );
   }
 
   getById(id: string): Observable<CustomerDto> {

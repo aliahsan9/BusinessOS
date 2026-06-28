@@ -75,6 +75,11 @@
   @include form-control-base;
 }
 
+[data-bs-theme='dark'] .form-select option {
+  background-color: var(--color-surface);
+  color: var(--color-text);
+}
+
 .form-label {
   display: block;
   margin-bottom: var(--space-2);

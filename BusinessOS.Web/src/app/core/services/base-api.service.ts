@@ -14,7 +14,8 @@ export class BaseApiService {
   protected readonly baseUrl = environment.apiUrl;
 
   protected get<T>(endpoint: string, params?: PaginationParams | Record<string, unknown>): Observable<T> {
-    return this.request<T>('GET', endpoint, undefined, params);
+    const normalizedParams = params ? PaginationHelper.normalizeQueryParams(params) : undefined;
+    return this.request<T>('GET', endpoint, undefined, normalizedParams);
   }
 
   protected post<T>(endpoint: string, body: unknown): Observable<T> {
@@ -98,7 +99,10 @@ export class BaseApiService {
     }
 
     if (error.error && typeof error.error === 'object') {
-      return error.error as ApiError;
+      const body = error.error as ApiError;
+      if (body.status || body.title || body.detail) {
+        return body;
+      }
     }
 
     return {

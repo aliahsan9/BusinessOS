@@ -25,4 +25,23 @@ export class PaginationHelper {
     }
     return Math.min(pageSize, environment.maxPageSize);
   }
+
+  static normalizeQueryParams(
+    params: PaginationParams | Record<string, unknown>,
+  ): Record<string, unknown> {
+    const normalized = { ...params };
+    const hasPage = 'page' in normalized;
+    const hasPageSize = 'pageSize' in normalized;
+
+    if (hasPage || hasPageSize) {
+      normalized['page'] = PaginationHelper.normalizePage(
+        hasPage ? (normalized['page'] as number | undefined) : undefined,
+      );
+      normalized['pageSize'] = PaginationHelper.normalizePageSize(
+        hasPageSize ? (normalized['pageSize'] as number | undefined) : undefined,
+      );
+    }
+
+    return normalized;
+  }
 }

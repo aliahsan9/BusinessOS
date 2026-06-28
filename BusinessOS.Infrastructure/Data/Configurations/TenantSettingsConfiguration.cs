@@ -17,7 +17,7 @@ public class TenantSettingsConfiguration : IEntityTypeConfiguration<TenantSettin
         builder.Property(x => x.TaxRate).AsMoney();
         builder.Property(x => x.InvoicePrefix).HasMaxLength(20);
         builder.Property(x => x.EmailFromAddress).HasMaxLength(256);
-        builder.Property(x => x.Theme).HasMaxLength(20).IsRequired();
+        builder.Property(x => x.Theme).HasMaxLength(8000).IsRequired();
         builder.Property(x => x.LogoUrl).HasMaxLength(500);
 
         builder.HasIndex(x => x.TenantId).IsUnique();

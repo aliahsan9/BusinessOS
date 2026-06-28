@@ -70,7 +70,7 @@ describe('AppearanceSettingsComponent', () => {
   });
 
   it('should sync to backend on save', () => {
-    spyOn(themeService, 'syncToBackend');
+    spyOn(themeService, 'syncToBackend').and.returnValue(of(undefined));
     component.saveAndSync();
     expect(themeService.syncToBackend).toHaveBeenCalled();
     expect(notification.success).toHaveBeenCalled();
