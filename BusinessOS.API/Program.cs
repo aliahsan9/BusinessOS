@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using BusinessOS.API.Authorization;
 using BusinessOS.API.Endpoints;
 using BusinessOS.API.Middleware;
@@ -34,6 +35,10 @@ try
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddProblemDetails();
     builder.Services.AddBusinessOpenApi();
+    builder.Services.ConfigureHttpJsonOptions(options =>
+    {
+        options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    });
 
     var jwtKey = builder.Configuration["Jwt:Key"]
         ?? throw new InvalidOperationException("Jwt:Key is missing.");
@@ -109,6 +114,9 @@ try
     app.UseAuthorization();
 
     app.MapControllers();
+    app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", service = "BusinessOS.API" }))
+        .WithTags("Health")
+        .WithName("HealthCheck");
     app.MapAuthEndpoints();
     app.MapCategoryEndpoints();
     app.MapProductEndpoints();

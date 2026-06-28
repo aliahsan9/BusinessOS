@@ -83,6 +83,13 @@ public sealed class ExceptionHandlingMiddleware
                 null,
                 LogLevel.Warning),
 
+            BadHttpRequestException badHttpRequest => (
+                StatusCodes.Status400BadRequest,
+                "Invalid request body",
+                "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+                null,
+                LogLevel.Warning),
+
             _ => (
                 StatusCodes.Status500InternalServerError,
                 "An unexpected error occurred.",

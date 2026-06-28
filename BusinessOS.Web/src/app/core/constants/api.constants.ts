@@ -80,5 +80,5 @@ export const HTTP_HEADERS = {
 export const RETRY_CONFIG = {
   maxRetries: 2,
   delayMs: 1000,
-  retryableStatuses: [408, 429, 500, 502, 503, 504],
+  retryableStatuses: [408, 429, 502, 503, 504],
 } as const;

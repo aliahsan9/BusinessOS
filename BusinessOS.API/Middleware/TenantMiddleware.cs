@@ -30,6 +30,7 @@ public sealed class TenantMiddleware
         if (path.StartsWith("/swagger") ||
             path.StartsWith("/scalar") ||
             path.StartsWith("/openapi") ||
+            path.StartsWith("/api/health") ||
             path.StartsWith("/api/auth"))
         {
             await _next(context);

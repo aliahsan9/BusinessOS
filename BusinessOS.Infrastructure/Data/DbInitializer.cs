@@ -40,6 +40,11 @@ public static class DbInitializer
 
         await RbacSeeder.SeedAsync(context, roleManager, userManager, logger);
         await ExpenseCategorySeeder.SeedAllTenantsAsync(context, logger);
+
+        if (environment.IsDevelopment())
+        {
+            await DevSeeder.SeedAsync(context, userManager, logger);
+        }
     }
 
     private static async Task MigrateWithRetryAsync(

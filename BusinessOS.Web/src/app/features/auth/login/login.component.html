@@ -49,4 +49,10 @@
       <a routerLink="/auth/register" class="auth-form__link">Create account</a>
     </p>
   </form>
+
+  @if (devCredentials) {
+    <p class="auth-form__dev-hint">
+      Dev account: {{ devCredentials.email }} / {{ devCredentials.password }}
+    </p>
+  }
 </div>

@@ -79,9 +79,28 @@ export class BaseApiService {
   }
 
   protected parseError(error: HttpErrorResponse): ApiError {
+    if (error.status === 0) {
+      return {
+        status: 0,
+        title: 'Cannot reach server',
+        detail:
+          'The API is unavailable. Start the backend with "dotnet run" in BusinessOS.API (http://localhost:5162), then try again.',
+      };
+    }
+
+    if (error.status === 500 && (!error.error || typeof error.error === 'string')) {
+      return {
+        status: 500,
+        title: 'Server unavailable',
+        detail:
+          'The API may not be running. Start the backend with "dotnet run" in BusinessOS.API (http://localhost:5162), then try again.',
+      };
+    }
+
     if (error.error && typeof error.error === 'object') {
       return error.error as ApiError;
     }
+
     return {
       status: error.status,
       title: error.statusText || 'An unexpected error occurred',

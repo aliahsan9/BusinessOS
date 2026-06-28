@@ -5,4 +5,8 @@ export const environment = {
   tokenRefreshBufferMs: 60_000,
   defaultPageSize: 20,
   maxPageSize: 100,
+  devCredentials: {
+    email: 'admin@businessos.local',
+    password: 'Admin123!',
+  },
 };
