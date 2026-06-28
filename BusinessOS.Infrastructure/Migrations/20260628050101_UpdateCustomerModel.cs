@@ -52,7 +52,7 @@ namespace BusinessOS.Infrastructure.Migrations
                 table: "Customers",
                 type: "bit",
                 nullable: false,
-                defaultValue: false);
+                defaultValue: true);
 
             migrationBuilder.AddColumn<string>(
                 name: "LastName",
