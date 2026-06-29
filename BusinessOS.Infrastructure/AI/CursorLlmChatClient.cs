@@ -32,8 +32,8 @@ public sealed class CursorLlmChatClient : ILlmChatClient
     public async Task<string?> GenerateReplyAsync(
         Guid tenantId,
         string userId,
-        string message,
-        string currentPage,
+        string systemPrompt,
+        string userPrompt,
         CancellationToken cancellationToken = default)
     {
         if (!IsConfigured)
@@ -41,7 +41,11 @@ public sealed class CursorLlmChatClient : ILlmChatClient
             return null;
         }
 
-        var prompt = BuildPrompt(message, currentPage);
+        var prompt = $"""
+            {systemPrompt}
+
+            {userPrompt}
+            """;
         var cacheKey = $"cursor-agent:{tenantId}:{userId}";
 
         string agentId;
@@ -60,23 +64,6 @@ public sealed class CursorLlmChatClient : ILlmChatClient
 
         var result = await WaitForRunResultAsync(agentId, runId, cancellationToken);
         return string.IsNullOrWhiteSpace(result) ? null : result.Trim();
-    }
-
-    private static string BuildPrompt(string message, string currentPage)
-    {
-        var pageContext = string.IsNullOrWhiteSpace(currentPage)
-            ? "unknown"
-            : currentPage;
-
-        return $"""
-            You are BusinessOS AI, the in-app assistant for a business management platform (customers, orders/projects, invoices, expenses, analytics, reports, settings).
-            Answer clearly and concisely. Give practical steps inside BusinessOS when relevant.
-            Do not write code unless the user explicitly asks for code.
-            Current app page: {pageContext}
-
-            User message:
-            {message}
-            """;
     }
 
     private async Task<(string AgentId, string RunId)> CreateAgentAsync(

@@ -26,6 +26,13 @@
     opacity: 0.85;
   }
 
+  &__context {
+    display: block;
+    font-size: 0.65rem;
+    opacity: 0.75;
+    margin-top: 0.125rem;
+  }
+
   &__notice {
     padding: 0.625rem 1rem;
     font-size: 0.8rem;
@@ -127,6 +134,40 @@
     line-height: 1.5;
     border-bottom-left-radius: 4px;
     box-shadow: var(--shadow-sm);
+  }
+
+  &__sources {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px dashed var(--color-border);
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+
+    strong {
+      display: block;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--color-primary);
+      margin-bottom: 0.125rem;
+    }
+  }
+
+  &__action-link {
+    display: inline-block;
+    margin-top: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    color: var(--color-primary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:hover {
+      background: color-mix(in srgb, var(--color-primary) 20%, transparent);
+    }
   }
 
   &__typing {

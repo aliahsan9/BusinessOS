@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { AppCurrencyPipe } from '../../../shared/pipes/app-currency.pipe';
@@ -10,6 +10,7 @@ import { InvoiceDto } from '../../../core/models/invoice.model';
 import { ButtonVariant, InvoiceStatus } from '../../../core/enums';
 import { ROUTES } from '../../../core/constants/route.constants';
 import { PermissionCodes } from '../../../core/constants/permission.constants';
+import { PageContextService } from '../../../core/services/page-context.service';
 import { AppBreadcrumbComponent } from '../../../shared/components/app-breadcrumb/app-breadcrumb.component';
 import { AppPageHeaderComponent } from '../../../shared/components/app-page-header/app-page-header.component';
 import { AppCardComponent } from '../../../shared/components/app-card/app-card.component';
@@ -53,13 +54,14 @@ const INVOICE_TRANSITIONS: Record<InvoiceStatus, InvoiceStatus[]> = {
   styleUrl: './invoice-detail.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class InvoiceDetailComponent implements OnInit {
+export class InvoiceDetailComponent implements OnInit, OnDestroy {
   readonly ButtonVariant = ButtonVariant;
   private readonly route = inject(ActivatedRoute);
   private readonly invoiceService = inject(InvoiceService);
   private readonly reportService = inject(ReportService);
   private readonly notification = inject(NotificationService);
   private readonly tokenService = inject(TokenService);
+  private readonly pageContext = inject(PageContextService);
 
   readonly invoice = signal<InvoiceDto | null>(null);
   readonly loading = signal(true);
@@ -92,6 +94,12 @@ export class InvoiceDetailComponent implements OnInit {
   loadInvoice(): void {
     const id = this.route.snapshot.paramMap.get('id');
     if (!id) return;
+
+    this.pageContext.setContext({
+      url: `/invoices/${id}`,
+      module: 'invoices',
+      invoiceId: id,
+    });
 
     this.loading.set(true);
     this.invoiceService.getById(id).subscribe({
@@ -185,5 +193,9 @@ export class InvoiceDetailComponent implements OnInit {
 
   confirmVariant(): ButtonVariant {
     return this.pendingStatus() === InvoiceStatus.Cancelled ? ButtonVariant.Danger : ButtonVariant.Primary;
+  }
+
+  ngOnDestroy(): void {
+    this.pageContext.clearContext();
   }
 }

@@ -107,6 +107,11 @@ public static class DependencyInjection
         services.AddScoped<ISettingsService, SettingsService>();
         services.AddScoped<ISystemAdminService, SystemAdminService>();
         services.AddScoped<IOnboardingService, OnboardingService>();
+        services.AddScoped<IAiContextService, AiContextService>();
+        services.AddScoped<IAiRetrievalService, AiRetrievalService>();
+        services.AddScoped<IAiActionService, AiActionService>();
+        services.AddScoped<IAiPromptBuilder, AiPromptBuilder>();
+        services.AddScoped<IAiChatService, AiChatService>();
         services.AddScoped<IAiAssistantService, AiAssistantService>();
         services.AddScoped<IHelpService, HelpService>();
         services.AddScoped<ITeamService, TeamService>();

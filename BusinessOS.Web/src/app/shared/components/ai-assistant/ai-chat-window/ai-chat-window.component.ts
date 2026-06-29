@@ -10,8 +10,12 @@ import {
   afterNextRender,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
-import { AiService } from '../../../../core/services/ai.service';
+import { RouterLink } from '@angular/router';
+import { AiChatService } from '../../../../core/services/ai-chat.service';
+import { AiContextService } from '../../../../core/services/ai-context.service';
+import { AiRetrievalService } from '../../../../core/services/ai-retrieval.service';
+import { AiActionService } from '../../../../core/services/ai-action.service';
+import { AiPromptBuilderService } from '../../../../core/services/ai-prompt-builder.service';
 import { AiChatMessage, AiQuickActionDto, AiSearchResultDto, AiSuggestionDto } from '../../../../core/models/ai.model';
 import { ApiError } from '../../../../core/models/api-error.model';
 import { AiAssistantStateService } from '../../../../state/ai-assistant.state';
@@ -27,8 +31,11 @@ import { TenantSettingsStoreService } from '../../../../core/services/tenant-set
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AiChatWindowComponent {
-  private readonly aiService = inject(AiService);
-  private readonly router = inject(Router);
+  private readonly aiChatService = inject(AiChatService);
+  private readonly aiContextService = inject(AiContextService);
+  private readonly aiRetrievalService = inject(AiRetrievalService);
+  private readonly aiActionService = inject(AiActionService);
+  private readonly aiPromptBuilder = inject(AiPromptBuilderService);
   private readonly aiAssistantState = inject(AiAssistantStateService);
   private readonly tenantSettingsStore = inject(TenantSettingsStoreService);
   private readonly messagesContainer = viewChild<ElementRef<HTMLDivElement>>('messagesContainer');
@@ -39,7 +46,8 @@ export class AiChatWindowComponent {
   readonly messages = signal<AiChatMessage[]>([
     {
       role: 'assistant',
-      content: "Hi! I'm BusinessOS AI. Ask me anything about customers, projects, invoices, expenses, analytics, or reports.",
+      content:
+        "Hi! I'm BusinessOS AI. Ask about your customers, projects, invoices, and analytics — I'll answer using your real business data.",
       timestamp: new Date(),
     },
   ]);
@@ -54,6 +62,9 @@ export class AiChatWindowComponent {
   );
   readonly chatEnabled = this.aiAssistantState.chatEnabled;
   readonly settingsRoute = ROUTES.settings.hub;
+  readonly contextLabel = computed(() =>
+    this.aiPromptBuilder.buildContextLabel(this.aiContextService.buildPageContext()),
+  );
 
   constructor() {
     afterNextRender(() => this.scrollToBottom());
@@ -75,16 +86,22 @@ export class AiChatWindowComponent {
     this.appendMessage('user', message);
     this.loading.set(true);
 
-    const currentPage = this.router.url;
-
-    this.aiService.chat({ message, currentPage }).subscribe({
+    this.aiChatService.chat(message).subscribe({
       next: (response) => {
-        this.appendMessage('assistant', response.reply);
+        this.appendMessage('assistant', response.reply, response.sources, response.actionResult);
         if (this.showSuggestions()) {
           this.suggestions.set(response.suggestions);
         }
         this.quickActions.set(response.quickActions);
         this.searchResults.set(response.searchResults);
+
+        const navRoute = response.actionResult
+          ? this.aiActionService.shouldNavigate(response.actionResult)
+          : null;
+        if (navRoute) {
+          this.navigate.emit(navRoute);
+        }
+
         this.loading.set(false);
       },
       error: (err: ApiError) => {
@@ -107,7 +124,7 @@ export class AiChatWindowComponent {
     }
 
     this.loading.set(true);
-    this.aiService.chat({ message: '', searchQuery: query, currentPage: this.router.url }).subscribe({
+    this.aiChatService.search(query).subscribe({
       next: (response) => {
         this.searchResults.set(response.searchResults);
         this.appendMessage(
@@ -115,6 +132,7 @@ export class AiChatWindowComponent {
           response.searchResults.length
             ? `Found ${response.searchResults.length} result(s) for "${query}".`
             : `No results found for "${query}".`,
+          response.sources,
         );
         this.loading.set(false);
       },
@@ -123,6 +141,11 @@ export class AiChatWindowComponent {
         this.loading.set(false);
       },
     });
+  }
+
+  sourcesSummary(msg: AiChatMessage): string | null {
+    if (!msg.sources) return null;
+    return this.aiRetrievalService.formatSourcesSummary(msg.sources);
   }
 
   useSuggestion(suggestion: AiSuggestionDto): void {
@@ -137,8 +160,16 @@ export class AiChatWindowComponent {
     this.close.emit();
   }
 
-  private appendMessage(role: 'user' | 'assistant', content: string): void {
-    this.messages.update((msgs) => [...msgs, { role, content, timestamp: new Date() }]);
+  private appendMessage(
+    role: 'user' | 'assistant',
+    content: string,
+    sources?: AiChatMessage['sources'],
+    actionResult?: AiChatMessage['actionResult'],
+  ): void {
+    this.messages.update((msgs) => [
+      ...msgs,
+      { role, content, timestamp: new Date(), sources, actionResult },
+    ]);
     setTimeout(() => this.scrollToBottom(), 50);
   }
 

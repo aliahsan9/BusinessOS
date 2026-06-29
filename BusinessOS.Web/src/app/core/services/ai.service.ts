@@ -1,12 +1,14 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { BaseApiService } from './base-api.service';
-import { API_ENDPOINTS } from '../constants/api.constants';
 import { AiChatRequest, AiChatResponse } from '../models/ai.model';
+import { AiChatService } from './ai-chat.service';
 
+/** @deprecated Use AiChatService directly */
 @Injectable({ providedIn: 'root' })
-export class AiService extends BaseApiService {
+export class AiService {
+  private readonly aiChatService = inject(AiChatService);
+
   chat(request: AiChatRequest): Observable<AiChatResponse> {
-    return this.post<AiChatResponse>(API_ENDPOINTS.ai.chat, request);
+    return this.aiChatService.chatWithRequest(request);
   }
 }

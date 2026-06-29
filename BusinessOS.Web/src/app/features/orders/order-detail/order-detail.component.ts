@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { AppCurrencyPipe } from '../../../shared/pipes/app-currency.pipe';
@@ -10,6 +10,7 @@ import { OrderDto } from '../../../core/models/order.model';
 import { ButtonVariant, OrderStatus } from '../../../core/enums';
 import { ROUTES } from '../../../core/constants/route.constants';
 import { PermissionCodes } from '../../../core/constants/permission.constants';
+import { PageContextService } from '../../../core/services/page-context.service';
 import { AppBreadcrumbComponent } from '../../../shared/components/app-breadcrumb/app-breadcrumb.component';
 import { AppPageHeaderComponent } from '../../../shared/components/app-page-header/app-page-header.component';
 import { AppCardComponent } from '../../../shared/components/app-card/app-card.component';
@@ -41,7 +42,7 @@ type WorkflowAction = 'confirm' | 'process' | 'complete' | 'cancel' | 'invoice';
   styleUrl: './order-detail.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class OrderDetailComponent implements OnInit {
+export class OrderDetailComponent implements OnInit, OnDestroy {
   readonly ButtonVariant = ButtonVariant;
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -49,6 +50,7 @@ export class OrderDetailComponent implements OnInit {
   private readonly invoiceService = inject(InvoiceService);
   private readonly notification = inject(NotificationService);
   private readonly tokenService = inject(TokenService);
+  private readonly pageContext = inject(PageContextService);
 
   readonly order = signal<OrderDto | null>(null);
   readonly loading = signal(true);
@@ -65,6 +67,12 @@ export class OrderDetailComponent implements OnInit {
   loadOrder(): void {
     const id = this.route.snapshot.paramMap.get('id');
     if (!id) return;
+
+    this.pageContext.setContext({
+      url: `/orders/${id}`,
+      module: 'orders',
+      orderId: id,
+    });
 
     this.loading.set(true);
     this.orderService.getById(id).subscribe({
@@ -221,5 +229,9 @@ export class OrderDetailComponent implements OnInit {
         this.actionLoading.set(false);
       },
     });
+  }
+
+  ngOnDestroy(): void {
+    this.pageContext.clearContext();
   }
 }

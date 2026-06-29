@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { AppCurrencyPipe } from '../../../shared/pipes/app-currency.pipe';
 import { CustomerService } from '../../../core/services/customer.service';
+import { PageContextService } from '../../../core/services/page-context.service';
 import { CustomerAnalytics, CustomerDto, CustomerOrderSummary } from '../../../core/models/customer.model';
 import { ROUTES } from '../../../core/constants/route.constants';
 import { TokenService } from '../../../core/services/token.service';
@@ -35,11 +36,12 @@ import { AppPaginationComponent } from '../../../shared/components/app-paginatio
   styleUrl: './customer-detail.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class CustomerDetailComponent implements OnInit {
+export class CustomerDetailComponent implements OnInit, OnDestroy {
   readonly ButtonVariant = ButtonVariant;
   private readonly route = inject(ActivatedRoute);
   private readonly customerService = inject(CustomerService);
   private readonly tokenService = inject(TokenService);
+  private readonly pageContext = inject(PageContextService);
 
   readonly customer = signal<CustomerDto | null>(null);
   readonly analytics = signal<CustomerAnalytics | null>(null);
@@ -58,6 +60,12 @@ export class CustomerDetailComponent implements OnInit {
     const id = this.route.snapshot.paramMap.get('id');
     if (!id) return;
 
+    this.pageContext.setContext({
+      url: `/customers/${id}`,
+      module: 'customers',
+      customerId: id,
+    });
+
     this.customerService.getById(id).subscribe({
       next: (c) => {
         this.customer.set(c);
@@ -67,6 +75,10 @@ export class CustomerDetailComponent implements OnInit {
       },
       error: () => this.loading.set(false),
     });
+  }
+
+  ngOnDestroy(): void {
+    this.pageContext.clearContext();
   }
 
   loadAnalytics(customerId: string): void {

@@ -7,7 +7,7 @@ public interface ILlmChatClient
     Task<string?> GenerateReplyAsync(
         Guid tenantId,
         string userId,
-        string message,
-        string currentPage,
+        string systemPrompt,
+        string userPrompt,
         CancellationToken cancellationToken = default);
 }
