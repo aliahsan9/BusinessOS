@@ -17,6 +17,8 @@ using BusinessOS.Application.Features.Team.Services;
 using BusinessOS.Application.Features.Settings.Services;
 using BusinessOS.Application.Features.SystemAdmin.Services;
 using BusinessOS.Application.Features.Tenant.Services;
+using BusinessOS.Application.Features.Billing.Services;
+using BusinessOS.Infrastructure.Payments;
 using BusinessOS.Infrastructure.Data;
 using BusinessOS.Infrastructure.Identity;
 using BusinessOS.Infrastructure.MultiTenancy;
@@ -107,6 +109,20 @@ public static class DependencyInjection
         services.AddScoped<IHelpService, HelpService>();
         services.AddScoped<ITeamService, TeamService>();
         services.AddScoped<IOrganizationService, OrganizationService>();
+
+        services.Configure<StripeOptions>(configuration.GetSection(StripeOptions.SectionName));
+        services.Configure<JazzCashOptions>(configuration.GetSection(JazzCashOptions.SectionName));
+        services.Configure<EasyPaisaOptions>(configuration.GetSection(EasyPaisaOptions.SectionName));
+        services.Configure<BillingOptions>(configuration.GetSection(BillingOptions.SectionName));
+
+        services.AddScoped<IBillingService, BillingService>();
+        services.AddScoped<IBillingPlanSyncService>(sp => sp.GetRequiredService<BillingService>());
+        services.AddScoped<IBillingWebhookService, BillingWebhookService>();
+        services.AddScoped<IBillingMetricsService, BillingMetricsService>();
+        services.AddScoped<IFeatureFlagService, FeatureFlagService>();
+        services.AddScoped<IStripePaymentService, StripePaymentService>();
+        services.AddScoped<IJazzCashPaymentService, JazzCashPaymentService>();
+        services.AddScoped<IEasyPaisaPaymentService, EasyPaisaPaymentService>();
 
         return services;
     }

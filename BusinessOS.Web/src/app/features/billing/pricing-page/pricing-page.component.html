@@ -1,0 +1,60 @@
+<app-page-header
+  title="Pricing"
+  subtitle="Choose the plan that fits your business. All paid plans include a 14-day free trial."
+/>
+
+<div class="text-center mb-4">
+  <div class="btn-group" role="group">
+    <button type="button" class="btn" [class.btn-primary]="!annual()" [class.btn-outline-primary]="annual()" (click)="annual.set(false)">
+      Monthly
+    </button>
+    <button type="button" class="btn" [class.btn-primary]="annual()" [class.btn-outline-primary]="!annual()" (click)="annual.set(true)">
+      Annual <span class="badge bg-success ms-1">Save up to 17%</span>
+    </button>
+  </div>
+</div>
+
+@if (loading()) {
+  <app-skeleton />
+} @else if (error()) {
+  <app-alert variant="danger" [message]="error()!" />
+} @else {
+  <div class="row g-4">
+    @for (plan of plans(); track plan.id) {
+      <div class="col-md-6 col-xl-3">
+        <app-card [title]="plan.name">
+          <p class="text-muted small">{{ plan.description }}</p>
+          <div class="display-6 fw-bold mb-1">
+            {{ price(plan) | appCurrency }}
+            <small class="fs-6 text-muted fw-normal">/{{ annual() ? 'yr' : 'mo' }}</small>
+          </div>
+          @if (annual() && plan.annualSavingsPercent > 0) {
+            <p class="text-success small">Save {{ plan.annualSavingsPercent }}% vs monthly</p>
+          }
+
+          <ul class="list-unstyled small mb-4">
+            @for (feature of plan.features; track feature) {
+              <li class="mb-1">✓ {{ feature }}</li>
+            }
+          </ul>
+
+          @if (canManage) {
+            <app-button
+              [label]="isCurrentPlan(plan) ? 'Current Plan' : 'Get Started'"
+              [variant]="isCurrentPlan(plan) ? ButtonVariant.Secondary : ButtonVariant.Primary"
+              [disabled]="isCurrentPlan(plan) || actionLoading() === plan.id"
+              [loading]="actionLoading() === plan.id"
+              type="button"
+              [fullWidth]="true"
+              (clicked)="selectPlan(plan)"
+            />
+          } @else if (isAuthenticated()) {
+            <p class="text-muted small mb-0">Contact your admin to change plans.</p>
+          } @else {
+            <a [routerLink]="ROUTES.auth.register"><app-button label="Start Free Trial" [variant]="ButtonVariant.Primary" type="button" [fullWidth]="true" /></a>
+          }
+        </app-card>
+      </div>
+    }
+  </div>
+}

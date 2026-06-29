@@ -1,0 +1,109 @@
+<app-breadcrumb [items]="breadcrumbs" />
+<app-page-header title="Billing" subtitle="Manage your subscription, usage, and payments." />
+
+@if (loading()) {
+  <app-skeleton />
+} @else if (error()) {
+  <app-alert variant="danger" [message]="error()!" />
+} @else {
+  @if (dashboard(); as data) {
+    <div class="row g-4">
+      <div class="col-lg-8">
+        <app-card title="Current Plan">
+          <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+            <div>
+              <h4 class="mb-1">{{ data.currentPlan.planName }}</h4>
+              <span class="badge bg-primary-subtle text-primary-emphasis me-2">{{ data.currentPlan.status }}</span>
+              @if (data.currentPlan.isTrialActive) {
+                <span class="badge bg-warning-subtle text-warning-emphasis">
+                  Trial · {{ data.currentPlan.trialDaysRemaining }} days left
+                </span>
+              }
+            </div>
+            <div class="text-end">
+              <div class="fs-4 fw-semibold">{{ data.currentPlan.currentPrice | appCurrency:data.currentPlan.currency }}</div>
+              <small class="text-muted">{{ data.currentPlan.billingInterval | lowercase }} billing</small>
+            </div>
+          </div>
+
+          <dl class="row mb-0 small">
+            <dt class="col-sm-4">Renewal</dt>
+            <dd class="col-sm-8">{{ data.currentPlan.renewalDate ? (data.currentPlan.renewalDate | date:'mediumDate') : '—' }}</dd>
+            <dt class="col-sm-4">Provider</dt>
+            <dd class="col-sm-8">{{ data.currentPlan.paymentProvider }}</dd>
+          </dl>
+
+          @if (canManage) {
+            <div class="d-flex flex-wrap gap-2 mt-3 pt-3 border-top">
+              <a [routerLink]="ROUTES.pricing.base"><app-button label="Change Plan" [variant]="ButtonVariant.Primary" type="button" /></a>
+              <app-button label="Manage Payment" [variant]="ButtonVariant.Secondary" type="button" [loading]="actionLoading()" (clicked)="openPortal()" />
+              @if (!data.currentPlan.cancelAtPeriodEnd) {
+                <app-button label="Cancel Plan" [variant]="ButtonVariant.Danger" type="button" [loading]="actionLoading()" (clicked)="cancelSubscription()" />
+              } @else {
+                <app-alert variant="warning" message="Subscription will cancel at period end." />
+              }
+            </div>
+          }
+        </app-card>
+
+        <app-card title="Usage" class="mt-4">
+          @for (item of [
+            { label: 'Users', current: data.usage.userCount, max: data.usage.maxUsers },
+            { label: 'Customers', current: data.usage.customerCount, max: data.usage.maxCustomers },
+            { label: 'Projects', current: data.usage.projectCount, max: data.usage.maxProjects },
+            { label: 'Tasks', current: data.usage.taskCount, max: data.usage.maxTasks },
+            { label: 'AI Requests', current: data.usage.aiRequestsUsed, max: data.usage.maxAiRequests }
+          ]; track item.label) {
+            <div class="mb-3">
+              <div class="d-flex justify-content-between small mb-1">
+                <span>{{ item.label }}</span>
+                <span>{{ item.current }} / {{ formatLimit(item.max) }}</span>
+              </div>
+              <div class="progress" style="height: 6px">
+                <div class="progress-bar" [style.width.%]="usagePercent(item.current, item.max)"></div>
+              </div>
+            </div>
+          }
+          <a [routerLink]="ROUTES.billing.usage" class="small">View detailed usage →</a>
+        </app-card>
+      </div>
+
+      <div class="col-lg-4">
+        <app-card title="Recent Invoices">
+          @if (data.recentInvoices.length === 0) {
+            <p class="text-muted small mb-0">No invoices yet.</p>
+          } @else {
+            <ul class="list-unstyled mb-2">
+              @for (inv of data.recentInvoices; track inv.id) {
+                <li class="d-flex justify-content-between py-2 border-bottom small">
+                  <span>{{ inv.invoiceNumber }}</span>
+                  <span>{{ inv.totalAmount | appCurrency:inv.currency }}</span>
+                </li>
+              }
+            </ul>
+            <a [routerLink]="ROUTES.billing.invoices" class="small">View all invoices →</a>
+          }
+        </app-card>
+
+        <app-card title="Recent Transactions" class="mt-4">
+          @if (data.recentTransactions.length === 0) {
+            <p class="text-muted small mb-0">No transactions yet.</p>
+          } @else {
+            <ul class="list-unstyled mb-2">
+              @for (tx of data.recentTransactions; track tx.id) {
+                <li class="py-2 border-bottom small">
+                  <div class="d-flex justify-content-between">
+                    <span>{{ tx.transactionId }}</span>
+                    <span>{{ tx.amount | appCurrency:tx.currency }}</span>
+                  </div>
+                  <div class="text-muted">{{ tx.provider }} · {{ tx.status }}</div>
+                </li>
+              }
+            </ul>
+            <a [routerLink]="ROUTES.billing.history" class="small">View transaction history →</a>
+          }
+        </app-card>
+      </div>
+    </div>
+  }
+}

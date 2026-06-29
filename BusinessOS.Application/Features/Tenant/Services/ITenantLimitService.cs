@@ -8,4 +8,5 @@ public interface ITenantLimitService
     Task<TenantLimits> GetLimitsAsync(Guid tenantId, CancellationToken cancellationToken = default);
     Task EnsureWithinLimitAsync(string resourceType, CancellationToken cancellationToken = default);
     Task RefreshUsageAsync(Guid tenantId, CancellationToken cancellationToken = default);
+    Task IncrementAiUsageAsync(CancellationToken cancellationToken = default);
 }

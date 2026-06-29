@@ -28,6 +28,9 @@ public class BusinessOSDbContext
     public DbSet<TenantSubscription> TenantSubscriptions => Set<TenantSubscription>();
     public DbSet<TenantUsage> TenantUsages => Set<TenantUsage>();
     public DbSet<TenantAuditLog> TenantAuditLogs => Set<TenantAuditLog>();
+    public DbSet<BillingInvoice> BillingInvoices => Set<BillingInvoice>();
+    public DbSet<BillingTransaction> BillingTransactions => Set<BillingTransaction>();
+    public DbSet<PaymentProvider> PaymentProviders => Set<PaymentProvider>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Customer> Customers => Set<Customer>();
@@ -195,5 +198,14 @@ public class BusinessOSDbContext
 
         builder.Entity<TenantAuditLog>()
             .HasQueryFilter(x => x.TenantId == _tenantId);
+
+        builder.Entity<BillingInvoice>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<BillingTransaction>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<WorkTask>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
     }
 }

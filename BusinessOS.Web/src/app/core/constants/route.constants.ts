@@ -163,6 +163,18 @@ export const ROUTES = {
     settings: '/tenant/settings',
     registerBusiness: '/register-business',
   },
+  billing: {
+    base: '/billing',
+    usage: '/billing/usage',
+    history: '/billing/history',
+    invoices: '/billing/invoices',
+  },
+  pricing: {
+    base: '/pricing',
+  },
+  subscription: {
+    base: '/subscription',
+  },
   profile: '/profile',
   forbidden: '/forbidden',
   notFound: '/not-found',

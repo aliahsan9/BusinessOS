@@ -37,13 +37,14 @@ public sealed class TenantLimitService : ITenantLimitService
 
         if (tenant?.Plan is null)
         {
-            return new TenantLimits(3, 50, 5, 512, 50);
+            return new TenantLimits(1, 25, 10, 100, 512, 0);
         }
 
         return new TenantLimits(
             tenant.Plan.MaxUsers,
             tenant.Plan.MaxCustomers,
             tenant.Plan.MaxProjects,
+            tenant.Plan.MaxTasks,
             tenant.Plan.MaxStorageMb,
             tenant.Plan.MaxAiRequests);
     }
@@ -70,16 +71,18 @@ public sealed class TenantLimitService : ITenantLimitService
 
         var exceeded = resourceType.ToLowerInvariant() switch
         {
-            "users" when usage.UserCount >= limits.MaxUsers =>
-                $"User limit reached ({limits.MaxUsers}). Upgrade your plan to add more users.",
-            "customers" when usage.CustomerCount >= limits.MaxCustomers =>
-                $"Customer limit reached ({limits.MaxCustomers}). Upgrade your plan to add more customers.",
-            "projects" when usage.ProjectCount >= limits.MaxProjects =>
-                $"Project limit reached ({limits.MaxProjects}). Upgrade your plan to add more projects.",
-            "storage" when usage.StorageUsedMb >= limits.MaxStorageMb =>
+            "users" when !PlanLimitHelper.IsWithinLimit(usage.UserCount, limits.MaxUsers) =>
+                $"User limit reached ({PlanLimitHelper.FormatLimit(limits.MaxUsers)}). Upgrade your plan to add more users.",
+            "customers" when !PlanLimitHelper.IsWithinLimit(usage.CustomerCount, limits.MaxCustomers) =>
+                $"Customer limit reached ({PlanLimitHelper.FormatLimit(limits.MaxCustomers)}). Upgrade your plan to add more customers.",
+            "projects" when !PlanLimitHelper.IsWithinLimit(usage.ProjectCount, limits.MaxProjects) =>
+                $"Project limit reached ({PlanLimitHelper.FormatLimit(limits.MaxProjects)}). Upgrade your plan to add more projects.",
+            "tasks" when !PlanLimitHelper.IsWithinLimit(usage.TaskCount, limits.MaxTasks) =>
+                $"Task limit reached ({PlanLimitHelper.FormatLimit(limits.MaxTasks)}). Upgrade your plan to add more tasks.",
+            "storage" when limits.MaxStorageMb != SubscriptionPlan.Unlimited && usage.StorageUsedMb >= limits.MaxStorageMb =>
                 $"Storage limit reached ({limits.MaxStorageMb} MB). Upgrade your plan for more storage.",
-            "ai" when usage.AiRequestsUsed >= limits.MaxAiRequests =>
-                $"AI request limit reached ({limits.MaxAiRequests}). Upgrade your plan for more AI requests.",
+            "ai" when !PlanLimitHelper.IsUnlimited(limits.MaxAiRequests) && usage.AiRequestsUsed >= limits.MaxAiRequests =>
+                $"AI request limit reached ({PlanLimitHelper.FormatLimit(limits.MaxAiRequests)}). Upgrade your plan for more AI requests.",
             _ => null
         };
 
@@ -87,6 +90,26 @@ public sealed class TenantLimitService : ITenantLimitService
         {
             throw new BadRequestException(exceeded);
         }
+    }
+
+    public async Task IncrementAiUsageAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_tenantProvider.HasTenant())
+        {
+            return;
+        }
+
+        var usage = await _context.TenantUsages
+            .FirstOrDefaultAsync(x => x.TenantId == _tenantProvider.TenantId, cancellationToken);
+
+        if (usage is null)
+        {
+            return;
+        }
+
+        usage.AiRequestsUsed++;
+        usage.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task RefreshUsageAsync(Guid tenantId, CancellationToken cancellationToken = default)
@@ -102,6 +125,10 @@ public sealed class TenantLimitService : ITenantLimitService
             .CountAsync(x => x.TenantId == tenantId && !x.IsDeleted, cancellationToken);
 
         var projectCount = await dbContext.Projects
+            .IgnoreQueryFilters()
+            .CountAsync(x => x.TenantId == tenantId && !x.IsDeleted, cancellationToken);
+
+        var taskCount = await dbContext.WorkTasks
             .IgnoreQueryFilters()
             .CountAsync(x => x.TenantId == tenantId && !x.IsDeleted, cancellationToken);
 
@@ -122,6 +149,7 @@ public sealed class TenantLimitService : ITenantLimitService
         usage.UserCount = userCount;
         usage.CustomerCount = customerCount;
         usage.ProjectCount = projectCount;
+        usage.TaskCount = taskCount;
         usage.LastCalculatedAt = DateTime.UtcNow;
         usage.UpdatedAt = DateTime.UtcNow;
 

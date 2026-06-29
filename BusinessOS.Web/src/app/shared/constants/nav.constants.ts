@@ -262,6 +262,22 @@ export const NAV_ITEMS: NavItem[] = [
     group: 'Administration',
   },
   {
+    label: 'Billing',
+    icon: '💳',
+    route: ROUTES.billing.base,
+    description: 'Manage subscription, usage, and invoices.',
+    permissions: ['Subscription.View'],
+    group: 'Administration',
+  },
+  {
+    label: 'Pricing',
+    icon: '🏷️',
+    route: ROUTES.pricing.base,
+    description: 'Compare plans and upgrade your subscription.',
+    permissions: ['Subscription.View'],
+    group: 'Administration',
+  },
+  {
     label: 'Settings',
     icon: '⚙️',
     route: ROUTES.settings.base,

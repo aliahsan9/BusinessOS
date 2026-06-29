@@ -168,6 +168,7 @@ try
     app.MapTeamEndpoints();
     app.MapOrganizationEndpoints();
     app.MapTenantEndpoints();
+    app.MapBillingEndpoints();
     app.MapBusinessRegistrationEndpoint();
     app.MapSystemAdminEndpoints();
     app.MapHub<NotificationHub>("/hubs/notifications")

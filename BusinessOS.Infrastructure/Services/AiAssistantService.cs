@@ -1,6 +1,8 @@
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Services;
+using BusinessOS.Application.Features.Billing.Services;
+using BusinessOS.Application.Features.Tenant.Services;
 using BusinessOS.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -11,15 +13,21 @@ public sealed class AiAssistantService : IAiAssistantService
 {
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IFeatureFlagService _featureFlags;
+    private readonly ITenantLimitService _limitService;
     private readonly ILogger<AiAssistantService> _logger;
 
     public AiAssistantService(
         IApplicationDbContext context,
         ICurrentUserService currentUserService,
+        IFeatureFlagService featureFlags,
+        ITenantLimitService limitService,
         ILogger<AiAssistantService> logger)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _featureFlags = featureFlags;
+        _limitService = limitService;
         _logger = logger;
     }
 
@@ -27,6 +35,9 @@ public sealed class AiAssistantService : IAiAssistantService
         AiChatRequest request,
         CancellationToken cancellationToken = default)
     {
+        await _featureFlags.EnsureFeatureEnabledAsync(FeatureFlags.AiAssistant, cancellationToken);
+        await _limitService.EnsureWithinLimitAsync("ai", cancellationToken);
+
         var message = request.Message.Trim();
         var page = request.CurrentPage?.Trim().ToLowerInvariant() ?? string.Empty;
         var searchQuery = request.SearchQuery?.Trim();
@@ -40,6 +51,7 @@ public sealed class AiAssistantService : IAiAssistantService
         var quickActions = GetQuickActions();
 
         await SaveConversationAsync(message, reply, cancellationToken);
+        await _limitService.IncrementAiUsageAsync(cancellationToken);
 
         return new AiChatResponse
         {

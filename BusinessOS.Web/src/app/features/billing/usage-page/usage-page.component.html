@@ -1,0 +1,59 @@
+<app-breadcrumb [items]="breadcrumbs" />
+<app-page-header title="Usage" subtitle="Monitor resource consumption against your plan limits." />
+
+@if (loading()) {
+  <app-skeleton />
+} @else if (error()) {
+  <app-alert variant="danger" [message]="error()!" />
+} @else {
+  @if (usage(); as u) {
+    <app-card>
+      <div class="row g-4">
+        <div class="col-md-6">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span>👥</span><strong>Users</strong>
+            <span class="ms-auto small text-muted">{{ u.userCount }} / {{ formatLimit(u.maxUsers) }}</span>
+          </div>
+          <div class="progress mb-3" style="height: 8px"><div class="progress-bar" [style.width.%]="usagePercent(u.userCount, u.maxUsers)"></div></div>
+        </div>
+        <div class="col-md-6">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span>🧑‍💼</span><strong>Customers</strong>
+            <span class="ms-auto small text-muted">{{ u.customerCount }} / {{ formatLimit(u.maxCustomers) }}</span>
+          </div>
+          <div class="progress mb-3" style="height: 8px"><div class="progress-bar" [style.width.%]="usagePercent(u.customerCount, u.maxCustomers)"></div></div>
+        </div>
+        <div class="col-md-6">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span>📁</span><strong>Projects</strong>
+            <span class="ms-auto small text-muted">{{ u.projectCount }} / {{ formatLimit(u.maxProjects) }}</span>
+          </div>
+          <div class="progress mb-3" style="height: 8px"><div class="progress-bar" [style.width.%]="usagePercent(u.projectCount, u.maxProjects)"></div></div>
+        </div>
+        <div class="col-md-6">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span>✅</span><strong>Tasks</strong>
+            <span class="ms-auto small text-muted">{{ u.taskCount }} / {{ formatLimit(u.maxTasks) }}</span>
+          </div>
+          <div class="progress mb-3" style="height: 8px"><div class="progress-bar" [style.width.%]="usagePercent(u.taskCount, u.maxTasks)"></div></div>
+        </div>
+        <div class="col-md-6">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span>💾</span><strong>Storage (MB)</strong>
+            <span class="ms-auto small text-muted">{{ u.storageUsedMb }} / {{ formatLimit(u.maxStorageMb) }}</span>
+          </div>
+          <div class="progress mb-3" style="height: 8px"><div class="progress-bar" [style.width.%]="usagePercent(u.storageUsedMb, u.maxStorageMb)"></div></div>
+        </div>
+        <div class="col-md-6">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span>🤖</span><strong>AI Requests</strong>
+            <span class="ms-auto small text-muted">{{ u.aiRequestsUsed }} / {{ formatLimit(u.maxAiRequests) }}</span>
+          </div>
+          <div class="progress mb-3" style="height: 8px"><div class="progress-bar" [style.width.%]="usagePercent(u.aiRequestsUsed, u.maxAiRequests)"></div></div>
+        </div>
+      </div>
+      <p class="text-muted small mt-3 mb-0">Last updated: {{ u.lastCalculatedAt | date:'medium' }}</p>
+    </app-card>
+    <div class="mt-3"><a [routerLink]="ROUTES.pricing.base">Need more? Compare plans →</a></div>
+  }
+}

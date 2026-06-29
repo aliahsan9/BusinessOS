@@ -6,6 +6,7 @@ using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Application.Features.Roles.Services;
 using BusinessOS.Application.Features.Team.DTOs;
 using BusinessOS.Application.Features.Team.Services;
+using BusinessOS.Application.Features.Tenant.Services;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.Data;
@@ -26,6 +27,7 @@ public sealed class TeamService : ITeamService
     private readonly ICurrentUserService _currentUserService;
     private readonly IRbacAuditService _auditService;
     private readonly IEmailNotificationService _emailService;
+    private readonly ITenantLimitService _limitService;
     private readonly ILogger<TeamService> _logger;
 
     public TeamService(
@@ -37,6 +39,7 @@ public sealed class TeamService : ITeamService
         ICurrentUserService currentUserService,
         IRbacAuditService auditService,
         IEmailNotificationService emailService,
+        ITenantLimitService limitService,
         ILogger<TeamService> logger)
     {
         _context = context;
@@ -47,6 +50,7 @@ public sealed class TeamService : ITeamService
         _currentUserService = currentUserService;
         _auditService = auditService;
         _emailService = emailService;
+        _limitService = limitService;
         _logger = logger;
     }
 
@@ -217,6 +221,8 @@ public sealed class TeamService : ITeamService
         InviteTeamMemberRequest request,
         CancellationToken cancellationToken = default)
     {
+        await _limitService.EnsureWithinLimitAsync("users", cancellationToken);
+
         var tenantId = RequireTenantId();
         var currentUserId = _currentUserService.UserId
             ?? throw new UnauthorizedException("User context is required.");

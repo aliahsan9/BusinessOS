@@ -34,6 +34,8 @@ const IMPLEMENTED_PATHS = new Set([
   pathFromRoute(ROUTES.admin.base),
   pathFromRoute(ROUTES.team.base),
   pathFromRoute(ROUTES.organization.base),
+  pathFromRoute(ROUTES.billing.base),
+  pathFromRoute(ROUTES.pricing.base),
 ]);
 
 export function buildFeatureRoutes(): Routes {

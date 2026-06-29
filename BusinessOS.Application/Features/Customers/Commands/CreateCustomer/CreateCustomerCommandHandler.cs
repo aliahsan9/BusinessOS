@@ -1,6 +1,7 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Activities.DTOs;
+using BusinessOS.Application.Features.Tenant.Services;
 using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
@@ -14,20 +15,25 @@ public sealed class CreateCustomerCommandHandler : IRequestHandler<CreateCustome
 {
     private readonly IApplicationDbContext _context;
     private readonly IBusinessEventService _businessEvents;
+    private readonly ITenantLimitService _limitService;
     private readonly ILogger<CreateCustomerCommandHandler> _logger;
 
     public CreateCustomerCommandHandler(
         IApplicationDbContext context,
         IBusinessEventService businessEvents,
+        ITenantLimitService limitService,
         ILogger<CreateCustomerCommandHandler> logger)
     {
         _context = context;
         _businessEvents = businessEvents;
+        _limitService = limitService;
         _logger = logger;
     }
 
     public async Task<Guid> Handle(CreateCustomerCommand request, CancellationToken cancellationToken)
     {
+        await _limitService.EnsureWithinLimitAsync("customers", cancellationToken);
+
         var email = request.Email.Trim();
 
         var duplicateExists = await _context.Customers

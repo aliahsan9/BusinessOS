@@ -8,6 +8,7 @@ public class TenantUsage : AuditableEntity
     public int UserCount { get; set; }
     public int CustomerCount { get; set; }
     public int ProjectCount { get; set; }
+    public int TaskCount { get; set; }
     public long StorageUsedMb { get; set; }
     public int AiRequestsUsed { get; set; }
     public DateTime LastCalculatedAt { get; set; } = DateTime.UtcNow;

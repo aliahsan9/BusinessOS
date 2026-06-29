@@ -6,6 +6,7 @@ using BusinessOS.Application.Features.Customers.Commands.UpdateCustomer;
 using BusinessOS.Application.Features.Customers.Queries.GetCustomerAnalytics;
 using BusinessOS.Application.Features.Customers.Queries.GetCustomerById;
 using BusinessOS.Application.Features.Customers.Queries.GetCustomerOrders;
+using BusinessOS.Application.Features.Tenant.Services;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.MultiTenancy;
@@ -41,9 +42,14 @@ public class CreateCustomerHandlerTests
         var context = new Mock<IApplicationDbContext>();
         context.Setup(x => x.Customers).Returns(TestMockDbSet.CreateMockDbSet(customers.AsQueryable()).Object);
 
+        var limitService = new Mock<ITenantLimitService>();
+        limitService.Setup(x => x.EnsureWithinLimitAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
         var handler = new CreateCustomerCommandHandler(
             context.Object,
             TestHandlerDependencies.CreateBusinessEvents(),
+            limitService.Object,
             TestHandlerDependencies.CreateLogger<CreateCustomerCommandHandler>());
 
         var act = () => handler.Handle(
@@ -69,9 +75,14 @@ public class CreateCustomerHandlerTests
         context.Setup(x => x.Customers).Returns(TestMockDbSet.CreateMockDbSet(new List<Customer>().AsQueryable()).Object);
         context.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
+        var limitService = new Mock<ITenantLimitService>();
+        limitService.Setup(x => x.EnsureWithinLimitAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
         var handler = new CreateCustomerCommandHandler(
             context.Object,
             TestHandlerDependencies.CreateBusinessEvents(),
+            limitService.Object,
             TestHandlerDependencies.CreateLogger<CreateCustomerCommandHandler>());
 
         var id = await handler.Handle(

@@ -33,6 +33,9 @@ public interface IApplicationDbContext
     DbSet<TenantSubscription> TenantSubscriptions { get; }
     DbSet<TenantUsage> TenantUsages { get; }
     DbSet<TenantAuditLog> TenantAuditLogs { get; }
+    DbSet<BillingInvoice> BillingInvoices { get; }
+    DbSet<BillingTransaction> BillingTransactions { get; }
+    DbSet<PaymentProvider> PaymentProviders { get; }
     DbSet<TenantSettings> TenantSettings { get; }
     DbSet<GeneratedReport> GeneratedReports { get; }
     DbSet<UserOnboardingProgress> UserOnboardingProgress { get; }

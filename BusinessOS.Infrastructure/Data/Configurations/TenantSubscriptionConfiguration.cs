@@ -12,6 +12,11 @@ public class TenantSubscriptionConfiguration : IEntityTypeConfiguration<TenantSu
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Status).HasConversion<int>().IsRequired();
+        builder.Property(x => x.BillingInterval).HasConversion<int>().IsRequired();
+        builder.Property(x => x.PaymentProvider).HasConversion<int>().IsRequired();
+        builder.Property(x => x.StripeCustomerId).HasMaxLength(200);
+        builder.Property(x => x.StripeSubscriptionId).HasMaxLength(200);
+        builder.Property(x => x.ExternalReference).HasMaxLength(200);
 
         builder.HasIndex(x => x.TenantId).IsUnique();
 

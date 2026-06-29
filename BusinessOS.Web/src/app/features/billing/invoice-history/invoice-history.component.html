@@ -1,0 +1,42 @@
+<app-breadcrumb [items]="breadcrumbs" />
+<app-page-header title="Invoices" subtitle="Subscription billing invoices." />
+
+@if (loading()) {
+  <app-skeleton />
+} @else if (error()) {
+  <app-alert variant="danger" [message]="error()!" />
+} @else {
+  <app-card>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Invoice #</th>
+            <th>Plan</th>
+            <th>Amount</th>
+            <th>Tax</th>
+            <th>Status</th>
+            <th>Period</th>
+            <th>Paid</th>
+          </tr>
+        </thead>
+        <tbody>
+          @if (invoices().length === 0) {
+            <tr><td colspan="7" class="text-muted text-center py-4">No invoices yet.</td></tr>
+          }
+          @for (inv of invoices(); track inv.id) {
+            <tr>
+              <td>{{ inv.invoiceNumber }}</td>
+              <td>{{ inv.planName }}</td>
+              <td>{{ inv.totalAmount | appCurrency:inv.currency }}</td>
+              <td>{{ inv.taxAmount | appCurrency:inv.currency }}</td>
+              <td><span class="badge bg-secondary-subtle">{{ inv.status }}</span></td>
+              <td class="small">{{ inv.periodStart | date:'shortDate' }} – {{ inv.periodEnd | date:'shortDate' }}</td>
+              <td>{{ inv.paidAt ? (inv.paidAt | date:'medium') : '—' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </app-card>
+}

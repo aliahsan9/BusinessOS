@@ -144,6 +144,14 @@ export const routes: Routes = [
         loadChildren: () => import('./features/subscription/subscription.routes').then((m) => m.SUBSCRIPTION_ROUTES),
       },
       {
+        path: 'billing',
+        loadChildren: () => import('./features/billing/billing.routes').then((m) => m.BILLING_ROUTES),
+      },
+      {
+        path: 'pricing',
+        loadChildren: () => import('./features/billing/billing.routes').then((m) => m.PRICING_ROUTES),
+      },
+      {
         path: 'admin',
         loadChildren: () => import('./features/admin/admin.routes').then((m) => m.ADMIN_ROUTES),
       },

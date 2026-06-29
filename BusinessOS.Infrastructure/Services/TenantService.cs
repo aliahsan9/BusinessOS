@@ -142,9 +142,10 @@ public sealed class TenantService : ITenantService
                 tenant.Plan.MaxUsers,
                 tenant.Plan.MaxCustomers,
                 tenant.Plan.MaxProjects,
+                tenant.Plan.MaxTasks,
                 tenant.Plan.MaxStorageMb,
                 tenant.Plan.MaxAiRequests)
-            : new Application.Common.Models.TenantLimits(3, 50, 5, 512, 50);
+            : new Application.Common.Models.TenantLimits(1, 25, 10, 100, 512, 0);
 
         return new TenantUsageDto
         {
@@ -154,6 +155,8 @@ public sealed class TenantService : ITenantService
             MaxCustomers = limits.MaxCustomers,
             ProjectCount = usage.ProjectCount,
             MaxProjects = limits.MaxProjects,
+            TaskCount = usage.TaskCount,
+            MaxTasks = limits.MaxTasks,
             StorageUsedMb = usage.StorageUsedMb,
             MaxStorageMb = limits.MaxStorageMb,
             AiRequestsUsed = usage.AiRequestsUsed,

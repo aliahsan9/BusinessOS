@@ -15,7 +15,7 @@ public sealed class TenantContextService : ITenantContext
     private string _slug = string.Empty;
     private string? _subscriptionPlanName;
     private Guid? _subscriptionPlanId;
-    private TenantLimits _limits = new(5, 100, 10, 1024, 100);
+    private TenantLimits _limits = new(1, 25, 10, 100, 512, 0);
     private TenantUsageSnapshot? _usage;
     private bool _isActive;
     private bool _isLoaded;
@@ -74,6 +74,7 @@ public sealed class TenantContextService : ITenantContext
                 tenant.Plan.MaxUsers,
                 tenant.Plan.MaxCustomers,
                 tenant.Plan.MaxProjects,
+                tenant.Plan.MaxTasks,
                 tenant.Plan.MaxStorageMb,
                 tenant.Plan.MaxAiRequests);
         }
@@ -84,6 +85,7 @@ public sealed class TenantContextService : ITenantContext
                 tenant.Usage.UserCount,
                 tenant.Usage.CustomerCount,
                 tenant.Usage.ProjectCount,
+                tenant.Usage.TaskCount,
                 tenant.Usage.StorageUsedMb,
                 tenant.Usage.AiRequestsUsed,
                 tenant.Usage.LastCalculatedAt);

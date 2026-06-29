@@ -44,6 +44,8 @@ public class TenantUsageDto
     public int MaxCustomers { get; set; }
     public int ProjectCount { get; set; }
     public int MaxProjects { get; set; }
+    public int TaskCount { get; set; }
+    public int MaxTasks { get; set; }
     public long StorageUsedMb { get; set; }
     public long MaxStorageMb { get; set; }
     public int AiRequestsUsed { get; set; }

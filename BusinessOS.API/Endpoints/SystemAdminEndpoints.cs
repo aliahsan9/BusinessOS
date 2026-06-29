@@ -1,4 +1,6 @@
 using BusinessOS.Application.Common.Authorization;
+using BusinessOS.Application.Features.Billing.DTOs;
+using BusinessOS.Application.Features.Billing.Services;
 using BusinessOS.Application.Features.SystemAdmin.DTOs;
 using BusinessOS.Application.Features.SystemAdmin.Services;
 using BusinessOS.API.Authorization;
@@ -27,6 +29,11 @@ public static class SystemAdminEndpoints
             .RequirePermission(PermissionCodes.SystemAdminView)
             .WithName("GetEnvironmentInfo")
             .Produces<EnvironmentInfoResponse>(StatusCodes.Status200OK);
+
+        group.MapGet("/billing-metrics", GetBillingMetrics)
+            .RequirePermission(PermissionCodes.SystemAdminView)
+            .WithName("GetBillingMetrics")
+            .Produces<BillingMetricsDto>(StatusCodes.Status200OK);
     }
 
     private static async Task<IResult> GetHealth(
@@ -52,4 +59,9 @@ public static class SystemAdminEndpoints
         var result = await systemAdminService.GetEnvironmentInfoAsync(cancellationToken);
         return Results.Ok(result);
     }
+
+    private static async Task<IResult> GetBillingMetrics(
+        IBillingMetricsService billingMetricsService,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await billingMetricsService.GetMetricsAsync(cancellationToken));
 }
