@@ -2,17 +2,24 @@ import { ApplicationConfig, APP_INITIALIZER, provideZoneChangeDetection } from '
 import { provideRouter, withComponentInputBinding, withViewTransitions } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideAnimations } from '@angular/platform-browser/animations';
+import { firstValueFrom } from 'rxjs';
 import { routes } from './app.routes';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { errorInterceptor, loadingInterceptor } from './core/interceptors/error.interceptor';
 import { ThemeService } from './core/theme/theme.service';
 import { TokenService } from './core/services/token.service';
+import { TenantSettingsStoreService } from './core/services/tenant-settings-store.service';
 
-function initializeTheme(themeService: ThemeService, tokenService: TokenService): () => void {
-  return () => {
+function initializeApp(
+  themeService: ThemeService,
+  tokenService: TokenService,
+  tenantSettingsStore: TenantSettingsStoreService,
+): () => Promise<void> {
+  return async () => {
     themeService.initialize();
     if (tokenService.isAuthenticated()) {
       themeService.syncFromBackend();
+      await firstValueFrom(tenantSettingsStore.load());
     }
   };
 }
@@ -25,8 +32,8 @@ export const appConfig: ApplicationConfig = {
     provideAnimations(),
     {
       provide: APP_INITIALIZER,
-      useFactory: initializeTheme,
-      deps: [ThemeService, TokenService],
+      useFactory: initializeApp,
+      deps: [ThemeService, TokenService, TenantSettingsStoreService],
       multi: true,
     },
   ],

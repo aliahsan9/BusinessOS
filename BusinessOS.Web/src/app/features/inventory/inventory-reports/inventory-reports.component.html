@@ -22,15 +22,15 @@
   <div class="reports__summary">
     <div class="stat-card reports__stat">
       <span class="reports__stat-label">Inventory Value (Analytics)</span>
-      <span class="reports__stat-value">{{ analytics()?.inventoryValue | currency }}</span>
+      <span class="reports__stat-value">{{ analytics()?.inventoryValue | appCurrency }}</span>
     </div>
     <div class="stat-card reports__stat">
       <span class="reports__stat-label">Stock Value (Calculated)</span>
-      <span class="reports__stat-value">{{ totalStockValue() | currency }}</span>
+      <span class="reports__stat-value">{{ totalStockValue() | appCurrency }}</span>
     </div>
     <div class="stat-card reports__stat">
       <span class="reports__stat-label">Total Profit Potential</span>
-      <span class="reports__stat-value reports__stat-value--success">{{ totalProfitPotential() | currency }}</span>
+      <span class="reports__stat-value reports__stat-value--success">{{ totalProfitPotential() | appCurrency }}</span>
     </div>
   </div>
 
@@ -57,10 +57,10 @@
                 <td>{{ row.productName }}</td>
                 <td>{{ row.sku }}</td>
                 <td>{{ row.currentStock | number: '1.0-2' }}</td>
-                <td>{{ row.costPrice | currency }}</td>
-                <td>{{ row.salePrice | currency }}</td>
-                <td>{{ row.stockValue | currency }}</td>
-                <td>{{ row.profitPotential | currency }}</td>
+                <td>{{ row.costPrice | appCurrency }}</td>
+                <td>{{ row.salePrice | appCurrency }}</td>
+                <td>{{ row.stockValue | appCurrency }}</td>
+                <td>{{ row.profitPotential | appCurrency }}</td>
               </tr>
             }
           </tbody>

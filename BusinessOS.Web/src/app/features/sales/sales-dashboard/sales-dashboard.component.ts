@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
-import { CurrencyPipe, DecimalPipe } from '@angular/common';
+import { DecimalPipe } from '@angular/common';
+import { AppCurrencyPipe } from '../../../shared/pipes/app-currency.pipe';
 import { forkJoin } from 'rxjs';
 import { DashboardService } from '../../../core/services/dashboard.service';
 import { InvoiceService } from '../../../core/services/invoice.service';
@@ -32,7 +33,7 @@ interface InvoiceStats {
   selector: 'app-sales-dashboard',
   standalone: true,
   imports: [
-    CurrencyPipe,
+    AppCurrencyPipe,
     DecimalPipe,
     AppBreadcrumbComponent,
     AppPageHeaderComponent,

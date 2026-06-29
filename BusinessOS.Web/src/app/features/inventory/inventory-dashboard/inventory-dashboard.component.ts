@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject } from '@angular/core';
-import { CurrencyPipe, DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
+import { AppCurrencyPipe } from '../../../shared/pipes/app-currency.pipe';
 import { InventoryStateService } from '../../../state/inventory.state';
 import { StockMovementTrend } from '../../../core/models/inventory.model';
 import { ChartDataResponse } from '../../../core/models/dashboard.model';
@@ -18,7 +19,7 @@ import { AppEmptyStateComponent } from '../../../shared/components/app-empty-sta
   selector: 'app-inventory-dashboard',
   standalone: true,
   imports: [
-    CurrencyPipe,
+    AppCurrencyPipe,
     DatePipe,
     DecimalPipe,
     AppBreadcrumbComponent,

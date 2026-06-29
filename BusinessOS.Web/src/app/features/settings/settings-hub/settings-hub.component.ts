@@ -2,11 +2,13 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { SettingsService } from '../../../core/services/settings.service';
+import { TenantSettingsStoreService } from '../../../core/services/tenant-settings-store.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { TokenService } from '../../../core/services/token.service';
 import { BusinessProfileDto, TenantSettingsDto } from '../../../core/models/settings.model';
 import { ROUTES } from '../../../core/constants/route.constants';
 import { PermissionCodes } from '../../../core/constants/permission.constants';
+import { DEFAULT_CURRENCY_CODE } from '../../../core/constants/currency.constants';
 import { ButtonVariant } from '../../../core/enums';
 import { AppBreadcrumbComponent } from '../../../shared/components/app-breadcrumb/app-breadcrumb.component';
 import { AppPageHeaderComponent } from '../../../shared/components/app-page-header/app-page-header.component';
@@ -52,6 +54,7 @@ export class SettingsHubComponent implements OnInit {
   readonly ButtonVariant = ButtonVariant;
   private readonly fb = inject(FormBuilder);
   private readonly settingsService = inject(SettingsService);
+  private readonly tenantSettingsStore = inject(TenantSettingsStoreService);
   private readonly notification = inject(NotificationService);
   private readonly tokenService = inject(TokenService);
 
@@ -78,7 +81,7 @@ export class SettingsHubComponent implements OnInit {
   ];
 
   readonly settingsForm = this.fb.nonNullable.group({
-    currency: ['USD', Validators.required],
+    currency: [DEFAULT_CURRENCY_CODE, Validators.required],
     language: ['en', Validators.required],
     taxRate: [0, [Validators.required, Validators.min(0)]],
     invoicePrefix: [''],
@@ -110,6 +113,7 @@ export class SettingsHubComponent implements OnInit {
     this.settingsService.getSettings().subscribe({
       next: (s) => {
         this.settings.set(s);
+        this.tenantSettingsStore.applySettings(s);
         this.settingsForm.patchValue({
           currency: s.currency,
           language: s.language,
@@ -176,6 +180,7 @@ export class SettingsHubComponent implements OnInit {
       .subscribe({
         next: (s) => {
           this.settings.set(s);
+          this.tenantSettingsStore.applySettings(s);
           this.notification.success('Settings saved.');
           this.saving.set(false);
         },

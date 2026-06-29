@@ -48,7 +48,7 @@
                 <option value="">Select product</option>
                 @for (product of products(); track product.id) {
                   <option [value]="product.id">
-                    {{ product.name }} ({{ product.sku }}) — {{ product.salePrice | currency }}
+                    {{ product.name }} ({{ product.sku }}) — {{ product.salePrice | appCurrency }}
                   </option>
                 }
               </select>
@@ -59,7 +59,7 @@
             <app-input label="Qty *" type="number" formControlName="quantity" [error]="lineFieldError(i, 'quantity') ?? undefined" />
             <div class="form-field">
               <label>Line Total</label>
-              <p class="computed-value">{{ lineTotal(i) | currency }}</p>
+              <p class="computed-value">{{ lineTotal(i) | appCurrency }}</p>
             </div>
             <div class="line-item__actions">
               @if (items.length > 1) {
@@ -74,19 +74,19 @@
         <div class="totals">
           <div class="totals__row">
             <span>Subtotal</span>
-            <strong>{{ subtotal() | currency }}</strong>
+            <strong>{{ subtotal() | appCurrency }}</strong>
           </div>
           <div class="totals__row">
             <span>Discount</span>
-            <span>−{{ form.getRawValue().discount | currency }}</span>
+            <span>−{{ form.getRawValue().discount | appCurrency }}</span>
           </div>
           <div class="totals__row">
             <span>Tax</span>
-            <span>+{{ form.getRawValue().tax | currency }}</span>
+            <span>+{{ form.getRawValue().tax | appCurrency }}</span>
           </div>
           <div class="totals__row totals__row--grand">
             <span>Grand Total</span>
-            <strong>{{ grandTotal() | currency }}</strong>
+            <strong>{{ grandTotal() | appCurrency }}</strong>
           </div>
         </div>
       </div>

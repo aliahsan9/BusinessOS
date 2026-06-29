@@ -49,7 +49,7 @@
                   <app-badge [label]="purchase.status" [variant]="purchaseStatusVariant(purchase.status)" />
                 </td>
                 <td>{{ purchase.itemCount }}</td>
-                <td>{{ purchase.totalAmount | currency }}</td>
+                <td>{{ purchase.totalAmount | appCurrency }}</td>
                 <td>
                   <a [routerLink]="[routes.purchaseOrders.base, purchase.id]">View PO</a>
                 </td>

@@ -7,7 +7,7 @@
 
   <app-card title="Expense Details">
     <div class="detail-grid">
-      <div class="detail-item"><span>Amount</span><strong>{{ e.amount | currency }}</strong></div>
+      <div class="detail-item"><span>Amount</span><strong>{{ e.amount | appCurrency }}</strong></div>
       <div class="detail-item"><span>Date</span><strong>{{ e.expenseDate | date: 'mediumDate' }}</strong></div>
       <div class="detail-item"><span>Category</span><strong>{{ e.categoryName }}</strong></div>
       <div class="detail-item"><span>Payment Method</span><strong>{{ e.paymentMethod }}</strong></div>

@@ -100,8 +100,8 @@
             </td>
             <td>{{ product.sku }}</td>
             <td>{{ getCategoryName(product.categoryId) }}</td>
-            <td>{{ product.costPrice | currency }}</td>
-            <td>{{ product.salePrice | currency }}</td>
+            <td>{{ product.costPrice | appCurrency }}</td>
+            <td>{{ product.salePrice | appCurrency }}</td>
             <td>{{ profitMargin(product) | number: '1.1-1' }}%</td>
             <td>
               <span [class.text-warning]="product.currentStock > 0 && product.currentStock <= product.reorderLevel"

@@ -27,10 +27,10 @@
 
     <app-card title="Pricing">
       <dl class="detail-list">
-        <div><dt>Cost Price</dt><dd>{{ product()!.costPrice | currency }}</dd></div>
-        <div><dt>Selling Price</dt><dd>{{ product()!.salePrice | currency }}</dd></div>
+        <div><dt>Cost Price</dt><dd>{{ product()!.costPrice | appCurrency }}</dd></div>
+        <div><dt>Selling Price</dt><dd>{{ product()!.salePrice | appCurrency }}</dd></div>
         <div><dt>Profit Margin</dt><dd>{{ margin() | number: '1.1-1' }}%</dd></div>
-        <div><dt>Stock Value</dt><dd>{{ stockValue() | currency }}</dd></div>
+        <div><dt>Stock Value</dt><dd>{{ stockValue() | appCurrency }}</dd></div>
       </dl>
     </app-card>
 

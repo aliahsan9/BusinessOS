@@ -70,7 +70,17 @@
         [attr.aria-expanded]="showProfile()"
         (click)="toggleProfile()"
       >
-        <span class="app-navbar__avatar" aria-hidden="true">{{ currentUser()?.email?.charAt(0)?.toUpperCase() ?? 'U' }}</span>
+        @if (showCompanyLogo()) {
+          <img
+            class="app-navbar__avatar app-navbar__avatar-image"
+            [src]="companyLogoUrl()!"
+            alt="Company logo"
+            (load)="onLogoLoad()"
+            (error)="onLogoError()"
+          />
+        } @else {
+          <span class="app-navbar__avatar" aria-hidden="true">{{ userInitial() }}</span>
+        }
         <span class="app-navbar__profile-text">
           <span class="app-navbar__profile-name">{{ userDisplayName() }}</span>
           <span class="app-navbar__profile-role">Account</span>

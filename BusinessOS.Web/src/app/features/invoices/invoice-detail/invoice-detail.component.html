@@ -73,15 +73,15 @@
 
     <app-card title="Amounts">
       <dl class="detail-list">
-        <div><dt>Subtotal</dt><dd>{{ invoice()!.subTotal | currency }}</dd></div>
-        <div><dt>Discount</dt><dd>{{ invoice()!.discount | currency }}</dd></div>
-        <div><dt>Tax</dt><dd>{{ invoice()!.tax | currency }}</dd></div>
-        <div><dt>Grand Total</dt><dd>{{ invoice()!.grandTotal | currency }}</dd></div>
-        <div><dt>Amount Paid</dt><dd>{{ invoice()!.amountPaid | currency }}</dd></div>
+        <div><dt>Subtotal</dt><dd>{{ invoice()!.subTotal | appCurrency }}</dd></div>
+        <div><dt>Discount</dt><dd>{{ invoice()!.discount | appCurrency }}</dd></div>
+        <div><dt>Tax</dt><dd>{{ invoice()!.tax | appCurrency }}</dd></div>
+        <div><dt>Grand Total</dt><dd>{{ invoice()!.grandTotal | appCurrency }}</dd></div>
+        <div><dt>Amount Paid</dt><dd>{{ invoice()!.amountPaid | appCurrency }}</dd></div>
         <div>
           <dt>Outstanding</dt>
           <dd [class.text-danger]="invoice()!.outstandingAmount > 0">
-            {{ invoice()!.outstandingAmount | currency }}
+            {{ invoice()!.outstandingAmount | appCurrency }}
           </dd>
         </div>
       </dl>

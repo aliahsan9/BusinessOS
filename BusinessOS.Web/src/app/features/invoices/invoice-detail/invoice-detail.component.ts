@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { CurrencyPipe, DatePipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
+import { AppCurrencyPipe } from '../../../shared/pipes/app-currency.pipe';
 import { InvoiceService } from '../../../core/services/invoice.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { TokenService } from '../../../core/services/token.service';
@@ -36,7 +37,7 @@ const INVOICE_TRANSITIONS: Record<InvoiceStatus, InvoiceStatus[]> = {
   standalone: true,
   imports: [
     RouterLink,
-    CurrencyPipe,
+    AppCurrencyPipe,
     DatePipe,
     AppBreadcrumbComponent,
     AppPageHeaderComponent,

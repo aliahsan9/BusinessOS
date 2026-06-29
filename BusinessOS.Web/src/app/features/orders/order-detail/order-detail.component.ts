@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { CurrencyPipe, DatePipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
+import { AppCurrencyPipe } from '../../../shared/pipes/app-currency.pipe';
 import { OrderService } from '../../../core/services/order.service';
 import { InvoiceService } from '../../../core/services/invoice.service';
 import { NotificationService } from '../../../core/services/notification.service';
@@ -25,7 +26,7 @@ type WorkflowAction = 'confirm' | 'process' | 'complete' | 'cancel' | 'invoice';
   standalone: true,
   imports: [
     RouterLink,
-    CurrencyPipe,
+    AppCurrencyPipe,
     DatePipe,
     AppBreadcrumbComponent,
     AppPageHeaderComponent,

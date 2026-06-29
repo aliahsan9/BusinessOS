@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
-import { CurrencyPipe, DecimalPipe } from '@angular/common';
+import { DecimalPipe } from '@angular/common';
+import { AppCurrencyPipe } from '../../../shared/pipes/app-currency.pipe';
 import { FinanceService } from '../../../core/services/finance.service';
 import { FinancialDashboard } from '../../../core/models/finance.model';
 import { ChartDataResponse } from '../../../core/models/dashboard.model';
@@ -16,7 +17,7 @@ import { AppEmptyStateComponent } from '../../../shared/components/app-empty-sta
   selector: 'app-financial-dashboard',
   standalone: true,
   imports: [
-    CurrencyPipe,
+    AppCurrencyPipe,
     DecimalPipe,
     AppBreadcrumbComponent,
     AppPageHeaderComponent,

@@ -11,7 +11,7 @@
   />
 
   <app-page-header
-    [title]="'Payment — ' + (payment()!.amount | currency)"
+    [title]="'Payment — ' + (payment()!.amount | appCurrency)"
     [subtitle]="payment()!.customerName"
     [actions]="headerActions()"
   />
@@ -41,7 +41,7 @@
             </a>
           </dd>
         </div>
-        <div><dt>Amount</dt><dd>{{ payment()!.amount | currency }}</dd></div>
+        <div><dt>Amount</dt><dd>{{ payment()!.amount | appCurrency }}</dd></div>
         <div>
           <dt>Method</dt>
           <dd><app-badge [label]="payment()!.paymentMethod" variant="info" /></dd>

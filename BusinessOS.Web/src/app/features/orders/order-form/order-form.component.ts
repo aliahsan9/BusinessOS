@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { CurrencyPipe } from '@angular/common';
+import { AppCurrencyPipe } from '../../../shared/pipes/app-currency.pipe';
 import { FormArray, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { OrderService } from '../../../core/services/order.service';
@@ -26,7 +26,7 @@ import { getFieldError } from '../../../shared/validators/form.validators';
   imports: [
     ReactiveFormsModule,
     RouterLink,
-    CurrencyPipe,
+    AppCurrencyPipe,
     AppBreadcrumbComponent,
     AppPageHeaderComponent,
     AppInputComponent,

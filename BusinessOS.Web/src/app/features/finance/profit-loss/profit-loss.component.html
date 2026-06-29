@@ -39,10 +39,10 @@
     @case ('summary') {
       @if (profitLoss(); as report) {
         <div class="summary-row">
-          <div class="summary-card"><span>Total Revenue</span><strong>{{ report.totalRevenue | currency }}</strong></div>
-          <div class="summary-card"><span>Total Expenses</span><strong>{{ report.totalExpenses | currency }}</strong></div>
-          <div class="summary-card"><span>Gross Profit</span><strong>{{ report.grossProfit | currency }}</strong></div>
-          <div class="summary-card"><span>Net Profit</span><strong>{{ report.netProfit | currency }}</strong></div>
+          <div class="summary-card"><span>Total Revenue</span><strong>{{ report.totalRevenue | appCurrency }}</strong></div>
+          <div class="summary-card"><span>Total Expenses</span><strong>{{ report.totalExpenses | appCurrency }}</strong></div>
+          <div class="summary-card"><span>Gross Profit</span><strong>{{ report.grossProfit | appCurrency }}</strong></div>
+          <div class="summary-card"><span>Net Profit</span><strong>{{ report.netProfit | appCurrency }}</strong></div>
         </div>
         @if (report.periodBreakdown.length === 0) {
           <app-empty-state title="No breakdown data" description="Period breakdown will appear here." />
@@ -52,7 +52,7 @@
               <thead><tr><th>Period</th><th class="text-end">Amount</th><th class="text-end">Count</th></tr></thead>
               <tbody>
                 @for (row of report.periodBreakdown; track row.period) {
-                  <tr><td>{{ row.period }}</td><td class="text-end">{{ row.amount | currency }}</td><td class="text-end">{{ row.count | number }}</td></tr>
+                  <tr><td>{{ row.period }}</td><td class="text-end">{{ row.amount | appCurrency }}</td><td class="text-end">{{ row.count | number }}</td></tr>
                 }
               </tbody>
             </table>
@@ -70,7 +70,7 @@
               <thead><tr><th>Month</th><th class="text-end">Amount</th><th class="text-end">Count</th></tr></thead>
               <tbody>
                 @for (row of report.periodBreakdown; track row.period) {
-                  <tr><td>{{ row.period }}</td><td class="text-end">{{ row.amount | currency }}</td><td class="text-end">{{ row.count | number }}</td></tr>
+                  <tr><td>{{ row.period }}</td><td class="text-end">{{ row.amount | appCurrency }}</td><td class="text-end">{{ row.count | number }}</td></tr>
                 }
               </tbody>
             </table>
@@ -88,7 +88,7 @@
               <thead><tr><th>Year</th><th class="text-end">Amount</th><th class="text-end">Count</th></tr></thead>
               <tbody>
                 @for (row of report.periodBreakdown; track row.period) {
-                  <tr><td>{{ row.period }}</td><td class="text-end">{{ row.amount | currency }}</td><td class="text-end">{{ row.count | number }}</td></tr>
+                  <tr><td>{{ row.period }}</td><td class="text-end">{{ row.amount | appCurrency }}</td><td class="text-end">{{ row.count | number }}</td></tr>
                 }
               </tbody>
             </table>
@@ -99,8 +99,8 @@
     @case ('revenue') {
       @if (revenueBreakdown(); as report) {
         <div class="summary-row">
-          <div class="summary-card"><span>Order Revenue</span><strong>{{ report.orderRevenue | currency }}</strong></div>
-          <div class="summary-card"><span>Payment Total</span><strong>{{ report.paymentTotal | currency }}</strong></div>
+          <div class="summary-card"><span>Order Revenue</span><strong>{{ report.orderRevenue | appCurrency }}</strong></div>
+          <div class="summary-card"><span>Payment Total</span><strong>{{ report.paymentTotal | appCurrency }}</strong></div>
         </div>
         @if (report.byPaymentMethod.length === 0) {
           <app-empty-state title="No revenue breakdown" description="Revenue by payment method will appear here." />
@@ -110,7 +110,7 @@
               <thead><tr><th>Payment Method</th><th class="text-end">Amount</th><th class="text-end">Count</th></tr></thead>
               <tbody>
                 @for (row of report.byPaymentMethod; track row.category) {
-                  <tr><td>{{ row.category }}</td><td class="text-end">{{ row.amount | currency }}</td><td class="text-end">{{ row.count | number }}</td></tr>
+                  <tr><td>{{ row.category }}</td><td class="text-end">{{ row.amount | appCurrency }}</td><td class="text-end">{{ row.count | number }}</td></tr>
                 }
               </tbody>
             </table>
@@ -121,7 +121,7 @@
     @case ('expenses') {
       @if (expenseBreakdown(); as report) {
         <div class="summary-row">
-          <div class="summary-card"><span>Total Expenses</span><strong>{{ report.totalExpenses | currency }}</strong></div>
+          <div class="summary-card"><span>Total Expenses</span><strong>{{ report.totalExpenses | appCurrency }}</strong></div>
           <div class="summary-card"><span>Total Count</span><strong>{{ report.totalCount | number }}</strong></div>
         </div>
         @if (report.byCategory.length === 0) {
@@ -132,7 +132,7 @@
               <thead><tr><th>Category</th><th class="text-end">Amount</th><th class="text-end">Count</th><th class="text-end">%</th></tr></thead>
               <tbody>
                 @for (row of report.byCategory; track row.categoryName) {
-                  <tr><td>{{ row.categoryName }}</td><td class="text-end">{{ row.amount | currency }}</td><td class="text-end">{{ row.count | number }}</td><td class="text-end">{{ row.percentage | number: '1.1-1' }}%</td></tr>
+                  <tr><td>{{ row.categoryName }}</td><td class="text-end">{{ row.amount | appCurrency }}</td><td class="text-end">{{ row.count | number }}</td><td class="text-end">{{ row.percentage | number: '1.1-1' }}%</td></tr>
                 }
               </tbody>
             </table>

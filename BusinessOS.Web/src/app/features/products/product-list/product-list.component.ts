@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { CurrencyPipe, DecimalPipe } from '@angular/common';
+import { DecimalPipe } from '@angular/common';
+import { AppCurrencyPipe } from '../../../shared/pipes/app-currency.pipe';
 import { FormsModule } from '@angular/forms';
 import { ProductStateService } from '../../../state/product.state';
 import { CategoryService } from '../../../core/services/category.service';
@@ -30,7 +31,7 @@ import { ButtonVariant } from '../../../core/enums';
   standalone: true,
   imports: [
     RouterLink,
-    CurrencyPipe,
+    AppCurrencyPipe,
     DecimalPipe,
     FormsModule,
     AppBreadcrumbComponent,

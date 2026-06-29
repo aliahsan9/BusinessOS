@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, output, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { TokenService } from '../../../core/services/token.service';
+import { TenantSettingsStoreService } from '../../../core/services/tenant-settings-store.service';
 import { NotificationCenterService } from '../../../core/services/notification-center.service';
 import { ThemeService } from '../../../core/theme/theme.service';
 import { APP_ROUTE_PATHS, TOP_NAV_ITEMS } from '../../constants/nav.constants';
@@ -18,6 +19,7 @@ import { ROUTES } from '../../../core/constants/route.constants';
 export class AppNavbarComponent implements OnInit {
   private readonly authService = inject(AuthService);
   private readonly tokenService = inject(TokenService);
+  private readonly tenantSettingsStore = inject(TenantSettingsStoreService);
   private readonly notificationCenter = inject(NotificationCenterService);
   private readonly themeService = inject(ThemeService);
 
@@ -39,6 +41,25 @@ export class AppNavbarComponent implements OnInit {
   readonly showProfile = signal(false);
 
   readonly currentUser = this.authService.currentUser;
+  readonly companyLogoUrl = this.tenantSettingsStore.logoUrl;
+  readonly logoLoadFailed = signal(false);
+  readonly logoLoading = signal(false);
+
+  readonly showCompanyLogo = computed(
+    () => !!this.companyLogoUrl() && !this.logoLoadFailed(),
+  );
+
+  readonly userInitial = computed(
+    () => this.currentUser()?.email?.charAt(0)?.toUpperCase() ?? 'U',
+  );
+
+  constructor() {
+    effect(() => {
+      this.companyLogoUrl();
+      this.logoLoadFailed.set(false);
+      this.logoLoading.set(!!this.companyLogoUrl());
+    });
+  }
 
   readonly notifications = signal<{ id: string; title: string; message: string; read: boolean }[]>([]);
 
@@ -86,6 +107,15 @@ export class AppNavbarComponent implements OnInit {
 
   closeProfileMenu(): void {
     this.showProfile.set(false);
+  }
+
+  onLogoLoad(): void {
+    this.logoLoading.set(false);
+  }
+
+  onLogoError(): void {
+    this.logoLoadFailed.set(true);
+    this.logoLoading.set(false);
   }
 
   logout(): void {

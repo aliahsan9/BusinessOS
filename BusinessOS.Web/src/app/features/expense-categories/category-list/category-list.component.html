@@ -47,7 +47,7 @@
             <td>{{ category.name }}</td>
             <td>{{ category.description || '—' }}</td>
             <td>{{ category.expenseCount }}</td>
-            <td>{{ category.totalAmount | currency }}</td>
+            <td>{{ category.totalAmount | appCurrency }}</td>
             <td>
               <app-badge [label]="category.isActive ? 'Active' : 'Inactive'" [variant]="category.isActive ? 'success' : 'neutral'" />
             </td>

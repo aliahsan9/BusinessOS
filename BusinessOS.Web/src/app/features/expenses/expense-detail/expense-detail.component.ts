@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
-import { CurrencyPipe, DatePipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
+import { AppCurrencyPipe } from '../../../shared/pipes/app-currency.pipe';
 import { ExpenseService } from '../../../core/services/expense.service';
 import { ExpenseDto } from '../../../core/models/expense.model';
 import { ROUTES } from '../../../core/constants/route.constants';
@@ -16,7 +17,7 @@ import { AppSkeletonComponent } from '../../../shared/components/app-skeleton/ap
 @Component({
   selector: 'app-expense-detail',
   standalone: true,
-  imports: [CurrencyPipe, DatePipe, AppBreadcrumbComponent, AppPageHeaderComponent, AppCardComponent, AppBadgeComponent, AppSkeletonComponent],
+  imports: [AppCurrencyPipe, DatePipe, AppBreadcrumbComponent, AppPageHeaderComponent, AppCardComponent, AppBadgeComponent, AppSkeletonComponent],
   templateUrl: './expense-detail.component.html',
   styleUrl: './expense-detail.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

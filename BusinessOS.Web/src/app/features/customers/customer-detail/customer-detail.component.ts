@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { CurrencyPipe, DatePipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
+import { AppCurrencyPipe } from '../../../shared/pipes/app-currency.pipe';
 import { CustomerService } from '../../../core/services/customer.service';
 import { CustomerAnalytics, CustomerDto, CustomerOrderSummary } from '../../../core/models/customer.model';
 import { ROUTES } from '../../../core/constants/route.constants';
@@ -20,7 +21,7 @@ import { AppPaginationComponent } from '../../../shared/components/app-paginatio
   standalone: true,
   imports: [
     RouterLink,
-    CurrencyPipe,
+    AppCurrencyPipe,
     DatePipe,
     AppBreadcrumbComponent,
     AppPageHeaderComponent,

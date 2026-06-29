@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject } from '@angular/core';
-import { CurrencyPipe, DecimalPipe } from '@angular/common';
+import { DecimalPipe } from '@angular/common';
+import { AppCurrencyPipe } from '../../shared/pipes/app-currency.pipe';
 import { DashboardStateService } from '../../state/dashboard.state';
 import { DashboardPeriod } from '../../core/enums';
 import { AppBreadcrumbComponent } from '../../shared/components/app-breadcrumb/app-breadcrumb.component';
@@ -14,7 +15,7 @@ import { AppEmptyStateComponent } from '../../shared/components/app-empty-state/
   selector: 'app-dashboard',
   standalone: true,
   imports: [
-    CurrencyPipe,
+    AppCurrencyPipe,
     DecimalPipe,
     AppBreadcrumbComponent,
     AppCardComponent,

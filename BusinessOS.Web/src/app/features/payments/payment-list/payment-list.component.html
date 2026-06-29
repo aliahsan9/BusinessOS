@@ -80,7 +80,7 @@
               <app-badge [label]="payment.paymentMethod" variant="info" />
             </td>
             <td>{{ payment.referenceNo || '—' }}</td>
-            <td>{{ payment.amount | currency }}</td>
+            <td>{{ payment.amount | appCurrency }}</td>
             <td class="bos-table__actions">
               <a [routerLink]="[routes.payments.base, payment.id]">View</a>
               @if (canUpdate) {

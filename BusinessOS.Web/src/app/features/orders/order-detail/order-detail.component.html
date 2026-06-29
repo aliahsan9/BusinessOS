@@ -56,10 +56,10 @@
         <div><dt>Email</dt><dd>{{ order()!.customerEmail || '—' }}</dd></div>
         <div><dt>Phone</dt><dd>{{ order()!.customerPhone || '—' }}</dd></div>
         <div><dt>Order Date</dt><dd>{{ order()!.orderDate | date: 'mediumDate' }}</dd></div>
-        <div><dt>Subtotal</dt><dd>{{ order()!.totalAmount | currency }}</dd></div>
-        <div><dt>Discount</dt><dd>{{ order()!.discount | currency }}</dd></div>
-        <div><dt>Tax</dt><dd>{{ order()!.tax | currency }}</dd></div>
-        <div><dt>Grand Total</dt><dd>{{ order()!.grandTotal | currency }}</dd></div>
+        <div><dt>Subtotal</dt><dd>{{ order()!.totalAmount | appCurrency }}</dd></div>
+        <div><dt>Discount</dt><dd>{{ order()!.discount | appCurrency }}</dd></div>
+        <div><dt>Tax</dt><dd>{{ order()!.tax | appCurrency }}</dd></div>
+        <div><dt>Grand Total</dt><dd>{{ order()!.grandTotal | appCurrency }}</dd></div>
       </dl>
     </app-card>
   </div>
@@ -86,15 +86,15 @@
               </td>
               <td>{{ item.productSku || '—' }}</td>
               <td>{{ item.quantity }}</td>
-              <td>{{ item.unitPrice | currency }}</td>
-              <td>{{ item.total | currency }}</td>
+              <td>{{ item.unitPrice | appCurrency }}</td>
+              <td>{{ item.total | appCurrency }}</td>
             </tr>
           }
         </tbody>
         <tfoot>
           <tr>
             <td colspan="4" class="text-end"><strong>Grand Total</strong></td>
-            <td><strong>{{ order()!.grandTotal | currency }}</strong></td>
+            <td><strong>{{ order()!.grandTotal | appCurrency }}</strong></td>
           </tr>
         </tfoot>
       </table>

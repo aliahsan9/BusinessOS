@@ -79,7 +79,7 @@
             <td>
               <app-badge [label]="quotation.status" [variant]="statusVariant(quotation.status)" />
             </td>
-            <td>{{ quotation.grandTotal | currency }}</td>
+            <td>{{ quotation.grandTotal | appCurrency }}</td>
             <td class="bos-table__actions">
               <a [routerLink]="[routes.quotations.base, quotation.id]">View</a>
               @if (canEditItem(quotation)) {

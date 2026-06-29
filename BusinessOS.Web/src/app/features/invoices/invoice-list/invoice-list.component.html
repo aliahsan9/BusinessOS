@@ -77,9 +77,9 @@
             <td>
               <app-badge [label]="invoice.status" [variant]="statusVariant(invoice.status)" />
             </td>
-            <td>{{ invoice.grandTotal | currency }}</td>
+            <td>{{ invoice.grandTotal | appCurrency }}</td>
             <td [class.text-danger]="invoice.outstandingAmount > 0">
-              {{ invoice.outstandingAmount | currency }}
+              {{ invoice.outstandingAmount | appCurrency }}
             </td>
             <td class="bos-table__actions">
               <a [routerLink]="[routes.invoices.base, invoice.id]">View</a>

@@ -36,8 +36,8 @@
           <span class="dashboard__stat-label">Total Revenue</span>
           <span class="dashboard__stat-icon" aria-hidden="true">💰</span>
         </div>
-        <span class="dashboard__stat-value">{{ overview()?.totalRevenue | currency }}</span>
-        <span class="dashboard__stat-meta">Monthly: {{ sales()?.monthlySales | currency }}</span>
+        <span class="dashboard__stat-value">{{ overview()?.totalRevenue | appCurrency }}</span>
+        <span class="dashboard__stat-meta">Monthly: {{ sales()?.monthlySales | appCurrency }}</span>
       </div>
       <div class="stat-card dashboard__stat dashboard__stat--orders">
         <div class="dashboard__stat-top">
@@ -45,7 +45,7 @@
           <span class="dashboard__stat-icon" aria-hidden="true">🛒</span>
         </div>
         <span class="dashboard__stat-value">{{ overview()?.totalOrders | number }}</span>
-        <span class="dashboard__stat-meta">Avg: {{ sales()?.averageOrderValue | currency }}</span>
+        <span class="dashboard__stat-meta">Avg: {{ sales()?.averageOrderValue | appCurrency }}</span>
       </div>
       <div class="stat-card dashboard__stat dashboard__stat--customers">
         <div class="dashboard__stat-top">
@@ -69,7 +69,7 @@
     <div class="card-grid dashboard__stats dashboard__stats--secondary">
       <div class="stat-card dashboard__stat dashboard__stat--compact">
         <span class="dashboard__stat-label">Inventory Value</span>
-        <span class="dashboard__stat-value dashboard__stat-value--sm">{{ overview()?.totalInventoryValue | currency }}</span>
+        <span class="dashboard__stat-value dashboard__stat-value--sm">{{ overview()?.totalInventoryValue | appCurrency }}</span>
       </div>
       <div class="stat-card dashboard__stat dashboard__stat--compact">
         <span class="dashboard__stat-label">Low Stock</span>
@@ -173,7 +173,7 @@
                       <br /><small class="text-muted">{{ customer.email }}</small>
                     </td>
                     <td>{{ customer.totalOrders }}</td>
-                    <td class="text-end">{{ customer.totalSpending | currency }}</td>
+                    <td class="text-end">{{ customer.totalSpending | appCurrency }}</td>
                   </tr>
                 }
               </tbody>
@@ -204,7 +204,7 @@
                       <br /><small class="text-muted">{{ product.sku }}</small>
                     </td>
                     <td>{{ product.totalQuantitySold }}</td>
-                    <td class="text-end">{{ product.totalRevenue | currency }}</td>
+                    <td class="text-end">{{ product.totalRevenue | appCurrency }}</td>
                   </tr>
                 }
               </tbody>

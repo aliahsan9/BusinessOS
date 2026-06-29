@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { CurrencyPipe, DatePipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
+import { AppCurrencyPipe } from '../../../shared/pipes/app-currency.pipe';
 import { SupplierService } from '../../../core/services/supplier.service';
 import { SupplierDto, SupplierProductSummary, SupplierPurchaseSummary } from '../../../core/models/supplier.model';
 import { ROUTES } from '../../../core/constants/route.constants';
@@ -20,7 +21,7 @@ import { ButtonVariant } from '../../../core/enums';
   standalone: true,
   imports: [
     RouterLink,
-    CurrencyPipe,
+    AppCurrencyPipe,
     DatePipe,
     AppBreadcrumbComponent,
     AppPageHeaderComponent,

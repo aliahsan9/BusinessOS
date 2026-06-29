@@ -1,7 +1,8 @@
 import { ButtonVariant } from '../../../core/enums';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { CurrencyPipe, DecimalPipe } from '@angular/common';
+import { DecimalPipe } from '@angular/common';
+import { AppCurrencyPipe } from '../../../shared/pipes/app-currency.pipe';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ProductService } from '../../../core/services/product.service';
 import { CategoryService } from '../../../core/services/category.service';
@@ -23,7 +24,7 @@ import { getFieldError } from '../../../shared/validators/form.validators';
   imports: [
     ReactiveFormsModule,
     RouterLink,
-    CurrencyPipe,
+    AppCurrencyPipe,
     DecimalPipe,
     AppBreadcrumbComponent,
     AppPageHeaderComponent,

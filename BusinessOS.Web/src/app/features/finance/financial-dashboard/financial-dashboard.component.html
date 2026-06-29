@@ -19,26 +19,26 @@
   <div class="card-grid stats-grid">
     <div class="stat-card">
       <span class="stat-label">Total Revenue</span>
-      <span class="stat-value stat-value--success">{{ dashboard()?.totalRevenue | currency }}</span>
+      <span class="stat-value stat-value--success">{{ dashboard()?.totalRevenue | appCurrency }}</span>
     </div>
     <div class="stat-card">
       <span class="stat-label">Total Expenses</span>
-      <span class="stat-value stat-value--danger">{{ dashboard()?.totalExpenses | currency }}</span>
+      <span class="stat-value stat-value--danger">{{ dashboard()?.totalExpenses | appCurrency }}</span>
     </div>
     <div class="stat-card">
       <span class="stat-label">Net Profit</span>
-      <span class="stat-value">{{ dashboard()?.netProfit | currency }}</span>
+      <span class="stat-value">{{ dashboard()?.netProfit | appCurrency }}</span>
     </div>
     <div class="stat-card">
       <span class="stat-label">Outstanding Invoices</span>
-      <span class="stat-value stat-value--warning">{{ dashboard()?.outstandingInvoices | currency }}</span>
+      <span class="stat-value stat-value--warning">{{ dashboard()?.outstandingInvoices | appCurrency }}</span>
     </div>
   </div>
 
   <div class="card-grid stats-grid stats-grid--secondary">
     <div class="stat-card stat-card--compact">
       <span class="stat-label">Total Payments</span>
-      <span class="stat-value stat-value--sm">{{ dashboard()?.totalPayments | currency }}</span>
+      <span class="stat-value stat-value--sm">{{ dashboard()?.totalPayments | appCurrency }}</span>
     </div>
     <div class="stat-card stat-card--compact">
       <span class="stat-label">Completed Orders</span>

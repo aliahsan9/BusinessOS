@@ -217,6 +217,12 @@
     flex-shrink: 0;
   }
 
+  &__avatar-image {
+    object-fit: cover;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+  }
+
   &__profile-text {
     display: none;
     flex-direction: column;

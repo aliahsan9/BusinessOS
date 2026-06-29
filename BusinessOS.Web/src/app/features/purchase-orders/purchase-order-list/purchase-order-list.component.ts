@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { CurrencyPipe, DatePipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
+import { AppCurrencyPipe } from '../../../shared/pipes/app-currency.pipe';
 import { FormsModule } from '@angular/forms';
 import { PurchaseOrderService } from '../../../core/services/purchase-order.service';
 import { SupplierService } from '../../../core/services/supplier.service';
@@ -26,7 +27,7 @@ import { AppConfirmDialogComponent } from '../../../shared/components/app-confir
   standalone: true,
   imports: [
     RouterLink,
-    CurrencyPipe,
+    AppCurrencyPipe,
     DatePipe,
     FormsModule,
     AppBreadcrumbComponent,

@@ -56,10 +56,10 @@
         <div><dt>Quotation Date</dt><dd>{{ quotation()!.quotationDate | date: 'mediumDate' }}</dd></div>
         <div><dt>Expiry Date</dt><dd>{{ quotation()!.expiryDate | date: 'mediumDate' }}</dd></div>
         <div><dt>Notes</dt><dd>{{ quotation()!.notes || '—' }}</dd></div>
-        <div><dt>Subtotal</dt><dd>{{ quotation()!.subTotal | currency }}</dd></div>
-        <div><dt>Discount</dt><dd>{{ quotation()!.discount | currency }}</dd></div>
-        <div><dt>Tax</dt><dd>{{ quotation()!.tax | currency }}</dd></div>
-        <div><dt>Grand Total</dt><dd>{{ quotation()!.grandTotal | currency }}</dd></div>
+        <div><dt>Subtotal</dt><dd>{{ quotation()!.subTotal | appCurrency }}</dd></div>
+        <div><dt>Discount</dt><dd>{{ quotation()!.discount | appCurrency }}</dd></div>
+        <div><dt>Tax</dt><dd>{{ quotation()!.tax | appCurrency }}</dd></div>
+        <div><dt>Grand Total</dt><dd>{{ quotation()!.grandTotal | appCurrency }}</dd></div>
       </dl>
     </app-card>
   </div>
@@ -86,15 +86,15 @@
               </td>
               <td>{{ item.productSku || '—' }}</td>
               <td>{{ item.quantity }}</td>
-              <td>{{ item.unitPrice | currency }}</td>
-              <td>{{ item.total | currency }}</td>
+              <td>{{ item.unitPrice | appCurrency }}</td>
+              <td>{{ item.total | appCurrency }}</td>
             </tr>
           }
         </tbody>
         <tfoot>
           <tr>
             <td colspan="4" class="text-end"><strong>Grand Total</strong></td>
-            <td><strong>{{ quotation()!.grandTotal | currency }}</strong></td>
+            <td><strong>{{ quotation()!.grandTotal | appCurrency }}</strong></td>
           </tr>
         </tfoot>
       </table>

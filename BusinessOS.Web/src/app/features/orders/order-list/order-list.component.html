@@ -69,7 +69,7 @@
             <td>
               <app-badge [label]="order.status" [variant]="statusVariant(order.status)" />
             </td>
-            <td>{{ order.grandTotal | currency }}</td>
+            <td>{{ order.grandTotal | appCurrency }}</td>
             <td class="bos-table__actions">
               <a [routerLink]="[routes.orders.base, order.id]">View</a>
               @if (canEditItem(order)) {

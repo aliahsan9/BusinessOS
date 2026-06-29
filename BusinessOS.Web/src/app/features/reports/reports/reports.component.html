@@ -92,7 +92,7 @@
                       <td>{{ row.customerName }}</td>
                       <td>{{ row.orderDate | date: 'mediumDate' }}</td>
                       <td>{{ row.status }}</td>
-                      <td class="text-end">{{ row.grandTotal | currency }}</td>
+                      <td class="text-end">{{ row.grandTotal | appCurrency }}</td>
                     </tr>
                   }
                 </tbody>
@@ -123,8 +123,8 @@
                       <td>{{ row.customerName }}</td>
                       <td>{{ row.orderNumber }}</td>
                       <td>{{ row.status }}</td>
-                      <td class="text-end">{{ row.grandTotal | currency }}</td>
-                      <td class="text-end">{{ row.outstandingAmount | currency }}</td>
+                      <td class="text-end">{{ row.grandTotal | appCurrency }}</td>
+                      <td class="text-end">{{ row.outstandingAmount | appCurrency }}</td>
                     </tr>
                   }
                 </tbody>
@@ -156,7 +156,7 @@
                       <td>{{ row.orderNumber }}</td>
                       <td>{{ row.paymentMethod }}</td>
                       <td>{{ row.referenceNo || '—' }}</td>
-                      <td class="text-end">{{ row.amount | currency }}</td>
+                      <td class="text-end">{{ row.amount | appCurrency }}</td>
                     </tr>
                   }
                 </tbody>
@@ -171,15 +171,15 @@
             <div class="summary-row">
               <div class="summary-card">
                 <span>Today</span>
-                <strong>{{ sales()?.todaySales | currency }}</strong>
+                <strong>{{ sales()?.todaySales | appCurrency }}</strong>
               </div>
               <div class="summary-card">
                 <span>This Week</span>
-                <strong>{{ sales()?.weeklySales | currency }}</strong>
+                <strong>{{ sales()?.weeklySales | appCurrency }}</strong>
               </div>
               <div class="summary-card">
                 <span>This Month</span>
-                <strong>{{ sales()?.monthlySales | currency }}</strong>
+                <strong>{{ sales()?.monthlySales | appCurrency }}</strong>
               </div>
             </div>
             <div class="bos-table-wrapper">
@@ -195,7 +195,7 @@
                   @for (row of revenueTrends(); track row.date) {
                     <tr>
                       <td>{{ row.date | date: 'mediumDate' }}</td>
-                      <td class="text-end">{{ row.revenue | currency }}</td>
+                      <td class="text-end">{{ row.revenue | appCurrency }}</td>
                       <td class="text-end">{{ row.orderCount | number }}</td>
                     </tr>
                   }
@@ -227,8 +227,8 @@
                       <td>{{ row.customerName }}</td>
                       <td>{{ row.dueDate | date: 'mediumDate' }}</td>
                       <td>{{ row.status }}</td>
-                      <td class="text-end">{{ row.grandTotal | currency }}</td>
-                      <td class="text-end">{{ row.outstandingAmount | currency }}</td>
+                      <td class="text-end">{{ row.grandTotal | appCurrency }}</td>
+                      <td class="text-end">{{ row.outstandingAmount | appCurrency }}</td>
                     </tr>
                   }
                 </tbody>
@@ -258,7 +258,7 @@
                       <td>{{ row.categoryName }}</td>
                       <td>{{ row.expenseDate | date: 'mediumDate' }}</td>
                       <td>{{ row.status }}</td>
-                      <td class="text-end">{{ row.amount | currency }}</td>
+                      <td class="text-end">{{ row.amount | appCurrency }}</td>
                     </tr>
                   }
                 </tbody>

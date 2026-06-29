@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
-import { CurrencyPipe, DecimalPipe } from '@angular/common';
+import { DecimalPipe } from '@angular/common';
+import { AppCurrencyPipe } from '../../../shared/pipes/app-currency.pipe';
 import { InventoryStateService } from '../../../state/inventory.state';
 import { ProductService } from '../../../core/services/product.service';
 import { ProductDto } from '../../../core/models/product.model';
@@ -30,7 +31,7 @@ interface ReportRow {
   selector: 'app-inventory-reports',
   standalone: true,
   imports: [
-    CurrencyPipe,
+    AppCurrencyPipe,
     DecimalPipe,
     AppBreadcrumbComponent,
     AppPageHeaderComponent,

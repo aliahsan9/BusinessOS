@@ -57,7 +57,7 @@
             <app-input label="Unit Price *" type="number" formControlName="unitPrice" [error]="lineFieldError(i, 'unitPrice') ?? undefined" />
             <div class="form-field">
               <label>Line Total</label>
-              <p class="computed-value">{{ lineTotal(i) | currency }}</p>
+              <p class="computed-value">{{ lineTotal(i) | appCurrency }}</p>
             </div>
             <div class="line-item__actions">
               @if (items.length > 1) {
@@ -71,7 +71,7 @@
         <app-button label="Add Line Item" [variant]="ButtonVariant.Outline" type="button" icon="➕" (clicked)="addLineItem()" />
         <div class="grand-total">
           <span>Grand Total</span>
-          <strong>{{ grandTotal() | currency }}</strong>
+          <strong>{{ grandTotal() | appCurrency }}</strong>
         </div>
       </div>
     </app-card>

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
-import { CurrencyPipe, DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
+import { AppCurrencyPipe } from '../../../shared/pipes/app-currency.pipe';
 import { FormsModule } from '@angular/forms';
 import { FinanceService } from '../../../core/services/finance.service';
 import {
@@ -27,7 +28,7 @@ type ProfitLossTab = 'summary' | 'monthly' | 'yearly' | 'revenue' | 'expenses';
   standalone: true,
   imports: [
     FormsModule,
-    CurrencyPipe,
+    AppCurrencyPipe,
     DatePipe,
     DecimalPipe,
     AppBreadcrumbComponent,

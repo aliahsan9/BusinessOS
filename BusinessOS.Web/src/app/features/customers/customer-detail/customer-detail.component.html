@@ -39,8 +39,8 @@
       } @else if (analytics()) {
         <dl class="detail-list">
           <div><dt>Total Orders</dt><dd>{{ analytics()!.totalOrders }}</dd></div>
-          <div><dt>Total Spending</dt><dd>{{ analytics()!.totalSpending | currency }}</dd></div>
-          <div><dt>Average Order Value</dt><dd>{{ analytics()!.averageOrderValue | currency }}</dd></div>
+          <div><dt>Total Spending</dt><dd>{{ analytics()!.totalSpending | appCurrency }}</dd></div>
+          <div><dt>Average Order Value</dt><dd>{{ analytics()!.averageOrderValue | appCurrency }}</dd></div>
           <div><dt>Last Order</dt><dd>{{ analytics()!.lastOrderDate ? (analytics()!.lastOrderDate | date: 'mediumDate') : '—' }}</dd></div>
         </dl>
       }
@@ -72,7 +72,7 @@
                 </td>
                 <td>{{ order.orderDate | date: 'mediumDate' }}</td>
                 <td><app-badge [label]="order.status" [variant]="orderStatusVariant(order.status)" /></td>
-                <td>{{ order.grandTotal | currency }}</td>
+                <td>{{ order.grandTotal | appCurrency }}</td>
                 <td><a [routerLink]="[routes.orders.base, order.id]">View</a></td>
               </tr>
             }

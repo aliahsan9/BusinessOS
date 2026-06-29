@@ -19,15 +19,15 @@
   <div class="card-grid stats-grid">
     <div class="stat-card">
       <span class="stat-label">Revenue Today</span>
-      <span class="stat-value">{{ sales()?.todaySales | currency }}</span>
+      <span class="stat-value">{{ sales()?.todaySales | appCurrency }}</span>
     </div>
     <div class="stat-card">
       <span class="stat-label">Revenue This Week</span>
-      <span class="stat-value">{{ sales()?.weeklySales | currency }}</span>
+      <span class="stat-value">{{ sales()?.weeklySales | appCurrency }}</span>
     </div>
     <div class="stat-card">
       <span class="stat-label">Revenue This Month</span>
-      <span class="stat-value">{{ sales()?.monthlySales | currency }}</span>
+      <span class="stat-value">{{ sales()?.monthlySales | appCurrency }}</span>
     </div>
     <div class="stat-card">
       <span class="stat-label">Pending Orders</span>
@@ -54,7 +54,7 @@
     </div>
     <div class="stat-card stat-card--compact">
       <span class="stat-label">Total Outstanding</span>
-      <span class="stat-value stat-value--sm">{{ invoiceStats()?.totalOutstandingAmount | currency }}</span>
+      <span class="stat-value stat-value--sm">{{ invoiceStats()?.totalOutstandingAmount | appCurrency }}</span>
     </div>
     <div class="stat-card stat-card--compact">
       <span class="stat-label">Completed Orders</span>

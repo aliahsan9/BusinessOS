@@ -53,7 +53,7 @@
         <div><dt>Purchase Date</dt><dd>{{ purchaseOrder()!.purchaseDate | date: 'mediumDate' }}</dd></div>
         <div><dt>Reference</dt><dd>{{ purchaseOrder()!.referenceNumber || '—' }}</dd></div>
         <div><dt>Notes</dt><dd>{{ purchaseOrder()!.notes || '—' }}</dd></div>
-        <div><dt>Total Amount</dt><dd>{{ purchaseOrder()!.totalAmount | currency }}</dd></div>
+        <div><dt>Total Amount</dt><dd>{{ purchaseOrder()!.totalAmount | appCurrency }}</dd></div>
       </dl>
     </app-card>
   </div>
@@ -80,15 +80,15 @@
               </td>
               <td>{{ item.productSku || '—' }}</td>
               <td>{{ item.quantity }}</td>
-              <td>{{ item.unitPrice | currency }}</td>
-              <td>{{ item.total | currency }}</td>
+              <td>{{ item.unitPrice | appCurrency }}</td>
+              <td>{{ item.total | appCurrency }}</td>
             </tr>
           }
         </tbody>
         <tfoot>
           <tr>
             <td colspan="4" class="text-end"><strong>Grand Total</strong></td>
-            <td><strong>{{ purchaseOrder()!.totalAmount | currency }}</strong></td>
+            <td><strong>{{ purchaseOrder()!.totalAmount | appCurrency }}</strong></td>
           </tr>
         </tfoot>
       </table>

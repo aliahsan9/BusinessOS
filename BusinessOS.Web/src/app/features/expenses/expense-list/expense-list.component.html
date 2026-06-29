@@ -48,7 +48,7 @@
         @for (expense of items(); track expense.id) {
           <tr>
             <td><a [routerLink]="[routes.expenses.base, expense.id]" class="link-primary">{{ expense.title }}</a></td>
-            <td>{{ expense.amount | currency }}</td>
+            <td>{{ expense.amount | appCurrency }}</td>
             <td>{{ expense.expenseDate | date: 'mediumDate' }}</td>
             <td>{{ expense.categoryName }}</td>
             <td>{{ expense.vendor || '—' }}</td>

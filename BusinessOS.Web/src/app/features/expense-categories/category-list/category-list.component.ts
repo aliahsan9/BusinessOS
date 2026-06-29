@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { CurrencyPipe } from '@angular/common';
+import { AppCurrencyPipe } from '../../../shared/pipes/app-currency.pipe';
 import { ExpenseCategoryService } from '../../../core/services/expense-category.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { TokenService } from '../../../core/services/token.service';
@@ -25,7 +25,7 @@ import { AppConfirmDialogComponent } from '../../../shared/components/app-confir
   imports: [
     RouterLink,
     FormsModule,
-    CurrencyPipe,
+    AppCurrencyPipe,
     AppBreadcrumbComponent,
     AppPageHeaderComponent,
     AppSearchBarComponent,
