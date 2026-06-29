@@ -123,12 +123,21 @@ public static class DependencyInjection
         services.Configure<BillingOptions>(configuration.GetSection(BillingOptions.SectionName));
         services.Configure<AiOptions>(configuration.GetSection(AiOptions.SectionName));
 
-        services.AddHttpClient<ILlmChatClient, CursorLlmChatClient>((sp, client) =>
+        services.AddHttpClient<OpenAiChatClient>((sp, client) =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AiOptions>>().Value;
+            client.BaseAddress = new Uri(options.OpenAiBaseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromMinutes(2);
+        });
+
+        services.AddHttpClient<CursorLlmChatClient>((sp, client) =>
         {
             var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AiOptions>>().Value;
             client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
             client.Timeout = TimeSpan.FromMinutes(3);
         });
+
+        services.AddScoped<ILlmChatClient, LlmChatClientRouter>();
 
         services.AddScoped<BillingService>();
         services.AddScoped<IBillingService>(sp => sp.GetRequiredService<BillingService>());

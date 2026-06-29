@@ -11,6 +11,13 @@ public sealed class AiOptions
 
     public string ModelId { get; set; } = "composer-2";
 
+    /// <summary>OpenAI API key (sk-...). Preferred for RAG when set.</summary>
+    public string OpenAiApiKey { get; set; } = string.Empty;
+
+    public string OpenAiModel { get; set; } = "gpt-4o-mini";
+
+    public string OpenAiBaseUrl { get; set; } = "https://api.openai.com/";
+
     /// <summary>Max seconds to wait for a Cursor agent run to finish.</summary>
     public int RunTimeoutSeconds { get; set; } = 120;
 

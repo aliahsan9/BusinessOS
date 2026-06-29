@@ -14,24 +14,25 @@ public sealed class AiRetrievalService : IAiRetrievalService
 
     public AiRetrievalScope DetermineScope(string message, AiPageContextDto page)
     {
+        var intent = AiMessageAnalyzer.Classify(message);
+        if (!AiMessageAnalyzer.RequiresRetrieval(intent))
+            return AiRetrievalScope.None;
+
         var text = message.ToLowerInvariant();
 
         if (ContainsAny(text, "overdue", "unpaid", "outstanding", "past due"))
             return AiRetrievalScope.OverdueInvoices;
 
-        if (ContainsAny(text, "highest revenue", "top customer", "most revenue", "best customer", "revenue ranking"))
+        if (ContainsAny(text, "highest revenue", "top customer", "most revenue", "best customer", "revenue ranking", "revenue this month"))
             return AiRetrievalScope.RevenueRanking;
 
-        if (ContainsAny(text, "project progress", "delayed task", "team workload", "delayed tasks", "behind schedule"))
+        if (ContainsAny(text, "project progress", "delayed task", "team workload", "delayed tasks", "behind schedule", "delayed"))
             return AiRetrievalScope.ProjectProgress;
 
-        if (ContainsAny(text, "this customer", "current customer", "summarize this customer", "customer revenue", "about this customer"))
+        if (ContainsAny(text, "this customer", "current customer", "summarize this customer", "customer revenue", "about this customer", "summarize", "who is this"))
             return page.CustomerId is not null
                 ? AiRetrievalScope.CustomerBundle
-                : AiRetrievalScope.PageDefaults;
-
-        if (ContainsAny(text, "customer") && page.CustomerId is not null)
-            return AiRetrievalScope.CustomerBundle;
+                : AiRetrievalScope.None;
 
         if (ContainsAny(text, "this invoice", "current invoice") && page.InvoiceId is not null)
             return AiRetrievalScope.CurrentInvoice;
@@ -39,25 +40,25 @@ public sealed class AiRetrievalService : IAiRetrievalService
         if (ContainsAny(text, "this order", "this project", "current project") && page.OrderId is not null)
             return AiRetrievalScope.CurrentOrder;
 
-        if (page.CustomerId is not null && ContainsAny(text, "customer", "invoice", "order", "payment", "revenue"))
+        if (page.CustomerId is not null && ContainsAny(text, "customer", "invoice", "order", "payment", "revenue", "spending"))
             return AiRetrievalScope.CustomerBundle;
 
-        if (page.Module is "invoices" && ContainsAny(text, "invoice", "payment", "revenue", "month"))
+        if (page.InvoiceId is not null && ContainsAny(text, "invoice", "payment", "balance", "outstanding"))
+            return AiRetrievalScope.CurrentInvoice;
+
+        if (page.OrderId is not null && ContainsAny(text, "order", "project", "task", "line item"))
+            return AiRetrievalScope.CurrentOrder;
+
+        if (ContainsAny(text, "customer") && !ContainsAny(text, "create", "add", "new"))
+            return page.CustomerId is not null ? AiRetrievalScope.CustomerBundle : AiRetrievalScope.None;
+
+        if (ContainsAny(text, "invoice"))
             return AiRetrievalScope.OverdueInvoices;
 
-        if (page.Module is "orders" && ContainsAny(text, "project", "task", "progress", "delay"))
-            return AiRetrievalScope.ProjectProgress;
+        if (ContainsAny(text, "order", "project"))
+            return page.OrderId is not null ? AiRetrievalScope.CurrentOrder : AiRetrievalScope.ProjectProgress;
 
-        if (page.Module is "customers")
-            return AiRetrievalScope.PageDefaults;
-
-        if (page.Module is "invoices")
-            return AiRetrievalScope.OverdueInvoices;
-
-        if (page.Module is "orders")
-            return AiRetrievalScope.ProjectProgress;
-
-        return AiRetrievalScope.PageDefaults;
+        return AiRetrievalScope.None;
     }
 
     public async Task<AiContextDto> RetrieveAsync(

@@ -1,4 +1,3 @@
-using System.Text.Json;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Services;
@@ -73,7 +72,16 @@ public sealed class AiChatService : IAiChatService
 
         if (actionResult is { Success: true })
         {
-            context = await _retrievalService.RetrieveAsync(request, cancellationToken);
+            context = new AiContextDto
+            {
+                User = new AiUserContextDto
+                {
+                    UserId = _currentUserService.UserId ?? "unknown",
+                    Email = _currentUserService.Email,
+                    Roles = _currentUserService.Roles
+                },
+                Page = page
+            };
             reply = actionResult.Message;
             if (actionResult.Route is not null)
             {
@@ -82,8 +90,26 @@ public sealed class AiChatService : IAiChatService
         }
         else if (!string.IsNullOrWhiteSpace(message))
         {
-            context = await _retrievalService.RetrieveAsync(request, cancellationToken);
-            reply = await ResolveReplyAsync(message, context, actionResult, cancellationToken);
+            var intent = AiMessageAnalyzer.Classify(message);
+            if (AiMessageAnalyzer.RequiresRetrieval(intent))
+            {
+                context = await _retrievalService.RetrieveAsync(request, cancellationToken);
+            }
+            else
+            {
+                context = new AiContextDto
+                {
+                    User = new AiUserContextDto
+                    {
+                        UserId = _currentUserService.UserId ?? "unknown",
+                        Email = _currentUserService.Email,
+                        Roles = _currentUserService.Roles
+                    },
+                    Page = page
+                };
+            }
+
+            reply = await ResolveReplyAsync(message, context, intent, actionResult, cancellationToken);
         }
         else
         {
@@ -119,12 +145,23 @@ public sealed class AiChatService : IAiChatService
     private async Task<string> ResolveReplyAsync(
         string message,
         AiContextDto context,
+        AiMessageIntent intent,
         AiActionResultDto? failedAction,
         CancellationToken cancellationToken)
     {
         if (failedAction is { Success: false })
         {
             return failedAction.Message;
+        }
+
+        if (intent is AiMessageIntent.Conversational)
+        {
+            return AiNaturalReplyBuilder.BuildConversationalReply(message, context.Page);
+        }
+
+        if (intent is AiMessageIntent.Help)
+        {
+            return AiNaturalReplyBuilder.BuildHelpReply(message);
         }
 
         if (_llmChat.IsConfigured
@@ -150,51 +187,11 @@ public sealed class AiChatService : IAiChatService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "LLM request failed; falling back to data-driven reply");
+                _logger.LogWarning(ex, "LLM request failed; falling back to natural language reply");
             }
         }
 
-        return BuildDataDrivenReply(message, context);
-    }
-
-    private static string BuildDataDrivenReply(string message, AiContextDto context)
-    {
-        var lower = message.ToLowerInvariant();
-
-        if (context.Customer is not null)
-        {
-            var customerJson = JsonSerializer.Serialize(context.Customer);
-            if (ContainsAny(lower, "summarize", "summary", "about", "this customer", "tell me"))
-            {
-                return $"Customer data: {customerJson}";
-            }
-        }
-
-        if (context.Invoices.Count > 0 && ContainsAny(lower, "overdue", "unpaid", "outstanding"))
-        {
-            return $"Found {context.Invoices.Count} overdue/unpaid invoice(s). " +
-                   $"Details: {JsonSerializer.Serialize(context.Invoices.Take(10))}";
-        }
-
-        if (context.Analytics is not null && ContainsAny(lower, "revenue", "highest", "top"))
-        {
-            return $"Revenue analytics: {JsonSerializer.Serialize(context.Analytics)}";
-        }
-
-        if (context.Orders.Count > 0 && ContainsAny(lower, "project", "progress", "task", "delay"))
-        {
-            return $"Project/order data: {JsonSerializer.Serialize(new { context.Orders, context.Projects, context.Analytics })}";
-        }
-
-        if (context.Customer is null && context.Invoices.Count == 0 && context.Orders.Count == 0)
-        {
-            return "I don't have enough business data for that question in the current context. " +
-                   "Try opening a customer, order, or invoice detail page, or ask about overdue invoices or revenue rankings.";
-        }
-
-        return $"Based on retrieved data — customers: {(context.Customer is not null ? 1 : 0)}, " +
-               $"orders: {context.Orders.Count}, invoices: {context.Invoices.Count}, projects: {context.Projects.Count}. " +
-               $"Analytics: {(context.Analytics is not null ? JsonSerializer.Serialize(context.Analytics) : "none")}.";
+        return AiNaturalReplyBuilder.BuildBusinessReply(message, context);
     }
 
     private async Task SaveConversationAsync(
@@ -336,7 +333,4 @@ public sealed class AiChatService : IAiChatService
         new() { Label = "Create Invoice", Route = "/invoices", Icon = "🧾" },
         new() { Label = "Open Analytics", Route = "/analytics", Icon = "📈" }
     ];
-
-    private static bool ContainsAny(string text, params string[] terms) =>
-        terms.Any(term => text.Contains(term, StringComparison.OrdinalIgnoreCase));
 }

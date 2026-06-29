@@ -144,7 +144,7 @@ export class AiChatWindowComponent {
   }
 
   sourcesSummary(msg: AiChatMessage): string | null {
-    if (!msg.sources) return null;
+    if (!msg.sources || !this.aiRetrievalService.hasRetrievedData(msg.sources)) return null;
     return this.aiRetrievalService.formatSourcesSummary(msg.sources);
   }
 
