@@ -1,6 +1,6 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
-using BusinessOS.Application.Features.Auth.DTOs;
+using BusinessOS.Application.Features.Activities.Services;
 using BusinessOS.Application.Features.Auth.Services;
 using BusinessOS.Application.Features.Categories.Commands.CreateCategory;
 using BusinessOS.Application.Features.Inventory.Services;
@@ -88,7 +88,8 @@ public class AuthServiceTests
             tenantProvider.Object,
             Mock.Of<IDbContextFactory<BusinessOS.Infrastructure.Data.BusinessOSDbContext>>(),
             roleRepository,
-            Mock.Of<IRbacAuditService>());
+            Mock.Of<IRbacAuditService>(),
+            Mock.Of<IActivityService>());
     }
 }
 

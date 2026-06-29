@@ -39,5 +39,6 @@ public interface INotificationService
         string title,
         string message,
         string type,
+        string? link = null,
         CancellationToken cancellationToken = default);
 }

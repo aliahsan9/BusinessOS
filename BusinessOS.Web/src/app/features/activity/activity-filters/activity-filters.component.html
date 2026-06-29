@@ -13,7 +13,21 @@
   </div>
 
   <div class="activity-filters__field">
-    <label for="activity-entity-type">Filter by</label>
+    <label for="activity-action">Action type</label>
+    <select
+      id="activity-action"
+      class="form-select form-select-sm"
+      [ngModel]="action()"
+      (ngModelChange)="onActionChange($event); apply.emit()"
+    >
+      @for (option of actions; track option.value) {
+        <option [value]="option.value">{{ option.label }}</option>
+      }
+    </select>
+  </div>
+
+  <div class="activity-filters__field">
+    <label for="activity-entity-type">Entity type</label>
     <select
       id="activity-entity-type"
       class="form-select form-select-sm"

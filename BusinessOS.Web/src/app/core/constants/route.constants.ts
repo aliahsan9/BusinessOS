@@ -127,8 +127,8 @@ export const ROUTES = {
     profitLoss: '/finance/profit-loss',
   },
   audit: {
-    base: '/audit',
-    list: '/audit',
+    base: '/audit-logs',
+    list: '/audit-logs',
   },
   notifications: {
     base: '/notifications',

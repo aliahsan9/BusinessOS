@@ -16,4 +16,10 @@ public interface IActivityService
     Task<ActivityResponse> LogAsync(
         LogActivityRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<ActivityResponse> LogForUserAsync(
+        string userId,
+        string userName,
+        LogActivityRequest request,
+        CancellationToken cancellationToken = default);
 }

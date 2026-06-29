@@ -145,6 +145,7 @@ public sealed class NotificationService : INotificationService
             Message = request.Message.Trim(),
             Type = string.IsNullOrWhiteSpace(request.Type) ? "Info" : request.Type.Trim(),
             IsRead = false,
+            Link = string.IsNullOrWhiteSpace(request.Link) ? null : request.Link.Trim(),
             CreatedBy = ResolveUserName()
         };
 
@@ -158,13 +159,14 @@ public sealed class NotificationService : INotificationService
         string title,
         string message,
         string type,
+        string? link = null,
         CancellationToken cancellationToken = default)
     {
         var userId = _currentUserService.UserId
             ?? throw new UnauthorizedException("User context is required.");
 
         return await CreateNotificationAsync(
-            new CreateNotificationRequest(userId, title, message, type),
+            new CreateNotificationRequest(userId, title, message, type, link),
             cancellationToken);
     }
 
@@ -209,6 +211,7 @@ public sealed class NotificationService : INotificationService
             Message = notification.Message,
             Type = notification.Type,
             IsRead = notification.IsRead,
+            Link = notification.Link,
             CreatedAt = notification.CreatedAt,
             CreatedBy = notification.CreatedBy
         };

@@ -27,6 +27,7 @@ public static class ActivityEndpoints
 
     private static async Task<IResult> GetActivities(
         string? search,
+        string? action,
         string? entityType,
         DateTime? dateFrom,
         DateTime? dateTo,
@@ -39,6 +40,7 @@ public static class ActivityEndpoints
             page <= 0 ? 1 : page,
             pageSize <= 0 ? 20 : pageSize,
             search,
+            action,
             entityType,
             dateFrom,
             dateTo);

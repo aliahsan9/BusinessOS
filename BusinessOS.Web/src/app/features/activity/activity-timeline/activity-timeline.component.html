@@ -4,11 +4,13 @@
 
   <app-activity-filters
     [search]="search()"
+    [action]="action()"
     [entityType]="entityType()"
     [datePreset]="datePreset()"
     [dateFrom]="dateFrom()"
     [dateTo]="dateTo()"
     (searchChange)="search.set($event)"
+    (actionChange)="action.set($event)"
     (entityTypeChange)="entityType.set($event)"
     (datePresetChange)="datePreset.set($event)"
     (dateFromChange)="dateFrom.set($event)"

@@ -64,6 +64,10 @@
     background: color-mix(in srgb, var(--color-primary, #0d6efd) 8%, transparent);
   }
 
+  &--clickable {
+    cursor: pointer;
+  }
+
   p {
     margin: 0.375rem 0;
     color: var(--color-text-muted, #6c757d);

@@ -1,5 +1,6 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Activities.Services;
 using BusinessOS.Application.Features.Auth.DTOs;
 using BusinessOS.Infrastructure.Services;
 using FluentAssertions;
@@ -25,7 +26,8 @@ public class AuthServiceRegistrationTests
             Mock.Of<ITenantProvider>(),
             Mock.Of<IDbContextFactory<BusinessOS.Infrastructure.Data.BusinessOSDbContext>>(),
             Mock.Of<IRoleRepository>(),
-            Mock.Of<IRbacAuditService>());
+            Mock.Of<IRbacAuditService>(),
+            Mock.Of<IActivityService>());
 
         var act = () => sut.RegisterAsync(
             "a@test.com",
@@ -57,7 +59,8 @@ public class AuthServiceRegistrationTests
             Mock.Of<ITenantProvider>(),
             Mock.Of<IDbContextFactory<BusinessOS.Infrastructure.Data.BusinessOSDbContext>>(),
             Mock.Of<IRoleRepository>(),
-            Mock.Of<IRbacAuditService>());
+            Mock.Of<IRbacAuditService>(),
+            Mock.Of<IActivityService>());
 
         var act = () => sut.LoginAsync("a@test.com", "WrongPass1!", CancellationToken.None);
 

@@ -17,12 +17,30 @@ export interface ActivityDto {
 
 export interface ActivityQueryParams extends PaginationParams {
   search?: string;
+  action?: string;
   entityType?: ActivityEntityType | '';
   dateFrom?: string;
   dateTo?: string;
 }
 
 export type ActivityDatePreset = 'today' | 'last7' | 'last30' | 'custom';
+
+export const ACTIVITY_ACTIONS: { value: string; label: string }[] = [
+  { value: '', label: 'All actions' },
+  { value: 'Create', label: 'Create' },
+  { value: 'Update', label: 'Update' },
+  { value: 'Delete', label: 'Delete' },
+  { value: 'Login', label: 'Login' },
+  { value: 'Logout', label: 'Logout' },
+  { value: 'ProfileUpdated', label: 'Profile Updated' },
+  { value: 'PasswordChanged', label: 'Password Changed' },
+  { value: 'InvoiceCreated', label: 'Invoice Created' },
+  { value: 'InvoicePaid', label: 'Invoice Paid' },
+  { value: 'ExpenseAdded', label: 'Expense Added' },
+  { value: 'TaskCompleted', label: 'Task Completed' },
+  { value: 'CustomerCreated', label: 'Customer Created' },
+  { value: 'ProjectCreated', label: 'Project Created' },
+];
 
 export const ACTIVITY_ENTITY_TYPES: { value: ActivityEntityType | ''; label: string }[] = [
   { value: '', label: 'All types' },

@@ -46,6 +46,7 @@ export class ActivityTimelineComponent implements OnInit {
   readonly loadingMore = signal(false);
   readonly error = signal<string | null>(null);
   readonly search = signal('');
+  readonly action = signal('');
   readonly entityType = signal<ActivityEntityType | ''>('');
   readonly datePreset = signal<ActivityDatePreset>('last7');
   readonly dateFrom = signal('');
@@ -68,6 +69,7 @@ export class ActivityTimelineComponent implements OnInit {
         page,
         pageSize: this.pageSize(),
         search: this.search().trim() || undefined,
+        action: this.action().trim() || undefined,
         entityType: this.entityType() || undefined,
         dateFrom: range.from,
         dateTo: range.to,
@@ -101,6 +103,7 @@ export class ActivityTimelineComponent implements OnInit {
         page: nextPage,
         pageSize: this.pageSize(),
         search: this.search().trim() || undefined,
+        action: this.action().trim() || undefined,
         entityType: this.entityType() || undefined,
         dateFrom: range.from,
         dateTo: range.to,

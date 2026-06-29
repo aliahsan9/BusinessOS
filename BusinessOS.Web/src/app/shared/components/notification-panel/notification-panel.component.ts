@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { NotificationStateService } from '../../../state/notification.state';
 import { NotificationService } from '../../../core/services/notification.service';
@@ -18,6 +18,7 @@ import { AppSkeletonComponent } from '../app-skeleton/app-skeleton.component';
 })
 export class NotificationPanelComponent {
   private readonly toast = inject(NotificationService);
+  private readonly router = inject(Router);
   readonly notificationState = inject(NotificationStateService);
   readonly routes = ROUTES;
   readonly typeVariants = NOTIFICATION_TYPE_VARIANTS;
@@ -38,5 +39,16 @@ export class NotificationPanelComponent {
 
   getTypeVariant(type: string): 'primary' | 'success' | 'danger' | 'warning' | 'info' | 'neutral' {
     return this.typeVariants[type] ?? 'neutral';
+  }
+
+  openNotification(link: string | null | undefined, isRead: boolean, id: string): void {
+    if (!isRead) {
+      void this.notificationState.markRead(id);
+    }
+
+    if (link) {
+      this.notificationState.closePanel();
+      void this.router.navigateByUrl(link);
+    }
   }
 }

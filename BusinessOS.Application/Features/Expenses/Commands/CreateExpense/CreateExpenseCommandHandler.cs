@@ -1,6 +1,8 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Activities.DTOs;
+using BusinessOS.Application.Features.Audit;
+using BusinessOS.Application.Features.Audit.Services;
 using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
@@ -14,15 +16,18 @@ public sealed class CreateExpenseCommandHandler : IRequestHandler<CreateExpenseC
 {
     private readonly IApplicationDbContext _context;
     private readonly IBusinessEventService _businessEvents;
+    private readonly IEntityAuditService _entityAudit;
     private readonly ILogger<CreateExpenseCommandHandler> _logger;
 
     public CreateExpenseCommandHandler(
         IApplicationDbContext context,
         IBusinessEventService businessEvents,
+        IEntityAuditService entityAudit,
         ILogger<CreateExpenseCommandHandler> logger)
     {
         _context = context;
         _businessEvents = businessEvents;
+        _entityAudit = entityAudit;
         _logger = logger;
     }
 
@@ -57,15 +62,31 @@ public sealed class CreateExpenseCommandHandler : IRequestHandler<CreateExpenseC
 
         _logger.LogInformation("Created expense {ExpenseId}", expense.Id);
 
+        try
+        {
+            await _entityAudit.LogChangeAsync(
+                ActivityEntityTypes.Expense,
+                expense.Id,
+                ActivityActions.ExpenseAdded,
+                null,
+                EntityAuditSnapshots.ExpenseSnapshot(expense),
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to write entity audit for expense {ExpenseId}", expense.Id);
+        }
+
         await PublishEventSafeAsync(
             new BusinessEventRequest(
-                ActivityActions.Created,
+                ActivityActions.ExpenseAdded,
                 ActivityEntityTypes.Expense,
                 expense.Id,
                 expense.Title,
                 "Expense Added",
                 $"Expense \"{expense.Title}\" was added.",
-                NotificationTypes.Business),
+                NotificationTypes.Info,
+                Link: $"/expenses/{expense.Id}"),
             cancellationToken);
 
         return expense.Id;

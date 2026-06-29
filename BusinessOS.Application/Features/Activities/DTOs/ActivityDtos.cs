@@ -20,6 +20,7 @@ public record ActivityQueryParams(
     int Page = 1,
     int PageSize = 20,
     string? Search = null,
+    string? Action = null,
     string? EntityType = null,
     DateTime? DateFrom = null,
     DateTime? DateTo = null);
@@ -39,4 +40,5 @@ public record BusinessEventRequest(
     string NotificationTitle,
     string NotificationMessage,
     string NotificationType,
-    string? Metadata = null);
+    string? Metadata = null,
+    string? Link = null);

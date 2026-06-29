@@ -1,6 +1,8 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Activities.DTOs;
+using BusinessOS.Application.Features.Audit;
+using BusinessOS.Application.Features.Audit.Services;
 using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Domain.Enums;
 using MediatR;
@@ -13,15 +15,18 @@ public sealed class UpdateExpenseCommandHandler : IRequestHandler<UpdateExpenseC
 {
     private readonly IApplicationDbContext _context;
     private readonly IBusinessEventService _businessEvents;
+    private readonly IEntityAuditService _entityAudit;
     private readonly ILogger<UpdateExpenseCommandHandler> _logger;
 
     public UpdateExpenseCommandHandler(
         IApplicationDbContext context,
         IBusinessEventService businessEvents,
+        IEntityAuditService entityAudit,
         ILogger<UpdateExpenseCommandHandler> logger)
     {
         _context = context;
         _businessEvents = businessEvents;
+        _entityAudit = entityAudit;
         _logger = logger;
     }
 
@@ -30,6 +35,8 @@ public sealed class UpdateExpenseCommandHandler : IRequestHandler<UpdateExpenseC
         var expense = await _context.Expenses
             .FirstOrDefaultAsync(x => x.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException("Expense not found.");
+
+        var oldSnapshot = EntityAuditSnapshots.ExpenseSnapshot(expense);
 
         var categoryExists = await _context.ExpenseCategories
             .AsNoTracking()
@@ -56,15 +63,31 @@ public sealed class UpdateExpenseCommandHandler : IRequestHandler<UpdateExpenseC
 
         _logger.LogInformation("Updated expense {ExpenseId}", expense.Id);
 
+        try
+        {
+            await _entityAudit.LogChangeAsync(
+                ActivityEntityTypes.Expense,
+                expense.Id,
+                ActivityActions.Update,
+                oldSnapshot,
+                EntityAuditSnapshots.ExpenseSnapshot(expense),
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to write entity audit for expense {ExpenseId}", expense.Id);
+        }
+
         await PublishEventSafeAsync(
             new BusinessEventRequest(
-                ActivityActions.Updated,
+                ActivityActions.Update,
                 ActivityEntityTypes.Expense,
                 expense.Id,
                 expense.Title,
                 "Expense Updated",
-                $"Expense \"{expense.Title}\" was updated.",
-                NotificationTypes.Business),
+                $"Updated expense \"{expense.Title}\"",
+                NotificationTypes.Info,
+                Link: $"/expenses/{expense.Id}"),
             cancellationToken);
 
         return Unit.Value;

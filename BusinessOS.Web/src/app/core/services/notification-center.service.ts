@@ -18,12 +18,16 @@ export class NotificationCenterService extends BaseApiService {
     return this.get<PagedResult<NotificationDto>>(API_ENDPOINTS.notifications.base, params);
   }
 
+  getUnread(params?: NotificationQueryParams): Observable<PagedResult<NotificationDto>> {
+    return this.get<PagedResult<NotificationDto>>(`${API_ENDPOINTS.notifications.base}/unread`, params);
+  }
+
   getUnreadCount(): Observable<UnreadCountResponse> {
     return this.get<UnreadCountResponse>(API_ENDPOINTS.notifications.unreadCount);
   }
 
   markRead(id: string): Observable<void> {
-    return this.put<void>(`${API_ENDPOINTS.notifications.base}/read/${id}`, {});
+    return this.put<void>(`${API_ENDPOINTS.notifications.base}/${id}/read`, {});
   }
 
   markAllRead(): Observable<void> {

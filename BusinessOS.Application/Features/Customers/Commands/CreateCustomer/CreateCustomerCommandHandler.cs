@@ -1,6 +1,8 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Activities.DTOs;
+using BusinessOS.Application.Features.Audit;
+using BusinessOS.Application.Features.Audit.Services;
 using BusinessOS.Application.Features.Tenant.Services;
 using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Domain.Entities;
@@ -15,17 +17,20 @@ public sealed class CreateCustomerCommandHandler : IRequestHandler<CreateCustome
 {
     private readonly IApplicationDbContext _context;
     private readonly IBusinessEventService _businessEvents;
+    private readonly IEntityAuditService _entityAudit;
     private readonly ITenantLimitService _limitService;
     private readonly ILogger<CreateCustomerCommandHandler> _logger;
 
     public CreateCustomerCommandHandler(
         IApplicationDbContext context,
         IBusinessEventService businessEvents,
+        IEntityAuditService entityAudit,
         ITenantLimitService limitService,
         ILogger<CreateCustomerCommandHandler> logger)
     {
         _context = context;
         _businessEvents = businessEvents;
+        _entityAudit = entityAudit;
         _limitService = limitService;
         _logger = logger;
     }
@@ -60,15 +65,25 @@ public sealed class CreateCustomerCommandHandler : IRequestHandler<CreateCustome
         await _context.SaveChangesAsync(cancellationToken);
 
         var customerName = $"{customer.FirstName} {customer.LastName}".Trim();
+
+        await AuditSafeAsync(
+            ActivityEntityTypes.Customer,
+            customer.Id,
+            ActivityActions.CustomerCreated,
+            null,
+            EntityAuditSnapshots.CustomerSnapshot(customer),
+            cancellationToken);
+
         await PublishEventSafeAsync(
             new BusinessEventRequest(
-                ActivityActions.Created,
+                ActivityActions.CustomerCreated,
                 ActivityEntityTypes.Customer,
                 customer.Id,
                 customerName,
                 "Customer Created",
-                $"Customer {customerName} was created.",
-                NotificationTypes.Customer),
+                $"Created customer {customerName}",
+                NotificationTypes.Success,
+                Link: $"/customers/{customer.Id}"),
             cancellationToken);
 
         return customer.Id;
@@ -85,6 +100,24 @@ public sealed class CreateCustomerCommandHandler : IRequestHandler<CreateCustome
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to publish business event for customer {CustomerId}", request.EntityId);
+        }
+    }
+
+    private async Task AuditSafeAsync(
+        string entityType,
+        Guid entityId,
+        string action,
+        object? oldValues,
+        object? newValues,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _entityAudit.LogChangeAsync(entityType, entityId, action, oldValues, newValues, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to write entity audit for customer {CustomerId}", entityId);
         }
     }
 }

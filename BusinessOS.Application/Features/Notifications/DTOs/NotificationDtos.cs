@@ -8,6 +8,7 @@ public class NotificationResponse
     public string Message { get; set; } = default!;
     public string Type { get; set; } = default!;
     public bool IsRead { get; set; }
+    public string? Link { get; set; }
     public DateTime CreatedAt { get; set; }
     public string? CreatedBy { get; set; }
 }
@@ -40,4 +41,5 @@ public record CreateNotificationRequest(
     string UserId,
     string Title,
     string Message,
-    string Type);
+    string Type,
+    string? Link = null);

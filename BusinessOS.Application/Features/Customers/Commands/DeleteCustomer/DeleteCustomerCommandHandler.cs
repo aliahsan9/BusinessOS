@@ -1,6 +1,8 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Activities.DTOs;
+using BusinessOS.Application.Features.Audit;
+using BusinessOS.Application.Features.Audit.Services;
 using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Domain.Enums;
 using MediatR;
@@ -13,15 +15,18 @@ public sealed class DeleteCustomerCommandHandler : IRequestHandler<DeleteCustome
 {
     private readonly IApplicationDbContext _context;
     private readonly IBusinessEventService _businessEvents;
+    private readonly IEntityAuditService _entityAudit;
     private readonly ILogger<DeleteCustomerCommandHandler> _logger;
 
     public DeleteCustomerCommandHandler(
         IApplicationDbContext context,
         IBusinessEventService businessEvents,
+        IEntityAuditService entityAudit,
         ILogger<DeleteCustomerCommandHandler> logger)
     {
         _context = context;
         _businessEvents = businessEvents;
+        _entityAudit = entityAudit;
         _logger = logger;
     }
 
@@ -34,21 +39,37 @@ public sealed class DeleteCustomerCommandHandler : IRequestHandler<DeleteCustome
             throw new NotFoundException("Customer not found");
 
         var customerName = $"{customer.FirstName} {customer.LastName}".Trim();
+        var oldSnapshot = EntityAuditSnapshots.CustomerSnapshot(customer);
 
         customer.IsActive = false;
         _context.Customers.Remove(customer);
 
         await _context.SaveChangesAsync(cancellationToken);
 
+        try
+        {
+            await _entityAudit.LogChangeAsync(
+                ActivityEntityTypes.Customer,
+                customer.Id,
+                ActivityActions.Delete,
+                oldSnapshot,
+                null,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to write entity audit for customer {CustomerId}", customer.Id);
+        }
+
         await PublishEventSafeAsync(
             new BusinessEventRequest(
-                ActivityActions.Deleted,
+                ActivityActions.Delete,
                 ActivityEntityTypes.Customer,
                 customer.Id,
                 customerName,
                 "Customer Deleted",
-                $"Customer {customerName} was deleted.",
-                NotificationTypes.Customer),
+                $"Deleted customer {customerName}",
+                NotificationTypes.Warning),
             cancellationToken);
 
         return Unit.Value;

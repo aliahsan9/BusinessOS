@@ -1,6 +1,8 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Activities.DTOs;
+using BusinessOS.Application.Features.Audit;
+using BusinessOS.Application.Features.Audit.Services;
 using BusinessOS.Application.Features.Invoices.Services;
 using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Domain.Enums;
@@ -15,15 +17,18 @@ public sealed class UpdateInvoiceStatusCommandHandler
 {
     private readonly IApplicationDbContext _context;
     private readonly IBusinessEventService _businessEvents;
+    private readonly IEntityAuditService _entityAudit;
     private readonly ILogger<UpdateInvoiceStatusCommandHandler> _logger;
 
     public UpdateInvoiceStatusCommandHandler(
         IApplicationDbContext context,
         IBusinessEventService businessEvents,
+        IEntityAuditService entityAudit,
         ILogger<UpdateInvoiceStatusCommandHandler> logger)
     {
         _context = context;
         _businessEvents = businessEvents;
+        _entityAudit = entityAudit;
         _logger = logger;
     }
 
@@ -37,6 +42,7 @@ public sealed class UpdateInvoiceStatusCommandHandler
         if (invoice is null)
             throw new NotFoundException("Invoice not found.");
 
+        var oldSnapshot = EntityAuditSnapshots.InvoiceSnapshot(invoice);
         var newStatus = request.Status.Trim();
 
         InvoiceStatusRules.ValidateTransition(invoice.Status, newStatus);
@@ -49,17 +55,33 @@ public sealed class UpdateInvoiceStatusCommandHandler
             invoice.Id,
             newStatus);
 
+        try
+        {
+            await _entityAudit.LogChangeAsync(
+                ActivityEntityTypes.Invoice,
+                invoice.Id,
+                ActivityActions.Update,
+                oldSnapshot,
+                EntityAuditSnapshots.InvoiceSnapshot(invoice),
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to write entity audit for invoice {InvoiceId}", invoice.Id);
+        }
+
         if (string.Equals(newStatus, InvoiceStatusNames.Paid, StringComparison.OrdinalIgnoreCase))
         {
             await PublishEventSafeAsync(
                 new BusinessEventRequest(
-                    ActivityActions.Paid,
+                    ActivityActions.InvoicePaid,
                     ActivityEntityTypes.Invoice,
                     invoice.Id,
                     $"#{invoice.InvoiceNumber}",
                     "Invoice Paid",
                     $"Invoice #{invoice.InvoiceNumber} was marked as paid.",
-                    NotificationTypes.Success),
+                    NotificationTypes.Success,
+                    Link: $"/invoices/{invoice.Id}"),
                 cancellationToken);
         }
 

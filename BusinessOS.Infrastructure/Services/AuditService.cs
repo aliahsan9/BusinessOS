@@ -28,7 +28,7 @@ public sealed class AuditService : IAuditService
     {
         var (normalizedPage, normalizedPageSize) = PaginationParams.Normalize(page, pageSize);
 
-        var query = _context.RbacAuditLogs.AsNoTracking();
+        var query = _context.EntityAuditLogs.AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(action))
         {
@@ -45,37 +45,37 @@ public sealed class AuditService : IAuditService
         if (!string.IsNullOrWhiteSpace(userId))
         {
             var normalizedUserId = userId.Trim();
-            query = query.Where(x => x.ActorUserId == normalizedUserId);
+            query = query.Where(x => x.ChangedBy == normalizedUserId);
         }
 
         if (dateFrom.HasValue)
         {
             var from = dateFrom.Value.ToUniversalTime();
-            query = query.Where(x => x.CreatedAt >= from);
+            query = query.Where(x => x.ChangedAt >= from);
         }
 
         if (dateTo.HasValue)
         {
             var to = dateTo.Value.ToUniversalTime();
-            query = query.Where(x => x.CreatedAt <= to);
+            query = query.Where(x => x.ChangedAt <= to);
         }
 
         var totalCount = await query.CountAsync(cancellationToken);
 
         var items = await query
-            .OrderByDescending(x => x.CreatedAt)
+            .OrderByDescending(x => x.ChangedAt)
             .Skip((normalizedPage - 1) * normalizedPageSize)
             .Take(normalizedPageSize)
             .Select(x => new AuditLogResponse
             {
                 Id = x.Id,
-                ActorUserId = x.ActorUserId,
+                ActorUserId = x.ChangedBy,
                 Action = x.Action,
                 EntityType = x.EntityType,
                 EntityId = x.EntityId,
-                OldValue = x.OldValue,
-                NewValue = x.NewValue,
-                CreatedAt = x.CreatedAt
+                OldValue = x.OldValues,
+                NewValue = x.NewValues,
+                CreatedAt = x.ChangedAt
             })
             .ToListAsync(cancellationToken);
 

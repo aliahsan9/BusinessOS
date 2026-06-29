@@ -25,6 +25,17 @@ public static class NotificationEndpoints
             .WithName("GetUnreadNotificationCount")
             .Produces<UnreadCountResponse>(StatusCodes.Status200OK);
 
+        group.MapGet("/unread", GetUnreadNotifications)
+            .RequirePermission(PermissionCodes.NotificationView)
+            .WithName("GetUnreadNotifications")
+            .Produces<PagedResult<NotificationResponse>>(StatusCodes.Status200OK);
+
+        group.MapPut("/{id:guid}/read", MarkReadPutById)
+            .RequirePermission(PermissionCodes.NotificationUpdate)
+            .WithName("MarkNotificationReadById")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
         group.MapPost("/{id:guid}/read", MarkRead)
             .RequirePermission(PermissionCodes.NotificationUpdate)
             .WithName("MarkNotificationRead")
@@ -97,6 +108,28 @@ public static class NotificationEndpoints
         var count = await notificationService.GetUnreadCountAsync(userId, cancellationToken);
         return Results.Ok(new UnreadCountResponse(count));
     }
+
+    private static async Task<IResult> GetUnreadNotifications(
+        int page,
+        int pageSize,
+        INotificationService notificationService,
+        ICurrentUserService currentUserService,
+        CancellationToken cancellationToken)
+    {
+        var userId = currentUserService.UserId
+            ?? throw new Application.Common.Exceptions.UnauthorizedException("User context is required.");
+
+        var result = await notificationService.GetForUserAsync(
+            userId, unreadOnly: true, page, pageSize, cancellationToken);
+
+        return Results.Ok(result);
+    }
+
+    private static Task<IResult> MarkReadPutById(
+        Guid id,
+        INotificationService notificationService,
+        CancellationToken cancellationToken) =>
+        MarkRead(id, notificationService, cancellationToken);
 
     private static async Task<IResult> MarkRead(
         Guid id,

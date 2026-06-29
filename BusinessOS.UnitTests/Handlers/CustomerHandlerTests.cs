@@ -49,6 +49,7 @@ public class CreateCustomerHandlerTests
         var handler = new CreateCustomerCommandHandler(
             context.Object,
             TestHandlerDependencies.CreateBusinessEvents(),
+            TestHandlerDependencies.CreateEntityAudit(),
             limitService.Object,
             TestHandlerDependencies.CreateLogger<CreateCustomerCommandHandler>());
 
@@ -82,6 +83,7 @@ public class CreateCustomerHandlerTests
         var handler = new CreateCustomerCommandHandler(
             context.Object,
             TestHandlerDependencies.CreateBusinessEvents(),
+            TestHandlerDependencies.CreateEntityAudit(),
             limitService.Object,
             TestHandlerDependencies.CreateLogger<CreateCustomerCommandHandler>());
 
@@ -113,6 +115,7 @@ public class UpdateCustomerHandlerTests
         var handler = new UpdateCustomerCommandHandler(
             context.Object,
             TestHandlerDependencies.CreateBusinessEvents(),
+            TestHandlerDependencies.CreateEntityAudit(),
             TestHandlerDependencies.CreateLogger<UpdateCustomerCommandHandler>());
 
         var act = () => handler.Handle(
@@ -157,6 +160,7 @@ public class UpdateCustomerHandlerTests
         var handler = new UpdateCustomerCommandHandler(
             context.Object,
             TestHandlerDependencies.CreateBusinessEvents(),
+            TestHandlerDependencies.CreateEntityAudit(),
             TestHandlerDependencies.CreateLogger<UpdateCustomerCommandHandler>());
 
         await handler.Handle(
@@ -189,6 +193,7 @@ public class DeleteCustomerHandlerTests
         var handler = new DeleteCustomerCommandHandler(
             context.Object,
             TestHandlerDependencies.CreateBusinessEvents(),
+            TestHandlerDependencies.CreateEntityAudit(),
             TestHandlerDependencies.CreateLogger<DeleteCustomerCommandHandler>());
 
         var act = () => handler.Handle(new DeleteCustomerCommand(Guid.NewGuid()), CancellationToken.None);
@@ -222,6 +227,7 @@ public class DeleteCustomerHandlerTests
         var handler = new DeleteCustomerCommandHandler(
             context.Object,
             TestHandlerDependencies.CreateBusinessEvents(),
+            TestHandlerDependencies.CreateEntityAudit(),
             TestHandlerDependencies.CreateLogger<DeleteCustomerCommandHandler>());
 
         await handler.Handle(new DeleteCustomerCommand(customerId), CancellationToken.None);

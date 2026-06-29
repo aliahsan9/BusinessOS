@@ -120,8 +120,13 @@ export const routes: Routes = [
         loadChildren: () => import('./features/permissions/permissions.routes').then((m) => m.PERMISSION_ROUTES),
       },
       {
-        path: 'audit',
+        path: 'audit-logs',
         loadChildren: () => import('./features/audit/audit.routes').then((m) => m.AUDIT_ROUTES),
+      },
+      {
+        path: 'audit',
+        redirectTo: 'audit-logs',
+        pathMatch: 'full',
       },
       {
         path: 'notifications',

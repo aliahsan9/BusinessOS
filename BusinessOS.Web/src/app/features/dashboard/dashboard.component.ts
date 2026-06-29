@@ -4,7 +4,10 @@ import { RouterLink } from '@angular/router';
 import { AppCurrencyPipe } from '../../shared/pipes/app-currency.pipe';
 import { DashboardStateService } from '../../state/dashboard.state';
 import { ActivityService } from '../../core/services/activity.service';
+import { InvoiceService } from '../../core/services/invoice.service';
+import { NotificationStateService } from '../../state/notification.state';
 import { ActivityDto } from '../../core/models/activity.model';
+import { InvoiceSummaryDto } from '../../core/models/invoice.model';
 import { ROUTES } from '../../core/constants/route.constants';
 import { DashboardPeriod } from '../../core/enums';
 import { AppBreadcrumbComponent } from '../../shared/components/app-breadcrumb/app-breadcrumb.component';
@@ -38,10 +41,16 @@ import { AppEmptyStateComponent } from '../../shared/components/app-empty-state/
 export class DashboardComponent implements OnInit {
   private readonly dashboardState = inject(DashboardStateService);
   private readonly activityService = inject(ActivityService);
+  private readonly invoiceService = inject(InvoiceService);
+  private readonly notificationState = inject(NotificationStateService);
 
   readonly recentActivities = signal<ActivityDto[]>([]);
+  readonly recentLogins = signal<ActivityDto[]>([]);
+  readonly latestInvoices = signal<InvoiceSummaryDto[]>([]);
   readonly activityLoading = signal(false);
+  readonly widgetsLoading = signal(false);
   readonly routes = ROUTES;
+  readonly unreadCount = this.notificationState.unreadCount;
 
   readonly overview = this.dashboardState.overview;
   readonly sales = this.dashboardState.sales;
@@ -68,6 +77,30 @@ export class DashboardComponent implements OnInit {
   ngOnInit(): void {
     this.dashboardState.loadDashboard();
     this.loadRecentActivity();
+    this.loadWidgets();
+  }
+
+  loadWidgets(): void {
+    this.widgetsLoading.set(true);
+    void this.notificationState.refresh(5);
+
+    this.activityService.getAll({ page: 1, pageSize: 5, action: 'Login' }).subscribe({
+      next: (result) => {
+        this.recentLogins.set(result.items);
+      },
+      error: () => this.recentLogins.set([]),
+    });
+
+    this.invoiceService.getAll({ page: 1, pageSize: 5 }).subscribe({
+      next: (result) => {
+        this.latestInvoices.set(result.items);
+        this.widgetsLoading.set(false);
+      },
+      error: () => {
+        this.latestInvoices.set([]);
+        this.widgetsLoading.set(false);
+      },
+    });
   }
 
   loadRecentActivity(): void {

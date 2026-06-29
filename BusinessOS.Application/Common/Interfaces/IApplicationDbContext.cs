@@ -24,6 +24,7 @@ public interface IApplicationDbContext
     DbSet<UserRole> RbacUserRoles { get; }
     DbSet<RolePermission> RolePermissions { get; }
     DbSet<RbacAuditLog> RbacAuditLogs { get; }
+    DbSet<EntityAuditLog> EntityAuditLogs { get; }
     DbSet<Expense> Expenses { get; }
     DbSet<ExpenseCategory> ExpenseCategories { get; }
     DbSet<Notification> Notifications { get; }

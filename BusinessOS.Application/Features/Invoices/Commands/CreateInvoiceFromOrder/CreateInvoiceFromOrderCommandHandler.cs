@@ -1,6 +1,8 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Activities.DTOs;
+using BusinessOS.Application.Features.Audit;
+using BusinessOS.Application.Features.Audit.Services;
 using BusinessOS.Application.Features.Invoices.Services;
 using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Domain.Entities;
@@ -17,17 +19,20 @@ public sealed class CreateInvoiceFromOrderCommandHandler
     private readonly IApplicationDbContext _context;
     private readonly IInvoiceNumberGenerator _invoiceNumberGenerator;
     private readonly IBusinessEventService _businessEvents;
+    private readonly IEntityAuditService _entityAudit;
     private readonly ILogger<CreateInvoiceFromOrderCommandHandler> _logger;
 
     public CreateInvoiceFromOrderCommandHandler(
         IApplicationDbContext context,
         IInvoiceNumberGenerator invoiceNumberGenerator,
         IBusinessEventService businessEvents,
+        IEntityAuditService entityAudit,
         ILogger<CreateInvoiceFromOrderCommandHandler> logger)
     {
         _context = context;
         _invoiceNumberGenerator = invoiceNumberGenerator;
         _businessEvents = businessEvents;
+        _entityAudit = entityAudit;
         _logger = logger;
     }
 
@@ -84,15 +89,31 @@ public sealed class CreateInvoiceFromOrderCommandHandler
             invoice.Id,
             order.Id);
 
+        try
+        {
+            await _entityAudit.LogChangeAsync(
+                ActivityEntityTypes.Invoice,
+                invoice.Id,
+                ActivityActions.InvoiceCreated,
+                null,
+                EntityAuditSnapshots.InvoiceSnapshot(invoice),
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to write entity audit for invoice {InvoiceId}", invoice.Id);
+        }
+
         await PublishEventSafeAsync(
             new BusinessEventRequest(
-                ActivityActions.Generated,
+                ActivityActions.InvoiceCreated,
                 ActivityEntityTypes.Invoice,
                 invoice.Id,
                 $"#{invoice.InvoiceNumber}",
-                "Invoice Generated",
-                $"Invoice #{invoice.InvoiceNumber} was generated.",
-                NotificationTypes.Billing),
+                "Invoice Created",
+                $"Created invoice #{invoice.InvoiceNumber}",
+                NotificationTypes.Info,
+                Link: $"/invoices/{invoice.Id}"),
             cancellationToken);
 
         return invoice.Id;

@@ -35,6 +35,12 @@ public sealed class ActivityService : IActivityService
             activitiesQuery = activitiesQuery.Where(x => x.EntityType == entityType);
         }
 
+        if (!string.IsNullOrWhiteSpace(query.Action))
+        {
+            var action = query.Action.Trim();
+            activitiesQuery = activitiesQuery.Where(x => x.Action == action);
+        }
+
         if (query.DateFrom.HasValue)
         {
             var from = query.DateFrom.Value.ToUniversalTime();
@@ -121,6 +127,30 @@ public sealed class ActivityService : IActivityService
             return MapActivity(existing);
         }
 
+        var activity = new Activity
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            UserName = userName,
+            Action = request.Action.Trim(),
+            EntityType = request.EntityType.Trim(),
+            EntityId = request.EntityId,
+            EntityName = request.EntityName.Trim(),
+            Metadata = request.Metadata
+        };
+
+        _context.Activities.Add(activity);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return MapActivity(activity);
+    }
+
+    public async Task<ActivityResponse> LogForUserAsync(
+        string userId,
+        string userName,
+        LogActivityRequest request,
+        CancellationToken cancellationToken = default)
+    {
         var activity = new Activity
         {
             Id = Guid.NewGuid(),

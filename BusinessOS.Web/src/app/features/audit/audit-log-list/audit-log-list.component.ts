@@ -13,6 +13,13 @@ import { AppSkeletonComponent } from '../../../shared/components/app-skeleton/ap
 import { AppEmptyStateComponent } from '../../../shared/components/app-empty-state/app-empty-state.component';
 import { AppAlertComponent } from '../../../shared/components/app-alert/app-alert.component';
 
+interface AuditDiffField {
+  key: string;
+  oldValue: string;
+  newValue: string;
+  changed: boolean;
+}
+
 @Component({
   selector: 'app-audit-log-list',
   standalone: true,
@@ -44,10 +51,14 @@ export class AuditLogListComponent implements OnInit {
   readonly error = signal<string | null>(null);
   readonly actionFilter = signal('');
   readonly entityTypeFilter = signal('');
+  readonly userFilter = signal('');
   readonly dateFrom = signal('');
   readonly dateTo = signal('');
+  readonly expandedId = signal<string | null>(null);
   readonly routes = ROUTES;
   readonly breadcrumbs = [{ label: 'Audit Logs', route: ROUTES.audit.list }];
+
+  readonly entityTypeOptions = ['', 'Customer', 'Project', 'Invoice', 'Expense'];
 
   ngOnInit(): void {
     this.load();
@@ -62,6 +73,7 @@ export class AuditLogListComponent implements OnInit {
         pageSize: this.pageSize(),
         action: this.actionFilter() || undefined,
         entityType: this.entityTypeFilter() || undefined,
+        userId: this.userFilter() || undefined,
         dateFrom: this.dateFrom() || undefined,
         dateTo: this.dateTo() || undefined,
       })
@@ -90,5 +102,50 @@ export class AuditLogListComponent implements OnInit {
 
   retry(): void {
     this.load();
+  }
+
+  toggleExpanded(id: string): void {
+    this.expandedId.update((current) => (current === id ? null : id));
+  }
+
+  getDiffFields(log: AuditLogDto): AuditDiffField[] {
+    const oldObj = this.parseJson(log.oldValue);
+    const newObj = this.parseJson(log.newValue);
+    const keys = new Set([...Object.keys(oldObj), ...Object.keys(newObj)]);
+
+    return [...keys].sort().map((key) => {
+      const oldValue = this.formatValue(oldObj[key]);
+      const newValue = this.formatValue(newObj[key]);
+      return {
+        key,
+        oldValue,
+        newValue,
+        changed: oldValue !== newValue,
+      };
+    });
+  }
+
+  private parseJson(value?: string | null): Record<string, unknown> {
+    if (!value) {
+      return {};
+    }
+
+    try {
+      return JSON.parse(value) as Record<string, unknown>;
+    } catch {
+      return { value };
+    }
+  }
+
+  private formatValue(value: unknown): string {
+    if (value === null || value === undefined) {
+      return '—';
+    }
+
+    if (typeof value === 'object') {
+      return JSON.stringify(value);
+    }
+
+    return String(value);
   }
 }

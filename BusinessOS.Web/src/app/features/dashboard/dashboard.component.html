@@ -216,6 +216,52 @@
       </app-card>
     </div>
 
+    <div class="dashboard__widgets card-grid">
+      <app-card title="Unread Notifications" subtitle="Requires your attention">
+        <div class="dashboard__widget-stat">{{ unreadCount() }}</div>
+        <a class="btn btn-sm btn-outline-primary" [routerLink]="routes.notifications.list">Open inbox</a>
+      </app-card>
+
+      <app-card title="Recent Logins" subtitle="Latest sign-ins">
+        @if (widgetsLoading()) {
+          <app-skeleton height="4rem" />
+        } @else if (recentLogins().length === 0) {
+          <app-empty-state title="No login activity" />
+        } @else {
+          <ul class="dashboard__activity-list">
+            @for (login of recentLogins(); track login.id) {
+              <li class="dashboard__activity-item">
+                <div>
+                  <strong>{{ login.userName }}</strong>
+                  <div class="dashboard__activity-meta">{{ login.createdAt | date: 'medium' }}</div>
+                </div>
+              </li>
+            }
+          </ul>
+        }
+      </app-card>
+
+      <app-card title="Latest Invoices" subtitle="Recently created invoices">
+        @if (widgetsLoading()) {
+          <app-skeleton height="4rem" />
+        } @else if (latestInvoices().length === 0) {
+          <app-empty-state title="No invoices yet" />
+        } @else {
+          <ul class="dashboard__activity-list">
+            @for (invoice of latestInvoices(); track invoice.id) {
+              <li class="dashboard__activity-item">
+                <div>
+                  <strong>{{ invoice.invoiceNumber }}</strong>
+                  <div class="dashboard__activity-meta">{{ invoice.status }} · {{ invoice.grandTotal | appCurrency }}</div>
+                </div>
+                <a class="btn btn-sm btn-link" [routerLink]="['/invoices', invoice.id]">View</a>
+              </li>
+            }
+          </ul>
+        }
+      </app-card>
+    </div>
+
     <app-card title="Recent Activity" subtitle="Latest actions across your business">
       @if (activityLoading()) {
         <div class="loading-stack">

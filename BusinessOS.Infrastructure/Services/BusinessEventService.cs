@@ -66,6 +66,7 @@ public sealed class BusinessEventService : IBusinessEventService
             request.NotificationTitle,
             request.NotificationMessage,
             request.NotificationType,
+            request.Link,
             cancellationToken);
 
         await _realtimeNotificationService.PushNotificationAsync(

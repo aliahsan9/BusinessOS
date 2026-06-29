@@ -25,6 +25,8 @@
         <li
           class="notification-panel__item"
           [class.notification-panel__item--unread]="!item.isRead"
+          [class.notification-panel__item--clickable]="!!item.link"
+          (click)="openNotification(item.link, item.isRead, item.id)"
         >
           <div class="notification-panel__item-top">
             <strong>{{ item.title }}</strong>

@@ -1,8 +1,11 @@
 using BusinessOS.Application.Common.Authorization;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Common.Exceptions;
+using BusinessOS.Application.Features.Activities.DTOs;
+using BusinessOS.Application.Features.Activities.Services;
 using BusinessOS.Application.Features.Auth.DTOs;
 using BusinessOS.Application.Features.Auth.Services;
+using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,6 +20,7 @@ public sealed class AuthService : IAuthService
     private readonly IDbContextFactory<BusinessOSDbContext> _dbContextFactory;
     private readonly IRoleRepository _roleRepository;
     private readonly IRbacAuditService _auditService;
+    private readonly IActivityService _activityService;
 
     public AuthService(
         IIdentityService identityService,
@@ -25,7 +29,8 @@ public sealed class AuthService : IAuthService
         ITenantProvider tenantProvider,
         IDbContextFactory<BusinessOSDbContext> dbContextFactory,
         IRoleRepository roleRepository,
-        IRbacAuditService auditService)
+        IRbacAuditService auditService,
+        IActivityService activityService)
     {
         _identityService = identityService;
         _tenantRegistrationService = tenantRegistrationService;
@@ -34,6 +39,7 @@ public sealed class AuthService : IAuthService
         _dbContextFactory = dbContextFactory;
         _roleRepository = roleRepository;
         _auditService = auditService;
+        _activityService = activityService;
     }
 
     public async Task<AuthResponse> LoginAsync(
@@ -51,17 +57,23 @@ public sealed class AuthService : IAuthService
 
         _tenantProvider.SetTenantId(user.TenantId);
 
-        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var appUser = await dbContext.Users.FirstOrDefaultAsync(x => x.Id == user.Id, cancellationToken);
-        if (appUser is not null)
+        var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        if (dbContext is not null)
         {
-            if (!appUser.IsActive)
+            await using (dbContext)
             {
-                throw new UnauthorizedException("Account is deactivated.");
-            }
+                var appUser = await dbContext.Users.FirstOrDefaultAsync(x => x.Id == user.Id, cancellationToken);
+                if (appUser is not null)
+                {
+                    if (!appUser.IsActive)
+                    {
+                        throw new UnauthorizedException("Account is deactivated.");
+                    }
 
-            appUser.LastActiveAt = DateTime.UtcNow;
-            await dbContext.SaveChangesAsync(cancellationToken);
+                    appUser.LastActiveAt = DateTime.UtcNow;
+                    await dbContext.SaveChangesAsync(cancellationToken);
+                }
+            }
         }
 
         var roles = await _roleRepository.GetUserRoleNamesAsync(user.Id, cancellationToken);
@@ -80,6 +92,26 @@ public sealed class AuthService : IAuthService
             null,
             RbacAuditService.Serialize(new { user.Email }),
             cancellationToken);
+
+        var userName = user.Email.Split('@')[0];
+        var entityId = Guid.TryParse(user.Id, out var parsedUserId) ? parsedUserId : Guid.Empty;
+        try
+        {
+            await _activityService.LogForUserAsync(
+                user.Id,
+                userName,
+                new LogActivityRequest(
+                    ActivityActions.Login,
+                    "User",
+                    entityId,
+                    userName,
+                    RbacAuditService.Serialize(new { user.Email })),
+                cancellationToken);
+        }
+        catch
+        {
+            // Activity logging should not block authentication.
+        }
 
         return new AuthResponse
         {

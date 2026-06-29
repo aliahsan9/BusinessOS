@@ -54,6 +54,7 @@ public class BusinessOSDbContext
     public DbSet<UserRole> RbacUserRoles => Set<UserRole>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<RbacAuditLog> RbacAuditLogs => Set<RbacAuditLog>();
+    public DbSet<EntityAuditLog> EntityAuditLogs => Set<EntityAuditLog>();
     public DbSet<AIConversation> AIConversations => Set<AIConversation>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<Activity> Activities => Set<Activity>();
@@ -197,6 +198,9 @@ public class BusinessOSDbContext
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<TenantAuditLog>()
+            .HasQueryFilter(x => x.TenantId == _tenantId);
+
+        builder.Entity<EntityAuditLog>()
             .HasQueryFilter(x => x.TenantId == _tenantId);
 
         builder.Entity<BillingInvoice>()

@@ -97,6 +97,7 @@ public static class DependencyInjection
         services.AddScoped<IPdfGenerationService, PdfGenerationService>();
         services.AddScoped<IReportService, ReportService>();
         services.AddScoped<IAuditService, AuditService>();
+        services.AddScoped<IEntityAuditService, EntityAuditService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IActivityService, ActivityService>();
         services.AddScoped<IBusinessEventService, BusinessEventService>();
