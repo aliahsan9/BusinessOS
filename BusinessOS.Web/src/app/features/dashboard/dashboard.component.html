@@ -215,5 +215,33 @@
         }
       </app-card>
     </div>
+
+    <app-card title="Recent Activity" subtitle="Latest actions across your business">
+      @if (activityLoading()) {
+        <div class="loading-stack">
+          @for (i of [1, 2, 3]; track i) {
+            <app-skeleton height="3rem" />
+          }
+        </div>
+      } @else if (recentActivities().length === 0) {
+        <app-empty-state title="No recent activity" description="Business actions will appear here." />
+      } @else {
+        <ul class="dashboard__activity-list">
+          @for (activity of recentActivities(); track activity.id) {
+            <li class="dashboard__activity-item">
+              <app-badge [label]="activity.entityType" [variant]="getStatusVariant(activity.entityType)" />
+              <div>
+                <strong>{{ activity.description }}</strong>
+                <div class="dashboard__activity-meta">{{ activity.createdAt | date: 'medium' }}</div>
+              </div>
+            </li>
+          }
+        </ul>
+      }
+
+      <div class="dashboard__activity-footer">
+        <a class="btn btn-sm btn-outline-primary" [routerLink]="routes.activity.list">View All</a>
+      </div>
+    </app-card>
   }
 </div>

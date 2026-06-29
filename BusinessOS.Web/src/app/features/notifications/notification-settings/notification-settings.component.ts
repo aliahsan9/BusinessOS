@@ -51,6 +51,10 @@ export class NotificationSettingsComponent implements OnInit {
     orderNotificationsEnabled: [true],
     inventoryAlertsEnabled: [true],
     paymentAlertsEnabled: [true],
+    taskNotificationsEnabled: [true],
+    invoiceNotificationsEnabled: [true],
+    customerNotificationsEnabled: [true],
+    projectNotificationsEnabled: [true],
   });
 
   ngOnInit(): void {

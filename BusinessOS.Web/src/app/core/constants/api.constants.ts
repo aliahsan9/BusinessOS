@@ -83,6 +83,11 @@ export const API_ENDPOINTS = {
     base: '/notifications',
     preferences: '/notifications/preferences',
     readAll: '/notifications/read-all',
+    unreadCount: '/notifications/unread-count',
+  },
+  activity: {
+    base: '/activity',
+    recent: '/activity/recent',
   },
   settings: {
     base: '/settings',

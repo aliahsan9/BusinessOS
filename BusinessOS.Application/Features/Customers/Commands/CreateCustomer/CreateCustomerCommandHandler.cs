@@ -1,18 +1,29 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Activities.DTOs;
+using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Domain.Entities;
+using BusinessOS.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace BusinessOS.Application.Features.Customers.Commands.CreateCustomer;
 
 public sealed class CreateCustomerCommandHandler : IRequestHandler<CreateCustomerCommand, Guid>
 {
     private readonly IApplicationDbContext _context;
+    private readonly IBusinessEventService _businessEvents;
+    private readonly ILogger<CreateCustomerCommandHandler> _logger;
 
-    public CreateCustomerCommandHandler(IApplicationDbContext context)
+    public CreateCustomerCommandHandler(
+        IApplicationDbContext context,
+        IBusinessEventService businessEvents,
+        ILogger<CreateCustomerCommandHandler> logger)
     {
         _context = context;
+        _businessEvents = businessEvents;
+        _logger = logger;
     }
 
     public async Task<Guid> Handle(CreateCustomerCommand request, CancellationToken cancellationToken)
@@ -42,6 +53,32 @@ public sealed class CreateCustomerCommandHandler : IRequestHandler<CreateCustome
         _context.Customers.Add(customer);
         await _context.SaveChangesAsync(cancellationToken);
 
+        var customerName = $"{customer.FirstName} {customer.LastName}".Trim();
+        await PublishEventSafeAsync(
+            new BusinessEventRequest(
+                ActivityActions.Created,
+                ActivityEntityTypes.Customer,
+                customer.Id,
+                customerName,
+                "Customer Created",
+                $"Customer {customerName} was created.",
+                NotificationTypes.Customer),
+            cancellationToken);
+
         return customer.Id;
+    }
+
+    private async Task PublishEventSafeAsync(
+        BusinessEventRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _businessEvents.PublishAsync(request, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish business event for customer {CustomerId}", request.EntityId);
+        }
     }
 }

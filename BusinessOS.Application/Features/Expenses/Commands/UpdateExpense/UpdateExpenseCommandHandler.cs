@@ -1,5 +1,8 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Activities.DTOs;
+using BusinessOS.Application.Features.Notifications.Services;
+using BusinessOS.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -9,13 +12,16 @@ namespace BusinessOS.Application.Features.Expenses.Commands.UpdateExpense;
 public sealed class UpdateExpenseCommandHandler : IRequestHandler<UpdateExpenseCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
+    private readonly IBusinessEventService _businessEvents;
     private readonly ILogger<UpdateExpenseCommandHandler> _logger;
 
     public UpdateExpenseCommandHandler(
         IApplicationDbContext context,
+        IBusinessEventService businessEvents,
         ILogger<UpdateExpenseCommandHandler> logger)
     {
         _context = context;
+        _businessEvents = businessEvents;
         _logger = logger;
     }
 
@@ -50,6 +56,31 @@ public sealed class UpdateExpenseCommandHandler : IRequestHandler<UpdateExpenseC
 
         _logger.LogInformation("Updated expense {ExpenseId}", expense.Id);
 
+        await PublishEventSafeAsync(
+            new BusinessEventRequest(
+                ActivityActions.Updated,
+                ActivityEntityTypes.Expense,
+                expense.Id,
+                expense.Title,
+                "Expense Updated",
+                $"Expense \"{expense.Title}\" was updated.",
+                NotificationTypes.Business),
+            cancellationToken);
+
         return Unit.Value;
+    }
+
+    private async Task PublishEventSafeAsync(
+        BusinessEventRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _businessEvents.PublishAsync(request, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish business event for expense {ExpenseId}", request.EntityId);
+        }
     }
 }

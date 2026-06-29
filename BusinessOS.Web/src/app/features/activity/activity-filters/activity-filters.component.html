@@ -1,0 +1,67 @@
+<div class="activity-filters toolbar">
+  <div class="activity-filters__search">
+    <label for="activity-search">Search</label>
+    <input
+      id="activity-search"
+      type="search"
+      class="form-control form-control-sm"
+      placeholder="Search user, entity, or action..."
+      [ngModel]="search()"
+      (ngModelChange)="onSearchInput($event)"
+      (keyup.enter)="apply.emit()"
+    />
+  </div>
+
+  <div class="activity-filters__field">
+    <label for="activity-entity-type">Filter by</label>
+    <select
+      id="activity-entity-type"
+      class="form-select form-select-sm"
+      [ngModel]="entityType()"
+      (ngModelChange)="onEntityTypeChange($event); apply.emit()"
+    >
+      @for (option of entityTypes; track option.value) {
+        <option [value]="option.value">{{ option.label }}</option>
+      }
+    </select>
+  </div>
+
+  <div class="activity-filters__field">
+    <label for="activity-date-preset">Date range</label>
+    <select
+      id="activity-date-preset"
+      class="form-select form-select-sm"
+      [ngModel]="datePreset()"
+      (ngModelChange)="onDatePresetChange($event); apply.emit()"
+    >
+      @for (preset of datePresets; track preset.value) {
+        <option [value]="preset.value">{{ preset.label }}</option>
+      }
+    </select>
+  </div>
+
+  @if (datePreset() === 'custom') {
+    <div class="activity-filters__field">
+      <label for="activity-date-from">From</label>
+      <input
+        id="activity-date-from"
+        type="date"
+        class="form-control form-control-sm"
+        [ngModel]="dateFrom()"
+        (ngModelChange)="dateFromChange.emit($event); apply.emit()"
+      />
+    </div>
+    <div class="activity-filters__field">
+      <label for="activity-date-to">To</label>
+      <input
+        id="activity-date-to"
+        type="date"
+        class="form-control form-control-sm"
+        [ngModel]="dateTo()"
+        (ngModelChange)="dateToChange.emit($event); apply.emit()"
+      />
+    </div>
+  }
+
+  <button type="button" class="btn btn-sm btn-primary" (click)="apply.emit()">Apply</button>
+</div>

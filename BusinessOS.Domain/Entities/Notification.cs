@@ -12,4 +12,5 @@ public class Notification : AuditableEntity
 
     public string Type { get; set; } = default!;
     public bool IsRead { get; set; } = false;
+    public string? CreatedBy { get; set; }
 }

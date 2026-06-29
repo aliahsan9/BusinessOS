@@ -16,6 +16,10 @@ public class TenantSettingsDto
     public bool OrderNotificationsEnabled { get; set; } = true;
     public bool InventoryAlertsEnabled { get; set; } = true;
     public bool PaymentAlertsEnabled { get; set; } = true;
+    public bool TaskNotificationsEnabled { get; set; } = true;
+    public bool InvoiceNotificationsEnabled { get; set; } = true;
+    public bool CustomerNotificationsEnabled { get; set; } = true;
+    public bool ProjectNotificationsEnabled { get; set; } = true;
 }
 
 public class BusinessProfileDto
@@ -43,7 +47,11 @@ public record UpdateTenantSettingsRequest(
     bool SystemNotificationsEnabled,
     bool OrderNotificationsEnabled,
     bool InventoryAlertsEnabled,
-    bool PaymentAlertsEnabled);
+    bool PaymentAlertsEnabled,
+    bool TaskNotificationsEnabled,
+    bool InvoiceNotificationsEnabled,
+    bool CustomerNotificationsEnabled,
+    bool ProjectNotificationsEnabled);
 
 public record UpdateBusinessProfileRequest(
     string Name,

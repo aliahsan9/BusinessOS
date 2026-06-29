@@ -8,6 +8,7 @@ import {
   NotificationDto,
   NotificationPreferences,
   NotificationQueryParams,
+  UnreadCountResponse,
   UpdateNotificationPreferencesRequest,
 } from '../models/notification.model';
 
@@ -17,12 +18,20 @@ export class NotificationCenterService extends BaseApiService {
     return this.get<PagedResult<NotificationDto>>(API_ENDPOINTS.notifications.base, params);
   }
 
+  getUnreadCount(): Observable<UnreadCountResponse> {
+    return this.get<UnreadCountResponse>(API_ENDPOINTS.notifications.unreadCount);
+  }
+
   markRead(id: string): Observable<void> {
-    return this.post<void>(`${API_ENDPOINTS.notifications.base}/${id}/read`, {});
+    return this.put<void>(`${API_ENDPOINTS.notifications.base}/read/${id}`, {});
   }
 
   markAllRead(): Observable<void> {
-    return this.post<void>(API_ENDPOINTS.notifications.readAll, {});
+    return this.put<void>(API_ENDPOINTS.notifications.readAll, {});
+  }
+
+  remove(id: string): Observable<void> {
+    return this.delete<void>(`${API_ENDPOINTS.notifications.base}/${id}`);
   }
 
   getPreferences(): Observable<NotificationPreferences> {

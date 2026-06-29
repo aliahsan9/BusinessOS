@@ -106,6 +106,16 @@ export class NotificationListComponent implements OnInit {
     });
   }
 
+  deleteItem(item: NotificationDto): void {
+    this.notificationCenter.remove(item.id).subscribe({
+      next: () => {
+        this.notification.success('Notification deleted.');
+        this.load();
+      },
+      error: () => this.notification.error('Failed to delete notification.'),
+    });
+  }
+
   retry(): void {
     this.load();
   }

@@ -151,6 +151,10 @@ export class ThemeService {
           orderNotificationsEnabled: current.orderNotificationsEnabled,
           inventoryAlertsEnabled: current.inventoryAlertsEnabled,
           paymentAlertsEnabled: current.paymentAlertsEnabled,
+          taskNotificationsEnabled: current.taskNotificationsEnabled,
+          invoiceNotificationsEnabled: current.invoiceNotificationsEnabled,
+          customerNotificationsEnabled: current.customerNotificationsEnabled,
+          projectNotificationsEnabled: current.projectNotificationsEnabled,
         });
       }),
       map(() => undefined),

@@ -6,6 +6,7 @@ using BusinessOS.Application.Features.Analytics.Services;
 using BusinessOS.Application.Features.Finance.Services;
 using BusinessOS.Application.Features.Pdf.Services;
 using BusinessOS.Application.Features.Reports.Services;
+using BusinessOS.Application.Features.Activities.Services;
 using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Application.Features.Roles.Services;
 using BusinessOS.Application.Features.Settings.Services;
@@ -84,6 +85,10 @@ public static class DependencyInjection
         services.AddScoped<IReportService, ReportService>();
         services.AddScoped<IAuditService, AuditService>();
         services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IActivityService, ActivityService>();
+        services.AddScoped<IBusinessEventService, BusinessEventService>();
+        services.AddScoped<IEmailNotificationService, EmailNotificationService>();
+        services.AddScoped<IRealtimeNotificationService, NullRealtimeNotificationService>();
         services.AddScoped<ISettingsService, SettingsService>();
         services.AddScoped<ISystemAdminService, SystemAdminService>();
 

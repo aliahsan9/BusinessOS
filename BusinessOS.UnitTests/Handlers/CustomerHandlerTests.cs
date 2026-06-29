@@ -41,7 +41,10 @@ public class CreateCustomerHandlerTests
         var context = new Mock<IApplicationDbContext>();
         context.Setup(x => x.Customers).Returns(TestMockDbSet.CreateMockDbSet(customers.AsQueryable()).Object);
 
-        var handler = new CreateCustomerCommandHandler(context.Object);
+        var handler = new CreateCustomerCommandHandler(
+            context.Object,
+            TestHandlerDependencies.CreateBusinessEvents(),
+            TestHandlerDependencies.CreateLogger<CreateCustomerCommandHandler>());
 
         var act = () => handler.Handle(
             new CreateCustomerCommand(
@@ -66,7 +69,10 @@ public class CreateCustomerHandlerTests
         context.Setup(x => x.Customers).Returns(TestMockDbSet.CreateMockDbSet(new List<Customer>().AsQueryable()).Object);
         context.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
-        var handler = new CreateCustomerCommandHandler(context.Object);
+        var handler = new CreateCustomerCommandHandler(
+            context.Object,
+            TestHandlerDependencies.CreateBusinessEvents(),
+            TestHandlerDependencies.CreateLogger<CreateCustomerCommandHandler>());
 
         var id = await handler.Handle(
             new CreateCustomerCommand(
@@ -93,7 +99,10 @@ public class UpdateCustomerHandlerTests
         var context = new Mock<IApplicationDbContext>();
         context.Setup(x => x.Customers).Returns(TestMockDbSet.CreateMockDbSet(new List<Customer>().AsQueryable()).Object);
 
-        var handler = new UpdateCustomerCommandHandler(context.Object);
+        var handler = new UpdateCustomerCommandHandler(
+            context.Object,
+            TestHandlerDependencies.CreateBusinessEvents(),
+            TestHandlerDependencies.CreateLogger<UpdateCustomerCommandHandler>());
 
         var act = () => handler.Handle(
             new UpdateCustomerCommand(
@@ -134,7 +143,10 @@ public class UpdateCustomerHandlerTests
         context.Setup(x => x.Customers).Returns(TestMockDbSet.CreateMockDbSet(new List<Customer> { customer }.AsQueryable()).Object);
         context.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
-        var handler = new UpdateCustomerCommandHandler(context.Object);
+        var handler = new UpdateCustomerCommandHandler(
+            context.Object,
+            TestHandlerDependencies.CreateBusinessEvents(),
+            TestHandlerDependencies.CreateLogger<UpdateCustomerCommandHandler>());
 
         await handler.Handle(
             new UpdateCustomerCommand(
@@ -163,7 +175,10 @@ public class DeleteCustomerHandlerTests
         var context = new Mock<IApplicationDbContext>();
         context.Setup(x => x.Customers).Returns(TestMockDbSet.CreateMockDbSet(new List<Customer>().AsQueryable()).Object);
 
-        var handler = new DeleteCustomerCommandHandler(context.Object);
+        var handler = new DeleteCustomerCommandHandler(
+            context.Object,
+            TestHandlerDependencies.CreateBusinessEvents(),
+            TestHandlerDependencies.CreateLogger<DeleteCustomerCommandHandler>());
 
         var act = () => handler.Handle(new DeleteCustomerCommand(Guid.NewGuid()), CancellationToken.None);
 
@@ -193,7 +208,10 @@ public class DeleteCustomerHandlerTests
         context.Setup(x => x.Customers).Returns(TestMockDbSet.CreateMockDbSet(new List<Customer> { customer }.AsQueryable()).Object);
         context.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
-        var handler = new DeleteCustomerCommandHandler(context.Object);
+        var handler = new DeleteCustomerCommandHandler(
+            context.Object,
+            TestHandlerDependencies.CreateBusinessEvents(),
+            TestHandlerDependencies.CreateLogger<DeleteCustomerCommandHandler>());
 
         await handler.Handle(new DeleteCustomerCommand(customerId), CancellationToken.None);
 

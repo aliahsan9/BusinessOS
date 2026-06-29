@@ -27,6 +27,7 @@ public interface IApplicationDbContext
     DbSet<Expense> Expenses { get; }
     DbSet<ExpenseCategory> ExpenseCategories { get; }
     DbSet<Notification> Notifications { get; }
+    DbSet<Activity> Activities { get; }
     DbSet<Tenant> Tenants { get; }
     DbSet<TenantSettings> TenantSettings { get; }
     DbSet<GeneratedReport> GeneratedReports { get; }

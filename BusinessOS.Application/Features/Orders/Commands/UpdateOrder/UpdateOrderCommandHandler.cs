@@ -1,7 +1,10 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Activities.DTOs;
+using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Application.Features.Orders.Services;
 using BusinessOS.Domain.Entities;
+using BusinessOS.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -11,13 +14,16 @@ namespace BusinessOS.Application.Features.Orders.Commands.UpdateOrder;
 public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
+    private readonly IBusinessEventService _businessEvents;
     private readonly ILogger<UpdateOrderCommandHandler> _logger;
 
     public UpdateOrderCommandHandler(
         IApplicationDbContext context,
+        IBusinessEventService businessEvents,
         ILogger<UpdateOrderCommandHandler> logger)
     {
         _context = context;
+        _businessEvents = businessEvents;
         _logger = logger;
     }
 
@@ -106,6 +112,31 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
 
         _logger.LogInformation("Updated order {OrderId}", order.Id);
 
+        await PublishEventSafeAsync(
+            new BusinessEventRequest(
+                ActivityActions.Updated,
+                ActivityEntityTypes.Project,
+                order.Id,
+                order.OrderNumber,
+                "Project Updated",
+                $"Project {order.OrderNumber} was updated.",
+                NotificationTypes.Project),
+            cancellationToken);
+
         return Unit.Value;
+    }
+
+    private async Task PublishEventSafeAsync(
+        BusinessEventRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _businessEvents.PublishAsync(request, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish business event for order {OrderId}", request.EntityId);
+        }
     }
 }

@@ -1,6 +1,8 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Activities.DTOs;
 using BusinessOS.Application.Features.Invoices.Services;
+using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using MediatR;
@@ -14,15 +16,18 @@ public sealed class CreateInvoiceFromOrderCommandHandler
 {
     private readonly IApplicationDbContext _context;
     private readonly IInvoiceNumberGenerator _invoiceNumberGenerator;
+    private readonly IBusinessEventService _businessEvents;
     private readonly ILogger<CreateInvoiceFromOrderCommandHandler> _logger;
 
     public CreateInvoiceFromOrderCommandHandler(
         IApplicationDbContext context,
         IInvoiceNumberGenerator invoiceNumberGenerator,
+        IBusinessEventService businessEvents,
         ILogger<CreateInvoiceFromOrderCommandHandler> logger)
     {
         _context = context;
         _invoiceNumberGenerator = invoiceNumberGenerator;
+        _businessEvents = businessEvents;
         _logger = logger;
     }
 
@@ -79,6 +84,31 @@ public sealed class CreateInvoiceFromOrderCommandHandler
             invoice.Id,
             order.Id);
 
+        await PublishEventSafeAsync(
+            new BusinessEventRequest(
+                ActivityActions.Generated,
+                ActivityEntityTypes.Invoice,
+                invoice.Id,
+                $"#{invoice.InvoiceNumber}",
+                "Invoice Generated",
+                $"Invoice #{invoice.InvoiceNumber} was generated.",
+                NotificationTypes.Billing),
+            cancellationToken);
+
         return invoice.Id;
+    }
+
+    private async Task PublishEventSafeAsync(
+        BusinessEventRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _businessEvents.PublishAsync(request, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish business event for invoice {InvoiceId}", request.EntityId);
+        }
     }
 }

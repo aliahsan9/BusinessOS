@@ -222,6 +222,14 @@ export const NAV_ITEMS: NavItem[] = [
     group: 'Administration',
   },
   {
+    label: 'Activity',
+    icon: '🕒',
+    route: ROUTES.activity.base,
+    description: 'View business activity timeline.',
+    permissions: ['Activity.View'],
+    group: 'Administration',
+  },
+  {
     label: 'Notifications',
     icon: '🔔',
     route: ROUTES.notifications.base,

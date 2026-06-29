@@ -1,5 +1,7 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Activities.DTOs;
+using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Application.Features.Orders.Services;
 using BusinessOS.Domain.Enums;
 using MediatR;
@@ -11,13 +13,16 @@ namespace BusinessOS.Application.Features.Orders.Commands.DeleteOrder;
 public sealed class DeleteOrderCommandHandler : IRequestHandler<DeleteOrderCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
+    private readonly IBusinessEventService _businessEvents;
     private readonly ILogger<DeleteOrderCommandHandler> _logger;
 
     public DeleteOrderCommandHandler(
         IApplicationDbContext context,
+        IBusinessEventService businessEvents,
         ILogger<DeleteOrderCommandHandler> logger)
     {
         _context = context;
+        _businessEvents = businessEvents;
         _logger = logger;
     }
 
@@ -44,6 +49,31 @@ public sealed class DeleteOrderCommandHandler : IRequestHandler<DeleteOrderComma
 
         _logger.LogInformation("Deleted order {OrderId}", order.Id);
 
+        await PublishEventSafeAsync(
+            new BusinessEventRequest(
+                ActivityActions.Deleted,
+                ActivityEntityTypes.Project,
+                order.Id,
+                order.OrderNumber,
+                "Project Deleted",
+                $"Project {order.OrderNumber} was deleted.",
+                NotificationTypes.Project),
+            cancellationToken);
+
         return Unit.Value;
+    }
+
+    private async Task PublishEventSafeAsync(
+        BusinessEventRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _businessEvents.PublishAsync(request, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish business event for order {OrderId}", request.EntityId);
+        }
     }
 }

@@ -1,9 +1,13 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Activities.DTOs;
+using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Application.Features.Settings.DTOs;
 using BusinessOS.Application.Features.Settings.Services;
 using BusinessOS.Domain.Entities;
+using BusinessOS.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace BusinessOS.Infrastructure.Services;
 
@@ -11,13 +15,19 @@ public sealed class SettingsService : ISettingsService
 {
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IBusinessEventService _businessEvents;
+    private readonly ILogger<SettingsService> _logger;
 
     public SettingsService(
         IApplicationDbContext context,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IBusinessEventService businessEvents,
+        ILogger<SettingsService> logger)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _businessEvents = businessEvents;
+        _logger = logger;
     }
 
     public async Task<TenantSettingsDto> GetSettingsAsync(CancellationToken cancellationToken = default)
@@ -48,9 +58,15 @@ public sealed class SettingsService : ISettingsService
         settings.OrderNotificationsEnabled = request.OrderNotificationsEnabled;
         settings.InventoryAlertsEnabled = request.InventoryAlertsEnabled;
         settings.PaymentAlertsEnabled = request.PaymentAlertsEnabled;
+        settings.TaskNotificationsEnabled = request.TaskNotificationsEnabled;
+        settings.InvoiceNotificationsEnabled = request.InvoiceNotificationsEnabled;
+        settings.CustomerNotificationsEnabled = request.CustomerNotificationsEnabled;
+        settings.ProjectNotificationsEnabled = request.ProjectNotificationsEnabled;
         settings.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        await PublishSettingsUpdatedAsync(settings.Id, cancellationToken);
 
         return MapSettings(settings);
     }
@@ -81,7 +97,30 @@ public sealed class SettingsService : ISettingsService
 
         await _context.SaveChangesAsync(cancellationToken);
 
+        await PublishSettingsUpdatedAsync(settings.Id, cancellationToken);
+
         return MapBusinessProfile(tenant, settings);
+    }
+
+    private async Task PublishSettingsUpdatedAsync(Guid settingsId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _businessEvents.PublishAsync(
+                new BusinessEventRequest(
+                    ActivityActions.Updated,
+                    ActivityEntityTypes.Settings,
+                    settingsId,
+                    "Business Settings",
+                    "Business Settings Updated",
+                    "Business settings were updated.",
+                    NotificationTypes.System),
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish settings updated event");
+        }
     }
 
     private async Task<Tenant> GetCurrentTenantAsync(CancellationToken cancellationToken)
@@ -133,7 +172,11 @@ public sealed class SettingsService : ISettingsService
             SystemNotificationsEnabled = settings.SystemNotificationsEnabled,
             OrderNotificationsEnabled = settings.OrderNotificationsEnabled,
             InventoryAlertsEnabled = settings.InventoryAlertsEnabled,
-            PaymentAlertsEnabled = settings.PaymentAlertsEnabled
+            PaymentAlertsEnabled = settings.PaymentAlertsEnabled,
+            TaskNotificationsEnabled = settings.TaskNotificationsEnabled,
+            InvoiceNotificationsEnabled = settings.InvoiceNotificationsEnabled,
+            CustomerNotificationsEnabled = settings.CustomerNotificationsEnabled,
+            ProjectNotificationsEnabled = settings.ProjectNotificationsEnabled
         };
 
     private static BusinessProfileDto MapBusinessProfile(Tenant tenant, TenantSettings settings) =>

@@ -57,6 +57,65 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.ToTable("AIConversations");
                 });
 
+            modelBuilder.Entity("BusinessOS.Domain.Entities.Activity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("EntityName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Metadata")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("UserName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "CreatedAt");
+
+                    b.HasIndex("TenantId", "EntityType", "EntityId", "Action");
+
+                    b.ToTable("Activities", (string)null);
+                });
+
             modelBuilder.Entity("BusinessOS.Domain.Entities.Category", b =>
                 {
                     b.Property<Guid>("Id")
@@ -561,6 +620,10 @@ namespace BusinessOS.Infrastructure.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
@@ -1351,6 +1414,9 @@ namespace BusinessOS.Infrastructure.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
 
+                    b.Property<bool>("CustomerNotificationsEnabled")
+                        .HasColumnType("bit");
+
                     b.Property<string>("EmailFromAddress")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
@@ -1359,6 +1425,9 @@ namespace BusinessOS.Infrastructure.Migrations
                         .HasColumnType("bit");
 
                     b.Property<bool>("InventoryAlertsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("InvoiceNotificationsEnabled")
                         .HasColumnType("bit");
 
                     b.Property<string>("InvoicePrefix")
@@ -1383,7 +1452,13 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.Property<bool>("PaymentAlertsEnabled")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("ProjectNotificationsEnabled")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("SystemNotificationsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("TaskNotificationsEnabled")
                         .HasColumnType("bit");
 
                     b.Property<decimal>("TaxRate")

@@ -28,6 +28,7 @@ const IMPLEMENTED_PATHS = new Set([
   pathFromRoute(ROUTES.roles.base),
   pathFromRoute(ROUTES.permissions.base),
   pathFromRoute(ROUTES.audit.base),
+  pathFromRoute(ROUTES.activity.base),
   pathFromRoute(ROUTES.notifications.base),
   pathFromRoute(ROUTES.settings.base),
   pathFromRoute(ROUTES.admin.base),

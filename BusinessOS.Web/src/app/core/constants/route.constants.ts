@@ -149,6 +149,10 @@ export const ROUTES = {
     base: '/admin',
     dashboard: '/admin',
   },
+  activity: {
+    base: '/activity',
+    list: '/activity',
+  },
   profile: '/profile',
   forbidden: '/forbidden',
   notFound: '/not-found',

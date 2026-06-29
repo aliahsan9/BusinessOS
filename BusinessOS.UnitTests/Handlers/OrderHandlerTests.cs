@@ -155,7 +155,8 @@ public class CreateOrderHandlerTests
             context.Object,
             orderNumberGenerator.Object,
             InventoryServiceTestHelper.CreateMock().Object,
-            Mock.Of<ILogger<CreateOrderCommandHandler>>());
+            TestHandlerDependencies.CreateBusinessEvents(),
+            TestHandlerDependencies.CreateLogger<CreateOrderCommandHandler>());
 
         var id = await handler.Handle(
             new CreateOrderCommand(
@@ -187,7 +188,8 @@ public class CreateOrderHandlerTests
             context.Object,
             orderNumberGenerator.Object,
             InventoryServiceTestHelper.CreateMock().Object,
-            Mock.Of<ILogger<CreateOrderCommandHandler>>());
+            TestHandlerDependencies.CreateBusinessEvents(),
+            TestHandlerDependencies.CreateLogger<CreateOrderCommandHandler>());
     }
 
     private static Mock<IInventoryService> CreateInventoryServiceMock() =>
@@ -217,7 +219,8 @@ public class UpdateOrderHandlerTests
 
         var handler = new UpdateOrderCommandHandler(
             context.Object,
-            Mock.Of<ILogger<UpdateOrderCommandHandler>>());
+            TestHandlerDependencies.CreateBusinessEvents(),
+            TestHandlerDependencies.CreateLogger<UpdateOrderCommandHandler>());
 
         var act = () => handler.Handle(
             new UpdateOrderCommand(
@@ -300,7 +303,8 @@ public class UpdateOrderHandlerTests
 
         var handler = new UpdateOrderCommandHandler(
             db,
-            Mock.Of<ILogger<UpdateOrderCommandHandler>>());
+            TestHandlerDependencies.CreateBusinessEvents(),
+            TestHandlerDependencies.CreateLogger<UpdateOrderCommandHandler>());
 
         await handler.Handle(
             new UpdateOrderCommand(
@@ -339,7 +343,8 @@ public class DeleteOrderHandlerTests
 
         var handler = new DeleteOrderCommandHandler(
             context.Object,
-            Mock.Of<ILogger<DeleteOrderCommandHandler>>());
+            TestHandlerDependencies.CreateBusinessEvents(),
+            TestHandlerDependencies.CreateLogger<DeleteOrderCommandHandler>());
 
         var act = () => handler.Handle(new DeleteOrderCommand(orderId), CancellationToken.None);
 
@@ -371,7 +376,8 @@ public class UpdateOrderStatusHandlerTests
         var handler = new UpdateOrderStatusCommandHandler(
             context.Object,
             InventoryServiceTestHelper.CreateMock().Object,
-            Mock.Of<ILogger<UpdateOrderStatusCommandHandler>>());
+            TestHandlerDependencies.CreateBusinessEvents(),
+            TestHandlerDependencies.CreateLogger<UpdateOrderStatusCommandHandler>());
 
         var act = () => handler.Handle(
             new UpdateOrderStatusCommand(orderId, OrderStatusNames.Pending),
@@ -401,7 +407,8 @@ public class UpdateOrderStatusHandlerTests
         var handler = new UpdateOrderStatusCommandHandler(
             context.Object,
             InventoryServiceTestHelper.CreateMock().Object,
-            Mock.Of<ILogger<UpdateOrderStatusCommandHandler>>());
+            TestHandlerDependencies.CreateBusinessEvents(),
+            TestHandlerDependencies.CreateLogger<UpdateOrderStatusCommandHandler>());
 
         await handler.Handle(
             new UpdateOrderStatusCommand(orderId, OrderStatusNames.Confirmed),

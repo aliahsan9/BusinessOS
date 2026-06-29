@@ -1,5 +1,7 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Activities.DTOs;
+using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using MediatR;
@@ -11,13 +13,16 @@ namespace BusinessOS.Application.Features.Expenses.Commands.CreateExpense;
 public sealed class CreateExpenseCommandHandler : IRequestHandler<CreateExpenseCommand, Guid>
 {
     private readonly IApplicationDbContext _context;
+    private readonly IBusinessEventService _businessEvents;
     private readonly ILogger<CreateExpenseCommandHandler> _logger;
 
     public CreateExpenseCommandHandler(
         IApplicationDbContext context,
+        IBusinessEventService businessEvents,
         ILogger<CreateExpenseCommandHandler> logger)
     {
         _context = context;
+        _businessEvents = businessEvents;
         _logger = logger;
     }
 
@@ -52,6 +57,31 @@ public sealed class CreateExpenseCommandHandler : IRequestHandler<CreateExpenseC
 
         _logger.LogInformation("Created expense {ExpenseId}", expense.Id);
 
+        await PublishEventSafeAsync(
+            new BusinessEventRequest(
+                ActivityActions.Created,
+                ActivityEntityTypes.Expense,
+                expense.Id,
+                expense.Title,
+                "Expense Added",
+                $"Expense \"{expense.Title}\" was added.",
+                NotificationTypes.Business),
+            cancellationToken);
+
         return expense.Id;
+    }
+
+    private async Task PublishEventSafeAsync(
+        BusinessEventRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _businessEvents.PublishAsync(request, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish business event for expense {ExpenseId}", request.EntityId);
+        }
     }
 }

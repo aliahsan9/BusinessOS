@@ -92,6 +92,9 @@ export const PermissionCodes = {
     view: 'Notification.View',
     update: 'Notification.Update',
   },
+  activity: {
+    view: 'Activity.View',
+  },
   report: {
     view: 'Report.View',
   },

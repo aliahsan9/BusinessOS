@@ -274,3 +274,30 @@
     grid-template-columns: 1fr;
   }
 }
+
+.dashboard__activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dashboard__activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.dashboard__activity-meta {
+  color: var(--color-text-muted, #6c757d);
+  font-size: 0.8125rem;
+}
+
+.dashboard__activity-footer {
+  margin-top: 1rem;
+}

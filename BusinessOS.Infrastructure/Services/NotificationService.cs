@@ -43,16 +43,7 @@ public sealed class NotificationService : INotificationService
             .OrderByDescending(x => x.CreatedAt)
             .Skip((normalizedPage - 1) * normalizedPageSize)
             .Take(normalizedPageSize)
-            .Select(x => new NotificationResponse
-            {
-                Id = x.Id,
-                UserId = x.UserId,
-                Title = x.Title,
-                Message = x.Message,
-                Type = x.Type,
-                IsRead = x.IsRead,
-                CreatedAt = x.CreatedAt
-            })
+            .Select(x => MapNotification(x))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<NotificationResponse>
@@ -63,6 +54,13 @@ public sealed class NotificationService : INotificationService
             TotalCount = totalCount
         };
     }
+
+    public async Task<int> GetUnreadCountAsync(
+        string userId,
+        CancellationToken cancellationToken = default) =>
+        await _context.Notifications
+            .AsNoTracking()
+            .CountAsync(x => x.UserId == userId && !x.IsRead, cancellationToken);
 
     public async Task MarkReadAsync(Guid notificationId, CancellationToken cancellationToken = default)
     {
@@ -90,6 +88,16 @@ public sealed class NotificationService : INotificationService
         await _context.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task DeleteAsync(Guid notificationId, CancellationToken cancellationToken = default)
+    {
+        var notification = await _context.Notifications
+            .FirstOrDefaultAsync(x => x.Id == notificationId, cancellationToken)
+            ?? throw new NotFoundException($"Notification '{notificationId}' was not found.");
+
+        _context.Notifications.Remove(notification);
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task<NotificationPreferencesDto> GetPreferencesAsync(
         CancellationToken cancellationToken = default)
     {
@@ -108,6 +116,10 @@ public sealed class NotificationService : INotificationService
         settings.OrderNotificationsEnabled = request.OrderNotificationsEnabled;
         settings.InventoryAlertsEnabled = request.InventoryAlertsEnabled;
         settings.PaymentAlertsEnabled = request.PaymentAlertsEnabled;
+        settings.TaskNotificationsEnabled = request.TaskNotificationsEnabled;
+        settings.InvoiceNotificationsEnabled = request.InvoiceNotificationsEnabled;
+        settings.CustomerNotificationsEnabled = request.CustomerNotificationsEnabled;
+        settings.ProjectNotificationsEnabled = request.ProjectNotificationsEnabled;
         settings.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
@@ -132,13 +144,28 @@ public sealed class NotificationService : INotificationService
             Title = request.Title.Trim(),
             Message = request.Message.Trim(),
             Type = string.IsNullOrWhiteSpace(request.Type) ? "Info" : request.Type.Trim(),
-            IsRead = false
+            IsRead = false,
+            CreatedBy = ResolveUserName()
         };
 
         _context.Notifications.Add(notification);
         await _context.SaveChangesAsync(cancellationToken);
 
         return MapNotification(notification);
+    }
+
+    public async Task<NotificationResponse> CreateForCurrentUserAsync(
+        string title,
+        string message,
+        string type,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = _currentUserService.UserId
+            ?? throw new UnauthorizedException("User context is required.");
+
+        return await CreateNotificationAsync(
+            new CreateNotificationRequest(userId, title, message, type),
+            cancellationToken);
     }
 
     private async Task<TenantSettings> GetOrCreateTenantSettingsAsync(CancellationToken cancellationToken)
@@ -164,6 +191,15 @@ public sealed class NotificationService : INotificationService
         return settings;
     }
 
+    private string ResolveUserName()
+    {
+        var email = _currentUserService.Email;
+        if (string.IsNullOrWhiteSpace(email))
+            return "System";
+
+        return email.Split('@')[0];
+    }
+
     private static NotificationResponse MapNotification(Notification notification) =>
         new()
         {
@@ -173,7 +209,8 @@ public sealed class NotificationService : INotificationService
             Message = notification.Message,
             Type = notification.Type,
             IsRead = notification.IsRead,
-            CreatedAt = notification.CreatedAt
+            CreatedAt = notification.CreatedAt,
+            CreatedBy = notification.CreatedBy
         };
 
     private static NotificationPreferencesDto MapPreferences(TenantSettings settings) =>
@@ -183,6 +220,10 @@ public sealed class NotificationService : INotificationService
             SystemNotificationsEnabled = settings.SystemNotificationsEnabled,
             OrderNotificationsEnabled = settings.OrderNotificationsEnabled,
             InventoryAlertsEnabled = settings.InventoryAlertsEnabled,
-            PaymentAlertsEnabled = settings.PaymentAlertsEnabled
+            PaymentAlertsEnabled = settings.PaymentAlertsEnabled,
+            TaskNotificationsEnabled = settings.TaskNotificationsEnabled,
+            InvoiceNotificationsEnabled = settings.InvoiceNotificationsEnabled,
+            CustomerNotificationsEnabled = settings.CustomerNotificationsEnabled,
+            ProjectNotificationsEnabled = settings.ProjectNotificationsEnabled
         };
 }

@@ -26,4 +26,18 @@ public interface INotificationService
     Task<NotificationResponse> CreateNotificationAsync(
         CreateNotificationRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<int> GetUnreadCountAsync(
+        string userId,
+        CancellationToken cancellationToken = default);
+
+    Task DeleteAsync(
+        Guid notificationId,
+        CancellationToken cancellationToken = default);
+
+    Task<NotificationResponse> CreateForCurrentUserAsync(
+        string title,
+        string message,
+        string type,
+        CancellationToken cancellationToken = default);
 }

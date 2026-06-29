@@ -1,6 +1,8 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Activities.DTOs;
 using BusinessOS.Application.Features.Inventory.Services;
+using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Application.Features.Orders.Services;
 using BusinessOS.Domain.Enums;
 using MediatR;
@@ -14,15 +16,18 @@ public sealed class UpdateOrderStatusCommandHandler
 {
     private readonly IApplicationDbContext _context;
     private readonly IInventoryService _inventoryService;
+    private readonly IBusinessEventService _businessEvents;
     private readonly ILogger<UpdateOrderStatusCommandHandler> _logger;
 
     public UpdateOrderStatusCommandHandler(
         IApplicationDbContext context,
         IInventoryService inventoryService,
+        IBusinessEventService businessEvents,
         ILogger<UpdateOrderStatusCommandHandler> logger)
     {
         _context = context;
         _inventoryService = inventoryService;
+        _businessEvents = businessEvents;
         _logger = logger;
     }
 
@@ -64,6 +69,61 @@ public sealed class UpdateOrderStatusCommandHandler
             order.Id,
             request.Status);
 
+        if (request.Status.Equals(OrderStatusNames.Completed, StringComparison.OrdinalIgnoreCase))
+        {
+            await PublishEventSafeAsync(
+                new BusinessEventRequest(
+                    ActivityActions.Completed,
+                    ActivityEntityTypes.Project,
+                    order.Id,
+                    order.OrderNumber,
+                    "Project Completed",
+                    $"Project {order.OrderNumber} was completed.",
+                    NotificationTypes.Success),
+                cancellationToken);
+
+            foreach (var item in order.OrderItems)
+            {
+                await PublishEventSafeAsync(
+                    new BusinessEventRequest(
+                        ActivityActions.Completed,
+                        ActivityEntityTypes.Task,
+                        item.Id,
+                        $"Task in {order.OrderNumber}",
+                        "Task Completed",
+                        $"A task in project {order.OrderNumber} was completed.",
+                        NotificationTypes.Task),
+                    cancellationToken);
+            }
+        }
+        else
+        {
+            await PublishEventSafeAsync(
+                new BusinessEventRequest(
+                    ActivityActions.Updated,
+                    ActivityEntityTypes.Project,
+                    order.Id,
+                    order.OrderNumber,
+                    "Project Updated",
+                    $"Project {order.OrderNumber} status changed to {request.Status}.",
+                    NotificationTypes.Project),
+                cancellationToken);
+        }
+
         return Unit.Value;
+    }
+
+    private async Task PublishEventSafeAsync(
+        BusinessEventRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _businessEvents.PublishAsync(request, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish business event for order {OrderId}", request.EntityId);
+        }
     }
 }

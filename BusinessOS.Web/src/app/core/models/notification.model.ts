@@ -8,6 +8,7 @@ export interface NotificationDto {
   type: string;
   isRead: boolean;
   createdAt: string;
+  createdBy?: string | null;
 }
 
 export interface NotificationPreferences {
@@ -16,6 +17,10 @@ export interface NotificationPreferences {
   orderNotificationsEnabled: boolean;
   inventoryAlertsEnabled: boolean;
   paymentAlertsEnabled: boolean;
+  taskNotificationsEnabled: boolean;
+  invoiceNotificationsEnabled: boolean;
+  customerNotificationsEnabled: boolean;
+  projectNotificationsEnabled: boolean;
 }
 
 export type UpdateNotificationPreferencesRequest = NotificationPreferences;
@@ -30,3 +35,20 @@ export interface CreateNotificationRequest {
 export interface NotificationQueryParams extends PaginationParams {
   unreadOnly?: boolean;
 }
+
+export interface UnreadCountResponse {
+  count: number;
+}
+
+export const NOTIFICATION_TYPE_VARIANTS: Record<string, 'primary' | 'success' | 'danger' | 'warning' | 'info' | 'neutral'> = {
+  Success: 'success',
+  Info: 'info',
+  Warning: 'warning',
+  Error: 'danger',
+  System: 'neutral',
+  Business: 'primary',
+  Billing: 'primary',
+  Task: 'info',
+  Project: 'primary',
+  Customer: 'info',
+};

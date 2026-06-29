@@ -2,12 +2,16 @@ using System.Text;
 using System.Text.Json;
 using BusinessOS.API.Authorization;
 using BusinessOS.API.Endpoints;
+using BusinessOS.API.Hubs;
 using BusinessOS.API.Middleware;
 using BusinessOS.API.OpenApi;
+using BusinessOS.API.Services;
 using BusinessOS.Application;
+using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Infrastructure;
 using BusinessOS.Infrastructure.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using Serilog;
@@ -34,6 +38,9 @@ try
     builder.Services.AddMemoryCache();
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddProblemDetails();
+    builder.Services.AddSignalR();
+    builder.Services.AddSingleton<IUserIdProvider, NameIdentifierUserIdProvider>();
+    builder.Services.AddScoped<IRealtimeNotificationService, SignalRRealtimeNotificationService>();
     builder.Services.AddBusinessOpenApi();
     builder.Services.ConfigureHttpJsonOptions(options =>
     {
@@ -61,6 +68,22 @@ try
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
                 ClockSkew = TimeSpan.Zero
+            };
+
+            options.Events = new JwtBearerEvents
+            {
+                OnMessageReceived = context =>
+                {
+                    var accessToken = context.Request.Query["access_token"];
+                    var path = context.HttpContext.Request.Path;
+                    if (!string.IsNullOrEmpty(accessToken) &&
+                        path.StartsWithSegments("/hubs"))
+                    {
+                        context.Token = accessToken;
+                    }
+
+                    return Task.CompletedTask;
+                }
             };
         });
 
@@ -137,8 +160,11 @@ try
     app.MapUserEndpoints();
     app.MapAuditEndpoints();
     app.MapNotificationEndpoints();
+    app.MapActivityEndpoints();
     app.MapSettingsEndpoints();
     app.MapSystemAdminEndpoints();
+    app.MapHub<NotificationHub>("/hubs/notifications")
+        .RequireAuthorization();
 
     app.Run();
 }

@@ -40,6 +40,7 @@
           @if (!item.isRead) {
             <button type="button" class="link-primary" (click)="markRead(item)">Mark read</button>
           }
+          <button type="button" class="link-danger" (click)="deleteItem(item)">Delete</button>
         </div>
       </article>
     }

@@ -13,6 +13,10 @@ export interface TenantSettingsDto {
   orderNotificationsEnabled: boolean;
   inventoryAlertsEnabled: boolean;
   paymentAlertsEnabled: boolean;
+  taskNotificationsEnabled: boolean;
+  invoiceNotificationsEnabled: boolean;
+  customerNotificationsEnabled: boolean;
+  projectNotificationsEnabled: boolean;
 }
 
 export interface BusinessProfileDto {
@@ -40,6 +44,10 @@ export interface UpdateTenantSettingsRequest {
   orderNotificationsEnabled: boolean;
   inventoryAlertsEnabled: boolean;
   paymentAlertsEnabled: boolean;
+  taskNotificationsEnabled: boolean;
+  invoiceNotificationsEnabled: boolean;
+  customerNotificationsEnabled: boolean;
+  projectNotificationsEnabled: boolean;
 }
 
 export interface UpdateBusinessProfileRequest {

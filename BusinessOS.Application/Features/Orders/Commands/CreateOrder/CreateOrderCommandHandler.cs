@@ -1,6 +1,8 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Activities.DTOs;
 using BusinessOS.Application.Features.Inventory.Services;
+using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Application.Features.Orders.Services;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
@@ -15,17 +17,20 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
     private readonly IApplicationDbContext _context;
     private readonly IOrderNumberGenerator _orderNumberGenerator;
     private readonly IInventoryService _inventoryService;
+    private readonly IBusinessEventService _businessEvents;
     private readonly ILogger<CreateOrderCommandHandler> _logger;
 
     public CreateOrderCommandHandler(
         IApplicationDbContext context,
         IOrderNumberGenerator orderNumberGenerator,
         IInventoryService inventoryService,
+        IBusinessEventService businessEvents,
         ILogger<CreateOrderCommandHandler> logger)
     {
         _context = context;
         _orderNumberGenerator = orderNumberGenerator;
         _inventoryService = inventoryService;
+        _businessEvents = businessEvents;
         _logger = logger;
     }
 
@@ -114,6 +119,31 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
             order.Id,
             customer.Id);
 
+        await PublishEventSafeAsync(
+            new BusinessEventRequest(
+                ActivityActions.Created,
+                ActivityEntityTypes.Project,
+                order.Id,
+                order.OrderNumber,
+                "Project Created",
+                $"Project {order.OrderNumber} was created.",
+                NotificationTypes.Project),
+            cancellationToken);
+
         return order.Id;
+    }
+
+    private async Task PublishEventSafeAsync(
+        BusinessEventRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _businessEvents.PublishAsync(request, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish business event for order {OrderId}", request.EntityId);
+        }
     }
 }

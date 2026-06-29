@@ -20,9 +20,20 @@ public static class NotificationEndpoints
             .WithName("GetNotifications")
             .Produces<PagedResult<NotificationResponse>>(StatusCodes.Status200OK);
 
+        group.MapGet("/unread-count", GetUnreadCount)
+            .RequirePermission(PermissionCodes.NotificationView)
+            .WithName("GetUnreadNotificationCount")
+            .Produces<UnreadCountResponse>(StatusCodes.Status200OK);
+
         group.MapPost("/{id:guid}/read", MarkRead)
             .RequirePermission(PermissionCodes.NotificationUpdate)
             .WithName("MarkNotificationRead")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
+        group.MapPut("/read/{id:guid}", MarkReadPut)
+            .RequirePermission(PermissionCodes.NotificationUpdate)
+            .WithName("MarkNotificationReadPut")
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
@@ -30,6 +41,17 @@ public static class NotificationEndpoints
             .RequirePermission(PermissionCodes.NotificationUpdate)
             .WithName("MarkAllNotificationsRead")
             .Produces(StatusCodes.Status204NoContent);
+
+        group.MapPut("/read-all", MarkAllReadPut)
+            .RequirePermission(PermissionCodes.NotificationUpdate)
+            .WithName("MarkAllNotificationsReadPut")
+            .Produces(StatusCodes.Status204NoContent);
+
+        group.MapDelete("/{id:guid}", DeleteNotification)
+            .RequirePermission(PermissionCodes.NotificationUpdate)
+            .WithName("DeleteNotification")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapGet("/preferences", GetPreferences)
             .RequirePermission(PermissionCodes.NotificationView)
@@ -64,6 +86,18 @@ public static class NotificationEndpoints
         return Results.Ok(result);
     }
 
+    private static async Task<IResult> GetUnreadCount(
+        INotificationService notificationService,
+        ICurrentUserService currentUserService,
+        CancellationToken cancellationToken)
+    {
+        var userId = currentUserService.UserId
+            ?? throw new Application.Common.Exceptions.UnauthorizedException("User context is required.");
+
+        var count = await notificationService.GetUnreadCountAsync(userId, cancellationToken);
+        return Results.Ok(new UnreadCountResponse(count));
+    }
+
     private static async Task<IResult> MarkRead(
         Guid id,
         INotificationService notificationService,
@@ -72,6 +106,12 @@ public static class NotificationEndpoints
         await notificationService.MarkReadAsync(id, cancellationToken);
         return Results.NoContent();
     }
+
+    private static Task<IResult> MarkReadPut(
+        Guid id,
+        INotificationService notificationService,
+        CancellationToken cancellationToken) =>
+        MarkRead(id, notificationService, cancellationToken);
 
     private static async Task<IResult> MarkAllRead(
         INotificationService notificationService,
@@ -82,6 +122,21 @@ public static class NotificationEndpoints
             ?? throw new Application.Common.Exceptions.UnauthorizedException("User context is required.");
 
         await notificationService.MarkAllReadAsync(userId, cancellationToken);
+        return Results.NoContent();
+    }
+
+    private static Task<IResult> MarkAllReadPut(
+        INotificationService notificationService,
+        ICurrentUserService currentUserService,
+        CancellationToken cancellationToken) =>
+        MarkAllRead(notificationService, currentUserService, cancellationToken);
+
+    private static async Task<IResult> DeleteNotification(
+        Guid id,
+        INotificationService notificationService,
+        CancellationToken cancellationToken)
+    {
+        await notificationService.DeleteAsync(id, cancellationToken);
         return Results.NoContent();
     }
 
@@ -110,4 +165,6 @@ public static class NotificationEndpoints
         var result = await notificationService.CreateNotificationAsync(request, cancellationToken);
         return Results.Created($"/api/notifications/{result.Id}", result);
     }
+
+    private sealed record UnreadCountResponse(int Count);
 }

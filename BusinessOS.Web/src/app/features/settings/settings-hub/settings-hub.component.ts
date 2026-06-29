@@ -5,7 +5,7 @@ import { SettingsService } from '../../../core/services/settings.service';
 import { TenantSettingsStoreService } from '../../../core/services/tenant-settings-store.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { TokenService } from '../../../core/services/token.service';
-import { BusinessProfileDto, TenantSettingsDto } from '../../../core/models/settings.model';
+import { BusinessProfileDto, TenantSettingsDto, UpdateTenantSettingsRequest } from '../../../core/models/settings.model';
 import { ROUTES } from '../../../core/constants/route.constants';
 import { PermissionCodes } from '../../../core/constants/permission.constants';
 import { DEFAULT_CURRENCY_CODE } from '../../../core/constants/currency.constants';
@@ -93,6 +93,10 @@ export class SettingsHubComponent implements OnInit {
     orderNotificationsEnabled: [true],
     inventoryAlertsEnabled: [true],
     paymentAlertsEnabled: [true],
+    taskNotificationsEnabled: [true],
+    invoiceNotificationsEnabled: [true],
+    customerNotificationsEnabled: [true],
+    projectNotificationsEnabled: [true],
   });
 
   readonly profileForm = this.fb.nonNullable.group({
@@ -127,6 +131,10 @@ export class SettingsHubComponent implements OnInit {
           orderNotificationsEnabled: s.orderNotificationsEnabled,
           inventoryAlertsEnabled: s.inventoryAlertsEnabled,
           paymentAlertsEnabled: s.paymentAlertsEnabled,
+          taskNotificationsEnabled: s.taskNotificationsEnabled,
+          invoiceNotificationsEnabled: s.invoiceNotificationsEnabled,
+          customerNotificationsEnabled: s.customerNotificationsEnabled,
+          projectNotificationsEnabled: s.projectNotificationsEnabled,
         });
         this.loading.set(false);
       },
@@ -170,13 +178,26 @@ export class SettingsHubComponent implements OnInit {
 
     this.saving.set(true);
     const value = this.settingsForm.getRawValue();
+    const request: UpdateTenantSettingsRequest = {
+      currency: value.currency,
+      language: value.language,
+      taxRate: value.taxRate,
+      invoicePrefix: value.invoicePrefix || null,
+      emailFromAddress: value.emailFromAddress || null,
+      theme: value.theme,
+      logoUrl: value.logoUrl || null,
+      emailNotificationsEnabled: value.emailNotificationsEnabled,
+      systemNotificationsEnabled: value.systemNotificationsEnabled,
+      orderNotificationsEnabled: value.orderNotificationsEnabled,
+      inventoryAlertsEnabled: value.inventoryAlertsEnabled,
+      paymentAlertsEnabled: value.paymentAlertsEnabled,
+      taskNotificationsEnabled: value.taskNotificationsEnabled,
+      invoiceNotificationsEnabled: value.invoiceNotificationsEnabled,
+      customerNotificationsEnabled: value.customerNotificationsEnabled,
+      projectNotificationsEnabled: value.projectNotificationsEnabled,
+    };
     this.settingsService
-      .updateSettings({
-        ...value,
-        invoicePrefix: value.invoicePrefix || null,
-        emailFromAddress: value.emailFromAddress || null,
-        logoUrl: value.logoUrl || null,
-      })
+      .updateSettings(request)
       .subscribe({
         next: (s) => {
           this.settings.set(s);

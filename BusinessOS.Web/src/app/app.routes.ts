@@ -118,6 +118,10 @@ export const routes: Routes = [
         loadChildren: () => import('./features/notifications/notifications.routes').then((m) => m.NOTIFICATION_ROUTES),
       },
       {
+        path: 'activity',
+        loadChildren: () => import('./features/activity/activity.routes').then((m) => m.ACTIVITY_ROUTES),
+      },
+      {
         path: 'settings',
         loadChildren: () => import('./features/settings/settings.routes').then((m) => m.SETTINGS_ROUTES),
       },

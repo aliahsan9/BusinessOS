@@ -32,35 +32,9 @@
       {{ isDarkMode() ? '☀️' : '🌙' }}
     </button>
 
-    <div class="app-navbar__dropdown">
-      <button
-        type="button"
-        class="app-navbar__action-btn"
-        aria-label="Notifications"
-        [attr.aria-expanded]="showNotifications()"
-        (click)="toggleNotifications()"
-      >
-        🔔
-        @if (hasUnreadNotifications()) {
-          <span class="app-navbar__badge" aria-hidden="true"></span>
-        }
-      </button>
-      @if (showNotifications()) {
-        <div class="app-navbar__panel" role="menu">
-          <div class="app-navbar__panel-header">Notifications</div>
-          @if (notifications().length === 0) {
-            <p class="app-navbar__panel-empty">No notifications yet.</p>
-          } @else {
-            @for (n of notifications(); track n.id) {
-              <div class="app-navbar__notification" [class.app-navbar__notification--unread]="!n.read">
-                <strong>{{ n.title }}</strong>
-                <p>{{ n.message }}</p>
-              </div>
-            }
-          }
-        </div>
-      }
-    </div>
+    @if (canViewNotifications()) {
+      <app-notification-bell />
+    }
 
     <div class="app-navbar__dropdown">
       <button

@@ -1,7 +1,11 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
+import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { DatePipe, DecimalPipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { AppCurrencyPipe } from '../../shared/pipes/app-currency.pipe';
 import { DashboardStateService } from '../../state/dashboard.state';
+import { ActivityService } from '../../core/services/activity.service';
+import { ActivityDto } from '../../core/models/activity.model';
+import { ROUTES } from '../../core/constants/route.constants';
 import { DashboardPeriod } from '../../core/enums';
 import { AppBreadcrumbComponent } from '../../shared/components/app-breadcrumb/app-breadcrumb.component';
 import { AppCardComponent } from '../../shared/components/app-card/app-card.component';
@@ -15,6 +19,8 @@ import { AppEmptyStateComponent } from '../../shared/components/app-empty-state/
   selector: 'app-dashboard',
   standalone: true,
   imports: [
+    RouterLink,
+    DatePipe,
     AppCurrencyPipe,
     DecimalPipe,
     AppBreadcrumbComponent,
@@ -31,6 +37,11 @@ import { AppEmptyStateComponent } from '../../shared/components/app-empty-state/
 })
 export class DashboardComponent implements OnInit {
   private readonly dashboardState = inject(DashboardStateService);
+  private readonly activityService = inject(ActivityService);
+
+  readonly recentActivities = signal<ActivityDto[]>([]);
+  readonly activityLoading = signal(false);
+  readonly routes = ROUTES;
 
   readonly overview = this.dashboardState.overview;
   readonly sales = this.dashboardState.sales;
@@ -56,6 +67,21 @@ export class DashboardComponent implements OnInit {
 
   ngOnInit(): void {
     this.dashboardState.loadDashboard();
+    this.loadRecentActivity();
+  }
+
+  loadRecentActivity(): void {
+    this.activityLoading.set(true);
+    this.activityService.getRecent(10).subscribe({
+      next: (items) => {
+        this.recentActivities.set(items);
+        this.activityLoading.set(false);
+      },
+      error: () => {
+        this.recentActivities.set([]);
+        this.activityLoading.set(false);
+      },
+    });
   }
 
   onPeriodChange(event: Event): void {

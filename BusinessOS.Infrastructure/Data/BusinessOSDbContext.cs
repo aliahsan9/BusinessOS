@@ -49,6 +49,7 @@ public class BusinessOSDbContext
     public DbSet<RbacAuditLog> RbacAuditLogs => Set<RbacAuditLog>();
     public DbSet<AIConversation> AIConversations => Set<AIConversation>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<Activity> Activities => Set<Activity>();
     public DbSet<GeneratedReport> GeneratedReports => Set<GeneratedReport>();
 
     public override Task<int> SaveChangesAsync(
@@ -131,6 +132,9 @@ public class BusinessOSDbContext
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<Notification>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<Activity>()
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<TenantSettings>()

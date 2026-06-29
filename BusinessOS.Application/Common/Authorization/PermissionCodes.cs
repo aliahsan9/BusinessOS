@@ -78,6 +78,8 @@ public static class PermissionCodes
     public const string NotificationView = "Notification.View";
     public const string NotificationUpdate = "Notification.Update";
 
+    public const string ActivityView = "Activity.View";
+
     public const string ReportView = "Report.View";
 
     public const string SettingsView = "Settings.View";
@@ -160,6 +162,7 @@ public static class PermissionCodes
         new("View Audit Logs", AuditView, "View system audit logs", "Audit"),
         new("View Notifications", NotificationView, "View notifications", "Notification"),
         new("Update Notifications", NotificationUpdate, "Manage notification preferences", "Notification"),
+        new("View Activity", ActivityView, "View activity timeline", "Activity"),
         new("View Reports", ReportView, "View and export reports", "Report"),
         new("View Settings", SettingsView, "View business settings", "Settings"),
         new("Update Settings", SettingsUpdate, "Update business settings", "Settings"),
@@ -187,7 +190,8 @@ public static class PermissionCodes
         NotificationView,
         ReportView,
         SettingsView,
-        SystemAdminView
+        SystemAdminView,
+        ActivityView
     };
 
     public static readonly IReadOnlySet<string> ManagerPermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -204,7 +208,7 @@ public static class PermissionCodes
         ExpenseCreate, ExpenseView, ExpenseUpdate, ExpenseDelete,
         ExpenseCategoryCreate, ExpenseCategoryView, ExpenseCategoryUpdate, ExpenseCategoryDelete,
         FinanceView, ReportView, NotificationView, NotificationUpdate,
-        SettingsView, SettingsUpdate
+        SettingsView, SettingsUpdate, ActivityView
     };
 
     public static readonly IReadOnlySet<string> AccountantPermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)

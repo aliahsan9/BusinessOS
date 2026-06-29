@@ -18,6 +18,10 @@ public class TenantSettings : AuditableEntity
     public bool OrderNotificationsEnabled { get; set; } = true;
     public bool InventoryAlertsEnabled { get; set; } = true;
     public bool PaymentAlertsEnabled { get; set; } = true;
+    public bool TaskNotificationsEnabled { get; set; } = true;
+    public bool InvoiceNotificationsEnabled { get; set; } = true;
+    public bool CustomerNotificationsEnabled { get; set; } = true;
+    public bool ProjectNotificationsEnabled { get; set; } = true;
 
     public Tenant Tenant { get; set; } = default!;
 }
