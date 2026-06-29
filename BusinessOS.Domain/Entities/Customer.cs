@@ -15,6 +15,7 @@ public class Customer : AuditableEntity
     public string Country { get; set; } = default!;
     public string PostalCode { get; set; } = default!;
     public bool IsActive { get; set; } = true;
+    public string? AssignedUserId { get; set; }
 
     public ICollection<Order> Orders { get; set; } = new List<Order>();
 }

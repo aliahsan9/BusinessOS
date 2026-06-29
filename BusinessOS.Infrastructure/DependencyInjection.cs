@@ -11,7 +11,9 @@ using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Application.Features.Onboarding.Services;
 using BusinessOS.Application.Features.AI.Services;
 using BusinessOS.Application.Features.Help.Services;
+using BusinessOS.Application.Features.Organization.Services;
 using BusinessOS.Application.Features.Roles.Services;
+using BusinessOS.Application.Features.Team.Services;
 using BusinessOS.Application.Features.Settings.Services;
 using BusinessOS.Application.Features.SystemAdmin.Services;
 using BusinessOS.Infrastructure.Data;
@@ -97,6 +99,8 @@ public static class DependencyInjection
         services.AddScoped<IOnboardingService, OnboardingService>();
         services.AddScoped<IAiAssistantService, AiAssistantService>();
         services.AddScoped<IHelpService, HelpService>();
+        services.AddScoped<ITeamService, TeamService>();
+        services.AddScoped<IOrganizationService, OrganizationService>();
 
         return services;
     }

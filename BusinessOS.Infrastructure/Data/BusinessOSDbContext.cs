@@ -52,6 +52,9 @@ public class BusinessOSDbContext
     public DbSet<Activity> Activities => Set<Activity>();
     public DbSet<GeneratedReport> GeneratedReports => Set<GeneratedReport>();
     public DbSet<UserOnboardingProgress> UserOnboardingProgress => Set<UserOnboardingProgress>();
+    public DbSet<TeamInvitation> TeamInvitations => Set<TeamInvitation>();
+    public DbSet<Project> Projects => Set<Project>();
+    public DbSet<WorkTask> WorkTasks => Set<WorkTask>();
 
     public override Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default)
@@ -172,6 +175,15 @@ public class BusinessOSDbContext
             .HasQueryFilter(x => x.Id == _tenantId && !x.IsDeleted);
 
         builder.Entity<GeneratedReport>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<TeamInvitation>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<Project>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<WorkTask>()
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
     }
 }

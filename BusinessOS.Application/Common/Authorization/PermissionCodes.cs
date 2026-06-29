@@ -84,8 +84,33 @@ public static class PermissionCodes
 
     public const string SettingsView = "Settings.View";
     public const string SettingsUpdate = "Settings.Update";
+    public const string SettingsManage = "Settings.Manage";
 
     public const string SystemAdminView = "SystemAdmin.View";
+
+    public const string ProjectCreate = "Projects.Create";
+    public const string ProjectView = "Projects.View";
+    public const string ProjectUpdate = "Projects.Update";
+    public const string ProjectDelete = "Projects.Delete";
+
+    public const string TaskCreate = "Tasks.Create";
+    public const string TaskView = "Tasks.View";
+    public const string TaskUpdate = "Tasks.Update";
+    public const string TaskDelete = "Tasks.Delete";
+
+    public const string AnalyticsView = "Analytics.View";
+
+    public const string TeamView = "Team.View";
+    public const string TeamManage = "Team.Manage";
+    public const string TeamInvite = "Team.Invite";
+
+    public const string OrganizationView = "Organization.View";
+    public const string OrganizationManage = "Organization.Manage";
+
+    public const string SubscriptionView = "Subscription.View";
+    public const string SubscriptionManage = "Subscription.Manage";
+
+    public const string UserManage = "Users.Manage";
 
     public static readonly IReadOnlyList<PermissionDefinition> All =
     [
@@ -166,7 +191,32 @@ public static class PermissionCodes
         new("View Reports", ReportView, "View and export reports", "Report"),
         new("View Settings", SettingsView, "View business settings", "Settings"),
         new("Update Settings", SettingsUpdate, "Update business settings", "Settings"),
-        new("View System Admin", SystemAdminView, "View system administration", "SystemAdmin")
+        new("Manage Settings", SettingsManage, "Full settings management", "Settings"),
+        new("View System Admin", SystemAdminView, "View system administration", "SystemAdmin"),
+
+        new("Create Project", ProjectCreate, "Create projects", "Project"),
+        new("View Projects", ProjectView, "View projects", "Project"),
+        new("Update Project", ProjectUpdate, "Update projects", "Project"),
+        new("Delete Project", ProjectDelete, "Delete projects", "Project"),
+
+        new("Create Task", TaskCreate, "Create tasks", "Task"),
+        new("View Tasks", TaskView, "View tasks", "Task"),
+        new("Update Task", TaskUpdate, "Update tasks", "Task"),
+        new("Delete Task", TaskDelete, "Delete tasks", "Task"),
+
+        new("View Analytics", AnalyticsView, "View business analytics", "Analytics"),
+
+        new("View Team", TeamView, "View team members and dashboard", "Team"),
+        new("Manage Team", TeamManage, "Manage team members and roles", "Team"),
+        new("Invite Team Members", TeamInvite, "Invite new team members", "Team"),
+
+        new("View Organization", OrganizationView, "View organization profile", "Organization"),
+        new("Manage Organization", OrganizationManage, "Manage organization settings", "Organization"),
+
+        new("View Subscription", SubscriptionView, "View subscription details", "Subscription"),
+        new("Manage Subscription", SubscriptionManage, "Manage subscription billing", "Subscription"),
+
+        new("Manage Users", UserManage, "Full user management access", "User")
     ];
 
     public static readonly IReadOnlySet<string> ViewOnly = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -191,32 +241,43 @@ public static class PermissionCodes
         ReportView,
         SettingsView,
         SystemAdminView,
-        ActivityView
+        ActivityView,
+        ProjectView,
+        TaskView,
+        AnalyticsView,
+        TeamView,
+        OrganizationView,
+        SubscriptionView
+    };
+
+    public static readonly IReadOnlySet<string> EmployeePermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ProjectView,
+        TaskView,
+        TaskUpdate,
+        ActivityView,
+        NotificationView
     };
 
     public static readonly IReadOnlySet<string> ManagerPermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        ProductCreate, ProductView, ProductUpdate, ProductDelete,
         CustomerCreate, CustomerView, CustomerUpdate, CustomerDelete,
-        OrderCreate, OrderView, OrderUpdate, OrderDelete,
-        SupplierCreate, SupplierView, SupplierUpdate, SupplierDelete,
-        PurchaseOrderCreate, PurchaseOrderView, PurchaseOrderUpdate, PurchaseOrderDelete,
-        PaymentCreate, PaymentView, PaymentUpdate, PaymentDelete,
-        InvoiceCreate, InvoiceView, InvoiceUpdate, InvoiceDelete,
-        QuotationCreate, QuotationView, QuotationUpdate, QuotationDelete,
-        InventoryView, InventoryUpdate, InventoryAdjust,
-        ExpenseCreate, ExpenseView, ExpenseUpdate, ExpenseDelete,
-        ExpenseCategoryCreate, ExpenseCategoryView, ExpenseCategoryUpdate, ExpenseCategoryDelete,
-        FinanceView, ReportView, NotificationView, NotificationUpdate,
-        SettingsView, SettingsUpdate, ActivityView
+        ProjectCreate, ProjectView, ProjectUpdate, ProjectDelete,
+        TaskCreate, TaskView, TaskUpdate, TaskDelete,
+        OrderView,
+        ReportView,
+        AnalyticsView,
+        ActivityView,
+        NotificationView, NotificationUpdate
     };
 
     public static readonly IReadOnlySet<string> AccountantPermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         ExpenseCreate, ExpenseView, ExpenseUpdate, ExpenseDelete,
         ExpenseCategoryCreate, ExpenseCategoryView, ExpenseCategoryUpdate, ExpenseCategoryDelete,
-        FinanceView, ReportView,
-        PaymentView, InvoiceView, OrderView,
+        FinanceView, ReportView, AnalyticsView,
+        InvoiceCreate, InvoiceView, InvoiceUpdate, InvoiceDelete,
+        PaymentView, OrderView,
         NotificationView, NotificationUpdate
     };
 
@@ -236,6 +297,13 @@ public static class PermissionCodes
         SupplierCreate, SupplierView, SupplierUpdate, SupplierDelete,
         PurchaseOrderCreate, PurchaseOrderView, PurchaseOrderUpdate, PurchaseOrderDelete
     };
+
+    public static IReadOnlySet<string> BuildAdminPermissions()
+    {
+        var all = All.Select(x => x.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        all.Remove(SubscriptionManage);
+        return all;
+    }
 }
 
 public sealed record PermissionDefinition(

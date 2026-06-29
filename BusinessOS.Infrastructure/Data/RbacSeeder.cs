@@ -22,6 +22,7 @@ public static class RbacSeeder
         var roleMap = await SeedRolesAsync(context, roleManager, logger, cancellationToken);
         await SeedRolePermissionsAsync(context, roleMap, logger, cancellationToken);
         await SyncIdentityUserRolesAsync(context, userManager, roleMap, cancellationToken);
+        await MigrateAdminToOwnerAsync(context, userManager, roleMap, cancellationToken);
     }
 
     private static async Task SeedPermissionsAsync(
@@ -110,8 +111,10 @@ public static class RbacSeeder
 
         var rolePermissionMap = new Dictionary<string, IReadOnlySet<string>>(StringComparer.OrdinalIgnoreCase)
         {
-            [RoleNames.Admin] = permissions.Select(x => x.Code).ToHashSet(StringComparer.OrdinalIgnoreCase),
+            [RoleNames.Owner] = permissions.Select(x => x.Code).ToHashSet(StringComparer.OrdinalIgnoreCase),
+            [RoleNames.Admin] = PermissionCodes.BuildAdminPermissions(),
             [RoleNames.Manager] = PermissionCodes.ManagerPermissions,
+            [RoleNames.Employee] = PermissionCodes.EmployeePermissions,
             [RoleNames.Accountant] = PermissionCodes.AccountantPermissions,
             [RoleNames.Sales] = PermissionCodes.SalesPermissions,
             [RoleNames.InventoryManager] = PermissionCodes.InventoryManagerPermissions,
@@ -193,12 +196,84 @@ public static class RbacSeeder
         await context.SaveChangesAsync(cancellationToken);
     }
 
+    private static async Task MigrateAdminToOwnerAsync(
+        BusinessOSDbContext context,
+        UserManager<ApplicationUser> userManager,
+        Dictionary<string, Role> roleMap,
+        CancellationToken cancellationToken)
+    {
+        if (!roleMap.TryGetValue(RoleNames.Owner, out var ownerRole))
+        {
+            return;
+        }
+
+        var tenants = await context.Tenants
+            .IgnoreQueryFilters()
+            .Where(x => !x.IsDeleted)
+            .ToListAsync(cancellationToken);
+
+        foreach (var tenant in tenants)
+        {
+            if (string.IsNullOrWhiteSpace(tenant.OwnerUserId))
+            {
+                continue;
+            }
+
+            var owner = await userManager.FindByIdAsync(tenant.OwnerUserId);
+            if (owner is null)
+            {
+                continue;
+            }
+
+            var roles = await userManager.GetRolesAsync(owner);
+            if (roles.Contains(RoleNames.Owner, StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (roles.Contains(RoleNames.Admin, StringComparer.OrdinalIgnoreCase))
+            {
+                await userManager.RemoveFromRoleAsync(owner, RoleNames.Admin);
+
+                var adminRbac = roleMap.GetValueOrDefault(RoleNames.Admin);
+                if (adminRbac is not null)
+                {
+                    var adminAssignment = await context.RbacUserRoles
+                        .FirstOrDefaultAsync(x => x.UserId == owner.Id && x.RoleId == adminRbac.Id, cancellationToken);
+
+                    if (adminAssignment is not null)
+                    {
+                        context.RbacUserRoles.Remove(adminAssignment);
+                    }
+                }
+            }
+
+            await userManager.AddToRoleAsync(owner, RoleNames.Owner);
+
+            var exists = await context.RbacUserRoles
+                .AnyAsync(x => x.UserId == owner.Id && x.RoleId == ownerRole.Id, cancellationToken);
+
+            if (!exists)
+            {
+                context.RbacUserRoles.Add(new UserRole
+                {
+                    UserId = owner.Id,
+                    RoleId = ownerRole.Id
+                });
+            }
+        }
+
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
     private static string GetDefaultRoleDescription(string roleName) =>
         roleName switch
         {
-            RoleNames.Admin => "Full system access with all permissions.",
-            RoleNames.Manager => "Manages products, customers, orders, inventory, and finance.",
-            RoleNames.Accountant => "Manages expenses, financial reports, and accounting.",
+            RoleNames.Owner => "Full access including ownership transfer and subscription billing.",
+            RoleNames.Admin => "Almost full access except subscription billing and ownership transfer.",
+            RoleNames.Manager => "Manages customers, projects, tasks, reports, and analytics.",
+            RoleNames.Employee => "Views and updates assigned projects and tasks.",
+            RoleNames.Accountant => "Manages invoices, expenses, and financial analytics.",
             RoleNames.Sales => "Manages customers and orders.",
             RoleNames.InventoryManager => "Manages inventory and products.",
             RoleNames.Viewer => "Read-only access across modules.",

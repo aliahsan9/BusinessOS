@@ -11,6 +11,9 @@ public class ApplicationUser : IdentityUser
     public string LastName { get; set; } = default!;
 
     public bool IsActive { get; set; } = true;
+    public string? AvatarUrl { get; set; }
+    public DateTime? LastActiveAt { get; set; }
+    public DateTime JoinedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
     public Tenant Tenant { get; set; } = default!;

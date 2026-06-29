@@ -105,11 +105,41 @@ export const PermissionCodes = {
   systemAdmin: {
     view: 'SystemAdmin.View',
   },
+  project: {
+    create: 'Projects.Create',
+    view: 'Projects.View',
+    update: 'Projects.Update',
+    delete: 'Projects.Delete',
+  },
+  task: {
+    create: 'Tasks.Create',
+    view: 'Tasks.View',
+    update: 'Tasks.Update',
+    delete: 'Tasks.Delete',
+  },
+  analytics: {
+    view: 'Analytics.View',
+  },
+  team: {
+    view: 'Team.View',
+    manage: 'Team.Manage',
+    invite: 'Team.Invite',
+  },
+  organization: {
+    view: 'Organization.View',
+    manage: 'Organization.Manage',
+  },
+  subscription: {
+    view: 'Subscription.View',
+    manage: 'Subscription.Manage',
+  },
 } as const;
 
 export const RoleNames = {
+  owner: 'Owner',
   admin: 'Admin',
   manager: 'Manager',
+  employee: 'Employee',
   accountant: 'Accountant',
   sales: 'Sales',
   inventoryManager: 'InventoryManager',

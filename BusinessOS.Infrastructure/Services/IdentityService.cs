@@ -57,7 +57,8 @@ public sealed class IdentityService : IIdentityService
             Email = request.Email,
             FirstName = request.FirstName,
             LastName = request.LastName,
-            TenantId = request.TenantId
+            TenantId = request.TenantId,
+            JoinedAt = DateTime.UtcNow
         };
 
         var result = await _userManager.CreateAsync(user, request.Password);

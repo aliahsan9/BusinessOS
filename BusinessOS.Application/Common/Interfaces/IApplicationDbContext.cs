@@ -33,6 +33,9 @@ public interface IApplicationDbContext
     DbSet<GeneratedReport> GeneratedReports { get; }
     DbSet<UserOnboardingProgress> UserOnboardingProgress { get; }
     DbSet<AIConversation> AIConversations { get; }
+    DbSet<TeamInvitation> TeamInvitations { get; }
+    DbSet<Project> Projects { get; }
+    DbSet<WorkTask> WorkTasks { get; }
 
     Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default);

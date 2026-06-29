@@ -101,7 +101,7 @@ public sealed class RoleService : IRoleService
         var role = await _roleRepository.GetRoleByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException($"Role '{id}' was not found.");
 
-        if (RoleNames.All.Contains(role.Name))
+        if (RoleNames.Protected.Contains(role.Name))
         {
             throw new BadRequestException($"System role '{role.Name}' cannot be deleted.");
         }

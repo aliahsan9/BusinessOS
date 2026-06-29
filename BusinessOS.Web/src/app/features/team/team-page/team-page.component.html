@@ -1,0 +1,231 @@
+<app-breadcrumb [items]="breadcrumbs" />
+
+<app-page-header
+  title="Team Management"
+  subtitle="Invite members, manage roles, and track team activity."
+  [actions]="headerActions"
+/>
+
+@if (error()) {
+  <app-alert variant="danger" [message]="error()!" [dismissible]="false" />
+}
+
+<section class="stats-grid">
+  @if (dashboardLoading()) {
+    @for (i of [1, 2, 3, 4]; track i) {
+      <app-skeleton height="5rem" />
+    }
+  } @else if (dashboard()) {
+    <app-card title="Total Members" [padding]="true">
+      <p class="stat-value">{{ dashboard()!.totalMembers }}</p>
+    </app-card>
+    <app-card title="Active Members" [padding]="true">
+      <p class="stat-value stat-value--success">{{ dashboard()!.activeMembers }}</p>
+    </app-card>
+    <app-card title="Pending Invitations" [padding]="true">
+      <p class="stat-value stat-value--warning">{{ dashboard()!.pendingInvitations }}</p>
+    </app-card>
+    <app-card title="Roles" [padding]="true">
+      <p class="stat-value">{{ dashboard()!.roleDistribution.length }}</p>
+    </app-card>
+  }
+</section>
+
+@if (dashboard()?.roleDistribution?.length) {
+  <section class="section-block">
+    <h2 class="section-title">Roles Distribution</h2>
+    <div class="role-badges">
+      @for (item of dashboard()!.roleDistribution; track item.roleName) {
+        <span class="role-chip">
+          <app-badge [label]="item.roleName" [variant]="roleBadgeVariant(item.roleName)" />
+          <span class="role-count">{{ item.count }}</span>
+        </span>
+      }
+    </div>
+  </section>
+}
+
+<div class="content-grid">
+  <section class="section-block members-panel">
+    <h2 class="section-title">Team Members</h2>
+
+    <div class="toolbar">
+      <app-search-bar placeholder="Search members..." [value]="searchTerm()" (search)="onSearch($event)" />
+      <select class="form-select filter-input" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event); onFilterChange()">
+        <option value="">All statuses</option>
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+      </select>
+      <select class="form-select filter-input" [ngModel]="roleFilter()" (ngModelChange)="roleFilter.set($event); onFilterChange()">
+        <option value="">All roles</option>
+        @for (role of roles(); track role.id) {
+          <option [value]="role.name">{{ role.name }}</option>
+        }
+      </select>
+    </div>
+
+    @if (loading()) {
+      <div class="loading-stack">
+        @for (i of [1, 2, 3, 4, 5]; track i) {
+          <app-skeleton height="2.5rem" />
+        }
+      </div>
+    } @else if (members().length === 0) {
+      <app-empty-state icon="👥" title="No team members" description="Invite your first team member to get started." />
+    } @else {
+      <div class="bos-table-wrapper">
+        <table class="bos-table bos-table--striped bos-table--hover bos-table--compact">
+          <thead>
+            <tr>
+              <th>Member</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Joined</th>
+              <th>Last Active</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (member of members(); track member.id) {
+              <tr>
+                <td>
+                  <div class="member-cell">
+                    @if (member.avatarUrl) {
+                      <img [src]="member.avatarUrl" [alt]="member.fullName" class="avatar avatar--img" />
+                    } @else {
+                      <span class="avatar">{{ initials(member.fullName) }}</span>
+                    }
+                    <span>{{ member.fullName }}</span>
+                  </div>
+                </td>
+                <td>{{ member.email }}</td>
+                <td>
+                  @for (role of member.roles; track role) {
+                    <app-badge [label]="role" [variant]="roleBadgeVariant(role)" />
+                  }
+                </td>
+                <td>{{ member.joinedAt | date: 'mediumDate' }}</td>
+                <td>{{ member.lastActiveAt ? (member.lastActiveAt | date: 'short') : '—' }}</td>
+                <td>
+                  <app-badge [label]="member.isActive ? 'Active' : 'Inactive'" [variant]="member.isActive ? 'success' : 'neutral'" />
+                </td>
+                <td class="bos-table__actions">
+                  @if (canManage) {
+                    <button type="button" class="btn-link" (click)="openEditModal(member)">Edit</button>
+                    <button type="button" class="btn-link btn-link--danger" (click)="confirmRemove(member)">Remove</button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <app-pagination
+        [page]="page()"
+        [pageSize]="pageSize()"
+        [totalCount]="totalCount()"
+        [totalPages]="totalPages()"
+        (pageChange)="onPageChange($event)"
+      />
+    }
+  </section>
+
+  <aside class="section-block side-panel">
+    @if (canInvite && invitations().length) {
+      <h2 class="section-title">Pending Invitations</h2>
+      <ul class="invitation-list">
+        @for (inv of invitations(); track inv.id) {
+          <li>
+            <strong>{{ inv.email }}</strong>
+            <app-badge [label]="inv.roleName" variant="neutral" />
+            <small>Expires {{ inv.expiresAt | date: 'mediumDate' }}</small>
+          </li>
+        }
+      </ul>
+    }
+
+    @if (dashboard()?.recentActivity?.length) {
+      <h2 class="section-title">Recent Activity</h2>
+      <ul class="activity-feed">
+        @for (item of dashboard()!.recentActivity; track item.id) {
+          <li>
+            <span class="activity-user">{{ item.userName }}</span>
+            <span class="activity-action">{{ item.action }}</span>
+            <span class="activity-entity">{{ item.entityType }}: {{ item.entityName }}</span>
+            <small>{{ item.createdAt | date: 'short' }}</small>
+          </li>
+        }
+      </ul>
+    }
+
+    @if (dashboard()?.assignedTasks?.length) {
+      <h2 class="section-title">Assigned Tasks</h2>
+      <ul class="task-list">
+        @for (task of dashboard()!.assignedTasks; track task.id) {
+          <li>
+            <strong>{{ task.title }}</strong>
+            <span>{{ task.projectName }}</span>
+            <app-badge [label]="task.status" variant="neutral" />
+          </li>
+        }
+      </ul>
+    }
+  </aside>
+</div>
+
+@if (showInviteModal()) {
+  <div class="modal-backdrop" (click)="showInviteModal.set(false)">
+    <div class="modal-panel" (click)="$event.stopPropagation()">
+      <h3>Invite Team Member</h3>
+      <app-input label="Email" type="email" [(ngModel)]="inviteEmail" placeholder="colleague@company.com" />
+      <label class="form-label">Role</label>
+      <select class="form-select" [(ngModel)]="inviteRoleId">
+        @for (role of roles(); track role.id) {
+          <option [value]="role.id">{{ role.name }}</option>
+        }
+      </select>
+      <div class="modal-actions">
+        <app-button label="Cancel" [variant]="ButtonVariant.Outline" (clicked)="showInviteModal.set(false)" />
+        <app-button label="Send Invitation" [loading]="saving()" (clicked)="submitInvite()" />
+      </div>
+    </div>
+  </div>
+}
+
+@if (showEditModal()) {
+  <div class="modal-backdrop" (click)="showEditModal.set(false)">
+    <div class="modal-panel" (click)="$event.stopPropagation()">
+      <h3>Edit Team Member</h3>
+      <app-input label="First Name" [(ngModel)]="editFirstName" />
+      <app-input label="Last Name" [(ngModel)]="editLastName" />
+      <app-input label="Avatar URL" [(ngModel)]="editAvatarUrl" placeholder="https://..." />
+      <label class="form-label">Role</label>
+      <select class="form-select" [(ngModel)]="editRoleId">
+        @for (role of roles(); track role.id) {
+          <option [value]="role.id">{{ role.name }}</option>
+        }
+      </select>
+      <label class="form-check">
+        <input type="checkbox" class="form-check-input" [(ngModel)]="editIsActive" />
+        Active
+      </label>
+      <div class="modal-actions">
+        <app-button label="Cancel" [variant]="ButtonVariant.Outline" (clicked)="showEditModal.set(false)" />
+        <app-button label="Save Changes" [loading]="saving()" (clicked)="submitEdit()" />
+      </div>
+    </div>
+  </div>
+}
+
+@if (showRemoveConfirm()) {
+  <app-confirm-dialog
+    title="Remove Team Member"
+    message="This will deactivate the member's access. Continue?"
+    confirmLabel="Remove"
+    [variant]="ButtonVariant.Danger"
+    (confirmed)="removeMember()"
+    (cancelled)="showRemoveConfirm.set(false)"
+  />
+}

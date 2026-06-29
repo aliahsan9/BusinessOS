@@ -87,7 +87,8 @@ public class AuthServiceTests
             jwtTokenGenerator,
             tenantProvider.Object,
             Mock.Of<IDbContextFactory<BusinessOS.Infrastructure.Data.BusinessOSDbContext>>(),
-            roleRepository);
+            roleRepository,
+            Mock.Of<IRbacAuditService>());
     }
 }
 

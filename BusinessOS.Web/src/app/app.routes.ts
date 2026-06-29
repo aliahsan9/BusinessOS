@@ -138,6 +138,14 @@ export const routes: Routes = [
         path: 'admin',
         loadChildren: () => import('./features/admin/admin.routes').then((m) => m.ADMIN_ROUTES),
       },
+      {
+        path: 'team',
+        loadChildren: () => import('./features/team/team.routes').then((m) => m.TEAM_ROUTES),
+      },
+      {
+        path: 'organization',
+        loadChildren: () => import('./features/organization/organization.routes').then((m) => m.ORGANIZATION_ROUTES),
+      },
       ...buildFeatureRoutes(),
     ],
   },

@@ -155,7 +155,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: '📉',
     route: ROUTES.analytics.base,
     description: 'Advanced analytics across customers, projects, revenue, and expenses.',
-    permissions: ['Report.View'],
+    permissions: ['Analytics.View'],
   },
   {
     label: 'Financial Dashboard',
@@ -188,6 +188,22 @@ export const NAV_ITEMS: NavItem[] = [
     description: 'Analyze revenue, expenses, and profitability.',
     permissions: ['Finance.View'],
     group: 'Finance',
+  },
+  {
+    label: 'Team',
+    icon: '👨‍👩‍👧‍👦',
+    route: ROUTES.team.base,
+    description: 'Manage team members, roles, and collaboration.',
+    permissions: ['Team.View'],
+    group: 'Administration',
+  },
+  {
+    label: 'Organization',
+    icon: '🏢',
+    route: ROUTES.organization.base,
+    description: 'Organization profile, logo, timezone, and currency.',
+    permissions: ['Organization.View'],
+    group: 'Administration',
   },
   {
     label: 'Users',
@@ -254,4 +270,4 @@ export const NAV_ITEMS: NavItem[] = [
     group: 'Administration',
   },
 ];
-
+

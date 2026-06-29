@@ -148,6 +148,15 @@ export const ROUTES = {
     base: '/activity',
     list: '/activity',
   },
+  team: {
+    base: '/team',
+    list: '/team',
+    member: '/team/member/:id',
+  },
+  organization: {
+    base: '/organization',
+    settings: '/organization',
+  },
   profile: '/profile',
   forbidden: '/forbidden',
   notFound: '/not-found',

@@ -1,6 +1,8 @@
 using BusinessOS.Application.Features.Auth.Commands.Login;
 using BusinessOS.Application.Features.Auth.Commands.Register;
 using BusinessOS.Application.Features.Auth.DTOs;
+using BusinessOS.Application.Features.Team.DTOs;
+using BusinessOS.Application.Features.Team.Services;
 using MediatR;
 
 namespace BusinessOS.API.Endpoints;
@@ -34,6 +36,18 @@ public static class AuthEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status400BadRequest);
 
+        group.MapGet("/invitation/{token}", GetInvitationPreview)
+            .WithName("GetInvitationPreview")
+            .WithSummary("Preview a team invitation")
+            .Produces<InvitationPreviewDto>(StatusCodes.Status200OK);
+
+        group.MapPost("/accept-invitation", AcceptInvitation)
+            .WithName("AcceptInvitation")
+            .WithSummary("Accept a team invitation")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
         return app;
     }
 
@@ -53,5 +67,23 @@ public static class AuthEndpoints
     {
         var result = await sender.Send(command, cancellationToken);
         return Results.Ok(result);
+    }
+
+    private static async Task<IResult> GetInvitationPreview(
+        string token,
+        ITeamService teamService,
+        CancellationToken cancellationToken)
+    {
+        var result = await teamService.GetInvitationPreviewAsync(token, cancellationToken);
+        return Results.Ok(result);
+    }
+
+    private static async Task<IResult> AcceptInvitation(
+        AcceptInvitationRequest request,
+        ITeamService teamService,
+        CancellationToken cancellationToken)
+    {
+        await teamService.AcceptInvitationAsync(request, cancellationToken);
+        return Results.NoContent();
     }
 }

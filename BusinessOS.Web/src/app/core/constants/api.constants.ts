@@ -79,6 +79,14 @@ export const API_ENDPOINTS = {
     historyRegenerate: '/reports/history',
   },
   auditLogs: '/audit-logs',
+  team: {
+    base: '/team',
+    invite: '/team/invite',
+    member: '/team/member',
+    activity: '/team/activity',
+    invitations: '/team/invitations',
+  },
+  organization: '/organization',
   notifications: {
     base: '/notifications',
     preferences: '/notifications/preferences',

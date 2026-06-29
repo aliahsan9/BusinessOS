@@ -1,0 +1,53 @@
+<app-breadcrumb [items]="breadcrumbs" />
+
+<app-page-header
+  title="Organization Settings"
+  subtitle="Manage your organization profile, branding, and regional preferences."
+/>
+
+@if (error()) {
+  <app-alert variant="danger" [message]="error()!" [dismissible]="false" />
+}
+
+@if (loading()) {
+  <div class="loading-stack">
+    @for (i of [1, 2, 3, 4]; track i) {
+      <app-skeleton height="3rem" />
+    }
+  </div>
+} @else {
+  <form [formGroup]="form" (ngSubmit)="save()" class="org-form">
+    <app-card title="Organization Profile" subtitle="Business identity and contact details." [padding]="true">
+      <div class="form-grid">
+        <app-input label="Organization Name" formControlName="name" />
+        <app-input label="Business Type" formControlName="businessType" />
+        <app-input label="Email" type="email" formControlName="email" />
+        <app-input label="Phone" type="tel" formControlName="phone" />
+        <app-input label="Address" formControlName="address" class="span-2" />
+        <app-input label="Website" formControlName="website" placeholder="https://..." />
+        <app-input label="Logo URL" formControlName="logoUrl" placeholder="https://..." />
+      </div>
+      <label class="form-label">Description</label>
+      <textarea class="form-control" formControlName="description" rows="3"></textarea>
+    </app-card>
+
+    <app-card title="Regional Settings" subtitle="Currency and timezone preferences." [padding]="true">
+      <div class="form-grid">
+        <app-input label="Currency" formControlName="currency" placeholder="USD" />
+        <app-input label="Timezone" formControlName="timezone" placeholder="UTC" />
+      </div>
+    </app-card>
+
+    @if (organization(); as org) {
+      <app-card title="Subscription" [padding]="true">
+        <p class="plan-label">Current Plan: <strong>{{ org.subscriptionPlan }}</strong></p>
+      </app-card>
+    }
+
+    @if (canManage) {
+      <div class="form-actions">
+        <app-button label="Save Changes" type="submit" [loading]="saving()" />
+      </div>
+    }
+  </form>
+}

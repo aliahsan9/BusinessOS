@@ -1,6 +1,6 @@
 using BusinessOS.Application.Common.Authorization;
-using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Features.Auth.DTOs;
 using BusinessOS.Application.Features.Auth.Services;
 using BusinessOS.Infrastructure.Data;
@@ -16,6 +16,7 @@ public sealed class AuthService : IAuthService
     private readonly ITenantProvider _tenantProvider;
     private readonly IDbContextFactory<BusinessOSDbContext> _dbContextFactory;
     private readonly IRoleRepository _roleRepository;
+    private readonly IRbacAuditService _auditService;
 
     public AuthService(
         IIdentityService identityService,
@@ -23,7 +24,8 @@ public sealed class AuthService : IAuthService
         IJwtTokenGenerator jwtTokenGenerator,
         ITenantProvider tenantProvider,
         IDbContextFactory<BusinessOSDbContext> dbContextFactory,
-        IRoleRepository roleRepository)
+        IRoleRepository roleRepository,
+        IRbacAuditService auditService)
     {
         _identityService = identityService;
         _tenantRegistrationService = tenantRegistrationService;
@@ -31,6 +33,7 @@ public sealed class AuthService : IAuthService
         _tenantProvider = tenantProvider;
         _dbContextFactory = dbContextFactory;
         _roleRepository = roleRepository;
+        _auditService = auditService;
     }
 
     public async Task<AuthResponse> LoginAsync(
@@ -48,6 +51,19 @@ public sealed class AuthService : IAuthService
 
         _tenantProvider.SetTenantId(user.TenantId);
 
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var appUser = await dbContext.Users.FirstOrDefaultAsync(x => x.Id == user.Id, cancellationToken);
+        if (appUser is not null)
+        {
+            if (!appUser.IsActive)
+            {
+                throw new UnauthorizedException("Account is deactivated.");
+            }
+
+            appUser.LastActiveAt = DateTime.UtcNow;
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
         var roles = await _roleRepository.GetUserRoleNamesAsync(user.Id, cancellationToken);
         if (roles.Count == 0)
         {
@@ -56,6 +72,14 @@ public sealed class AuthService : IAuthService
 
         var permissions = await _roleRepository.GetUserPermissionCodesAsync(user.Id, cancellationToken);
         var token = _jwtTokenGenerator.GenerateToken(user.Id, user.Email, user.TenantId, roles, permissions);
+
+        await _auditService.LogAsync(
+            "UserLogin",
+            "User",
+            user.Id,
+            null,
+            RbacAuditService.Serialize(new { user.Email }),
+            cancellationToken);
 
         return new AuthResponse
         {
@@ -103,8 +127,8 @@ public sealed class AuthService : IAuthService
         var user = await _identityService.FindByEmailAsync(email, cancellationToken)
             ?? throw new BadRequestException("User registration failed.");
 
-        await _identityService.AddToRoleAsync(user, RoleNames.Admin, cancellationToken);
-        await AssignRbacRoleAsync(user.Id, RoleNames.Admin, cancellationToken);
+        await _identityService.AddToRoleAsync(user, RoleNames.Owner, cancellationToken);
+        await AssignRbacRoleAsync(user.Id, RoleNames.Owner, cancellationToken);
 
         var tenant = await dbContext.Tenants
             .IgnoreQueryFilters()
