@@ -81,6 +81,10 @@ export const routes: Routes = [
         loadChildren: () => import('./features/reports/reports.routes').then((m) => m.REPORT_ROUTES),
       },
       {
+        path: 'analytics',
+        loadChildren: () => import('./features/analytics/analytics.routes').then((m) => m.ANALYTICS_ROUTES),
+      },
+      {
         path: 'expenses',
         loadChildren: () => import('./features/expenses/expenses.routes').then((m) => m.EXPENSE_ROUTES),
       },
@@ -116,6 +120,10 @@ export const routes: Routes = [
       {
         path: 'settings',
         loadChildren: () => import('./features/settings/settings.routes').then((m) => m.SETTINGS_ROUTES),
+      },
+      {
+        path: 'subscription',
+        loadChildren: () => import('./features/subscription/subscription.routes').then((m) => m.SUBSCRIPTION_ROUTES),
       },
       {
         path: 'admin',

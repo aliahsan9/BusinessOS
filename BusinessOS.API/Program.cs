@@ -129,6 +129,7 @@ try
     app.MapQuotationEndpoints();
     app.MapInventoryEndpoints();
     app.MapDashboardEndpoints();
+    app.MapAnalyticsEndpoints();
     app.MapRoleEndpoints();
     app.MapExpenseEndpoints();
     app.MapFinanceEndpoints();

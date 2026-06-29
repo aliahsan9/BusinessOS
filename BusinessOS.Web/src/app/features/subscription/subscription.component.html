@@ -1,0 +1,56 @@
+<div class="subscription page-container">
+  <h1 class="page-title">Subscription & Billing</h1>
+
+  @if (loading()) {
+    <app-skeleton variant="rect" height="200px" />
+  } @else if (status()) {
+    <app-card title="Current Subscription">
+      <p><strong>Plan:</strong> {{ status()!.currentPlan.name }}</p>
+      <p><strong>Status:</strong> {{ status()!.status }}</p>
+      <p>Customers: {{ status()!.usage.customersCount }} / {{ status()!.usage.maxCustomers === -1 ? '∞' : status()!.usage.maxCustomers }}</p>
+      <p>Projects: {{ status()!.usage.projectsCount }} / {{ status()!.usage.maxProjects === -1 ? '∞' : status()!.usage.maxProjects }}</p>
+    </app-card>
+  }
+
+  <h2 class="h5 mt-4">Compare Plans</h2>
+  <div class="subscription__plans">
+    @for (plan of plans(); track plan.tier) {
+      <app-card [title]="plan.name">
+        <p class="subscription__price">{{ plan.monthlyPrice | appCurrency }}<small>/mo</small></p>
+        <ul>
+          @for (f of plan.features; track f) {
+            <li>{{ f }}</li>
+          }
+        </ul>
+        <app-button
+          [label]="status()?.planTier === plan.tier ? 'Current Plan' : 'Upgrade'"
+          [variant]="planButtonVariant(plan.tier)"
+          [disabled]="status()?.planTier === plan.tier"
+          (clicked)="upgrade(plan.tier)"
+        />
+      </app-card>
+    }
+  </div>
+
+  @if (billingHistory().length) {
+    <h2 class="h5 mt-4">Billing History</h2>
+    <app-card>
+      <table class="table mb-0">
+        <thead>
+          <tr><th>Date</th><th>Event</th><th>Plan</th><th>Amount</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          @for (item of billingHistory(); track item.id) {
+            <tr>
+              <td>{{ item.createdAt | date:'mediumDate' }}</td>
+              <td>{{ item.eventType }}</td>
+              <td>{{ item.planTier }}</td>
+              <td>{{ item.amount | appCurrency }}</td>
+              <td>{{ item.status }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </app-card>
+  }
+</div>

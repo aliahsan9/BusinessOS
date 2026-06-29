@@ -110,6 +110,9 @@ export const ROUTES = {
     dashboard: '/sales',
   },
   reports: '/reports',
+  analytics: {
+    base: '/analytics',
+  },
   expenses: {
     base: '/expenses',
     list: '/expenses',

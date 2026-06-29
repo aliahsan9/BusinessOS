@@ -1,5 +1,6 @@
 using System.Reflection;
 using BusinessOS.Application.Behaviors;
+using BusinessOS.Application.Features.Analytics.Services;
 using BusinessOS.Application.Features.Dashboard.Services;
 using BusinessOS.Application.Features.Inventory.Services;
 using BusinessOS.Application.Features.Invoices.Services;
@@ -31,6 +32,7 @@ public static class DependencyInjection
         services.AddScoped<IQuotationNumberGenerator, QuotationNumberGenerator>();
         services.AddScoped<IInventoryService, InventoryService>();
 
+        services.AddScoped<IAnalyticsDateRangeResolver, AnalyticsDateRangeResolver>();
         services.AddScoped<IDashboardDateRangeResolver, DashboardDateRangeResolver>();
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<IAnalyticsService, AnalyticsService>();

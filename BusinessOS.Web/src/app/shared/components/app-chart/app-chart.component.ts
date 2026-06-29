@@ -29,6 +29,7 @@ export class AppChartComponent implements AfterViewInit, OnDestroy {
   private readonly themeService = inject(ThemeService);
   private readonly canvasRef = viewChild.required<ElementRef<HTMLCanvasElement>>('canvas');
   private chart: Chart | null = null;
+  private chartType: 'line' | 'bar' | 'doughnut' = 'line';
 
   constructor() {
     effect(() => {
@@ -62,51 +63,77 @@ export class AppChartComponent implements AfterViewInit, OnDestroy {
   private createChart(chartData: ChartDataResponse): void {
     const canvas = this.canvasRef().nativeElement;
     const colors = this.getChartColors();
+    const palette = this.getDatasetPalette();
     const config: ChartConfiguration = {
       type: this.mapChartType(chartData.chartType),
       data: {
         labels: chartData.labels,
-        datasets: chartData.datasets.map((ds) => ({
-          label: ds.label,
-          data: ds.data,
-          borderColor: colors.primary,
-          backgroundColor: ds.chartStyle === 'line' ? colors.primaryFaded : colors.primarySolid,
-          tension: 0.35,
-          fill: ds.chartStyle === 'line',
-          borderRadius: 6,
-        })),
+        datasets: chartData.datasets.map((ds, index) => {
+          const color = palette[index % palette.length];
+          const isLine = ds.chartStyle === 'line' || ds.chartStyle === 'area';
+          return {
+            label: ds.label,
+            data: ds.data,
+            borderColor: color.border,
+            backgroundColor: isLine ? color.fill : color.solid,
+            tension: 0.35,
+            fill: ds.chartStyle === 'line' || ds.chartStyle === 'area',
+            borderRadius: 6,
+          };
+        }),
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: { duration: 750, easing: 'easeInOutQuart' },
         plugins: {
-          legend: { display: chartData.datasets.length > 1, position: 'bottom' },
+          legend: { display: chartData.datasets.length > 1 || this.mapChartType(chartData.chartType) === 'doughnut', position: 'bottom' },
+          tooltip: { enabled: true, mode: 'index', intersect: false },
         },
-        scales: {
-          y: { beginAtZero: true, grid: { color: colors.grid } },
-          x: { grid: { display: false } },
-        },
+        scales: this.mapChartType(chartData.chartType) === 'doughnut'
+          ? undefined
+          : {
+              y: { beginAtZero: true, grid: { color: colors.grid } },
+              x: { grid: { display: false } },
+            },
       },
     };
     this.chart = new Chart(canvas, config);
+    this.chartType = this.mapChartType(chartData.chartType);
   }
 
   private updateChart(chartData: ChartDataResponse): void {
-    if (!this.chart) {
+    const nextType = this.mapChartType(chartData.chartType);
+    if (!this.chart || this.chartType !== nextType) {
+      this.chart?.destroy();
+      this.chart = null;
       this.createChart(chartData);
       return;
     }
     const colors = this.getChartColors();
+    const palette = this.getDatasetPalette();
     this.chart.data.labels = chartData.labels;
-    this.chart.data.datasets = chartData.datasets.map((ds) => ({
-      label: ds.label,
-      data: ds.data,
-      borderColor: colors.primary,
-      backgroundColor: ds.chartStyle === 'line' ? colors.primaryFaded : colors.primarySolid,
-      tension: 0.35,
-      fill: ds.chartStyle === 'line',
-      borderRadius: 6,
-    }));
+    this.chart.data.datasets = chartData.datasets.map((ds, index) => {
+      const color = palette[index % palette.length];
+      const isLine = ds.chartStyle === 'line' || ds.chartStyle === 'area';
+      return {
+        label: ds.label,
+        data: ds.data,
+        borderColor: color.border,
+        backgroundColor: isLine ? color.fill : color.solid,
+        tension: 0.35,
+        fill: ds.chartStyle === 'line' || ds.chartStyle === 'area',
+        borderRadius: 6,
+      };
+    });
+    if (this.mapChartType(chartData.chartType) === 'doughnut') {
+      this.chart.options.scales = undefined;
+    } else {
+      this.chart.options.scales = {
+        y: { beginAtZero: true, grid: { color: colors.grid } },
+        x: { grid: { display: false } },
+      };
+    }
     this.chart.update();
   }
 
@@ -140,10 +167,22 @@ export class AppChartComponent implements AfterViewInit, OnDestroy {
     return hex;
   }
 
+  private getDatasetPalette(): Array<{ border: string; fill: string; solid: string }> {
+    const colors = this.getChartColors();
+    const extras = ['#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+    const bases = [colors.primary, ...extras];
+    return bases.map((base) => ({
+      border: base,
+      fill: this.withAlpha(base, 0.15),
+      solid: this.withAlpha(base, 0.7),
+    }));
+  }
+
   private mapChartType(type: string): 'line' | 'bar' | 'doughnut' {
     const normalized = type.toLowerCase();
     if (normalized.includes('bar')) return 'bar';
     if (normalized.includes('doughnut') || normalized.includes('pie')) return 'doughnut';
+    if (normalized.includes('area')) return 'line';
     return 'line';
   }
 }

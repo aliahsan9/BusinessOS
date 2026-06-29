@@ -20,6 +20,7 @@ const IMPLEMENTED_PATHS = new Set([
   pathFromRoute(ROUTES.payments.base),
   pathFromRoute(ROUTES.sales.base),
   pathFromRoute(ROUTES.reports),
+  pathFromRoute(ROUTES.analytics.base),
   pathFromRoute(ROUTES.expenses.base),
   pathFromRoute(ROUTES.expenseCategories.base),
   pathFromRoute(ROUTES.finance.base),

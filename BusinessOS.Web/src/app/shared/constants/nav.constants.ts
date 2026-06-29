@@ -151,6 +151,13 @@ export const NAV_ITEMS: NavItem[] = [
     permissions: ['Report.View'],
   },
   {
+    label: 'Business Analytics',
+    icon: '📉',
+    route: ROUTES.analytics.base,
+    description: 'Advanced analytics across customers, projects, revenue, and expenses.',
+    permissions: ['Report.View'],
+  },
+  {
     label: 'Financial Dashboard',
     icon: '💹',
     route: ROUTES.finance.dashboard,

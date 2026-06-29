@@ -54,6 +54,17 @@ export const API_ENDPOINTS = {
     revenueBreakdown: '/finance/revenue-breakdown',
     expenseBreakdown: '/finance/expense-breakdown',
   },
+  analytics: {
+    overview: '/analytics/overview',
+    revenue: '/analytics/revenue',
+    expenses: '/analytics/expenses',
+    profit: '/analytics/profit',
+    customers: '/analytics/customers',
+    projects: '/analytics/projects',
+    tasks: '/analytics/tasks',
+    topCustomers: '/analytics/top-customers',
+    recentActivity: '/analytics/recent-activity',
+  },
   auditLogs: '/audit-logs',
   notifications: {
     base: '/notifications',

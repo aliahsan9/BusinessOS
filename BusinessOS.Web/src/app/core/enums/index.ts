@@ -6,6 +6,15 @@ export enum OrderStatus {
   Cancelled = 'Cancelled',
 }
 
+export enum AnalyticsPeriod {
+  Today = 'today',
+  Last7Days = 'last7days',
+  Last30Days = 'last30days',
+  Last90Days = 'last90days',
+  Year = 'year',
+  Custom = 'custom',
+}
+
 export enum DashboardPeriod {
   Today = 'today',
   Week = 'week',

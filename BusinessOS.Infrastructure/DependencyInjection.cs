@@ -2,6 +2,7 @@ using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Infrastructure.Repositories;
 using BusinessOS.Application.Features.Audit.Services;
 using BusinessOS.Application.Features.Auth.Services;
+using BusinessOS.Application.Features.Analytics.Services;
 using BusinessOS.Application.Features.Finance.Services;
 using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Application.Features.Roles.Services;
@@ -75,6 +76,7 @@ public static class DependencyInjection
         services.AddScoped<IRoleService, RoleService>();
         services.AddScoped<IPermissionService, PermissionService>();
         services.AddScoped<IRbacAuditService, RbacAuditService>();
+        services.AddScoped<IAnalyticsModuleService, AnalyticsModuleService>();
         services.AddScoped<IFinanceService, FinanceService>();
         services.AddScoped<IAuditService, AuditService>();
         services.AddScoped<INotificationService, NotificationService>();
