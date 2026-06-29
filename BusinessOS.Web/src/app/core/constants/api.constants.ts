@@ -93,6 +93,18 @@ export const API_ENDPOINTS = {
     base: '/settings',
     businessProfile: '/settings/business-profile',
   },
+  onboarding: {
+    status: '/onboarding/status',
+    saveProgress: '/onboarding/save-progress',
+    complete: '/onboarding/complete',
+    businessProfile: '/onboarding/business-profile',
+  },
+  ai: {
+    chat: '/ai/chat',
+  },
+  help: {
+    faqs: '/help/faqs',
+  },
   system: {
     health: '/system/health',
     stats: '/system/stats',

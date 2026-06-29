@@ -1,0 +1,33 @@
+@import '../onboarding-steps.shared';
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.analytics-card {
+  padding: 1.25rem;
+  border-radius: var(--bos-radius-lg, 12px);
+  border: 1px solid var(--bos-border-color, rgba(0, 0, 0, 0.08));
+  background: var(--bos-surface-elevated, #fff);
+
+  &__icon {
+    font-size: 1.5rem;
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  h3 {
+    margin: 0 0 0.5rem;
+    font-size: 1rem;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--bos-text-muted, #64748b);
+    line-height: 1.5;
+  }
+}

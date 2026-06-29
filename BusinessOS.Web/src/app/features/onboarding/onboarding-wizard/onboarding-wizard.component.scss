@@ -1,0 +1,96 @@
+.onboarding-wizard {
+  min-height: 100vh;
+  background: var(--bos-surface, #f8fafc);
+  display: flex;
+  flex-direction: column;
+
+  &__header {
+    padding: 1.5rem 2rem;
+    background: var(--bos-surface-elevated, #fff);
+    border-bottom: 1px solid var(--bos-border-color, rgba(0, 0, 0, 0.08));
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  &__brand {
+    margin-bottom: 1rem;
+  }
+
+  &__logo {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--bos-primary, #2563eb);
+  }
+
+  &__progress {
+    margin-bottom: 1rem;
+  }
+
+  &__steps {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  &__body {
+    flex: 1;
+    max-width: 960px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 3rem;
+  }
+}
+
+.progress-bar {
+  height: 6px;
+  background: var(--bos-border-color, rgba(0, 0, 0, 0.08));
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+
+  &__fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--bos-primary, #2563eb), #7c3aed);
+    border-radius: 999px;
+    transition: width 0.4s ease;
+  }
+}
+
+.progress-label {
+  font-size: 0.8rem;
+  color: var(--bos-text-muted, #64748b);
+}
+
+.step-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--bos-border-color, rgba(0, 0, 0, 0.15));
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &--active {
+    border-color: var(--bos-primary, #2563eb);
+    background: var(--bos-primary, #2563eb);
+    transform: scale(1.2);
+  }
+
+  &--done {
+    border-color: var(--bos-primary, #2563eb);
+    background: color-mix(in srgb, var(--bos-primary, #2563eb) 40%, transparent);
+  }
+}
+
+@media (max-width: 768px) {
+  .onboarding-wizard__header {
+    padding: 1rem;
+  }
+
+  .onboarding-wizard__body {
+    padding: 1.25rem 1rem 2rem;
+  }
+}

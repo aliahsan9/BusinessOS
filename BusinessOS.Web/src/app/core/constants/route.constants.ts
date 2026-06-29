@@ -12,14 +12,9 @@ export const ROUTES = {
   },
   onboarding: {
     base: '/onboarding',
-    business: '/onboarding/business',
-    owner: '/onboarding/owner',
-    address: '/onboarding/address',
-    currencyTax: '/onboarding/currency-tax',
-    invoicePreferences: '/onboarding/invoice-preferences',
-    logo: '/onboarding/logo',
-    review: '/onboarding/review',
+    wizard: '/onboarding',
   },
+  help: '/help',
   users: {
     base: '/users',
     list: '/users',

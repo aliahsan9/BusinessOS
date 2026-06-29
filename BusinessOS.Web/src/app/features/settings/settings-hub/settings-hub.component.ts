@@ -29,7 +29,8 @@ type SettingsTab =
   | 'notifications'
   | 'appearance'
   | 'security'
-  | 'branding';
+  | 'branding'
+  | 'ai';
 
 @Component({
   selector: 'app-settings-hub',
@@ -76,6 +77,7 @@ export class SettingsHubComponent implements OnInit {
     { id: 'email', label: 'Email' },
     { id: 'notifications', label: 'Notifications' },
     { id: 'appearance', label: 'Appearance' },
+    { id: 'ai', label: 'AI Assistant' },
     { id: 'security', label: 'Security' },
     { id: 'branding', label: 'Branding' },
   ];
@@ -88,6 +90,9 @@ export class SettingsHubComponent implements OnInit {
     emailFromAddress: ['', Validators.email],
     theme: ['light', Validators.required],
     logoUrl: [''],
+    timezone: ['UTC', Validators.required],
+    aiAssistantEnabled: [true],
+    aiShowSuggestions: [true],
     emailNotificationsEnabled: [true],
     systemNotificationsEnabled: [true],
     orderNotificationsEnabled: [true],
@@ -126,6 +131,9 @@ export class SettingsHubComponent implements OnInit {
           emailFromAddress: s.emailFromAddress ?? '',
           theme: s.theme,
           logoUrl: s.logoUrl ?? '',
+          timezone: s.timezone ?? 'UTC',
+          aiAssistantEnabled: s.aiAssistantEnabled ?? true,
+          aiShowSuggestions: s.aiShowSuggestions ?? true,
           emailNotificationsEnabled: s.emailNotificationsEnabled,
           systemNotificationsEnabled: s.systemNotificationsEnabled,
           orderNotificationsEnabled: s.orderNotificationsEnabled,
@@ -186,6 +194,9 @@ export class SettingsHubComponent implements OnInit {
       emailFromAddress: value.emailFromAddress || null,
       theme: value.theme,
       logoUrl: value.logoUrl || null,
+      timezone: value.timezone,
+      aiAssistantEnabled: value.aiAssistantEnabled,
+      aiShowSuggestions: value.aiShowSuggestions,
       emailNotificationsEnabled: value.emailNotificationsEnabled,
       systemNotificationsEnabled: value.systemNotificationsEnabled,
       orderNotificationsEnabled: value.orderNotificationsEnabled,

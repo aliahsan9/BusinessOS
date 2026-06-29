@@ -8,6 +8,9 @@ using BusinessOS.Application.Features.Pdf.Services;
 using BusinessOS.Application.Features.Reports.Services;
 using BusinessOS.Application.Features.Activities.Services;
 using BusinessOS.Application.Features.Notifications.Services;
+using BusinessOS.Application.Features.Onboarding.Services;
+using BusinessOS.Application.Features.AI.Services;
+using BusinessOS.Application.Features.Help.Services;
 using BusinessOS.Application.Features.Roles.Services;
 using BusinessOS.Application.Features.Settings.Services;
 using BusinessOS.Application.Features.SystemAdmin.Services;
@@ -91,6 +94,9 @@ public static class DependencyInjection
         services.AddScoped<IRealtimeNotificationService, NullRealtimeNotificationService>();
         services.AddScoped<ISettingsService, SettingsService>();
         services.AddScoped<ISystemAdminService, SystemAdminService>();
+        services.AddScoped<IOnboardingService, OnboardingService>();
+        services.AddScoped<IAiAssistantService, AiAssistantService>();
+        services.AddScoped<IHelpService, HelpService>();
 
         return services;
     }

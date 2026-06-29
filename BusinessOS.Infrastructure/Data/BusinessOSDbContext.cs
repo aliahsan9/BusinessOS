@@ -51,6 +51,7 @@ public class BusinessOSDbContext
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<Activity> Activities => Set<Activity>();
     public DbSet<GeneratedReport> GeneratedReports => Set<GeneratedReport>();
+    public DbSet<UserOnboardingProgress> UserOnboardingProgress => Set<UserOnboardingProgress>();
 
     public override Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default)

@@ -1,0 +1,30 @@
+<div class="onboarding-step">
+  <span class="onboarding-step__badge">Step 5 of 8</span>
+  <h2>Create Your First Task</h2>
+  <p class="onboarding-step__lead">Tasks are order line items. Add products or services to your project to represent individual deliverables.</p>
+
+  <div class="guided-step__tooltip">
+    <strong>💡 Tip</strong>
+    When editing an order, add line items with quantity, unit price, and product selection. Each line item is a task.
+  </div>
+
+  <div class="guided-card">
+    <div class="guided-card__highlight">
+      <h3>Task creation steps</h3>
+      <ul class="guided-card__tips">
+        <li>Open your project (order) from the Orders list</li>
+        <li>Add line items with products/services</li>
+        <li>Set quantities and pricing for each task</li>
+      </ul>
+    </div>
+    <a [routerLink]="routes.orders.list" class="guided-step__nav-link" target="_blank">
+      View Projects (Orders) →
+    </a>
+  </div>
+
+  <div class="onboarding-step__actions">
+    <app-button label="Back" [variant]="ButtonVariant.Outline" type="button" (clicked)="back.emit()" />
+    <app-button label="Skip Step" [variant]="ButtonVariant.Ghost" type="button" (clicked)="skipStep.emit()" />
+    <app-button label="Continue" (clicked)="next.emit()" />
+  </div>
+</div>

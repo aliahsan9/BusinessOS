@@ -11,6 +11,9 @@ public class TenantSettingsDto
     public string? EmailFromAddress { get; set; }
     public string Theme { get; set; } = "light";
     public string? LogoUrl { get; set; }
+    public string Timezone { get; set; } = "UTC";
+    public bool AiAssistantEnabled { get; set; } = true;
+    public bool AiShowSuggestions { get; set; } = true;
     public bool EmailNotificationsEnabled { get; set; } = true;
     public bool SystemNotificationsEnabled { get; set; } = true;
     public bool OrderNotificationsEnabled { get; set; } = true;
@@ -32,6 +35,8 @@ public class BusinessProfileDto
     public string Address { get; set; } = default!;
     public string SubscriptionPlan { get; set; } = default!;
     public bool IsActive { get; set; }
+    public string? Website { get; set; }
+    public string? Description { get; set; }
     public TenantSettingsDto Settings { get; set; } = default!;
 }
 
@@ -43,6 +48,9 @@ public record UpdateTenantSettingsRequest(
     string? EmailFromAddress,
     string Theme,
     string? LogoUrl,
+    string Timezone,
+    bool AiAssistantEnabled,
+    bool AiShowSuggestions,
     bool EmailNotificationsEnabled,
     bool SystemNotificationsEnabled,
     bool OrderNotificationsEnabled,
@@ -58,4 +66,6 @@ public record UpdateBusinessProfileRequest(
     string BusinessType,
     string Email,
     string Phone,
-    string Address);
+    string Address,
+    string? Website = null,
+    string? Description = null);

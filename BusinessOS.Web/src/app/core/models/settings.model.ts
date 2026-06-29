@@ -8,6 +8,9 @@ export interface TenantSettingsDto {
   emailFromAddress?: string | null;
   theme: string;
   logoUrl?: string | null;
+  timezone: string;
+  aiAssistantEnabled: boolean;
+  aiShowSuggestions: boolean;
   emailNotificationsEnabled: boolean;
   systemNotificationsEnabled: boolean;
   orderNotificationsEnabled: boolean;
@@ -28,6 +31,8 @@ export interface BusinessProfileDto {
   address: string;
   subscriptionPlan: string;
   isActive: boolean;
+  website?: string | null;
+  description?: string | null;
   settings: TenantSettingsDto;
 }
 
@@ -39,6 +44,9 @@ export interface UpdateTenantSettingsRequest {
   emailFromAddress?: string | null;
   theme: string;
   logoUrl?: string | null;
+  timezone: string;
+  aiAssistantEnabled: boolean;
+  aiShowSuggestions: boolean;
   emailNotificationsEnabled: boolean;
   systemNotificationsEnabled: boolean;
   orderNotificationsEnabled: boolean;
@@ -56,4 +64,6 @@ export interface UpdateBusinessProfileRequest {
   email: string;
   phone: string;
   address: string;
+  website?: string | null;
+  description?: string | null;
 }

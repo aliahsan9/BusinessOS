@@ -1,0 +1,41 @@
+@import '../onboarding-steps.shared';
+
+.onboarding-step--welcome {
+  .onboarding-step__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+    margin: 2rem 0;
+  }
+}
+
+.feature-card {
+  padding: 1.25rem;
+  border-radius: var(--bos-radius-lg, 12px);
+  border: 1px solid var(--bos-border-color, rgba(0, 0, 0, 0.08));
+  background: var(--bos-surface-elevated, #fff);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--bos-shadow-md, 0 4px 12px rgba(0, 0, 0, 0.08));
+  }
+
+  &__icon {
+    font-size: 1.75rem;
+    display: block;
+    margin-bottom: 0.75rem;
+  }
+
+  h3 {
+    font-size: 1rem;
+    margin: 0 0 0.5rem;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--bos-text-muted, #64748b);
+    line-height: 1.5;
+  }
+}

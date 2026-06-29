@@ -13,6 +13,9 @@ public class TenantSettings : AuditableEntity
     public string? EmailFromAddress { get; set; }
     public string Theme { get; set; } = "light";
     public string? LogoUrl { get; set; }
+    public string Timezone { get; set; } = "UTC";
+    public bool AiAssistantEnabled { get; set; } = true;
+    public bool AiShowSuggestions { get; set; } = true;
     public bool EmailNotificationsEnabled { get; set; } = true;
     public bool SystemNotificationsEnabled { get; set; } = true;
     public bool OrderNotificationsEnabled { get; set; } = true;

@@ -31,6 +31,8 @@ public interface IApplicationDbContext
     DbSet<Tenant> Tenants { get; }
     DbSet<TenantSettings> TenantSettings { get; }
     DbSet<GeneratedReport> GeneratedReports { get; }
+    DbSet<UserOnboardingProgress> UserOnboardingProgress { get; }
+    DbSet<AIConversation> AIConversations { get; }
 
     Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default);

@@ -19,6 +19,7 @@ public class TenantSettingsConfiguration : IEntityTypeConfiguration<TenantSettin
         builder.Property(x => x.EmailFromAddress).HasMaxLength(256);
         builder.Property(x => x.Theme).HasMaxLength(8000).IsRequired();
         builder.Property(x => x.LogoUrl).HasMaxLength(500);
+        builder.Property(x => x.Timezone).HasMaxLength(100).IsRequired();
 
         builder.HasIndex(x => x.TenantId).IsUnique();
 

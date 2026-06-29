@@ -63,6 +63,7 @@
               <div class="form-grid">
                 <app-input label="Currency *" formControlName="currency" [error]="settingsFieldError('currency') ?? undefined" />
                 <app-input label="Tax Rate (%)" type="number" formControlName="taxRate" [error]="settingsFieldError('taxRate') ?? undefined" />
+                <app-input label="Timezone" formControlName="timezone" />
               </div>
               @if (canUpdate) {
                 <div class="form-actions"><app-button label="Save" type="submit" [loading]="saving()" /></div>
@@ -118,6 +119,26 @@
                 Open full appearance settings →
               </a>
             </div>
+          </app-card>
+        }
+        @case ('ai') {
+          <app-card title="AI Assistant" subtitle="Configure BusinessOS AI behavior.">
+            <form [formGroup]="settingsForm" (ngSubmit)="saveSettings()">
+              <div class="toggle-list">
+                <label class="toggle-item">
+                  <input type="checkbox" formControlName="aiAssistantEnabled" />
+                  Enable AI Assistant
+                </label>
+                <label class="toggle-item">
+                  <input type="checkbox" formControlName="aiShowSuggestions" />
+                  Show Suggestions
+                </label>
+              </div>
+              <p class="text-muted">When disabled, the floating BusinessOS AI widget will be hidden. Suggestions control context-aware prompts in the chat.</p>
+              @if (canUpdate) {
+                <div class="form-actions"><app-button label="Save" type="submit" [loading]="saving()" /></div>
+              }
+            </form>
           </app-card>
         }
         @case ('security') {

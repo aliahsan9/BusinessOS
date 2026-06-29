@@ -53,6 +53,9 @@ public sealed class SettingsService : ISettingsService
             : request.EmailFromAddress.Trim();
         settings.Theme = string.IsNullOrWhiteSpace(request.Theme) ? "light" : request.Theme.Trim();
         settings.LogoUrl = string.IsNullOrWhiteSpace(request.LogoUrl) ? null : request.LogoUrl.Trim();
+        settings.Timezone = string.IsNullOrWhiteSpace(request.Timezone) ? "UTC" : request.Timezone.Trim();
+        settings.AiAssistantEnabled = request.AiAssistantEnabled;
+        settings.AiShowSuggestions = request.AiShowSuggestions;
         settings.EmailNotificationsEnabled = request.EmailNotificationsEnabled;
         settings.SystemNotificationsEnabled = request.SystemNotificationsEnabled;
         settings.OrderNotificationsEnabled = request.OrderNotificationsEnabled;
@@ -91,6 +94,8 @@ public sealed class SettingsService : ISettingsService
         tenant.Email = request.Email.Trim();
         tenant.Phone = request.Phone.Trim();
         tenant.Address = request.Address.Trim();
+        tenant.Website = string.IsNullOrWhiteSpace(request.Website) ? null : request.Website.Trim();
+        tenant.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
         tenant.UpdatedAt = DateTime.UtcNow;
 
         var settings = await GetOrCreateTenantSettingsAsync(cancellationToken);
@@ -168,6 +173,9 @@ public sealed class SettingsService : ISettingsService
             EmailFromAddress = settings.EmailFromAddress,
             Theme = settings.Theme,
             LogoUrl = settings.LogoUrl,
+            Timezone = settings.Timezone,
+            AiAssistantEnabled = settings.AiAssistantEnabled,
+            AiShowSuggestions = settings.AiShowSuggestions,
             EmailNotificationsEnabled = settings.EmailNotificationsEnabled,
             SystemNotificationsEnabled = settings.SystemNotificationsEnabled,
             OrderNotificationsEnabled = settings.OrderNotificationsEnabled,
@@ -190,6 +198,8 @@ public sealed class SettingsService : ISettingsService
             Address = tenant.Address,
             SubscriptionPlan = tenant.SubscriptionPlan,
             IsActive = tenant.IsActive,
+            Website = tenant.Website,
+            Description = tenant.Description,
             Settings = MapSettings(settings)
         };
 }

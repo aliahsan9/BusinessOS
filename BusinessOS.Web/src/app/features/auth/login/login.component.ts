@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { OnboardingService } from '../../../core/services/onboarding.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { AppInputComponent } from '../../../shared/components/app-input/app-input.component';
 import { AppButtonComponent } from '../../../shared/components/app-button/app-button.component';
@@ -21,6 +22,7 @@ import { environment } from '../../../../environments/environment';
 export class LoginComponent {
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
+  private readonly onboardingService = inject(OnboardingService);
   private readonly notificationService = inject(NotificationService);
   private readonly router = inject(Router);
 
@@ -47,7 +49,14 @@ export class LoginComponent {
     const { email, password, rememberMe } = this.form.getRawValue();
 
     this.authService.login({ email, password }, rememberMe).subscribe({
-      next: () => void this.router.navigate(['/dashboard']),
+      next: () => {
+        this.onboardingService.getStatus().subscribe({
+          next: (status) => {
+            void this.router.navigate([status.shouldShowWizard ? '/onboarding' : '/dashboard']);
+          },
+          error: () => void this.router.navigate(['/dashboard']),
+        });
+      },
       error: (error: ApiError) => {
         const message =
           error.status === 401

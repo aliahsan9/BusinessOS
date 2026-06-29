@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
+import { onboardingRedirectGuard } from './core/guards/onboarding.guard';
 import { themeGuard } from './core/theme/theme.guard';
 import { buildFeatureRoutes } from './app-feature.routes';
 import { ROUTES } from './core/constants/route.constants';
@@ -30,7 +31,7 @@ export const routes: Routes = [
     path: '',
     loadComponent: () =>
       import('./shared/layouts/dashboard-layout/dashboard-layout.component').then((m) => m.DashboardLayoutComponent),
-    canActivate: [authGuard, themeGuard],
+    canActivate: [authGuard, themeGuard, onboardingRedirectGuard],
     children: [
       {
         path: 'dashboard',
@@ -124,6 +125,10 @@ export const routes: Routes = [
       {
         path: 'settings',
         loadChildren: () => import('./features/settings/settings.routes').then((m) => m.SETTINGS_ROUTES),
+      },
+      {
+        path: 'help',
+        loadChildren: () => import('./features/help/help.routes').then((m) => m.HELP_ROUTES),
       },
       {
         path: 'subscription',

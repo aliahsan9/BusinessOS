@@ -1,0 +1,18 @@
+@if (isEnabled()) {
+  <div class="ai-widget">
+    @if (isOpen()) {
+      <app-ai-chat-window (close)="close()" (navigate)="navigate($event)" />
+    }
+
+    <button
+      type="button"
+      class="ai-widget__fab"
+      aria-label="Open BusinessOS AI Assistant"
+      [attr.aria-expanded]="isOpen()"
+      (click)="toggle()"
+    >
+      <span class="ai-widget__fab-icon">✨</span>
+      <span class="ai-widget__fab-label">BusinessOS AI</span>
+    </button>
+  </div>
+}
