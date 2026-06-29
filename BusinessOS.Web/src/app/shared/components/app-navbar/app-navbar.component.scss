@@ -168,6 +168,12 @@
       background: var(--color-gray-100);
       border-color: var(--color-border);
     }
+
+    &--active {
+      background: var(--color-primary-light);
+      border-color: color-mix(in srgb, var(--color-primary) 18%, transparent);
+      box-shadow: 0 1px 2px color-mix(in srgb, var(--color-primary) 10%, transparent);
+    }
   }
 
   &__badge {

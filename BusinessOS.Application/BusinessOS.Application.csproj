@@ -7,13 +7,19 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Abstractions\**" />
+    <Compile Remove="DTOs\**" />
+    <EmbeddedResource Remove="Abstractions\**" />
+    <EmbeddedResource Remove="DTOs\**" />
+    <None Remove="Abstractions\**" />
+    <None Remove="DTOs\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\BusinessOS.Domain\BusinessOS.Domain.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Abstractions\Services\" />
-    <Folder Include="Abstractions\Persistence\" />
-    <Folder Include="DTOs\" />
     <Folder Include="Features\Customers\" />
     <Folder Include="Features\Dashboard\" />
     <Folder Include="Features\AI\" />

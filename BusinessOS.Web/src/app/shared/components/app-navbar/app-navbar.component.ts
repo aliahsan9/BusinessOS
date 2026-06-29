@@ -4,6 +4,7 @@ import { AuthService } from '../../../core/services/auth.service';
 import { TokenService } from '../../../core/services/token.service';
 import { TenantSettingsStoreService } from '../../../core/services/tenant-settings-store.service';
 import { NotificationStateService } from '../../../state/notification.state';
+import { AiAssistantStateService } from '../../../state/ai-assistant.state';
 import { ThemeService } from '../../../core/theme/theme.service';
 import { APP_ROUTE_PATHS, TOP_NAV_ITEMS } from '../../constants/nav.constants';
 import { ROUTES } from '../../../core/constants/route.constants';
@@ -22,6 +23,7 @@ export class AppNavbarComponent implements OnInit {
   private readonly tokenService = inject(TokenService);
   private readonly tenantSettingsStore = inject(TenantSettingsStoreService);
   private readonly notificationState = inject(NotificationStateService);
+  private readonly aiAssistantState = inject(AiAssistantStateService);
   private readonly themeService = inject(ThemeService);
 
   readonly menuToggle = output<void>();
@@ -40,6 +42,7 @@ export class AppNavbarComponent implements OnInit {
 
   readonly showProfile = signal(false);
   readonly canViewNotifications = computed(() => this.tokenService.hasPermission('Notification.View'));
+  readonly aiAssistantOpen = this.aiAssistantState.isOpen;
 
   readonly currentUser = this.authService.currentUser;
   readonly companyLogoUrl = this.tenantSettingsStore.logoUrl;
@@ -79,6 +82,12 @@ export class AppNavbarComponent implements OnInit {
 
   toggleDarkMode(): void {
     this.themeService.toggleDarkMode();
+  }
+
+  toggleAiAssistant(): void {
+    this.showProfile.set(false);
+    this.notificationState.closePanel();
+    this.aiAssistantState.toggle();
   }
 
   closeProfileMenu(): void {

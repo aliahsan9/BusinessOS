@@ -7,6 +7,13 @@
     <button type="button" class="ai-chat__close" aria-label="Close" (click)="onClose()">×</button>
   </header>
 
+  @if (!chatEnabled()) {
+    <div class="ai-chat__notice" role="status">
+      AI assistant is disabled in tenant settings.
+      <a [routerLink]="settingsRoute">Enable in Settings</a>
+    </div>
+  }
+
   <div class="ai-chat__search">
     <input
       type="search"

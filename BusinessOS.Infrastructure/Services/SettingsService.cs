@@ -33,6 +33,16 @@ public sealed class SettingsService : ISettingsService
     public async Task<TenantSettingsDto> GetSettingsAsync(CancellationToken cancellationToken = default)
     {
         var settings = await GetOrCreateTenantSettingsAsync(cancellationToken);
+
+        // Existing tenants created before AI settings defaulted to enabled may still have both flags false.
+        if (!settings.AiAssistantEnabled && !settings.AiShowSuggestions)
+        {
+            settings.AiAssistantEnabled = true;
+            settings.AiShowSuggestions = true;
+            settings.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
         return MapSettings(settings);
     }
 

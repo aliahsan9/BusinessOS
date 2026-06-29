@@ -25,6 +25,20 @@
     opacity: 0.85;
   }
 
+  &__notice {
+    padding: 0.625rem 1rem;
+    font-size: 0.8rem;
+    background: color-mix(in srgb, var(--bos-warning, #f59e0b) 12%, transparent);
+    color: var(--bos-text, inherit);
+    border-bottom: 1px solid color-mix(in srgb, var(--bos-warning, #f59e0b) 25%, transparent);
+
+    a {
+      color: var(--bos-primary, #2563eb);
+      font-weight: 600;
+      margin-left: 0.25rem;
+    }
+  }
+
   &__close {
     background: rgba(255, 255, 255, 0.2);
     border: none;

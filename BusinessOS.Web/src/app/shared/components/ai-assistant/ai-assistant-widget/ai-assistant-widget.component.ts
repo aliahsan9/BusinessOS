@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, inject, signal, computed, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { AiChatWindowComponent } from '../ai-chat-window/ai-chat-window.component';
 import { TenantSettingsStoreService } from '../../../../core/services/tenant-settings-store.service';
+import { AiAssistantStateService } from '../../../../state/ai-assistant.state';
 
 @Component({
   selector: 'app-ai-assistant-widget',
@@ -13,13 +14,10 @@ import { TenantSettingsStoreService } from '../../../../core/services/tenant-set
 })
 export class AiAssistantWidgetComponent implements OnInit {
   private readonly tenantSettingsStore = inject(TenantSettingsStoreService);
+  private readonly aiAssistantState = inject(AiAssistantStateService);
   private readonly router = inject(Router);
 
-  readonly isOpen = signal(false);
-
-  readonly isEnabled = computed(
-    () => this.tenantSettingsStore.settings()?.aiAssistantEnabled ?? true,
-  );
+  readonly isOpen = this.aiAssistantState.isOpen;
 
   ngOnInit(): void {
     if (!this.tenantSettingsStore.settings()) {
@@ -28,11 +26,11 @@ export class AiAssistantWidgetComponent implements OnInit {
   }
 
   toggle(): void {
-    this.isOpen.update((v) => !v);
+    this.aiAssistantState.toggle();
   }
 
   close(): void {
-    this.isOpen.set(false);
+    this.aiAssistantState.close();
   }
 
   navigate(route: string): void {

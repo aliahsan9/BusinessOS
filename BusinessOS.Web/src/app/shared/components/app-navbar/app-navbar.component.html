@@ -32,6 +32,18 @@
       {{ isDarkMode() ? '☀️' : '🌙' }}
     </button>
 
+    <button
+      type="button"
+      class="app-navbar__action-btn"
+      [class.app-navbar__action-btn--active]="aiAssistantOpen()"
+      aria-label="Open BusinessOS AI Assistant"
+      [attr.aria-expanded]="aiAssistantOpen()"
+      title="BusinessOS AI Assistant"
+      (click)="toggleAiAssistant()"
+    >
+      ✨
+    </button>
+
     @if (canViewNotifications()) {
       <app-notification-bell />
     }

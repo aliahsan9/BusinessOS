@@ -7,14 +7,18 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\BusinessOS.Application\BusinessOS.Application.csproj" />
-    <ProjectReference Include="..\BusinessOS.Domain\BusinessOS.Domain.csproj" />
-    <ProjectReference Include="..\BusinessOS.Infrastructure\BusinessOS.Infrastructure.csproj" />
+    <Compile Remove="Interceptors\**" />
+    <Compile Remove="Repositories\**" />
+    <EmbeddedResource Remove="Interceptors\**" />
+    <EmbeddedResource Remove="Repositories\**" />
+    <None Remove="Interceptors\**" />
+    <None Remove="Repositories\**" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Interceptors\" />
-    <Folder Include="Repositories\" />
+    <ProjectReference Include="..\BusinessOS.Application\BusinessOS.Application.csproj" />
+    <ProjectReference Include="..\BusinessOS.Domain\BusinessOS.Domain.csproj" />
+    <ProjectReference Include="..\BusinessOS.Infrastructure\BusinessOS.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>
