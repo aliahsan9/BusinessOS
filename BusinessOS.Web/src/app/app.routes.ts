@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard } from './core/guards/auth.guard';
+import { authGuard, guestGuard } from './core/guards/auth.guard';
 import { onboardingRedirectGuard } from './core/guards/onboarding.guard';
 import { themeGuard } from './core/theme/theme.guard';
 import { buildFeatureRoutes } from './app-feature.routes';
@@ -10,6 +10,15 @@ export const routes: Routes = [
   {
     path: 'auth',
     loadChildren: () => import('./features/auth/auth.routes').then((m) => m.AUTH_ROUTES),
+  },
+  {
+    path: 'register-business',
+    loadComponent: () =>
+      import('./features/tenant/business-registration/business-registration.component').then(
+        (m) => m.BusinessRegistrationComponent,
+      ),
+    canActivate: [guestGuard],
+    title: 'Register Business | BusinessOS',
   },
   {
     path: 'onboarding',
@@ -145,6 +154,15 @@ export const routes: Routes = [
       {
         path: 'organization',
         loadChildren: () => import('./features/organization/organization.routes').then((m) => m.ORGANIZATION_ROUTES),
+      },
+      {
+        path: 'tenant-settings',
+        redirectTo: 'tenant/settings',
+        pathMatch: 'full',
+      },
+      {
+        path: 'tenant',
+        loadChildren: () => import('./features/tenant/tenant.routes').then((m) => m.TENANT_ROUTES),
       },
       ...buildFeatureRoutes(),
     ],

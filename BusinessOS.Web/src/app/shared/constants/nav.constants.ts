@@ -198,6 +198,14 @@ export const NAV_ITEMS: NavItem[] = [
     group: 'Administration',
   },
   {
+    label: 'Tenant',
+    icon: '🏛️',
+    route: ROUTES.tenant.dashboard,
+    description: 'Tenant dashboard, plan, and resource usage.',
+    permissions: ['Tenant.View'],
+    group: 'Administration',
+  },
+  {
     label: 'Organization',
     icon: '🏢',
     route: ROUTES.organization.base,

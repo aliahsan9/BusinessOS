@@ -167,6 +167,8 @@ try
     app.MapHelpEndpoints();
     app.MapTeamEndpoints();
     app.MapOrganizationEndpoints();
+    app.MapTenantEndpoints();
+    app.MapBusinessRegistrationEndpoint();
     app.MapSystemAdminEndpoints();
     app.MapHub<NotificationHub>("/hubs/notifications")
         .RequireAuthorization();

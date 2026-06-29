@@ -1,0 +1,33 @@
+.dashboard-grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.overview-list {
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+}
+
+.overview-list div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.overview-list dt {
+  font-size: 0.8125rem;
+  color: var(--text-muted-color);
+}
+
+.overview-list dd {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+@media (min-width: 992px) {
+  .dashboard-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    align-items: start;
+  }
+}

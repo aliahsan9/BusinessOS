@@ -1,0 +1,49 @@
+<app-breadcrumb [items]="breadcrumbs" />
+
+<app-page-header
+  title="Tenant Dashboard"
+  subtitle="Overview of your business workspace, plan, and resource usage."
+>
+  @if (canManage) {
+    <a class="settings-link" [routerLink]="ROUTES.tenant.settings">Tenant Settings</a>
+  }
+</app-page-header>
+
+@if (loading()) {
+  <app-skeleton height="12rem" />
+} @else if (error()) {
+  <app-alert variant="danger" [message]="error()!" />
+} @else if (dashboard()) {
+  <div class="dashboard-grid">
+    <app-card title="Business Overview">
+      <dl class="overview-list">
+        <div>
+          <dt>Business Name</dt>
+          <dd>{{ dashboard()!.tenant.name }}</dd>
+        </div>
+        <div>
+          <dt>Workspace Slug</dt>
+          <dd>{{ dashboard()!.tenant.slug }}</dd>
+        </div>
+        <div>
+          <dt>Subscription Plan</dt>
+          <dd>{{ dashboard()!.tenant.subscriptionPlan }}</dd>
+        </div>
+        <div>
+          <dt>Status</dt>
+          <dd>{{ dashboard()!.tenant.status }}</dd>
+        </div>
+        <div>
+          <dt>Timezone</dt>
+          <dd>{{ dashboard()!.tenant.timezone }}</dd>
+        </div>
+        <div>
+          <dt>Currency</dt>
+          <dd>{{ dashboard()!.tenant.currency }}</dd>
+        </div>
+      </dl>
+    </app-card>
+
+    <app-tenant-usage [usage]="dashboard()!.usage" />
+  </div>
+}

@@ -16,6 +16,7 @@ using BusinessOS.Application.Features.Roles.Services;
 using BusinessOS.Application.Features.Team.Services;
 using BusinessOS.Application.Features.Settings.Services;
 using BusinessOS.Application.Features.SystemAdmin.Services;
+using BusinessOS.Application.Features.Tenant.Services;
 using BusinessOS.Infrastructure.Data;
 using BusinessOS.Infrastructure.Identity;
 using BusinessOS.Infrastructure.MultiTenancy;
@@ -34,6 +35,8 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.AddScoped<ITenantProvider, TenantProvider>();
+        services.AddScoped<ITenantContext, TenantContextService>();
+        services.AddScoped<ISuperAdminContext, SuperAdminContext>();
         services.AddScoped<ITenantDbConnection, TenantDbConnection>();
 
         void ConfigureOptions(DbContextOptionsBuilder options)
@@ -80,6 +83,9 @@ public static class DependencyInjection
         services.AddScoped<IIdentityService, IdentityService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<ITenantRegistrationService, TenantRegistrationService>();
+        services.AddScoped<ITenantService, TenantService>();
+        services.AddScoped<ITenantLimitService, TenantLimitService>();
+        services.AddScoped<ITenantAuditService, TenantAuditService>();
         services.AddScoped<IUserAnalyticsService, UserAnalyticsService>();
         services.AddScoped<IRoleService, RoleService>();
         services.AddScoped<IPermissionService, PermissionService>();

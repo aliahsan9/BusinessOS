@@ -24,8 +24,8 @@ public class TenantSettingsConfiguration : IEntityTypeConfiguration<TenantSettin
         builder.HasIndex(x => x.TenantId).IsUnique();
 
         builder.HasOne(x => x.Tenant)
-            .WithMany()
-            .HasForeignKey(x => x.TenantId)
+            .WithOne(x => x.Settings)
+            .HasForeignKey<TenantSettings>(x => x.TenantId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

@@ -29,6 +29,10 @@ public interface IApplicationDbContext
     DbSet<Notification> Notifications { get; }
     DbSet<Activity> Activities { get; }
     DbSet<Tenant> Tenants { get; }
+    DbSet<SubscriptionPlan> SubscriptionPlans { get; }
+    DbSet<TenantSubscription> TenantSubscriptions { get; }
+    DbSet<TenantUsage> TenantUsages { get; }
+    DbSet<TenantAuditLog> TenantAuditLogs { get; }
     DbSet<TenantSettings> TenantSettings { get; }
     DbSet<GeneratedReport> GeneratedReports { get; }
     DbSet<UserOnboardingProgress> UserOnboardingProgress { get; }

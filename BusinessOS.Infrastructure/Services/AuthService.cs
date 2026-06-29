@@ -99,7 +99,10 @@ public sealed class AuthService : IAuthService
         string firstName,
         string lastName,
         string businessName,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string timezone = "UTC",
+        string currency = "USD",
+        string industry = "General")
     {
         var existingUser = await _identityService.FindByEmailAsync(email, cancellationToken);
         if (existingUser is not null)
@@ -111,10 +114,14 @@ public sealed class AuthService : IAuthService
         await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
 
         await _tenantRegistrationService.CreateTenantAsync(
-            tenantId,
-            businessName,
-            email,
-            "pending",
+            new CreateTenantOptions(
+                tenantId,
+                businessName,
+                email,
+                "pending",
+                timezone,
+                currency,
+                industry),
             cancellationToken);
 
         var createResult = await _identityService.CreateUserAsync(

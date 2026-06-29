@@ -39,6 +39,7 @@ public static class DbInitializer
         }
 
         await RbacSeeder.SeedAsync(context, roleManager, userManager, logger);
+        await SubscriptionPlanSeeder.SeedAsync(context, logger);
         await ExpenseCategorySeeder.SeedAllTenantsAsync(context, logger);
 
         if (environment.IsDevelopment())

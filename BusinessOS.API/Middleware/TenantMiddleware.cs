@@ -23,34 +23,82 @@ public sealed class TenantMiddleware
 
     public async Task InvokeAsync(
         HttpContext context,
-        ITenantProvider tenantProvider)
+        ITenantProvider tenantProvider,
+        ITenantContext tenantContext)
     {
         var path = context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
 
-        if (path.StartsWith("/swagger") ||
-            path.StartsWith("/scalar") ||
-            path.StartsWith("/openapi") ||
-            path.StartsWith("/api/health") ||
-            path.StartsWith("/api/auth"))
+        if (IsExcludedPath(path))
         {
             await _next(context);
             return;
         }
+
+        Guid? resolvedTenantId = null;
 
         if (context.Request.Headers.TryGetValue("X-Tenant-ID", out var tenantHeader) &&
-            Guid.TryParse(tenantHeader, out var tenantId))
+            Guid.TryParse(tenantHeader, out var headerTenantId))
         {
-            tenantProvider.SetTenantId(tenantId);
-            await _next(context);
-            return;
+            resolvedTenantId = headerTenantId;
+        }
+        else
+        {
+            var tenantClaim = context.User.FindFirst("TenantId")?.Value;
+            if (!string.IsNullOrWhiteSpace(tenantClaim) &&
+                Guid.TryParse(tenantClaim, out var claimTenantId))
+            {
+                resolvedTenantId = claimTenantId;
+            }
         }
 
-        var tenantClaim = context.User.FindFirst("TenantId")?.Value;
-        if (!string.IsNullOrWhiteSpace(tenantClaim) &&
-            Guid.TryParse(tenantClaim, out var claimTenantId))
+        if (resolvedTenantId.HasValue)
         {
-            tenantProvider.SetTenantId(claimTenantId);
+            tenantProvider.SetTenantId(resolvedTenantId.Value);
+            TenantContext.SetTenantId(resolvedTenantId.Value);
+
+            if (context.User.Identity?.IsAuthenticated == true)
+            {
+                await tenantContext.LoadAsync(context.RequestAborted);
+
+                if (tenantContext.IsLoaded && !tenantContext.IsActive)
+                {
+                    await WriteProblemAsync(
+                        context,
+                        StatusCodes.Status403Forbidden,
+                        "TENANT_INACTIVE",
+                        "Tenant account is inactive or suspended.");
+
+                    TenantContext.Clear();
+                    return;
+                }
+
+                if (tenantContext.IsLoaded &&
+                    context.User.Identity?.IsAuthenticated == true)
+                {
+                    var claimTenant = context.User.FindFirst("TenantId")?.Value;
+                    if (!string.IsNullOrWhiteSpace(claimTenant) &&
+                        Guid.TryParse(claimTenant, out var jwtTenantId) &&
+                        jwtTenantId != resolvedTenantId.Value)
+                    {
+                        _logger.LogWarning(
+                            "Tenant mismatch: JWT {JwtTenant} vs resolved {ResolvedTenant}",
+                            jwtTenantId,
+                            resolvedTenantId.Value);
+
+                        await WriteProblemAsync(
+                            context,
+                            StatusCodes.Status403Forbidden,
+                            "TENANT_MISMATCH",
+                            "Tenant context does not match authenticated user.");
+
+                        TenantContext.Clear();
+                        return;
+                    }
+                }
+            }
+
             await _next(context);
+            TenantContext.Clear();
             return;
         }
 
@@ -65,22 +113,43 @@ public sealed class TenantMiddleware
             context.Request.Path,
             context.TraceIdentifier);
 
-        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        await WriteProblemAsync(
+            context,
+            StatusCodes.Status400BadRequest,
+            "TENANT_HEADER_REQUIRED",
+            "Missing or invalid X-Tenant-ID header");
+
+        TenantContext.Clear();
+    }
+
+    private static bool IsExcludedPath(string path) =>
+        path.StartsWith("/swagger") ||
+        path.StartsWith("/scalar") ||
+        path.StartsWith("/openapi") ||
+        path.StartsWith("/api/health") ||
+        path.StartsWith("/api/auth") ||
+        path.StartsWith("/api/register-business");
+
+    private static async Task WriteProblemAsync(
+        HttpContext context,
+        int statusCode,
+        string code,
+        string title)
+    {
+        context.Response.StatusCode = statusCode;
         context.Response.ContentType = "application/problem+json";
 
         var problem = new ProblemDetails
         {
             Type = "https://tools.ietf.org/html/rfc9110#section-15.5.1",
-            Title = "Missing or invalid X-Tenant-ID header",
-            Status = StatusCodes.Status400BadRequest,
+            Title = title,
+            Status = statusCode,
             Instance = context.Request.Path
         };
 
-        problem.Extensions["code"] = "TENANT_HEADER_REQUIRED";
+        problem.Extensions["code"] = code;
         problem.Extensions["traceId"] = context.TraceIdentifier;
 
         await context.Response.WriteAsync(JsonSerializer.Serialize(problem, JsonOptions));
-
-        TenantContext.Clear();
     }
 }

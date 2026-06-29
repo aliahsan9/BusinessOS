@@ -157,6 +157,12 @@ export const ROUTES = {
     base: '/organization',
     settings: '/organization',
   },
+  tenant: {
+    base: '/tenant',
+    dashboard: '/tenant/dashboard',
+    settings: '/tenant/settings',
+    registerBusiness: '/register-business',
+  },
   profile: '/profile',
   forbidden: '/forbidden',
   notFound: '/not-found',

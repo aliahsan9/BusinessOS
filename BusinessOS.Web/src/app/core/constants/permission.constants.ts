@@ -129,6 +129,10 @@ export const PermissionCodes = {
     view: 'Organization.View',
     manage: 'Organization.Manage',
   },
+  tenant: {
+    view: 'Tenant.View',
+    manage: 'Tenant.Manage',
+  },
   subscription: {
     view: 'Subscription.View',
     manage: 'Subscription.Manage',

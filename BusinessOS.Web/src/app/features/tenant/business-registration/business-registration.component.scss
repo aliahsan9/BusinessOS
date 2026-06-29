@@ -1,0 +1,40 @@
+.registration-page {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.registration-form {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.form-section h3 {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  color: var(--text-color);
+}
+
+.form-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.footer-link {
+  margin: 1rem 0 0;
+  color: var(--text-muted-color);
+}
+
+.footer-link a {
+  color: var(--color-primary, var(--primary-color));
+}

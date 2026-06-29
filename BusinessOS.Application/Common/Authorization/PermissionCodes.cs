@@ -107,6 +107,9 @@ public static class PermissionCodes
     public const string OrganizationView = "Organization.View";
     public const string OrganizationManage = "Organization.Manage";
 
+    public const string TenantView = "Tenant.View";
+    public const string TenantManage = "Tenant.Manage";
+
     public const string SubscriptionView = "Subscription.View";
     public const string SubscriptionManage = "Subscription.Manage";
 
@@ -213,6 +216,9 @@ public static class PermissionCodes
         new("View Organization", OrganizationView, "View organization profile", "Organization"),
         new("Manage Organization", OrganizationManage, "Manage organization settings", "Organization"),
 
+        new("View Tenant", TenantView, "View tenant profile and dashboard", "Tenant"),
+        new("Manage Tenant", TenantManage, "Manage tenant settings and branding", "Tenant"),
+
         new("View Subscription", SubscriptionView, "View subscription details", "Subscription"),
         new("Manage Subscription", SubscriptionManage, "Manage subscription billing", "Subscription"),
 
@@ -247,6 +253,7 @@ public static class PermissionCodes
         AnalyticsView,
         TeamView,
         OrganizationView,
+        TenantView,
         SubscriptionView
     };
 

@@ -12,5 +12,8 @@ public interface IAuthService
         string firstName,
         string lastName,
         string businessName,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        string timezone = "UTC",
+        string currency = "USD",
+        string industry = "General");
 }

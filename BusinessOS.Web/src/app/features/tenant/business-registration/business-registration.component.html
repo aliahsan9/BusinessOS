@@ -1,0 +1,39 @@
+<div class="registration-page">
+  <app-card title="Register Your Business" subtitle="Create your workspace and owner account in one step.">
+    @if (errorMessage()) {
+      <app-alert variant="danger" [message]="errorMessage()!" />
+    }
+
+    <form [formGroup]="form" (ngSubmit)="onSubmit()" class="registration-form">
+      <section class="form-section">
+        <h3>Business Information</h3>
+        <div class="form-grid">
+          <app-input label="Business Name" formControlName="businessName" [required]="true" />
+          <app-input label="Industry" formControlName="industry" [required]="true" />
+          <app-input label="Timezone" formControlName="timezone" [required]="true" />
+          <app-input label="Currency" formControlName="currency" [required]="true" />
+        </div>
+      </section>
+
+      <section class="form-section">
+        <h3>Owner Account</h3>
+        <div class="form-grid">
+          <app-input label="First Name" formControlName="ownerFirstName" [required]="true" />
+          <app-input label="Last Name" formControlName="ownerLastName" [required]="true" />
+          <app-input label="Email" type="email" formControlName="email" [required]="true" />
+          <app-input label="Password" type="password" formControlName="password" [required]="true" />
+          <app-input label="Confirm Password" type="password" formControlName="confirmPassword" [required]="true" />
+        </div>
+      </section>
+
+      <div class="actions">
+        <app-button label="Create Business" type="submit" [loading]="loading()" [disabled]="form.invalid || loading()" />
+      </div>
+    </form>
+
+    <p class="footer-link">
+      Already have an account?
+      <a [routerLink]="ROUTES.auth.login">Sign in</a>
+    </p>
+  </app-card>
+</div>

@@ -1,11 +1,17 @@
 namespace BusinessOS.Application.Common.Interfaces;
 
+public sealed record CreateTenantOptions(
+    Guid TenantId,
+    string BusinessName,
+    string Email,
+    string OwnerUserId,
+    string Timezone = "UTC",
+    string Currency = "USD",
+    string Industry = "General");
+
 public interface ITenantRegistrationService
 {
     Task<Guid> CreateTenantAsync(
-        Guid tenantId,
-        string businessName,
-        string email,
-        string ownerUserId,
+        CreateTenantOptions options,
         CancellationToken cancellationToken);
 }

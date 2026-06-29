@@ -105,7 +105,15 @@ export class AuthService extends BaseApiService {
     return true;
   }
 
-  private handleAuthSuccess(response: AuthResponse, rememberEmail?: string): void {
+  establishSession(response: AuthResponse, options?: { welcomeMessage?: string; rememberEmail?: string }): void {
+    this.handleAuthSuccess(response, options?.rememberEmail, options?.welcomeMessage);
+  }
+
+  private handleAuthSuccess(
+    response: AuthResponse,
+    rememberEmail?: string,
+    welcomeMessage = 'Welcome back!',
+  ): void {
     const user: AuthUser = {
       userId: response.userId,
       email: response.email,
@@ -124,7 +132,7 @@ export class AuthService extends BaseApiService {
     }
 
     this.loadingSignal.set(false);
-    this.notificationService.success('Welcome back!');
+    this.notificationService.success(welcomeMessage);
     this.themeService.syncFromBackend();
     this.tenantSettingsStore.load().subscribe();
   }

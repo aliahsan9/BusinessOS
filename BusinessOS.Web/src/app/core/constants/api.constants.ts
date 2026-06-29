@@ -87,6 +87,13 @@ export const API_ENDPOINTS = {
     invitations: '/team/invitations',
   },
   organization: '/organization',
+  tenant: {
+    base: '/tenant',
+    usage: '/tenant/usage',
+    settings: '/tenant/settings',
+    dashboard: '/tenant/dashboard',
+  },
+  registerBusiness: '/register-business',
   notifications: {
     base: '/notifications',
     preferences: '/notifications/preferences',

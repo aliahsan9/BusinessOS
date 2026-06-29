@@ -1,0 +1,53 @@
+<app-card title="Resource Usage">
+  <div class="usage-grid">
+    <div class="usage-item">
+      <div class="usage-header">
+        <span class="usage-label">Users</span>
+        <span class="usage-value">{{ usage().userCount }} / {{ usage().maxUsers }}</span>
+      </div>
+      <div class="usage-bar">
+        <div class="usage-fill" [style.width.%]="percent(usage().userCount, usage().maxUsers)"></div>
+      </div>
+    </div>
+
+    <div class="usage-item">
+      <div class="usage-header">
+        <span class="usage-label">Customers</span>
+        <span class="usage-value">{{ usage().customerCount }} / {{ usage().maxCustomers }}</span>
+      </div>
+      <div class="usage-bar">
+        <div class="usage-fill" [style.width.%]="percent(usage().customerCount, usage().maxCustomers)"></div>
+      </div>
+    </div>
+
+    <div class="usage-item">
+      <div class="usage-header">
+        <span class="usage-label">Projects</span>
+        <span class="usage-value">{{ usage().projectCount }} / {{ usage().maxProjects }}</span>
+      </div>
+      <div class="usage-bar">
+        <div class="usage-fill" [style.width.%]="percent(usage().projectCount, usage().maxProjects)"></div>
+      </div>
+    </div>
+
+    <div class="usage-item">
+      <div class="usage-header">
+        <span class="usage-label">Storage</span>
+        <span class="usage-value">{{ usage().storageUsedMb }} / {{ usage().maxStorageMb }} MB</span>
+      </div>
+      <div class="usage-bar">
+        <div class="usage-fill" [style.width.%]="percent(usage().storageUsedMb, usage().maxStorageMb)"></div>
+      </div>
+    </div>
+
+    <div class="usage-item">
+      <div class="usage-header">
+        <span class="usage-label">AI Requests</span>
+        <span class="usage-value">{{ usage().aiRequestsUsed }} / {{ usage().maxAiRequests }}</span>
+      </div>
+      <div class="usage-bar">
+        <div class="usage-fill" [style.width.%]="percent(usage().aiRequestsUsed, usage().maxAiRequests)"></div>
+      </div>
+    </div>
+  </div>
+</app-card>
