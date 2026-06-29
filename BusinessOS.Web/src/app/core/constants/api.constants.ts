@@ -8,7 +8,7 @@ export const API_ENDPOINTS = {
   dashboard: {
     overview: '/dashboard/overview',
     sales: '/dashboard/sales',
-    customers: '/dashboard/customers',
+    customers: '/dashboard/customers', 
     products: '/dashboard/products',
     inventory: '/dashboard/inventory',
     orders: '/dashboard/orders',
