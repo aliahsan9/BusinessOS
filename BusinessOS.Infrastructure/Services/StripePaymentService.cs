@@ -6,6 +6,7 @@ using BusinessOS.Application.Features.Billing.DTOs;
 using BusinessOS.Application.Features.Billing.Services;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.Payments;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Stripe;
@@ -16,16 +17,16 @@ namespace BusinessOS.Infrastructure.Services;
 public sealed class StripePaymentService : IStripePaymentService
 {
     private readonly StripeOptions _options;
-    private readonly IBillingPlanSyncService _planSync;
+    private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<StripePaymentService> _logger;
 
     public StripePaymentService(
         IOptions<StripeOptions> options,
-        IBillingPlanSyncService planSync,
+        IServiceProvider serviceProvider,
         ILogger<StripePaymentService> logger)
     {
         _options = options.Value;
-        _planSync = planSync;
+        _serviceProvider = serviceProvider;
         _logger = logger;
 
         if (IsConfigured)
@@ -187,7 +188,8 @@ public sealed class StripePaymentService : IStripePaymentService
         var interval = session.Metadata.GetValueOrDefault("billing_interval", "monthly");
         var billingInterval = interval == "yearly" ? BillingInterval.Yearly : BillingInterval.Monthly;
 
-        await _planSync.ApplyPlanFromWebhookAsync(
+        var planSync = _serviceProvider.GetRequiredService<IBillingPlanSyncService>();
+        await planSync.ApplyPlanFromWebhookAsync(
             tenantId,
             planId,
             SubscriptionStatus.Active,
@@ -199,7 +201,7 @@ public sealed class StripePaymentService : IStripePaymentService
             cancellationToken);
 
         var amount = session.AmountTotal.HasValue ? session.AmountTotal.Value / 100m : 0;
-        await _planSync.RecordTransactionAsync(
+        await planSync.RecordTransactionAsync(
             tenantId,
             amount,
             session.Currency?.ToUpperInvariant() ?? "USD",
@@ -237,7 +239,7 @@ public sealed class StripePaymentService : IStripePaymentService
 
         if (subscription.Metadata.TryGetValue("plan_id", out var planIdStr) && Guid.TryParse(planIdStr, out var planId))
         {
-            await _planSync.ApplyPlanFromWebhookAsync(
+            await _serviceProvider.GetRequiredService<IBillingPlanSyncService>().ApplyPlanFromWebhookAsync(
                 tenantId,
                 planId,
                 status,
@@ -265,7 +267,7 @@ public sealed class StripePaymentService : IStripePaymentService
             return;
         }
 
-        await _planSync.ApplyPlanFromWebhookAsync(
+        await _serviceProvider.GetRequiredService<IBillingPlanSyncService>().ApplyPlanFromWebhookAsync(
             tenantId,
             planId,
             SubscriptionStatus.Cancelled,

@@ -116,8 +116,10 @@ public static class DependencyInjection
         services.Configure<EasyPaisaOptions>(configuration.GetSection(EasyPaisaOptions.SectionName));
         services.Configure<BillingOptions>(configuration.GetSection(BillingOptions.SectionName));
 
-        services.AddScoped<IBillingService, BillingService>();
+        services.AddScoped<BillingService>();
+        services.AddScoped<IBillingService>(sp => sp.GetRequiredService<BillingService>());
         services.AddScoped<IBillingPlanSyncService>(sp => sp.GetRequiredService<BillingService>());
+        services.AddScoped<Func<IBillingPlanSyncService>>(sp => () => sp.GetRequiredService<IBillingPlanSyncService>());
         services.AddScoped<IBillingWebhookService, BillingWebhookService>();
         services.AddScoped<IBillingMetricsService, BillingMetricsService>();
         services.AddScoped<IFeatureFlagService, FeatureFlagService>();

@@ -26,11 +26,11 @@ public class BillingTransactionConfiguration : IEntityTypeConfiguration<BillingT
         builder.HasOne(x => x.Tenant)
             .WithMany()
             .HasForeignKey(x => x.TenantId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(x => x.Invoice)
             .WithMany()
             .HasForeignKey(x => x.BillingInvoiceId)
-            .OnDelete(DeleteBehavior.SetNull);
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

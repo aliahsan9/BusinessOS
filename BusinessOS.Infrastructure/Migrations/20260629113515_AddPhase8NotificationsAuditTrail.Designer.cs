@@ -2499,12 +2499,12 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.HasOne("BusinessOS.Domain.Entities.BillingInvoice", "Invoice")
                         .WithMany()
                         .HasForeignKey("BillingInvoiceId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("BusinessOS.Domain.Entities.Tenant", "Tenant")
                         .WithMany()
                         .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Invoice");

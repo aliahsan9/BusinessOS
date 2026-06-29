@@ -113,7 +113,7 @@ public static class SubscriptionPlanSeeder
         foreach (var plan in plans)
         {
             var existing = await context.SubscriptionPlans
-                .FirstOrDefaultAsync(x => x.Slug == plan.Slug, cancellationToken);
+                .FirstOrDefaultAsync(x => x.Id == plan.Id || x.Slug == plan.Slug, cancellationToken);
 
             if (existing is null)
             {
@@ -122,6 +122,7 @@ public static class SubscriptionPlanSeeder
                 continue;
             }
 
+            existing.Slug = plan.Slug;
             existing.Name = plan.Name;
             existing.Description = plan.Description;
             existing.MonthlyPrice = plan.MonthlyPrice;
