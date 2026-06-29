@@ -15,6 +15,7 @@ public sealed class AiAssistantService : IAiAssistantService
     private readonly ICurrentUserService _currentUserService;
     private readonly IFeatureFlagService _featureFlags;
     private readonly ITenantLimitService _limitService;
+    private readonly ILlmChatClient _llmChat;
     private readonly ILogger<AiAssistantService> _logger;
 
     public AiAssistantService(
@@ -22,12 +23,14 @@ public sealed class AiAssistantService : IAiAssistantService
         ICurrentUserService currentUserService,
         IFeatureFlagService featureFlags,
         ITenantLimitService limitService,
+        ILlmChatClient llmChat,
         ILogger<AiAssistantService> logger)
     {
         _context = context;
         _currentUserService = currentUserService;
         _featureFlags = featureFlags;
         _limitService = limitService;
+        _llmChat = llmChat;
         _logger = logger;
     }
 
@@ -46,7 +49,7 @@ public sealed class AiAssistantService : IAiAssistantService
             ? []
             : await SearchAsync(searchQuery, cancellationToken);
 
-        var reply = ResolveReply(message, page);
+        var reply = await ResolveReplyAsync(message, page, cancellationToken);
         var suggestions = GetContextSuggestions(page);
         var quickActions = GetQuickActions();
 
@@ -168,6 +171,39 @@ public sealed class AiAssistantService : IAiAssistantService
         }));
 
         return results.Take(15).ToList();
+    }
+
+    private async Task<string> ResolveReplyAsync(
+        string message,
+        string page,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(message)
+            && _llmChat.IsConfigured
+            && _currentUserService.UserId is not null
+            && _currentUserService.TenantId is not null)
+        {
+            try
+            {
+                var llmReply = await _llmChat.GenerateReplyAsync(
+                    _currentUserService.TenantId.Value,
+                    _currentUserService.UserId,
+                    message,
+                    page,
+                    cancellationToken);
+
+                if (!string.IsNullOrWhiteSpace(llmReply))
+                {
+                    return llmReply;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Cursor AI request failed; falling back to built-in assistant replies");
+            }
+        }
+
+        return ResolveReply(message, page);
     }
 
     private static string ResolveReply(string message, string page)

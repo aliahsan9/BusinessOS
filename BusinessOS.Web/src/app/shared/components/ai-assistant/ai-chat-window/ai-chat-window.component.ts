@@ -13,6 +13,7 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AiService } from '../../../../core/services/ai.service';
 import { AiChatMessage, AiQuickActionDto, AiSearchResultDto, AiSuggestionDto } from '../../../../core/models/ai.model';
+import { ApiError } from '../../../../core/models/api-error.model';
 import { AiAssistantStateService } from '../../../../state/ai-assistant.state';
 import { ROUTES } from '../../../../core/constants/route.constants';
 import { TenantSettingsStoreService } from '../../../../core/services/tenant-settings-store.service';
@@ -86,11 +87,8 @@ export class AiChatWindowComponent {
         this.searchResults.set(response.searchResults);
         this.loading.set(false);
       },
-      error: () => {
-        this.appendMessage(
-          'assistant',
-          'Sorry, I encountered an error. Your plan may not include AI Assistant, or the service is temporarily unavailable.',
-        );
+      error: (err: ApiError) => {
+        this.appendMessage('assistant', this.formatErrorMessage(err));
         this.loading.set(false);
       },
     });
@@ -120,7 +118,10 @@ export class AiChatWindowComponent {
         );
         this.loading.set(false);
       },
-      error: () => this.loading.set(false),
+      error: (err: ApiError) => {
+        this.appendMessage('assistant', this.formatErrorMessage(err));
+        this.loading.set(false);
+      },
     });
   }
 
@@ -144,5 +145,14 @@ export class AiChatWindowComponent {
   private scrollToBottom(): void {
     const el = this.messagesContainer()?.nativeElement;
     if (el) el.scrollTop = el.scrollHeight;
+  }
+
+  private formatErrorMessage(err: ApiError): string {
+    const message = err.detail?.trim() || err.title?.trim();
+    if (message) {
+      return message;
+    }
+
+    return 'Sorry, I could not reach the AI service. Please try again in a moment.';
   }
 }

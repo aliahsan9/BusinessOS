@@ -18,6 +18,7 @@ using BusinessOS.Application.Features.Settings.Services;
 using BusinessOS.Application.Features.SystemAdmin.Services;
 using BusinessOS.Application.Features.Tenant.Services;
 using BusinessOS.Application.Features.Billing.Services;
+using BusinessOS.Infrastructure.AI;
 using BusinessOS.Infrastructure.Payments;
 using BusinessOS.Infrastructure.Data;
 using BusinessOS.Infrastructure.Identity;
@@ -115,6 +116,14 @@ public static class DependencyInjection
         services.Configure<JazzCashOptions>(configuration.GetSection(JazzCashOptions.SectionName));
         services.Configure<EasyPaisaOptions>(configuration.GetSection(EasyPaisaOptions.SectionName));
         services.Configure<BillingOptions>(configuration.GetSection(BillingOptions.SectionName));
+        services.Configure<AiOptions>(configuration.GetSection(AiOptions.SectionName));
+
+        services.AddHttpClient<ILlmChatClient, CursorLlmChatClient>((sp, client) =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AiOptions>>().Value;
+            client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromMinutes(3);
+        });
 
         services.AddScoped<BillingService>();
         services.AddScoped<IBillingService>(sp => sp.GetRequiredService<BillingService>());

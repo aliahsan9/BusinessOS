@@ -37,7 +37,7 @@ public sealed class TenantLimitService : ITenantLimitService
 
         if (tenant?.Plan is null)
         {
-            return new TenantLimits(1, 25, 10, 100, 512, 0);
+            return new TenantLimits(1, 25, 10, 100, 512, 100);
         }
 
         return new TenantLimits(
@@ -81,6 +81,8 @@ public sealed class TenantLimitService : ITenantLimitService
                 $"Task limit reached ({PlanLimitHelper.FormatLimit(limits.MaxTasks)}). Upgrade your plan to add more tasks.",
             "storage" when limits.MaxStorageMb != SubscriptionPlan.Unlimited && usage.StorageUsedMb >= limits.MaxStorageMb =>
                 $"Storage limit reached ({limits.MaxStorageMb} MB). Upgrade your plan for more storage.",
+            "ai" when limits.MaxAiRequests == 0 =>
+                "AI assistant is not included in your current plan. Upgrade your plan to access AI features.",
             "ai" when !PlanLimitHelper.IsUnlimited(limits.MaxAiRequests) && usage.AiRequestsUsed >= limits.MaxAiRequests =>
                 $"AI request limit reached ({PlanLimitHelper.FormatLimit(limits.MaxAiRequests)}). Upgrade your plan for more AI requests.",
             _ => null

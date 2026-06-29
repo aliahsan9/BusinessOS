@@ -57,7 +57,7 @@ public sealed class FeatureFlagService : IFeatureFlagService
             .FirstOrDefaultAsync(x => x.Id == _tenantProvider.TenantId, cancellationToken)
             ?? throw new NotFoundException("Tenant not found.");
 
-        return tenant.Plan;
+        return tenant.Plan ?? throw new NotFoundException("Subscription plan not found.");
     }
 
     private static PlanFeatureFlagsDto MapFlags(SubscriptionPlan plan) => new()
