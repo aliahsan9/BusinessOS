@@ -50,10 +50,11 @@
         <button
           type="button"
           class="btn btn-sm btn-outline-secondary"
-          (click)="exportPlaceholder()"
-          title="PDF export coming soon"
+          (click)="openExportDialog()"
+          [disabled]="loading()"
+          title="Export analytics as PDF"
         >
-          Export
+          Export PDF
         </button>
       </div>
     </div>
@@ -212,5 +213,16 @@
         }
       </app-card>
     </div>
+  }
+
+  @if (showExportDialog()) {
+    <app-export-dialog
+      title="Export Analytics Report"
+      message="Select a report to export as PDF using the current date range."
+      [reportOptions]="exportOptions"
+      [loading]="exportLoading()"
+      (exportReport)="exportReport($event)"
+      (cancelled)="closeExportDialog()"
+    />
   }
 </div>

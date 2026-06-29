@@ -29,6 +29,7 @@ public interface IApplicationDbContext
     DbSet<Notification> Notifications { get; }
     DbSet<Tenant> Tenants { get; }
     DbSet<TenantSettings> TenantSettings { get; }
+    DbSet<GeneratedReport> GeneratedReports { get; }
 
     Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default);

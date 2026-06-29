@@ -2,6 +2,9 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { AnalyticsPeriod } from '../../core/enums';
 import { AnalyticsStateService } from '../../state/analytics.state';
+import { ReportService } from '../../core/services/report.service';
+import { NotificationService } from '../../core/services/notification.service';
+import { ReportQueryParams, ReportType } from '../../core/models/report.model';
 import { AppBreadcrumbComponent } from '../../shared/components/app-breadcrumb/app-breadcrumb.component';
 import { AppCardComponent } from '../../shared/components/app-card/app-card.component';
 import { AppChartComponent } from '../../shared/components/app-chart/app-chart.component';
@@ -10,6 +13,7 @@ import { AppAlertComponent } from '../../shared/components/app-alert/app-alert.c
 import { AppEmptyStateComponent } from '../../shared/components/app-empty-state/app-empty-state.component';
 import { AppBadgeComponent } from '../../shared/components/app-badge/app-badge.component';
 import { AppCurrencyPipe } from '../../shared/pipes/app-currency.pipe';
+import { AppExportDialogComponent } from '../../shared/components/app-export-dialog/app-export-dialog.component';
 import { AnalyticsKpiCard } from '../../core/models/analytics.model';
 
 @Component({
@@ -26,6 +30,7 @@ import { AnalyticsKpiCard } from '../../core/models/analytics.model';
     AppAlertComponent,
     AppEmptyStateComponent,
     AppBadgeComponent,
+    AppExportDialogComponent,
   ],
   templateUrl: './analytics.component.html',
   styleUrl: './analytics.component.scss',
@@ -33,6 +38,8 @@ import { AnalyticsKpiCard } from '../../core/models/analytics.model';
 })
 export class AnalyticsComponent implements OnInit {
   private readonly analyticsState = inject(AnalyticsStateService);
+  private readonly reportService = inject(ReportService);
+  private readonly notification = inject(NotificationService);
 
   readonly overview = this.analyticsState.overview;
   readonly kpiCards = this.analyticsState.kpiCards;
@@ -51,6 +58,16 @@ export class AnalyticsComponent implements OnInit {
   readonly showCustomRange = signal(false);
   readonly customStart = signal('');
   readonly customEnd = signal('');
+  readonly showExportDialog = signal(false);
+  readonly exportLoading = signal(false);
+
+  readonly exportOptions = [
+    { type: ReportType.BusinessSummary, label: 'Overview Report' },
+    { type: ReportType.Revenue, label: 'Revenue Report' },
+    { type: ReportType.Expenses, label: 'Expense Report' },
+    { type: ReportType.ProfitLoss, label: 'Profit & Loss' },
+    { type: ReportType.Customers, label: 'Customer Report' },
+  ];
 
   readonly periods = [
     { label: 'Today', value: AnalyticsPeriod.Today },
@@ -91,8 +108,39 @@ export class AnalyticsComponent implements OnInit {
     this.analyticsState.refresh();
   }
 
-  exportPlaceholder(): void {
-    // Placeholder for future PDF export feature.
+  openExportDialog(): void {
+    this.showExportDialog.set(true);
+  }
+
+  closeExportDialog(): void {
+    this.showExportDialog.set(false);
+  }
+
+  exportReport(type: ReportType): void {
+    this.exportLoading.set(true);
+    this.reportService.generateReport(type, this.buildReportParams()).subscribe({
+      next: () => {
+        this.notification.success('Report exported successfully.');
+        this.exportLoading.set(false);
+        this.showExportDialog.set(false);
+      },
+      error: () => {
+        this.notification.error('Failed to export report.');
+        this.exportLoading.set(false);
+      },
+    });
+  }
+
+  private buildReportParams(): ReportQueryParams {
+    const period = this.period();
+    if (period === AnalyticsPeriod.Custom) {
+      return {
+        period,
+        startDate: this.customStart() || this.analyticsState.customStartDate() || undefined,
+        endDate: this.customEnd() || this.analyticsState.customEndDate() || undefined,
+      };
+    }
+    return { period };
   }
 
   retry(): void {

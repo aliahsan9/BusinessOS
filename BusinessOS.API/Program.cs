@@ -130,6 +130,7 @@ try
     app.MapInventoryEndpoints();
     app.MapDashboardEndpoints();
     app.MapAnalyticsEndpoints();
+    app.MapReportEndpoints();
     app.MapRoleEndpoints();
     app.MapExpenseEndpoints();
     app.MapFinanceEndpoints();

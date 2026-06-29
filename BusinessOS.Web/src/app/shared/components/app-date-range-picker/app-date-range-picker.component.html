@@ -1,0 +1,35 @@
+<div class="date-range-picker">
+  <label class="date-range-picker__label" for="date-range-period">{{ label() }}</label>
+  <select
+    id="date-range-period"
+    class="form-select form-select-sm"
+    [value]="period()"
+    (change)="onPeriodChange($event)"
+    aria-label="Select report period"
+  >
+    @for (p of periods; track p.value) {
+      <option [value]="p.value">{{ p.label }}</option>
+    }
+  </select>
+
+  @if (showCustom()) {
+    <div class="date-range-picker__custom">
+      <input
+        type="date"
+        class="form-control form-control-sm"
+        [value]="localStart()"
+        (input)="localStart.set($any($event.target).value)"
+        aria-label="Start date"
+      />
+      <span class="date-range-picker__sep">to</span>
+      <input
+        type="date"
+        class="form-control form-control-sm"
+        [value]="localEnd()"
+        (input)="localEnd.set($any($event.target).value)"
+        aria-label="End date"
+      />
+      <app-button label="Apply" [variant]="ButtonVariant.Primary" (clicked)="applyCustomRange()" />
+    </div>
+  }
+</div>

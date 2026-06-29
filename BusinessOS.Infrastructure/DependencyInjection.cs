@@ -4,6 +4,8 @@ using BusinessOS.Application.Features.Audit.Services;
 using BusinessOS.Application.Features.Auth.Services;
 using BusinessOS.Application.Features.Analytics.Services;
 using BusinessOS.Application.Features.Finance.Services;
+using BusinessOS.Application.Features.Pdf.Services;
+using BusinessOS.Application.Features.Reports.Services;
 using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Application.Features.Roles.Services;
 using BusinessOS.Application.Features.Settings.Services;
@@ -78,6 +80,8 @@ public static class DependencyInjection
         services.AddScoped<IRbacAuditService, RbacAuditService>();
         services.AddScoped<IAnalyticsModuleService, AnalyticsModuleService>();
         services.AddScoped<IFinanceService, FinanceService>();
+        services.AddScoped<IPdfGenerationService, PdfGenerationService>();
+        services.AddScoped<IReportService, ReportService>();
         services.AddScoped<IAuditService, AuditService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<ISettingsService, SettingsService>();

@@ -3,6 +3,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { AppCurrencyPipe } from '../../../shared/pipes/app-currency.pipe';
 import { InvoiceService } from '../../../core/services/invoice.service';
+import { ReportService } from '../../../core/services/report.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { TokenService } from '../../../core/services/token.service';
 import { InvoiceDto } from '../../../core/models/invoice.model';
@@ -56,6 +57,7 @@ export class InvoiceDetailComponent implements OnInit {
   readonly ButtonVariant = ButtonVariant;
   private readonly route = inject(ActivatedRoute);
   private readonly invoiceService = inject(InvoiceService);
+  private readonly reportService = inject(ReportService);
   private readonly notification = inject(NotificationService);
   private readonly tokenService = inject(TokenService);
 
@@ -159,16 +161,13 @@ export class InvoiceDetailComponent implements OnInit {
     if (!inv) return;
 
     this.printing.set(true);
-    this.invoiceService.getPdfHtml(inv.id).subscribe({
-      next: (html) => {
-        const blob = new Blob([html], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
+    this.reportService.generateInvoicePdf(inv.id).subscribe({
+      next: () => {
+        this.notification.success('Invoice PDF downloaded.');
         this.printing.set(false);
       },
       error: () => {
-        this.notification.error('Failed to load invoice for printing.');
+        this.notification.error('Failed to generate invoice PDF.');
         this.printing.set(false);
       },
     });

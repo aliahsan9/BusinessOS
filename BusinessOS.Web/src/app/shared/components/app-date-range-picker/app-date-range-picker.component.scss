@@ -1,0 +1,30 @@
+.date-range-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+
+  &__label {
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--color-text-muted);
+  }
+
+  &__custom {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  &__sep {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+  }
+}
+
+@media (max-width: 576px) {
+  .date-range-picker__custom {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
