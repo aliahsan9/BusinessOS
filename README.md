@@ -1,11 +1,14 @@
 # BusinessOS
 
 BusinessOS is a modern business management platform built for freelancers, startups, agencies, and growing businesses that need a centralized workspace to manage their daily operations.
+<img width="1886" height="880" alt="5" src="https://github.com/user-attachments/assets/04fc549f-a1ca-4fbe-a6de-2c8ddb713807" />
+
+
 
 Instead of relying on multiple disconnected tools for customer management, project tracking, invoicing, task organization, and financial monitoring, BusinessOS provides a single platform where everything can be managed efficiently.
 
 The platform is designed with scalability, maintainability, and user experience in mind. It combines a modern Angular frontend with a secure ASP.NET Core backend to deliver a fast, reliable, and extensible business management solution.
-
+<img width="1872" height="887" alt="4" src="https://github.com/user-attachments/assets/b06b10b0-b4dd-4933-9ced-0f1422a6fa0b" />
 ---
 
 ## Overview
