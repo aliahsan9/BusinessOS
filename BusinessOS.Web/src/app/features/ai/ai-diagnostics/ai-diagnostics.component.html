@@ -1,0 +1,59 @@
+<app-breadcrumb [items]="breadcrumbs" />
+
+<div class="ai-diagnostics">
+  <header>
+    <h1>AI Observability</h1>
+    <p>Intent detection, tool usage, execution time, and token consumption.</p>
+    <a [routerLink]="routes.ai.workspace">← Back to workspace</a>
+  </header>
+
+  @if (loading()) {
+    <p>Loading diagnostics…</p>
+  } @else if (!diagnostics()) {
+    <p>No diagnostics available yet. Start using AI Copilot to generate logs.</p>
+  } @else {
+    <div class="stats">
+      <app-card title="Total requests">
+        <strong>{{ diagnostics()!.totalRequests }}</strong>
+      </app-card>
+      <app-card title="Success rate">
+        <strong>{{ diagnostics()!.successfulRequests }} / {{ diagnostics()!.totalRequests }}</strong>
+      </app-card>
+      <app-card title="Avg execution">
+        <strong>{{ diagnostics()!.averageExecutionTimeMs | number: '1.0-0' }} ms</strong>
+      </app-card>
+      <app-card title="Token usage">
+        <strong>{{ diagnostics()!.totalTokenUsage | number }}</strong>
+      </app-card>
+    </div>
+
+    <div class="grid">
+      <app-card title="Intent breakdown">
+        @for (item of diagnostics()!.intentBreakdown; track item.intent) {
+          <div class="row"><span>{{ item.intent }}</span><strong>{{ item.count }}</strong></div>
+        }
+      </app-card>
+      <app-card title="Tool breakdown">
+        @for (item of diagnostics()!.toolBreakdown; track item.tool) {
+          <div class="row"><span>{{ item.tool }}</span><strong>{{ item.count }}</strong></div>
+        }
+      </app-card>
+    </div>
+
+    <app-card title="Recent audit logs">
+      @for (log of diagnostics()!.recentLogs; track log.id) {
+        <div class="log" [class.log--failed]="!log.success">
+          <div>
+            <strong>{{ log.intent }}</strong>
+            <small>{{ log.createdAt | date: 'short' }}</small>
+          </div>
+          <p>{{ log.userMessage }}</p>
+          <small>Tools: {{ log.toolsUsed.join(', ') || 'none' }} · {{ log.executionTimeMs }}ms</small>
+          @if (log.errorMessage) {
+            <small class="error">{{ log.errorMessage }}</small>
+          }
+        </div>
+      }
+    </app-card>
+  }
+</div>

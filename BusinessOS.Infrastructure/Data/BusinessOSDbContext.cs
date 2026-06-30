@@ -56,6 +56,10 @@ public class BusinessOSDbContext
     public DbSet<RbacAuditLog> RbacAuditLogs => Set<RbacAuditLog>();
     public DbSet<EntityAuditLog> EntityAuditLogs => Set<EntityAuditLog>();
     public DbSet<AIConversation> AIConversations => Set<AIConversation>();
+    public DbSet<AiConversationSession> AiConversationSessions => Set<AiConversationSession>();
+    public DbSet<AiDocument> AiDocuments => Set<AiDocument>();
+    public DbSet<AiDocumentChunk> AiDocumentChunks => Set<AiDocumentChunk>();
+    public DbSet<AiCopilotAuditLog> AiCopilotAuditLogs => Set<AiCopilotAuditLog>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<Activity> Activities => Set<Activity>();
     public DbSet<GeneratedReport> GeneratedReports => Set<GeneratedReport>();
@@ -210,6 +214,21 @@ public class BusinessOSDbContext
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<WorkTask>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<AIConversation>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<AiConversationSession>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<AiDocument>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<AiDocumentChunk>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<AiCopilotAuditLog>()
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
     }
 }

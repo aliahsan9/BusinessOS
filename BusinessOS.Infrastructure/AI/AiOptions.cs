@@ -16,6 +16,8 @@ public sealed class AiOptions
 
     public string OpenAiModel { get; set; } = "gpt-4o-mini";
 
+    public string OpenAiEmbeddingModel { get; set; } = "text-embedding-3-small";
+
     public string OpenAiBaseUrl { get; set; } = "https://api.openai.com/";
 
     /// <summary>Max seconds to wait for a Cursor agent run to finish.</summary>

@@ -20,6 +20,26 @@
     color: var(--text-on-primary-color, #fff);
   }
 
+  &__header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  &__workspace-link {
+    font-size: 0.75rem;
+    color: inherit;
+    opacity: 0.9;
+    text-decoration: none;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.15);
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+  }
+
   &__subtitle {
     display: block;
     font-size: 0.75rem;
@@ -151,6 +171,39 @@
       color: var(--color-primary);
       margin-bottom: 0.125rem;
     }
+  }
+
+  &__citations {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px dashed var(--color-border);
+    font-size: 0.75rem;
+
+    strong {
+      display: block;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      color: var(--color-primary);
+      margin-bottom: 0.25rem;
+    }
+  }
+
+  &__citation {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    margin-bottom: 0.25rem;
+
+    small {
+      color: var(--color-text-muted);
+    }
+  }
+
+  &__tools {
+    margin-top: 0.375rem;
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+    font-family: ui-monospace, monospace;
   }
 
   &__action-link {

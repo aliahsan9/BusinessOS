@@ -1,0 +1,61 @@
+.ai-diagnostics {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+
+  header {
+    h1 {
+      margin: 0 0 0.25rem;
+    }
+
+    p {
+      margin: 0 0 0.5rem;
+      color: var(--color-text-muted);
+    }
+
+    a {
+      color: var(--color-primary);
+    }
+  }
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.375rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.log {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--color-border);
+
+  &--failed {
+    background: color-mix(in srgb, var(--color-danger) 6%, transparent);
+  }
+
+  p {
+    margin: 0.25rem 0;
+  }
+
+  small {
+    display: block;
+    color: var(--color-text-muted);
+  }
+
+  .error {
+    color: var(--color-danger);
+  }
+}

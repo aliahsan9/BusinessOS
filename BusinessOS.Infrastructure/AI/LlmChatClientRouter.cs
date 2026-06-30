@@ -39,4 +39,47 @@ public sealed class LlmChatClientRouter : ILlmChatClient
 
         return null;
     }
+
+    public async IAsyncEnumerable<string> StreamReplyAsync(
+        Guid tenantId,
+        string userId,
+        string systemPrompt,
+        string userPrompt,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        if (_openAi.IsConfigured)
+        {
+            await foreach (var token in _openAi.StreamReplyAsync(tenantId, userId, systemPrompt, userPrompt, cancellationToken))
+            {
+                yield return token;
+            }
+            yield break;
+        }
+
+        var reply = await GenerateReplyAsync(tenantId, userId, systemPrompt, userPrompt, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(reply))
+        {
+            foreach (var word in reply.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            {
+                yield return word + " ";
+            }
+        }
+    }
+
+    public async Task<(string? Reply, int? TokenUsage)> GenerateWithToolsAsync(
+        Guid tenantId,
+        string userId,
+        string systemPrompt,
+        string userPrompt,
+        IReadOnlyList<object> toolResults,
+        CancellationToken cancellationToken = default)
+    {
+        if (_openAi.IsConfigured)
+        {
+            return await _openAi.GenerateWithToolsAsync(tenantId, userId, systemPrompt, userPrompt, toolResults, cancellationToken);
+        }
+
+        var reply = await GenerateReplyAsync(tenantId, userId, systemPrompt, userPrompt, cancellationToken);
+        return (reply, null);
+    }
 }

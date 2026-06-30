@@ -17,6 +17,7 @@ import { AppBadgeComponent } from '../../shared/components/app-badge/app-badge.c
 import { AppSkeletonComponent } from '../../shared/components/app-skeleton/app-skeleton.component';
 import { AppAlertComponent } from '../../shared/components/app-alert/app-alert.component';
 import { AppEmptyStateComponent } from '../../shared/components/app-empty-state/app-empty-state.component';
+import { DashboardCopilotComponent } from '../../shared/components/ai-assistant/dashboard-copilot/dashboard-copilot.component';
 
 @Component({
   selector: 'app-dashboard',
@@ -33,6 +34,7 @@ import { AppEmptyStateComponent } from '../../shared/components/app-empty-state/
     AppSkeletonComponent,
     AppAlertComponent,
     AppEmptyStateComponent,
+    DashboardCopilotComponent,
   ],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss',

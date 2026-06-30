@@ -1,13 +1,16 @@
 <div class="ai-chat" role="dialog" aria-label="BusinessOS AI Assistant">
   <header class="ai-chat__header">
     <div>
-      <strong>BusinessOS AI</strong>
-      <span class="ai-chat__subtitle">Your business assistant</span>
+      <strong>BusinessOS AI Copilot</strong>
+      <span class="ai-chat__subtitle">Live data · Tools · RAG · Memory</span>
       @if (contextLabel()) {
         <span class="ai-chat__context">{{ contextLabel() }}</span>
       }
     </div>
-    <button type="button" class="ai-chat__close" aria-label="Close" (click)="onClose()">×</button>
+    <div class="ai-chat__header-actions">
+      <a class="ai-chat__workspace-link" [routerLink]="workspaceRoute" (click)="onClose()">Workspace</a>
+      <button type="button" class="ai-chat__close" aria-label="Close" (click)="onClose()">×</button>
+    </div>
   </header>
 
   @if (!chatEnabled()) {
@@ -38,6 +41,22 @@
             <div class="ai-chat__sources">
               <strong>Retrieved Data:</strong>
               {{ sourcesSummary(msg) }}
+            </div>
+          }
+          @if (msg.citations?.length) {
+            <div class="ai-chat__citations">
+              <strong>Sources</strong>
+              @for (citation of msg.citations; track citation.title) {
+                <div class="ai-chat__citation">
+                  <span>{{ citation.title }}</span>
+                  <small>{{ citation.documentType }}</small>
+                </div>
+              }
+            </div>
+          }
+          @if (msg.toolsUsed?.length) {
+            <div class="ai-chat__tools">
+              Tools: {{ msg.toolsUsed?.join(', ') }}
             </div>
           }
           @if (msg.actionResult?.success && msg.actionResult?.route) {

@@ -176,6 +176,11 @@ export const ROUTES = {
     base: '/subscription',
   },
   profile: '/profile',
+  ai: {
+    base: '/ai',
+    workspace: '/ai/workspace',
+    diagnostics: '/ai/diagnostics',
+  },
   forbidden: '/forbidden',
   notFound: '/not-found',
 } as const;

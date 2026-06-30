@@ -15,6 +15,10 @@
     </div>
   </div>
 
+  <div class="dashboard__copilot">
+    <app-dashboard-copilot />
+  </div>
+
   @if (error()) {
     <app-alert [message]="error()!" variant="danger" [dismissible]="false" />
     <app-empty-state title="Unable to load dashboard" description="There was a problem fetching your data." actionLabel="Retry" (action)="retry()" />

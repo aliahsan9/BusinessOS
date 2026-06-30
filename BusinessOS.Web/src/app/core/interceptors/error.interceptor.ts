@@ -14,7 +14,11 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
     catchError((error: HttpErrorResponse) => {
       const apiError = toApiError(error);
 
-      if (error.status === 401 && !req.url.includes('/auth/login')) {
+      const isAuthEndpoint = req.url.includes('/auth/login') || req.url.includes('/auth/register');
+      const isPostLoginSync =
+        req.url.includes('/settings') || req.url.includes('/onboarding/status');
+
+      if (error.status === 401 && !isAuthEndpoint && !isPostLoginSync) {
         authService.logout(false);
         notificationService.error('Session expired', 'Please sign in again.');
       } else if (error.status === 403) {

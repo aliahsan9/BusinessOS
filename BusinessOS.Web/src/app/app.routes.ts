@@ -145,6 +145,10 @@ export const routes: Routes = [
         loadChildren: () => import('./features/help/help.routes').then((m) => m.HELP_ROUTES),
       },
       {
+        path: 'ai',
+        loadChildren: () => import('./features/ai/ai.routes').then((m) => m.AI_ROUTES),
+      },
+      {
         path: 'subscription',
         loadChildren: () => import('./features/subscription/subscription.routes').then((m) => m.SUBSCRIPTION_ROUTES),
       },

@@ -130,7 +130,10 @@ try
 
     app.UseSerilogRequestLogging();
     app.UseMiddleware<ExceptionHandlingMiddleware>();
-    app.UseHttpsRedirection();
+    if (!app.Environment.IsDevelopment())
+    {
+        app.UseHttpsRedirection();
+    }
     app.UseCors(corsPolicyName);
     app.UseAuthentication();
     app.UseMiddleware<TenantMiddleware>();

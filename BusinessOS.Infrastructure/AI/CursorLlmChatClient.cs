@@ -210,6 +210,36 @@ public sealed class CursorLlmChatClient : ILlmChatClient
         return body.Length > 240 ? body[..240] + "…" : body;
     }
 
+    public async IAsyncEnumerable<string> StreamReplyAsync(
+        Guid tenantId,
+        string userId,
+        string systemPrompt,
+        string userPrompt,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var reply = await GenerateReplyAsync(tenantId, userId, systemPrompt, userPrompt, cancellationToken);
+        if (string.IsNullOrWhiteSpace(reply))
+            yield break;
+
+        foreach (var word in reply.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            yield return word + " ";
+        }
+    }
+
+    public async Task<(string? Reply, int? TokenUsage)> GenerateWithToolsAsync(
+        Guid tenantId,
+        string userId,
+        string systemPrompt,
+        string userPrompt,
+        IReadOnlyList<object> toolResults,
+        CancellationToken cancellationToken = default)
+    {
+        var enriched = userPrompt + "\n\nTool results:\n" + System.Text.Json.JsonSerializer.Serialize(toolResults);
+        var reply = await GenerateReplyAsync(tenantId, userId, systemPrompt, enriched, cancellationToken);
+        return (reply, null);
+    }
+
     private sealed class CreateAgentResponse
     {
         [JsonPropertyName("agent")]

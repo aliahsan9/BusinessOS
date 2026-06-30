@@ -130,6 +130,13 @@ export const API_ENDPOINTS = {
   },
   ai: {
     chat: '/ai/chat',
+    chatStream: '/ai/chat/stream',
+    conversations: '/ai/conversations',
+    conversation: '/ai/conversations',
+    insights: '/ai/insights',
+    dashboardCopilot: '/ai/dashboard-copilot',
+    diagnostics: '/ai/diagnostics',
+    analyticsQuery: '/ai/analytics/query',
   },
   help: {
     faqs: '/help/faqs',
