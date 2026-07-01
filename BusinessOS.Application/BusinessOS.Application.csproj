@@ -9,10 +9,13 @@
   <ItemGroup>
     <Compile Remove="Abstractions\**" />
     <Compile Remove="DTOs\**" />
+    <Compile Remove="Features\Purchases\**" />
     <EmbeddedResource Remove="Abstractions\**" />
     <EmbeddedResource Remove="DTOs\**" />
+    <EmbeddedResource Remove="Features\Purchases\**" />
     <None Remove="Abstractions\**" />
     <None Remove="DTOs\**" />
+    <None Remove="Features\Purchases\**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -23,7 +26,6 @@
     <Folder Include="Features\Customers\" />
     <Folder Include="Features\Dashboard\" />
     <Folder Include="Features\AI\" />
-    <Folder Include="Features\Purchases\" />
     <Folder Include="Features\Orders\" />
   </ItemGroup>
 

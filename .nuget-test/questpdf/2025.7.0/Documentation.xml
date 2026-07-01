@@ -1,0 +1,743 @@
+<documentation>
+    <!-- SHARED -->
+    
+    <doc for="colorParam">
+        <param name="color">Color in a <a href="https://www.questpdf.com/concepts/colors.html">valid format</a> (like <c>#FF8800</c> for orange) or from the predefined <see cref="Colors"/> set (like <c>Colors.Red.Lighten1</c>).</param>
+    </doc>
+
+    <doc for="param.sectionName">
+        <param name="sectionName">The text key corresponding to the value used when defining the <see cref="ElementExtensions.Section">Section</see> element.</param>
+    </doc>
+
+    <doc for="param.url">
+        <param name="url">The URL of the webpage to which the user will be redirected.</param>
+    </doc>
+    
+    <!-- SCALE -->
+    
+    <doc for="scale.remarks">
+        <remarks>
+            <para>Although this adjustment modifies the space available to its inner content, some elements might use their own strategies to fill that space.</para>
+            <para>For example, an Image with the <see cref="Infrastructure.ImageScaling.FitWidth" /> setting may retain its size, but its quality could vary based on the DPI setting.</para>
+            <para>In contrast, text will not only appear smaller or bigger; but also a different number of words may fit each line.</para>
+        </remarks>
+    </doc>
+    
+    <doc for="scale.factorParam">
+        <param name="factor">The scaling factor. Values greater than one enlarge the content, while values less than one reduce it.</param>
+    </doc>
+
+    <!-- IMAGE -->
+    
+    <doc for="image.remarks">
+        <remarks>
+            <para>
+                Please note that there is a significant difference between image resolution (number of pixels vertically and horizontally) and its physical size described in points.
+                Therefore, the resolution of an image is not used for determining its physical size on the document.
+            </para>
+
+            <para>
+                Multiple strategies exist for the Image element to determine its final size. 
+                By default, the image fills all the available width. 
+                This behavior can be customized using options within the <see cref="Fluent.ImageDescriptor">descriptor</see> class.
+            </para>
+            
+            <para>
+                Images are automatically resized and compressed based on the descriptor's setup.
+                It defaults to <see cref="DocumentSettings">global document's settings</see>.
+            </para>
+            
+            <para>Supported formats: PNG, JPEG and WEBP.</para>
+        </remarks>
+    </doc>
+
+    <doc for="image.useOriginalImage">
+        <summary>
+            When enabled, the library does not resize the image to achieve the target DPI, nor compress it with target image quality.
+        </summary>
+    </doc>
+    
+    <doc for="image.rasterDPI">
+        <summary>
+            <para>
+                Specifies the DPI (dots-per-inch) for rasterizing images, which is a measure of an image's resolution that indicates how many individual dots (or pixels) fit into one inch of a printed image. 
+                Higher DPI values result in greater detail and sharpness, making images appear clearer when printed, while lower DPI values can cause images to look blurry or pixelated.
+            </para>
+            <para>The target resolution is computed by multiplying the DPI with the physical image size on the document.</para>
+            <para>Default DPI value is 288 DPI.</para>
+        </summary>
+        
+        <remarks>
+            If the image has lower resolution that the one calculated from the DPI setting, it will NOT be rescaled.
+        </remarks>
+        
+        <example>
+            Consider an image of dimensions 3x4 inches. Using a DPI value of 300, the final resolution translates to 900x1200 pixels.
+        </example>
+    </doc>
+
+    <doc for="image.compressionQuality">
+        <summary>
+            <para>
+                Controls the balance between an image's file size and its visual fidelity during compression.
+                Higher quality values preserve more detail with larger file sizes, while lower values reduce file size at the cost of potential image degradation, such as blurriness or artifacts.
+            </para>
+            <para>Opaque images are JPEG-encoded based on this setting, while images with an alpha channel default to PNG format, disregarding this option.</para>
+            <para>Default is set to "high quality".</para>
+        </summary>
+    </doc>
+
+    <doc for="image.descriptor">
+        <returns>Descriptor allowing adjustments to image attributes, such as scaling behavior, compression quality, and target DPI.</returns>
+    </doc>
+
+    <!-- SVG -->
+
+    <doc for="svg.remarks">
+        <remarks>
+            Multiple strategies exist for the Image element to determine its final size.
+            By default, the image fills all the available width.
+            This behavior can be customized using options within the <see cref="Fluent.SvgImageDescriptor">descriptor</see> class.
+        </remarks>
+    </doc>
+
+    <doc for="svg.descriptor">
+        <returns>Descriptor allowing adjustments to the SVG image scaling behavior.</returns>
+    </doc>
+
+
+    <!-- CONTENT DIRECTION -->
+    
+    <doc for="contentDirection.ltr.remarks">
+        <remarks>
+            <para>This writing system is used by most of modern languages.</para>
+            
+            <para>
+                The content direction affects various layout structures. In LTR mode, items are typically aligned to the left.
+                This mode also influences the direction of items in certain layouts. For instance, in a row element with LTR mode,
+                the first item is positioned on the left, while the last item is on the right.
+            </para>
+        </remarks>
+    </doc>
+
+    <doc for="contentDirection.rtl.remarks">
+        <remarks>
+            <para>This writing system is used by languages such as Hebrew, Arabic, and Persian.</para>
+            
+            <para>
+                The content direction affects various layout structures. In RTL mode, items are typically aligned to the right.
+                This mode also influences the direction of items in certain layouts. For instance, in a row element with RTL mode,
+                the first item is positioned on the right, while the last item is on the left.
+            </para>
+        </remarks>
+    </doc>
+    
+    <!-- TEXT ELEMENT -->
+
+    <doc for="text.returns.spanDescriptor">
+        <returns>Handler for adjusting the appearance of the text span, including attributes like color, size, and background.</returns>
+    </doc>
+
+    <doc for="text.returns.pageNumberDescriptor">
+        <returns>
+            <para>Handler for adjusting the appearance of the text span, including attributes like color, size, and background.</para>
+            <para>Additionally, it provides formatting options, like displaying the page number in custom text format (e.g. Roman numerals).</para>
+        </returns>
+    </doc>
+
+    <doc for="text.clampLines">
+        <summary>
+            Limits the number of visible lines in a paragraph, truncating overflow text with an ellipsis or by hiding it to maintain layout consistency.
+        </summary>
+    </doc>
+
+    <!-- TEXT ELEMENT -->
+
+    <doc for="text.alignment.left">
+        <summary>
+        Aligns text horizontally to the left side.
+        </summary>
+    </doc>
+
+    <doc for="text.alignment.center">
+        <summary>
+            Aligns text horizontally to the center, ensuring equal space on both left and right sides.
+        </summary>
+    </doc>
+
+    <doc for="text.alignment.right">
+        <summary>
+            Aligns content horizontally to the right side.
+        </summary>
+    </doc>
+
+    <doc for="text.alignment.start">
+        <summary>
+            Aligns the text horizontally to the start of the container.
+            This method sets the horizontal alignment of the text to the start (left for left-to-right languages, right for right-to-left languages).
+        </summary>
+    </doc>
+
+    <doc for="text.alignment.end">
+        <summary>
+            Aligns the text horizontally to the end of the container.
+            This method sets the horizontal alignment of the text to the end (right for left-to-right languages, left for right-to-left languages).
+        </summary>
+    </doc>
+
+    <doc for="text.alignment.justify">
+        <summary>
+            <para>
+            Justifies the text within its container.
+            </para>
+            
+            <para>
+            This method sets the horizontal alignment of the text to be justified, meaning it aligns along both the left and right margins.
+            This is achieved by adjusting the spacing between words and characters as necessary so that each line of text stretches from one end of the text column to the other.
+            This creates a clean, block-like appearance for the text.
+            </para>
+        </summary>
+    </doc>
+    
+    <!-- TEXT ATTRIBUTES -->
+
+    <doc for="text.fontColor">
+        <summary>
+            Sets the font color.
+            The font color determines the color applied to text characters, affecting their visual appearance.
+        </summary>
+
+        <remarks>
+            It also influences the default color of text decorations, such as underlines.
+        </remarks>
+    </doc>
+
+    <doc for="text.backgroundColor">
+        <summary>
+            Sets a solid background color for the text.
+            This color fills the area behind the text or other elements, enhancing contrast and providing visual emphasis.
+        </summary>
+    </doc>
+    
+    <doc for="text.fontFamily">
+        <summary>
+            Sets the font family of the text.
+            A font family is a collection of related fonts that share a consistent design style but may vary in weight, style, or width.
+            Examples of font families include Arial, Times New Roman, and Calibri.
+        </summary>
+        
+        <remarks>
+            <para>By default, the library searches all fonts available in the runtime environment.</para>
+            <para>This may work well on the development environment but may fail in the cloud where fonts are usually not installed.</para>
+            <para>It is safest deploy font files along with the application and then register them using the <see cref="Drawing.FontManager">FontManager</see> class.</para>
+        </remarks>
+        
+        <param name="value">Actual font family (e.g. "Times New Roman", "Calibri", "Lato") or custom identifier used when invoking the <see cref="Drawing.FontManager.RegisterFontWithCustomName">FontManager</see> method.</param>
+    </doc>
+
+    <doc for="text.fontFeatures">
+        <summary>
+            <para>Enables or disables font features defined by the OpenType standard, e.g. kernig, ligatures.</para>
+            
+            <para>
+                Font features are always encoded as 4-character long strings. For example, the ligatures feature is encode as <c>liga</c>, while the kernig feature as <c>kern</c>.
+                For a list of available features, refer to the <see cref="QuestPDF.Helpers.FontFeatures">FontFeatures</see> class.
+            </para>
+        </summary>
+
+        <remarks>
+            <para>To better understand what font features are, please consider example definitions. Please note that there are many more various font features. Most fonts support only a handful of them, having some of them enabled by default:</para>
+            <para>Ligatures in typography are specific character combinations that are designed to improve the aesthetics and readability of certain letter pairs. For example, in some fonts, when you type certain combinations of letters like 'fi' or 'fl', they will be replaced with a single, joined glyph.</para>
+            <para>Kerning in typography refers to the adjustment of space between characters in a proportional font. It's used to achieve a visually pleasing result by adjusting the spacing of specific character pairs. For example, in many fonts, the pair 'AV' is kerned so that the 'A' and 'V' are closer together than they would be by default.</para>
+        </remarks>
+
+        <example>
+            <para>TextStyle.Default.EnableFontFeature(FontFeatures.StandardLigatures);</para>
+            <para>TextStyle.Default.DisableFontFeature(FontFeatures.Kerning);</para>
+        </example>
+        
+        <param name="value">Provide font feature name or use the <see cref="QuestPDF.Helpers.FontFeatures">FontFeatures</see> class.</param>
+    </doc>
+    
+    <doc for="text.fontSize">
+        <summary>
+            Sets font size for the text.
+            Font size measures the height of text characters, determining how large or small the text appears.
+        </summary>
+
+        <remarks>
+            It's worth noting that different fonts may render text with distinct visual sizes, even when assigned the same numerical font size.
+        </remarks>
+    </doc>
+
+    <doc for="text.wrapAnywhere">
+        <summary>
+            Allows text to wrap at any character, not just spaces.
+        </summary>
+    </doc>
+    
+    <doc for="text.lineHeight">
+        <summary>
+            Adjusts the vertical spacing between lines of text, affecting readability and overall text layout.
+            The added space is proportional to the text size. 
+            A <paramref name="factor"/> value of 1 retains the original spacing.
+            <a href="https://www.questpdf.com/api-reference/text/text-style.html#line-height">Learn more</a>
+        </summary>
+
+        <param name="factor">
+            <para>Sets the proportion of vertical spacing relative to the font size.</para>
+            <para>A value greater than 1 increases the spacing, while a value less than 1 decreases it. The value must be greater than 0.</para>
+            <para>A value of <c>1</c> sets the line height equal to the font size. This setting may result in insufficient vertical spacing around the text.</para>
+            <para>A value of <c>default</c> indicates that the font metrics should be used to calculate the line spacing, which is the default behavior.</para>
+        </param>
+    </doc>
+
+    <doc for="text.letterSpacing">
+        <summary>
+            Adjusts the horizontal spacing between characters in the text, affecting readability and overall visual style.
+            The adjustment is proportional to the text size.
+            <a href="https://www.questpdf.com/api-reference/text/text-style.html#letter-spacing">Learn more</a>
+        </summary>
+
+        <param name="factor">
+            <para>Sets the proportion by which the horizontal space between characters is changed.</para>
+            <para>A value of 0 maintains the original spacing. When the value is positive, the text is more spread out. When it is negative, the text is more condensed.</para>
+        </param>
+    </doc>
+
+    <doc for="text.wordSpacing">
+        <summary>
+            Adjusts the horizontal spacing between words in the text, affecting readability and overall visual style.
+            The adjustment is proportional to the text size.
+        </summary>
+
+        <param name="factor">
+            <para>Sets the proportion by which the horizontal space between words is changed.</para>
+            <para>A value of 0 maintains the original spacing. When the value is positive, the text is more spread out. When it is negative, the text is more condensed.</para>
+        </param>
+    </doc>
+
+    <doc for="text.paragraph.spacing">
+        <summary>
+            Adjusts the vertical gap between successive paragraphs (separated by line breaks),
+            helping to visually separate blocks of text for improved readability.
+        </summary>
+    </doc>
+
+    <doc for="text.paragraph.firstLineIndentation">
+        <summary>
+            Specifies the horizontal offset of the first line in a paragraph.
+            Commonly used to visually separate paragraphs in a block of text.
+        </summary>
+    </doc>
+    
+    <!-- TEXT EFFECTS -->
+
+    <doc for="text.italic">
+        <summary>
+            Renders text with an italic effect, where letters are slightly slanted to the right.
+            Commonly used for emphasis or to distinguish specific words.
+        </summary>
+    </doc>
+
+    <doc for="text.decoration.strikethrough">
+        <summary>
+            Draws a line through the middle of the text. 
+        </summary>
+    </doc>
+
+    <doc for="text.decoration.underline">
+        <summary>
+            Draws a line under the text.
+        </summary>
+    </doc>
+
+    <doc for="text.decoration.overline">
+        <summary>
+            Draws a line above the text.
+        </summary>
+    </doc>
+
+    <doc for="text.decoration.remarks">
+        <remarks>
+            You can control the decoration visuals by setting color and style (solid, double, wavy, dotted, dashed) of the line.
+        </remarks>
+    </doc>
+
+    <doc for="text.decoration.applicability">
+        <remarks>
+            Applies for the following text decorations: striketrough, underline, overline.
+        </remarks>
+    </doc>
+
+    <doc for="text.decoration.color">
+        <summary>
+            Sets the color of the text decoration.
+        </summary>
+    </doc>
+
+    <doc for="text.decoration.thickness">
+        <summary>
+            Changess thickness of decoration line proportionally to the provided argument. 
+            Value equal to 1 is the default thickness. 
+        </summary>
+    </doc>
+
+    <doc for="text.decoration.solid">
+        <summary>
+            Sets the decoration line to a solid straight line.
+        </summary>
+    </doc>
+
+    <doc for="text.decoration.double">
+        <summary>
+            Sets the decoration line to a solid double line.
+        </summary>
+    </doc>
+
+    <doc for="text.decoration.wavy">
+        <summary>
+            Sets the decoration line to wave.
+        </summary>
+    </doc>
+
+    <doc for="text.decoration.dotted">
+        <summary>
+            Sets the decoration line to dots.
+        </summary>
+    </doc>
+
+    <doc for="text.decoration.dashed">
+        <summary>
+            Sets the decoration line to dashes.
+        </summary>
+    </doc>
+    
+    <!-- TEXT WEIGHT -->
+    
+    <doc for="text.weight.thin">
+        <summary>
+            Sets the font weight to "thin" (equivalent to CSS 100).
+            <a href="https://www.questpdf.com/api-reference/text/text-style.html#font-weight">Learn more</a>
+        </summary>
+    </doc>
+
+    <doc for="text.weight.extraLight">
+        <summary>
+            Sets the font weight to "extra light" (equivalent to CSS 200).
+            <a href="https://www.questpdf.com/api-reference/text/text-style.html#font-weight">Learn more</a>
+        </summary>
+    </doc>
+
+    <doc for="text.weight.light">
+        <summary>
+            Sets the font weight to "light" (equivalent to CSS 300).
+            <a href="https://www.questpdf.com/api-reference/text/text-style.html#font-weight">Learn more</a>
+        </summary>
+    </doc>
+
+    <doc for="text.weight.normal">
+        <summary>
+            Sets the font weight to "normal" or "regular (equivalent to CSS 400).
+            <a href="https://www.questpdf.com/api-reference/text/text-style.html#font-weight">Learn more</a>
+        </summary>
+    </doc>
+
+    <doc for="text.weight.medium">
+        <summary>
+            Sets the font weight to "medium" (equivalent to CSS 500).
+            <a href="https://www.questpdf.com/api-reference/text/text-style.html#font-weight">Learn more</a>
+        </summary>
+    </doc>
+
+    <doc for="text.weight.semiBold">
+        <summary>
+            Sets the font weight to "semi bold" (equivalent to CSS 600).
+            <a href="https://www.questpdf.com/api-reference/text/text-style.html#font-weight">Learn more</a>
+        </summary>
+    </doc>
+
+    <doc for="text.weight.bold">
+        <summary>
+            Sets the font weight to "bold" (equivalent to CSS 700).
+            <a href="https://www.questpdf.com/api-reference/text/text-style.html#font-weight">Learn more</a>
+        </summary>
+    </doc>
+
+    <doc for="text.weight.extraBold">
+        <summary>
+            Sets the font weight to "extra bold" (equivalent to CSS 800).
+            <a href="https://www.questpdf.com/api-reference/text/text-style.html#font-weight">Learn more</a>
+        </summary>
+    </doc>
+
+    <doc for="text.weight.black">
+        <summary>
+            Sets the font weight to "black" (equivalent to CSS 900).
+            <a href="https://www.questpdf.com/api-reference/text/text-style.html#font-weight">Learn more</a>
+        </summary>
+    </doc>
+
+    <doc for="text.weight.extraBlack">
+        <summary>
+            Sets the font weight to "extra black" (equivalent to CSS 1000).
+            <a href="https://www.questpdf.com/api-reference/text/text-style.html#font-weight">Learn more</a>
+        </summary>
+    </doc>
+
+    <doc for="text.weight.remarks">
+        <remarks>
+            <para>Determines the thickness of the text characters, ranging from light to bold, to create visual hierarchy or emphasis.</para>
+            
+            <para>
+                Not all fonts support every weight.
+                If the specified weight isn't available, the library selects the closest available option.
+            </para>
+        </remarks>
+    </doc>
+    
+    <!-- TEXT POSITION -->
+    
+    <doc for="text.position.normal">
+        <summary>
+            Resets the text position and size to default, utilizing the full available line height.
+            <a href="https://www.questpdf.com/api-reference/text/text-style.html#subscript">Learn more</a>
+        </summary>
+    </doc>
+
+    <doc for="text.position.subscript">
+        <summary>
+            Sets the text style to subscript, making it smaller and positioning it below the baseline, e.g.: H₂0.
+            <a href="https://www.questpdf.com/api-reference/text/text-style.html#subscript">Learn more</a>
+        </summary>
+    </doc>
+
+    <doc for="text.position.superscript">
+        <summary>
+            Sets the text style to subscript, making it smaller and positioning it above the baseline, e.g.: y² + x² = 1.
+            <a href="https://www.questpdf.com/api-reference/text/text-style.html#superscript">Learn more</a>
+        </summary>
+    </doc>
+    
+    <!-- TEXT DIRECTION -->
+
+    <doc for="text.direction.auto">
+        <summary>
+            Resets the text direction, enabling content to follow the automatically detected direction.
+        </summary>
+    </doc>
+
+    <doc for="text.direction.ltr">
+        <summary>
+            Enforces a left-to-right text direction.
+        </summary>
+    </doc>
+
+    <doc for="text.direction.rtl">
+        <summary>
+            Enforces a right-to-left text direction.
+        </summary>
+    </doc>
+    
+    <!-- TEXT OTHERS -->
+    <doc for="text.style">
+        <summary>
+            Sets a font style using the typography pattern.
+            <a href="https://www.questpdf.com/api-reference/text/basics.html#typography-pattern">Learn more</a>
+        </summary>
+        
+        <remarks>
+            This API reduces the garbage collector pressure and offers the best performance.
+        </remarks>
+    </doc>
+    
+    <!-- PREVIEWER -->
+
+    <doc for="companion.support">
+        <summary>
+            Connects to the QuestPDF Companion application to automatically preview the document being currently implemented after every code modification,
+            without the need to recompile the code or restart the application.
+            <a href="https://www.questpdf.com/document-companion.html">Learn more</a>
+        </summary>
+        
+        <remarks>
+            For details on the hot-reload functionality, please refer to the documentation of your preferred IDE.
+        </remarks>
+        
+        <param name="port">Specifies port for communication with the QuestPDF Previewer application. Default value is 12500.</param>
+    </doc>
+
+    <doc for="companion.notSupported">
+        <summary>
+            The hot-reload feature and QuestPDF Companion integration are available only in the .NET 6 environment or later.
+            Please consider updating your project.
+            <a href="https://www.questpdf.com/companion/usage.html">Installation and usage</a><br />
+            <a href="https://www.questpdf.com/companion/features.html">Features overview</a>
+        </summary>
+        
+        <param name="port">This parameter is ignored.</param>
+    </doc>
+    
+    <!-- COMPONENTS -->
+
+    <doc for="component">
+        <summary>
+            Components serve as modular building blocks for abstracting document layouts. 
+            They promote code reusability across multiple sections or types of documents. 
+            Using a component, you can generate content based on its internal state.
+            <a href="https://www.questpdf.com/concepts/components.html">Learn more</a>
+        </summary>
+        <example>
+            Consider the scenario of a company-wide page header. 
+            Instead of replicating the same header design across various documents, a single component can be created and referenced wherever needed.
+        </example>
+    </doc>
+
+    <!-- DOCUMENT OPERATIONS -->
+
+    <doc for="documentOperation.pageSelector">
+        <remarks>
+            <list type="table">
+                <listheader>
+                    <term>Syntax</term>
+                    <description>Description</description>
+                </listheader>
+                <item>
+                    <term>1, 2, 3</term>
+                    <description>Plain numbers indicate pages numbered from the start</description>
+                </item>
+                <item>
+                    <term>r1, r2</term>
+                    <description>Numbers with 'r' prefix count from the end (r1 = last page)</description>
+                </item>
+                <item>
+                    <term>z</term>
+                    <description>Represents the last page (equivalent to r1)</description>
+                </item>
+                <item>
+                    <term>1-5</term>
+                    <description>Dash-separated ranges are inclusive</description>
+                </item>
+                <item>
+                    <term>5-1</term>
+                    <description>Reversed ranges list pages in descending order</description>
+                </item>
+                <item>
+                    <term>x1-3</term>
+                    <description>Excludes specified pages from previous range</description>
+                </item>
+                <item>
+                    <term>:odd</term>
+                    <description>Selects odd-positioned pages from the resulting page-set</description>
+                </item>
+                <item>
+                    <term>:even</term>
+                    <description>Selects even-positioned pages from the resulting page-set</description>
+                </item>
+            </list>
+        </remarks>
+        
+        <example>
+            <list type="table">
+                <listheader>
+                    <term>Expression</term>
+                    <description>Result</description>
+                </listheader>
+                <item>
+                    <term>1,6,4</term>
+                    <description>pages 1, 6, and 4 in that order</description>
+                </item>
+                <item>
+                    <term>3-7</term>
+                    <description>pages 3 through 7 inclusive</description>
+                </item>
+                <item>
+                    <term>7-3</term>
+                    <description>pages 7, 6, 5, 4, and 3 in that order</description>
+                </item>
+                <item>
+                    <term>1-z</term>
+                    <description>all pages in order</description>
+                </item>
+                <item>
+                    <term>z-1</term>
+                    <description>all pages in reverse order</description>
+                </item>
+                <item>
+                    <term>r3-r1</term>
+                    <description>the last three pages of the document</description>
+                </item>
+                <item>
+                    <term>r1-r3</term>
+                    <description>the last three pages of the document in reverse order</description>
+                </item>
+                <item>
+                    <term>1-20:even</term>
+                    <description>even pages from 2 to 20</description>
+                </item>
+                <item>
+                    <term>5,7-9,12</term>
+                    <description>pages 5, 7, 8, 9, and 12</description>
+                </item>
+                <item>
+                    <term>5,7-9,12:odd</term>
+                    <description>pages 5, 8, and 12 (pages in odd positions from the original set of 5, 7, 8, 9, 12)</description>
+                </item>
+                <item>
+                    <term>5,7-9,12:even</term>
+                    <description>pages 7 and 9 (pages in even positions from the original set of 5, 7, 8, 9, 12)</description>
+                </item>
+                <item>
+                    <term>1-10,x3-4</term>
+                    <description>pages 1 through 10 except pages 3 and 4 (1, 2, and 5 through 10)</description>
+                </item>
+                <item>
+                    <term>4-10,x7-9,12-8,xr5</term>
+                    <description>In a 15-page file: pages 4, 5, 6, 10, 12, 10, 9, and 8 in that order (pages 4 through 10 except 7 through 9, followed by 12 through 8 descending, except 11 which is the fifth page from the end)</description>
+                </item>
+            </list>
+        </example>
+    </doc>
+    
+    <doc for="documentOperation.encryption.allow.annotation">
+        <summary>
+            Specifies whether the user is permitted to add signatures and annotations to the document.
+        </summary>
+    </doc>
+
+    <doc for="documentOperation.encryption.allow.contentExtraction">
+        <summary>
+            Specifies whether the user is allowed to copy text and graphics from the document.
+        </summary>
+    </doc>
+
+    <doc for="documentOperation.encryption.allow.modification">
+        <summary>
+            Specifies whether the user is permitted to insert, rotate, or delete pages within the document.
+        </summary>
+    </doc>
+
+    <doc for="documentOperation.encryption.allow.printing">
+        <summary>
+            Specifies whether the user can print the document.
+        </summary>
+    </doc>
+
+    <doc for="documentOperation.encryption.allow.assembly">
+        <summary>
+            Specifies whether the user is permitted to insert, rotate, or delete pages within the document.
+        </summary>
+    </doc>
+
+    <doc for="documentOperation.encryption.allow.fillingForms">
+        <summary>
+            Specifies whether the user is allowed to fill out existing form fields in the document.
+        </summary>
+    </doc>
+
+    <doc for="documentOperation.encryption.encryptMetadata">
+        <summary>
+            Determines whether the document's metadata is included in encryption.
+        </summary>
+    </doc>
+</documentation>

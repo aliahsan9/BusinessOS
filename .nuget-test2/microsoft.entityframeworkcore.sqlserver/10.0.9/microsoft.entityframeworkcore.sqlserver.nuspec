@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata minClientVersion="3.6">
+    <id>Microsoft.EntityFrameworkCore.SqlServer</id>
+    <version>10.0.9</version>
+    <authors>Microsoft</authors>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <license type="expression">MIT</license>
+    <licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>
+    <icon>Icon.png</icon>
+    <readme>PACKAGE.md</readme>
+    <projectUrl>https://docs.microsoft.com/ef/core/</projectUrl>
+    <description>Microsoft SQL Server database provider for Entity Framework Core.</description>
+    <copyright>© Microsoft Corporation. All rights reserved.</copyright>
+    <tags>Entity Framework Core entity-framework-core EF Data O/RM EntityFramework EntityFrameworkCore EFCore SQL Server</tags>
+    <serviceable>true</serviceable>
+    <repository type="git" url="https://github.com/dotnet/dotnet" commit="901ca941248413c79832d2fdbd709da0c4386353" />
+    <dependencies>
+      <group targetFramework="net10.0">
+        <dependency id="Microsoft.EntityFrameworkCore.Relational" version="10.0.9" exclude="Build" />
+        <dependency id="Microsoft.Data.SqlClient" version="6.1.1" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Caching.Memory" version="10.0.9" exclude="Build" />
+        <dependency id="Microsoft.Extensions.Configuration.Abstractions" version="10.0.9" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Logging" version="10.0.9" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+  </metadata>
+</package>

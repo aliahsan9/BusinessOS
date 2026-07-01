@@ -1,0 +1,36 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>Microsoft.EntityFrameworkCore.Design</id>
+    <version>10.0.9</version>
+    <authors>Microsoft</authors>
+    <developmentDependency>true</developmentDependency>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <license type="expression">MIT</license>
+    <licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>
+    <icon>Icon.png</icon>
+    <readme>PACKAGE.md</readme>
+    <projectUrl>https://docs.microsoft.com/ef/core/</projectUrl>
+    <description>Shared design-time components for Entity Framework Core tools.</description>
+    <copyright>© Microsoft Corporation. All rights reserved.</copyright>
+    <tags>Entity Framework Core entity-framework-core EF Data O/RM EntityFramework EntityFrameworkCore EFCore</tags>
+    <serviceable>true</serviceable>
+    <repository type="git" url="https://github.com/dotnet/dotnet" commit="901ca941248413c79832d2fdbd709da0c4386353" />
+    <dependencies>
+      <group targetFramework="net10.0">
+        <dependency id="Microsoft.EntityFrameworkCore.Relational" version="10.0.9" exclude="Build" />
+        <dependency id="Humanizer.Core" version="2.14.1" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.CodeAnalysis.CSharp.Workspaces" version="5.0.0" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.CodeAnalysis.Workspaces.MSBuild" version="5.0.0" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.DependencyModel" version="10.0.9" exclude="Build,Analyzers" />
+        <dependency id="Mono.TextTemplating" version="3.0.0" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Build.Framework" version="18.0.2" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.CodeAnalysis.CSharp" version="5.0.0" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Caching.Memory" version="10.0.9" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Configuration.Abstractions" version="10.0.9" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Logging" version="10.0.9" exclude="Build,Analyzers" />
+        <dependency id="Newtonsoft.Json" version="13.0.3" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+  </metadata>
+</package>

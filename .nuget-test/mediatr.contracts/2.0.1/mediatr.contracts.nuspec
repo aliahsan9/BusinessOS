@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>MediatR.Contracts</id>
+    <version>2.0.1</version>
+    <authors>Jimmy Bogard</authors>
+    <license type="expression">Apache-2.0</license>
+    <licenseUrl>https://licenses.nuget.org/Apache-2.0</licenseUrl>
+    <icon>gradient_128x128.png</icon>
+    <description>Contracts package for requests, responses, and notifications</description>
+    <copyright>Copyright Jimmy Bogard</copyright>
+    <tags>mediator request response queries commands notifications</tags>
+    <repository type="git" url="https://github.com/jbogard/MediatR.git" commit="59c97275ade5c05dcd01b319ce0951377be03ce3" />
+    <dependencies>
+      <group targetFramework=".NETStandard2.0" />
+    </dependencies>
+  </metadata>
+</package>

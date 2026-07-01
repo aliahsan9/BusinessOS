@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>QuestPDF</id>
+    <version>2025.7.0</version>
+    <authors>MarcinZiabek</authors>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <license type="file">PackageLicense.md</license>
+    <licenseUrl>https://aka.ms/deprecateLicenseUrl</licenseUrl>
+    <icon>Logo.png</icon>
+    <readme>README.md</readme>
+    <projectUrl>https://www.questpdf.com/</projectUrl>
+    <iconUrl>https://www.questpdf.com/images/package-logo.png</iconUrl>
+    <description>Generate and edit PDF documents in your .NET applications using the open-source QuestPDF library and its C# Fluent API. Build invoices, reports and data exports with ease.</description>
+    <releaseNotes>- Line element: Added gradient and dashed pattern support
+- Background element: Added linear gradient (multiple colors, arbitrary angle) and rounded corners
+- Border element: Added linear gradient (multiple colors, arbitrary angle), rounded corners, and alignment options (inside, outside, center)
+- Shadow element (new): Added blur, color, offset, and spread support
+- Internal: Introduced visual snapshot testing for the generation process
+- Updated Skia dependency to M138</releaseNotes>
+    <copyright>Marcin Ziąbek, QuestPDF contributors</copyright>
+    <tags>pdf generation creation export merge edit html</tags>
+    <repository type="git" url="https://github.com/QuestPDF/library.git" commit="e36f35f67f8971c7814e171314ff12001e81423e" />
+    <dependencies>
+      <group targetFramework="net6.0" />
+      <group targetFramework="net8.0" />
+      <group targetFramework=".NETStandard2.0">
+        <dependency id="System.Numerics.Vectors" version="4.5.0" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+  </metadata>
+</package>

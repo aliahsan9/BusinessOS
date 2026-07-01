@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>Microsoft.VisualStudio.SolutionPersistence</id>
+    <version>1.0.52</version>
+    <authors>Microsoft</authors>
+    <license type="expression">MIT</license>
+    <licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>
+    <projectUrl>https://github.com/microsoft/vs-solutionpersistence</projectUrl>
+    <description>Package Description</description>
+    <releaseNotes>https://github.com/microsoft/vs-solutionpersistence/releases/tag/v1.0.52</releaseNotes>
+    <copyright>© Microsoft Corporation. All rights reserved.</copyright>
+    <repository type="git" url="https://github.com/microsoft/vs-solutionpersistence" commit="19c3ca7dc997dba2b3a86f6c666e9f717f34c8fe" />
+    <dependencies>
+      <group targetFramework=".NETFramework4.7.2">
+        <dependency id="Microsoft.IO.Redist" version="6.0.1" exclude="Build,Analyzers" />
+        <dependency id="System.Memory" version="4.5.5" exclude="Build,Analyzers" />
+        <dependency id="System.Threading.Tasks.Extensions" version="4.5.4" exclude="Build,Analyzers" />
+      </group>
+      <group targetFramework="net8.0" />
+    </dependencies>
+  </metadata>
+</package>

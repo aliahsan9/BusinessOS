@@ -1,0 +1,43 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>Microsoft.CodeAnalysis.Common</id>
+    <version>5.0.0</version>
+    <authors>Microsoft</authors>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <license type="expression">MIT</license>
+    <licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>
+    <icon>Icon.png</icon>
+    <projectUrl>https://github.com/dotnet/roslyn</projectUrl>
+    <description>A shared package used by the Microsoft .NET Compiler Platform ("Roslyn").
+      Do not install this package manually, it will be added as a prerequisite by other packages that require it.
+    
+      More details at https://aka.ms/roslyn-packages
+      This package was built from the source at https://github.com/dotnet/roslyn/commit/6c4a46a31302167b425d5e0a31ea83c9a9aa1d09.</description>
+    <copyright>© Microsoft Corporation. All rights reserved.</copyright>
+    <tags>Roslyn CodeAnalysis Compiler CSharp VB VisualBasic Parser Scanner Lexer Emit CodeGeneration Metadata IL Compilation Scripting Syntax Semantics</tags>
+    <serviceable>true</serviceable>
+    <repository type="git" url="https://github.com/dotnet/roslyn" branch="release/dev18.0" commit="6c4a46a31302167b425d5e0a31ea83c9a9aa1d09" />
+    <dependencies>
+      <group targetFramework="net8.0">
+        <dependency id="Microsoft.CodeAnalysis.Analyzers" version="3.11.0" />
+        <dependency id="System.Collections.Immutable" version="9.0.0" exclude="Build,Analyzers" />
+        <dependency id="System.Reflection.Metadata" version="9.0.0" exclude="Build,Analyzers" />
+      </group>
+      <group targetFramework="net9.0">
+        <dependency id="Microsoft.CodeAnalysis.Analyzers" version="3.11.0" />
+      </group>
+      <group targetFramework=".NETStandard2.0">
+        <dependency id="Microsoft.CodeAnalysis.Analyzers" version="3.11.0" />
+        <dependency id="System.Collections.Immutable" version="9.0.0" exclude="Build,Analyzers" />
+        <dependency id="System.Memory" version="4.6.0" exclude="Build,Analyzers" />
+        <dependency id="System.Reflection.Metadata" version="9.0.0" exclude="Build,Analyzers" />
+        <dependency id="System.Runtime.CompilerServices.Unsafe" version="6.1.0" exclude="Build,Analyzers" />
+        <dependency id="System.Text.Encoding.CodePages" version="8.0.0" exclude="Build,Analyzers" />
+        <dependency id="System.Threading.Tasks.Extensions" version="4.6.0" exclude="Build,Analyzers" />
+        <dependency id="System.Buffers" version="4.6.0" exclude="Build,Analyzers" />
+        <dependency id="System.Numerics.Vectors" version="4.6.0" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+  </metadata>
+</package>
