@@ -25,7 +25,7 @@ public class BusinessOSDbContextFactory : IDesignTimeDbContextFactory<BusinessOS
 
         optionsBuilder.UseSqlServer(connectionString);
 
-        // 👇 FIX: provide fake tenant provider
+        // FIX: provide fake tenant provider
         ITenantProvider tenantProvider = new DesignTimeTenantProvider();
 
         return new BusinessOSDbContext(optionsBuilder.Options, tenantProvider);
