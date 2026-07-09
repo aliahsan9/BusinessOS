@@ -20,6 +20,56 @@ The project follows modern software architecture principles and serves as both a
 
 ---
 
+---
+
+##Database Flow
+flowchart TD
+
+A[Client]
+
+B[HTTP Request]
+
+C[Middleware Pipeline]
+
+D[Endpoint]
+
+E[MediatR]
+
+F[Validation]
+
+G[Command or Query Handler]
+
+H[Business Logic]
+
+I[Entity Framework Core]
+
+J[(SQL Server)]
+
+K[HTTP Response]
+
+A --> B
+
+B --> C
+
+C --> D
+
+D --> E
+
+E --> F
+
+F --> G
+
+G --> H
+
+H --> I
+
+I --> J
+
+J --> K
+
+
+---
+
 ## Features
 
 ### User Authentication
