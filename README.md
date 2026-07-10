@@ -20,6 +20,13 @@ The project follows modern software architecture principles and serves as both a
 
 ---
 
+---
+
+##Database Design
+
+<img width="1024" height="559" alt="9e5a0304-d62d-48f7-8f4d-7dd6835d1a8f" src="https://github.com/user-attachments/assets/9782dc79-251b-4b9a-b7ce-b26d4fe4889a" />
+
+---
 ## Features
 
 ### User Authentication
