@@ -24,6 +24,8 @@ public enum AiToolName
     GetProducts,
     GetRevenue,
     GetSalesSummary,
+    GetBestSellingProducts,
+    GetSalesTrends,
     CreateTask,
     CreateInvoice,
     CreateCustomer,

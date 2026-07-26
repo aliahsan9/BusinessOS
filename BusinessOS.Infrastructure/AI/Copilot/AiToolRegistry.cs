@@ -36,6 +36,8 @@ public sealed class AiToolRegistry : IAiToolRegistry
                 selected.Add(tool);
         }
 
-        return selected.Take(3).ToList();
+        // Analytics / sales questions often need summary + bestsellers + trends together.
+        var limit = intent.Intent is AiCopilotIntent.Analytics or AiCopilotIntent.FollowUp ? 4 : 3;
+        return selected.Take(limit).ToList();
     }
 }

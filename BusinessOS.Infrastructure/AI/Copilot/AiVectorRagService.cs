@@ -110,7 +110,7 @@ public sealed class AiVectorRagService : IAiVectorRagService
                     EntityType = null,
                     MetadataFilters = filters.Count > 0 ? filters : null,
                     Top = Math.Max(top, 1),
-                    ScoreThreshold = 0.05f
+                    ScoreThreshold = 0.25f
                 }, cancellationToken);
 
                 if (hits.Count > 0)
@@ -168,7 +168,7 @@ public sealed class AiVectorRagService : IAiVectorRagService
                 chunk,
                 hybridScore = KeywordScore(chunk, queryKeywords, normalizedQuery)
             })
-            .Where(x => x.hybridScore > 0.05)
+            .Where(x => x.hybridScore > 0.2)
             .OrderByDescending(x => x.hybridScore)
             .Take(top)
             .Select(x => new AiCitationDto

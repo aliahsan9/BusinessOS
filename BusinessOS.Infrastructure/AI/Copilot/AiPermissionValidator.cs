@@ -44,7 +44,8 @@ public sealed class AiPermissionValidator : IAiPermissionValidator
 
     public AiPermissionCheckResult ValidateTool(AiToolName tool)
     {
-        if (tool is AiToolName.GetRevenue or AiToolName.GetSalesSummary)
+        if (tool is AiToolName.GetRevenue or AiToolName.GetSalesSummary
+            or AiToolName.GetBestSellingProducts or AiToolName.GetSalesTrends)
         {
             if (HasAnyRole("Owner", "Admin", "Manager", "Accountant")
                 || _currentUser.HasPermission(PermissionCodes.AnalyticsView)
@@ -97,7 +98,8 @@ public sealed class AiPermissionValidator : IAiPermissionValidator
         AiToolName.GetInvoices => [PermissionCodes.InvoiceView],
         AiToolName.GetExpenses => [PermissionCodes.ExpenseView],
         AiToolName.GetProducts => [PermissionCodes.ProductView],
-        AiToolName.GetRevenue or AiToolName.GetSalesSummary => [],
+        AiToolName.GetRevenue or AiToolName.GetSalesSummary
+            or AiToolName.GetBestSellingProducts or AiToolName.GetSalesTrends => [],
         AiToolName.CreateCustomer => [PermissionCodes.CustomerCreate],
         AiToolName.CreateProject => [],
         AiToolName.CreateTask => [PermissionCodes.TaskCreate],

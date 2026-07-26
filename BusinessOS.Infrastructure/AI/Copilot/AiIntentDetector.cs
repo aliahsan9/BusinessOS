@@ -24,16 +24,44 @@ public sealed class AiIntentDetector : IAiIntentDetector
         var content = StripLeadingGreeting(text);
 
         // Advice / strategy questions ("how can I increase sales?") must NOT become Analytics lookups.
+        // Orchestrator will still ground advice with live sales tools when relevant.
         if (IsAdviceRequest(content))
         {
             return new AiIntentDetectionResult
             {
                 Intent = AiCopilotIntent.Conversational,
-                Confidence = 0.93
+                Confidence = 0.93,
+                SuggestedTools = InferAdviceGroundingTools(content)
             };
         }
 
-        if (ContainsAny(content, "help", "how do i", "how to", "how can i", "getting started", "what can you"))
+        // Sales analytics before Help — "show top selling…" contains the substring "how to".
+        if (IsBestSellerQuery(content))
+        {
+            tools.Add(AiToolName.GetBestSellingProducts);
+            tools.Add(AiToolName.GetSalesSummary);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.Analytics,
+                Confidence = 0.94,
+                SuggestedTools = tools
+            };
+        }
+
+        if (IsTrendQuery(content))
+        {
+            tools.Add(AiToolName.GetSalesTrends);
+            tools.Add(AiToolName.GetRevenue);
+            tools.Add(AiToolName.GetSalesSummary);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.Analytics,
+                Confidence = 0.93,
+                SuggestedTools = tools
+            };
+        }
+
+        if (IsHelpRequest(content))
         {
             return new AiIntentDetectionResult
             {
@@ -62,7 +90,7 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
-        if (ContainsAny(content, "policy", "handbook", "contract", "faq", "terms", "documentation", "document", "uploaded"))
+        if (ContainsAny(content, "policy", "handbook", "contract", "faq", "terms", "documentation", "document", "uploaded", "knowledge base", "sop"))
         {
             tools.Add(AiToolName.SearchDocuments);
             return new AiIntentDetectionResult
@@ -98,6 +126,9 @@ public sealed class AiIntentDetector : IAiIntentDetector
 
             if (ContainsAny(content, "top customer", "best customer", "highest revenue"))
                 tools.Add(AiToolName.GetCustomers);
+
+            if (ContainsAny(content, "product"))
+                tools.Add(AiToolName.GetBestSellingProducts);
 
             return new AiIntentDetectionResult
             {
@@ -153,9 +184,11 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
-        if (ContainsAny(content, "product", "inventory", "catalog"))
+        if (ContainsAny(content, "product", "inventory", "catalog", "sku"))
         {
             tools.Add(AiToolName.GetProducts);
+            if (ContainsAny(content, "sell", "sold", "performance", "ranking"))
+                tools.Add(AiToolName.GetBestSellingProducts);
             return new AiIntentDetectionResult
             {
                 Intent = AiCopilotIntent.ActionRead,
@@ -181,6 +214,66 @@ public sealed class AiIntentDetector : IAiIntentDetector
             Intent = AiCopilotIntent.Conversational,
             Confidence = 0.5
         };
+    }
+
+    private static bool IsHelpRequest(string text)
+    {
+        // Avoid naive substring matches like "how to" inside "show top".
+        if (ContainsPhrase(text, "getting started") || ContainsPhrase(text, "what can you"))
+            return true;
+
+        if (ContainsPhrase(text, "how do i") || ContainsPhrase(text, "how to") || ContainsPhrase(text, "how can i"))
+        {
+            // App how-tos, not sales analytics / strategy.
+            return !IsBestSellerQuery(text) && !IsTrendQuery(text) && !IsAdviceRequest(text);
+        }
+
+        return ContainsPhrase(text, "help me") || text is "help" or "help?" or "help!";
+    }
+
+    private static bool ContainsPhrase(string text, string phrase)
+    {
+        if (string.IsNullOrWhiteSpace(text) || string.IsNullOrWhiteSpace(phrase))
+            return false;
+
+        var index = 0;
+        while ((index = text.IndexOf(phrase, index, StringComparison.OrdinalIgnoreCase)) >= 0)
+        {
+            var beforeOk = index == 0 || !char.IsLetterOrDigit(text[index - 1]);
+            var afterIndex = index + phrase.Length;
+            var afterOk = afterIndex >= text.Length || !char.IsLetterOrDigit(text[afterIndex]);
+            if (beforeOk && afterOk)
+                return true;
+            index += phrase.Length;
+        }
+
+        return false;
+    }
+
+    private static bool IsBestSellerQuery(string text) =>
+        ContainsAny(text,
+            "best selling", "best-selling", "bestseller", "best seller",
+            "top product", "top selling", "most sold", "highest selling",
+            "which product is best", "popular product", "fastest selling");
+
+    private static bool IsTrendQuery(string text) =>
+        ContainsAny(text,
+            "trend", "future trend", "sales trend", "growth trend",
+            "are sales growing", "is revenue growing", "declining",
+            "compare last month", "vs last month", "versus last",
+            "forecast", "what does the future", "momentum");
+
+    private static IReadOnlyList<AiToolName> InferAdviceGroundingTools(string text)
+    {
+        var tools = new List<AiToolName>();
+        if (ContainsAny(text, "sales", "sell", "revenue", "product", "customer", "grow", "increase", "boost"))
+        {
+            tools.Add(AiToolName.GetSalesSummary);
+            tools.Add(AiToolName.GetBestSellingProducts);
+            tools.Add(AiToolName.GetSalesTrends);
+        }
+
+        return tools;
     }
 
     private static bool IsGreetingOrSmallTalk(string text)
@@ -248,7 +341,8 @@ public sealed class AiIntentDetector : IAiIntentDetector
             "show me", "show ", "list ", "report", "breakdown", "total",
             "this month", "last month", "this week", "last week", "this year", "last year", "ytd",
             "today", "yesterday", "quarter", "so far", "to date",
-            "top customer", "best customer", "by revenue", "products sold");
+            "top customer", "best customer", "by revenue", "products sold",
+            "best selling", "bestseller", "top product", "trend");
 
     private static bool IsFollowUp(string text, AiMemoryStateDto memory) =>
         memory.RecentTurns.Count > 0
@@ -259,6 +353,9 @@ public sealed class AiIntentDetector : IAiIntentDetector
     {
         if (memory.LastAnalyticsQuery?.Contains("revenue", StringComparison.OrdinalIgnoreCase) == true)
             return [AiToolName.GetRevenue, AiToolName.GetCustomers];
+        if (memory.LastAnalyticsQuery?.Contains("product", StringComparison.OrdinalIgnoreCase) == true
+            || memory.LastAnalyticsQuery?.Contains("best", StringComparison.OrdinalIgnoreCase) == true)
+            return [AiToolName.GetBestSellingProducts, AiToolName.GetSalesSummary];
         if (memory.SelectedCustomerId is not null)
             return [AiToolName.GetCustomers, AiToolName.GetInvoices];
         return [AiToolName.GetSalesSummary];

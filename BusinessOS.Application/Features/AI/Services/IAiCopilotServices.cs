@@ -61,6 +61,7 @@ public interface IAiMemoryService
     Task UpdateAsync(Guid sessionId, AiChatRequest request, AiCopilotIntent intent, string userMessage, string assistantReply, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<AiConversationSessionDto>> ListSessionsAsync(int limit, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<AiConversationMessageDto>> GetSessionMessagesAsync(Guid sessionId, CancellationToken cancellationToken = default);
+    Task<bool> DeleteSessionAsync(Guid sessionId, CancellationToken cancellationToken = default);
 }
 
 public interface IAiVectorRagService

@@ -43,6 +43,9 @@ public sealed class AiAssistantService : IAiAssistantService
     public Task<IReadOnlyList<AiConversationMessageDto>> GetConversationAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
         _memory.GetSessionMessagesAsync(sessionId, cancellationToken);
 
+    public Task<bool> DeleteConversationAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+        _memory.DeleteSessionAsync(sessionId, cancellationToken);
+
     public Task<AiDashboardCopilotDto> GetDashboardCopilotAsync(CancellationToken cancellationToken = default) =>
         _insights.GetDashboardCopilotAsync(cancellationToken);
 

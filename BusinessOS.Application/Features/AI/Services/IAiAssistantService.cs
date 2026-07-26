@@ -22,6 +22,10 @@ public interface IAiAssistantService
         Guid sessionId,
         CancellationToken cancellationToken = default);
 
+    Task<bool> DeleteConversationAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken = default);
+
     Task<AiDashboardCopilotDto> GetDashboardCopilotAsync(CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<AiProactiveInsightDto>> GetInsightsAsync(CancellationToken cancellationToken = default);

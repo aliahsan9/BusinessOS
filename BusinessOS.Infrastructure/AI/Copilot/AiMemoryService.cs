@@ -196,6 +196,22 @@ public sealed class AiMemoryService : IAiMemoryService
         }).ToList();
     }
 
+    public async Task<bool> DeleteSessionAsync(Guid sessionId, CancellationToken cancellationToken = default)
+    {
+        var userId = _currentUser.UserId ?? throw new InvalidOperationException("User is required.");
+
+        var session = await _context.AiConversationSessions
+            .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId, cancellationToken);
+
+        if (session is null)
+            return false;
+
+        session.IsActive = false;
+        session.LastActivityAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     private async Task<string?> ResolveCustomerNameFromMessage(
         string message,
         Guid? currentCustomerId,

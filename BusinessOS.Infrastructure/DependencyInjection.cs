@@ -149,6 +149,8 @@ public static class DependencyInjection
         services.AddScoped<IAiTool, GetProductsTool>();
         services.AddScoped<IAiTool, GetRevenueTool>();
         services.AddScoped<IAiTool, GetSalesSummaryTool>();
+        services.AddScoped<IAiTool, GetBestSellingProductsTool>();
+        services.AddScoped<IAiTool, GetSalesTrendsTool>();
         services.AddScoped<IAiTool, CreateCustomerTool>();
         services.AddScoped<IAiTool, CreateProjectTool>();
         services.AddScoped<IAiTool, CreateTaskTool>();

@@ -27,6 +27,11 @@ public static class AiEndpoints
             .WithName("AiGetConversation")
             .Produces<IReadOnlyList<AiConversationMessageDto>>(StatusCodes.Status200OK);
 
+        group.MapDelete("/conversations/{sessionId:guid}", DeleteConversation)
+            .WithName("AiDeleteConversation")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound);
+
         group.MapGet("/insights", GetInsights)
             .WithName("AiInsights")
             .Produces<IReadOnlyList<AiProactiveInsightDto>>(StatusCodes.Status200OK);
@@ -96,6 +101,15 @@ public static class AiEndpoints
     {
         var messages = await aiService.GetConversationAsync(sessionId, cancellationToken);
         return Results.Ok(messages);
+    }
+
+    private static async Task<IResult> DeleteConversation(
+        Guid sessionId,
+        IAiAssistantService aiService,
+        CancellationToken cancellationToken)
+    {
+        var deleted = await aiService.DeleteConversationAsync(sessionId, cancellationToken);
+        return deleted ? Results.NoContent() : Results.NotFound(new { error = "Conversation not found." });
     }
 
     private static async Task<IResult> GetInsights(
