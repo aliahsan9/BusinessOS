@@ -44,5 +44,29 @@ public enum AiToolName
     GetPurchaseRecommendations,
     ApplyOnboardingProfile,
     GetBusinessSettings,
-    GetNotificationsSummary
+    GetNotificationsSummary,
+
+    // Phase 1A employee tools
+    SearchCustomer,
+    UpdateCustomer,
+    DeleteCustomer,
+    SearchProduct,
+    CreateProduct,
+    UpdateProduct,
+    DeleteProduct,
+    AdjustInventory,
+    ReceiveStock,
+    CreateSale,
+    CancelInvoice,
+    SearchInvoice,
+    CreatePurchaseOrder,
+    ApprovePurchaseOrder,
+    ReceivePurchase,
+    SearchSupplier,
+    CreateSupplier,
+    UpdateSupplier,
+    DeleteSupplier,
+    ShowProfit,
+    UpdateCompanyProfile,
+    UpdateTaxDefaults
 }

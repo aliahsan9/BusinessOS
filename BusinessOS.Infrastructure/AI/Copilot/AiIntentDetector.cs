@@ -184,6 +184,146 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
+        if (ContainsAny(content, "create", "add", "new", "generate", "register"))
+        {
+            if (ContainsAny(content, "customer", "client")) tools.Add(AiToolName.CreateCustomer);
+            if (ContainsAny(content, "product", "item")) tools.Add(AiToolName.CreateProduct);
+            if (ContainsAny(content, "supplier", "vendor")) tools.Add(AiToolName.CreateSupplier);
+            if (ContainsAny(content, "project")) tools.Add(AiToolName.CreateProject);
+            if (ContainsAny(content, "sale") || (ContainsAny(content, "order") && !ContainsAny(content, "purchase")))
+                tools.Add(AiToolName.CreateSale);
+            if (ContainsAny(content, "task")) tools.Add(AiToolName.CreateTask);
+            if (ContainsAny(content, "invoice")) tools.Add(AiToolName.CreateInvoice);
+            if (ContainsAny(content, "purchase order", "po ")) tools.Add(AiToolName.CreatePurchaseOrder);
+
+            if (tools.Count > 0)
+            {
+                return new AiIntentDetectionResult
+                {
+                    Intent = AiCopilotIntent.ActionCreate,
+                    Confidence = 0.9,
+                    SuggestedTools = tools
+                };
+            }
+        }
+
+        if (ContainsAny(content, "update", "edit", "change", "modify"))
+        {
+            if (ContainsAny(content, "customer", "client")) tools.Add(AiToolName.UpdateCustomer);
+            if (ContainsAny(content, "product")) tools.Add(AiToolName.UpdateProduct);
+            if (ContainsAny(content, "supplier")) tools.Add(AiToolName.UpdateSupplier);
+            if (ContainsAny(content, "company", "business", "profile")) tools.Add(AiToolName.UpdateCompanyProfile);
+            if (ContainsAny(content, "tax", "currency")) tools.Add(AiToolName.UpdateTaxDefaults);
+            if (tools.Count > 0)
+            {
+                return new AiIntentDetectionResult
+                {
+                    Intent = AiCopilotIntent.ActionCreate,
+                    Confidence = 0.88,
+                    SuggestedTools = tools
+                };
+            }
+        }
+
+        if (ContainsAny(content, "delete", "remove"))
+        {
+            if (ContainsAny(content, "customer", "client")) tools.Add(AiToolName.DeleteCustomer);
+            if (ContainsAny(content, "product")) tools.Add(AiToolName.DeleteProduct);
+            if (ContainsAny(content, "supplier")) tools.Add(AiToolName.DeleteSupplier);
+            if (tools.Count > 0)
+            {
+                return new AiIntentDetectionResult
+                {
+                    Intent = AiCopilotIntent.ActionCreate,
+                    Confidence = 0.88,
+                    SuggestedTools = tools
+                };
+            }
+        }
+
+        if (ContainsAny(content, "search", "find", "look up"))
+        {
+            if (ContainsAny(content, "customer", "client")) tools.Add(AiToolName.SearchCustomer);
+            if (ContainsAny(content, "product")) tools.Add(AiToolName.SearchProduct);
+            if (ContainsAny(content, "supplier")) tools.Add(AiToolName.SearchSupplier);
+            if (ContainsAny(content, "invoice")) tools.Add(AiToolName.SearchInvoice);
+            if (tools.Count > 0)
+            {
+                return new AiIntentDetectionResult
+                {
+                    Intent = AiCopilotIntent.ActionRead,
+                    Confidence = 0.9,
+                    SuggestedTools = tools
+                };
+            }
+        }
+
+        if (ContainsAny(content, "adjust stock", "adjust inventory"))
+        {
+            tools.Add(AiToolName.AdjustInventory);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.ActionCreate,
+                Confidence = 0.9,
+                SuggestedTools = tools
+            };
+        }
+
+        if (ContainsAny(content, "receive stock", "receive inventory"))
+        {
+            tools.Add(AiToolName.ReceiveStock);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.ActionCreate,
+                Confidence = 0.9,
+                SuggestedTools = tools
+            };
+        }
+
+        if (ContainsAny(content, "show profit", "net profit", "gross profit", "p&l", "profit and loss"))
+        {
+            tools.Add(AiToolName.ShowProfit);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.ActionRead,
+                Confidence = 0.92,
+                SuggestedTools = tools
+            };
+        }
+
+        if (ContainsAny(content, "cancel invoice", "void invoice"))
+        {
+            tools.Add(AiToolName.CancelInvoice);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.ActionCreate,
+                Confidence = 0.9,
+                SuggestedTools = tools
+            };
+        }
+
+        if (ContainsAny(content, "approve purchase", "approve po"))
+        {
+            tools.Add(AiToolName.ApprovePurchaseOrder);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.ActionCreate,
+                Confidence = 0.9,
+                SuggestedTools = tools
+            };
+        }
+
+        if (ContainsAny(content, "receive purchase", "receive po"))
+        {
+            tools.Add(AiToolName.ReceivePurchase);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.ActionCreate,
+                Confidence = 0.9,
+                SuggestedTools = tools
+            };
+        }
+
         if (ContainsAny(content, "create", "add", "new", "generate"))
         {
             if (ContainsAny(content, "customer")) tools.Add(AiToolName.CreateCustomer);

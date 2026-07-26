@@ -74,11 +74,13 @@ public sealed class AgentChatResponse
 public sealed class AgentStreamChunkDto
 {
     /// <summary>
-    /// token | status | workflow_step | final | error
+    /// tool | status | workflow_step | token | final | error
     /// </summary>
     public string Type { get; init; } = "token";
 
     public string? Content { get; init; }
+
+    public string? ToolName { get; init; }
 
     public AgentWorkflowStepDto? WorkflowStep { get; init; }
 

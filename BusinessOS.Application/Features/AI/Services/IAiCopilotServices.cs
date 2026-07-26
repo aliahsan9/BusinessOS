@@ -31,8 +31,24 @@ public interface IAiTool
     AiToolName ToolName { get; }
     string Description { get; }
     IReadOnlyList<string> RequiredPermissions { get; }
+
+    /// <summary>
+    /// JSON schema description of accepted arguments for structured extraction.
+    /// Null means the tool parses the raw message itself (legacy).
+    /// </summary>
+    string? ParameterSchemaJson { get; }
+
     bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory);
+
     Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Execute with pre-extracted JSON args. Default implementations fall back to <see cref="ExecuteAsync"/>.
+    /// </summary>
+    Task<AiToolResult> ExecuteWithArgsAsync(
+        AiCopilotExecutionContext context,
+        System.Text.Json.JsonElement args,
+        CancellationToken cancellationToken = default);
 }
 
 public interface IAiToolRegistry

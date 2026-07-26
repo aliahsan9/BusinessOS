@@ -32,6 +32,12 @@ public sealed class AgentPlanner : IAgentPlanner
         if (ContainsAny(text, "multi-step", "workflow", "end to end", "full report"))
             return true;
 
+        if (LooksLikeCustomerThenInvoice(text))
+            return true;
+
+        if (ContainsAny(text, " then ", " and then ", "after that", "اس کے بعد"))
+            return true;
+
         if (memory.OnboardingStep is > 0 && memory.OnboardingStep < 10)
             return true;
 
@@ -52,6 +58,23 @@ public sealed class AgentPlanner : IAgentPlanner
             || ContainsAny(text, "onboard", "setup company", "set up my business", "set up company"))
         {
             return PlanOnboarding(key, memory.PreferredLanguage);
+        }
+
+        if (LooksLikeCustomerThenInvoice(text))
+        {
+            return new AgentWorkflowPlanDto
+            {
+                Title = "Create customer and invoice",
+                AgentKey = key,
+                Intent = AiCopilotIntent.Workflow,
+                Steps =
+                [
+                    Step("create_customer", "Create customer", 0, AiToolName.CreateCustomer),
+                    Step("create_sale", "Create sale for customer", 1, AiToolName.CreateSale),
+                    Step("create_invoice", "Create invoice", 2, AiToolName.CreateInvoice),
+                    Step("summarize", "Confirm completion", 3, null)
+                ]
+            };
         }
 
         if (intent is AiCopilotIntent.ReportGeneration
@@ -104,10 +127,39 @@ public sealed class AgentPlanner : IAgentPlanner
                 [
                     Step("read_inventory", "Check low stock", 0, AiToolName.GetLowStock),
                     Step("analyze_demand", "Build purchase recommendations", 1, AiToolName.GetPurchaseRecommendations),
-                    Step("create_po", "Create purchase order draft", 2, AiToolName.CreatePurchaseOrderDraft),
+                    Step("create_po", "Create purchase order", 2, AiToolName.CreatePurchaseOrder),
                     Step("summarize", "Confirm draft", 3, null)
                 ]
             };
+        }
+
+        // Generic multi-step: use suggested create tools in sequence when "then" is present.
+        if (ContainsAny(text, " then ", " and then ", "after that"))
+        {
+            var steps = new List<AgentPlannedStepDto>();
+            var order = 0;
+            if (ContainsAny(text, "customer", "client"))
+                steps.Add(Step("create_customer", "Create customer", order++, AiToolName.CreateCustomer));
+            if (ContainsAny(text, "product"))
+                steps.Add(Step("create_product", "Create product", order++, AiToolName.CreateProduct));
+            if (ContainsAny(text, "sale", "order") && !ContainsAny(text, "purchase"))
+                steps.Add(Step("create_sale", "Create sale", order++, AiToolName.CreateSale));
+            if (ContainsAny(text, "invoice"))
+                steps.Add(Step("create_invoice", "Create invoice", order++, AiToolName.CreateInvoice));
+            if (ContainsAny(text, "supplier"))
+                steps.Add(Step("create_supplier", "Create supplier", order++, AiToolName.CreateSupplier));
+            steps.Add(Step("summarize", "Confirm completion", order, null));
+
+            if (steps.Count > 1)
+            {
+                return new AgentWorkflowPlanDto
+                {
+                    Title = "Multi-step business workflow",
+                    AgentKey = key,
+                    Intent = AiCopilotIntent.Workflow,
+                    Steps = steps
+                };
+            }
         }
 
         return new AgentWorkflowPlanDto
@@ -149,6 +201,10 @@ public sealed class AgentPlanner : IAgentPlanner
             ]
         };
     }
+
+    private static bool LooksLikeCustomerThenInvoice(string text) =>
+        (ContainsAny(text, "customer", "client") && ContainsAny(text, "invoice"))
+        || (ContainsAny(text, "create customer") && ContainsAny(text, "sale", "order", "invoice"));
 
     private static AgentPlannedStepDto Step(
         string key,

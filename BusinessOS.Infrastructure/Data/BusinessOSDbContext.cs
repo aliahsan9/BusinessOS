@@ -82,7 +82,7 @@ public class BusinessOSDbContext
 
     private void ApplyTenantAndAuditRules()
     {
-        foreach (var entry in ChangeTracker.Entries())
+        foreach (var entry in ChangeTracker.Entries().ToList())
         {
             // Assign TenantId automatically
             if (entry.State == EntityState.Added)

@@ -42,11 +42,14 @@ public sealed class VectorSyncOutboxInterceptor : SaveChangesInterceptor
         var outboxWriter = new VectorSyncOutboxWriter(db);
         var tracked = _registry.TrackedClrTypes;
 
-        foreach (var entry in db.ChangeTracker.Entries())
-        {
-            if (!tracked.Contains(entry.Entity.GetType()))
-                continue;
+        // Snapshot ChangeTracker entries before enqueueing — Enqueue adds outbox entities
+        // and must never run while Entries() is actively enumerating.
+        var candidates = db.ChangeTracker.Entries()
+            .Where(e => tracked.Contains(e.Entity.GetType()) && e.Entity is BaseEntity)
+            .ToList();
 
+        foreach (var entry in candidates)
+        {
             if (entry.Entity is not BaseEntity baseEntity)
                 continue;
 
@@ -72,6 +75,7 @@ public sealed class VectorSyncOutboxInterceptor : SaveChangesInterceptor
                 continue;
 
             var alreadyQueued = db.ChangeTracker.Entries<VectorSyncOutboxMessage>()
+                .ToList()
                 .Any(e => e.State == EntityState.Added
                           && e.Entity.EntityType == projector.EntityType
                           && e.Entity.EntityId == baseEntity.Id

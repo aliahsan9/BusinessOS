@@ -170,6 +170,9 @@ public sealed class AiCopilotExecutionContext
     public Guid SessionId { get; init; }
     public AiMemoryStateDto Memory { get; init; } = new();
     public string Message { get; init; } = default!;
+    public string Language { get; init; } = "en";
+    public System.Text.Json.JsonElement? ToolArgs { get; set; }
+    public Agents.DTOs.AgentExecutionState? ExecutionState { get; set; }
 }
 
 public sealed class AiMemoryStateDto

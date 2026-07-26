@@ -12,6 +12,7 @@ public abstract class AiToolBase : IAiTool
     public abstract AiToolName ToolName { get; }
     public abstract string Description { get; }
     public virtual IReadOnlyList<string> RequiredPermissions => [];
+    public virtual string? ParameterSchemaJson => null;
 
     public abstract bool CanHandle(
         AiCopilotIntent intent,
@@ -22,6 +23,15 @@ public abstract class AiToolBase : IAiTool
     public abstract Task<AiToolResult> ExecuteAsync(
         AiCopilotExecutionContext context,
         CancellationToken cancellationToken = default);
+
+    public virtual Task<AiToolResult> ExecuteWithArgsAsync(
+        AiCopilotExecutionContext context,
+        System.Text.Json.JsonElement args,
+        CancellationToken cancellationToken = default)
+    {
+        context.ToolArgs = args;
+        return ExecuteAsync(context, cancellationToken);
+    }
 
     protected static bool ContainsAny(string text, params string[] terms) =>
         terms.Any(term => text.Contains(term, StringComparison.OrdinalIgnoreCase));

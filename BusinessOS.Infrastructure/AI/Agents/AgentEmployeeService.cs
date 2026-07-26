@@ -6,7 +6,6 @@ using BusinessOS.Application.Features.Agents.Services;
 using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Enums;
 using BusinessOS.Application.Features.AI.Services;
-using BusinessOS.Domain.Enums;
 using Microsoft.Extensions.Logging;
 
 namespace BusinessOS.Infrastructure.AI.Agents;
@@ -16,12 +15,9 @@ public sealed class AgentEmployeeService : IAgentEmployeeService
     private readonly IAgentPersonaService _personaService;
     private readonly IVoicePreferenceService _voicePreferenceService;
     private readonly IAgentOnboardingOrchestrator _onboardingOrchestrator;
-    private readonly IAgentPlanner _planner;
+    private readonly IAgentRuntimeOrchestrator _runtime;
     private readonly IAgentWorkflowService _workflowService;
-    private readonly IAiCopilotOrchestrator _copilot;
-    private readonly IAiIntentDetector _intentDetector;
     private readonly IAiMemoryService _memoryService;
-    private readonly IAiContextService _contextService;
     private readonly IAiInsightService _insightService;
     private readonly ICurrentUserService _currentUser;
     private readonly ILogger<AgentEmployeeService> _logger;
@@ -30,12 +26,9 @@ public sealed class AgentEmployeeService : IAgentEmployeeService
         IAgentPersonaService personaService,
         IVoicePreferenceService voicePreferenceService,
         IAgentOnboardingOrchestrator onboardingOrchestrator,
-        IAgentPlanner planner,
+        IAgentRuntimeOrchestrator runtime,
         IAgentWorkflowService workflowService,
-        IAiCopilotOrchestrator copilot,
-        IAiIntentDetector intentDetector,
         IAiMemoryService memoryService,
-        IAiContextService contextService,
         IAiInsightService insightService,
         ICurrentUserService currentUser,
         ILogger<AgentEmployeeService> logger)
@@ -43,12 +36,9 @@ public sealed class AgentEmployeeService : IAgentEmployeeService
         _personaService = personaService;
         _voicePreferenceService = voicePreferenceService;
         _onboardingOrchestrator = onboardingOrchestrator;
-        _planner = planner;
+        _runtime = runtime;
         _workflowService = workflowService;
-        _copilot = copilot;
-        _intentDetector = intentDetector;
         _memoryService = memoryService;
-        _contextService = contextService;
         _insightService = insightService;
         _currentUser = currentUser;
         _logger = logger;
@@ -57,6 +47,27 @@ public sealed class AgentEmployeeService : IAgentEmployeeService
     public async Task<AgentChatResponse> ChatAsync(
         AgentChatRequest request,
         CancellationToken cancellationToken = default)
+    {
+        AgentChatResponse? final = null;
+        await foreach (var chunk in ChatStreamAsync(request, cancellationToken))
+        {
+            if (chunk.Type == "final" && chunk.FinalResponse is not null)
+                final = chunk.FinalResponse;
+        }
+
+        return final ?? new AgentChatResponse
+        {
+            Reply = "I couldn't complete that request.",
+            SpokenReply = "I couldn't complete that request.",
+            AgentKey = AgentKeys.Sophia,
+            AgentDisplayName = "Sophia",
+            Intent = AiCopilotIntent.Unknown
+        };
+    }
+
+    public async IAsyncEnumerable<AgentStreamChunkDto> ChatStreamAsync(
+        AgentChatRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var voice = await _voicePreferenceService.GetAsync(cancellationToken);
         var agentKey = AgentKeys.Normalize(
@@ -68,9 +79,12 @@ public sealed class AgentEmployeeService : IAgentEmployeeService
 
         if (await ShouldRouteToOnboardingAsync(request, cancellationToken))
         {
+            yield return new AgentStreamChunkDto { Type = "status", Content = "Starting onboarding…" };
+
+            AgentOnboardingResponse onboarding;
             if (LooksLikeOnboardingStart(request.Message))
             {
-                var started = await _onboardingOrchestrator.StartAsync(
+                onboarding = await _onboardingOrchestrator.StartAsync(
                     new AgentOnboardingStartRequest
                     {
                         AgentKey = agentKey,
@@ -78,211 +92,48 @@ public sealed class AgentEmployeeService : IAgentEmployeeService
                         SessionId = request.SessionId
                     },
                     cancellationToken);
-                return MapOnboardingToChat(started);
+            }
+            else
+            {
+                onboarding = await _onboardingOrchestrator.ContinueAsync(
+                    new AgentOnboardingContinueRequest
+                    {
+                        Message = request.Message,
+                        AgentKey = agentKey,
+                        Language = language,
+                        SessionId = request.SessionId,
+                        WorkflowId = request.WorkflowId
+                    },
+                    cancellationToken);
             }
 
-            var continued = await _onboardingOrchestrator.ContinueAsync(
-                new AgentOnboardingContinueRequest
-                {
-                    Message = request.Message,
-                    AgentKey = agentKey,
-                    Language = language,
-                    SessionId = request.SessionId,
-                    WorkflowId = request.WorkflowId
-                },
-                cancellationToken);
-            return MapOnboardingToChat(continued);
-        }
-
-        var copilotRequest = new AiCopilotChatRequest(
-            request.Message,
-            request.CurrentPage,
-            request.SearchQuery,
-            request.CustomerId,
-            request.OrderId,
-            request.InvoiceId,
-            request.ProjectId,
-            request.SessionId,
-            request.Stream,
-            agentKey,
-            language,
-            request.PreferEmployeeTone,
-            request.WorkflowId);
-
-        var page = _contextService.BuildPageContext(
-            new AiChatRequest(request.Message, request.CurrentPage, request.SearchQuery,
-                request.CustomerId, request.OrderId, request.InvoiceId, request.ProjectId));
-
-        Guid? sessionId = request.SessionId;
-        AiMemoryStateDto memory = new();
-        if (sessionId is not null)
-            memory = await _memoryService.LoadAsync(sessionId.Value, cancellationToken);
-
-        var intent = _intentDetector.Detect(request.Message, page, memory);
-
-        AgentWorkflowDto? workflow = null;
-        IReadOnlyList<AgentWorkflowStepDto> workflowSteps = [];
-
-        if (_planner.RequiresWorkflow(intent.Intent, request.Message, memory))
-        {
-            var userId = _currentUser.UserId
-                ?? throw new InvalidOperationException("User context is required.");
-
-            var plan = _planner.Plan(agentKey, intent.Intent, request.Message, page, memory);
-            workflow = await _workflowService.CreateFromPlanAsync(plan, userId, sessionId, cancellationToken);
-            workflow = await _workflowService.StartAsync(workflow.Id, cancellationToken);
-
-            foreach (var step in plan.Steps.OrderBy(s => s.SortOrder))
-            {
-                await _workflowService.BeginStepAsync(workflow.Id, step.StepKey, step.Title, cancellationToken);
-            }
-
-            copilotRequest = copilotRequest with { WorkflowId = workflow.Id };
-        }
-
-        var copilotResponse = await _copilot.ProcessAsync(copilotRequest, cancellationToken);
-
-        if (workflow is not null)
-        {
-            foreach (var step in workflow.Steps.OrderBy(s => s.SortOrder))
-            {
-                try
-                {
-                    await _workflowService.CompleteStepAsync(
-                        workflow.Id,
-                        step.StepKey,
-                        "Completed via agent chat",
-                        cancellationToken);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogDebug(ex, "Could not complete workflow step {Step}", step.StepKey);
-                }
-            }
-
-            await _workflowService.CompleteAsync(
-                workflow.Id,
-                Truncate(copilotResponse.Reply, 500),
-                cancellationToken);
-
-            var refreshed = await _workflowService.GetAsync(workflow.Id, cancellationToken);
-            workflowSteps = refreshed?.Steps ?? workflow.Steps;
-        }
-        else if (copilotResponse.WorkflowSteps.Count > 0)
-        {
-            workflowSteps = copilotResponse.WorkflowSteps.Select(s => new AgentWorkflowStepDto
-            {
-                Id = s.Id,
-                StepKey = s.StepKey,
-                Title = s.Title,
-                Status = Enum.TryParse<AgentWorkflowStepStatus>(s.Status, true, out var st)
-                    ? st
-                    : AgentWorkflowStepStatus.Completed,
-                SortOrder = s.SortOrder,
-                Message = s.Message,
-                StartedAt = s.StartedAt,
-                CompletedAt = s.CompletedAt
-            }).ToList();
-        }
-
-        return new AgentChatResponse
-        {
-            Reply = copilotResponse.Reply,
-            SpokenReply = copilotResponse.SpokenReply ?? copilotResponse.Reply,
-            SessionId = copilotResponse.SessionId,
-            AgentKey = copilotResponse.AgentKey ?? persona.Key,
-            AgentDisplayName = copilotResponse.AgentDisplayName ?? persona.DisplayName,
-            Intent = copilotResponse.Intent,
-            WorkflowId = workflow?.Id ?? copilotResponse.WorkflowId,
-            WorkflowSteps = workflowSteps,
-            ToolsUsed = copilotResponse.ToolsUsed,
-            Citations = copilotResponse.Citations,
-            Suggestions = copilotResponse.Suggestions,
-            QuickActions = copilotResponse.QuickActions,
-            SearchResults = copilotResponse.SearchResults,
-            Sources = copilotResponse.Sources,
-            ActionResult = copilotResponse.ActionResult,
-            PermissionDenied = copilotResponse.PermissionDenied
-        };
-    }
-
-    public async IAsyncEnumerable<AgentStreamChunkDto> ChatStreamAsync(
-        AgentChatRequest request,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        yield return new AgentStreamChunkDto { Type = "status", Content = "Thinking…" };
-
-        AgentChatResponse? final = null;
-        Exception? error = null;
-
-        try
-        {
-            final = await ChatAsync(new AgentChatRequest
-            {
-                Message = request.Message,
-                AgentKey = request.AgentKey,
-                Language = request.Language,
-                CurrentPage = request.CurrentPage,
-                SearchQuery = request.SearchQuery,
-                CustomerId = request.CustomerId,
-                OrderId = request.OrderId,
-                InvoiceId = request.InvoiceId,
-                ProjectId = request.ProjectId,
-                SessionId = request.SessionId,
-                WorkflowId = request.WorkflowId,
-                PreferEmployeeTone = request.PreferEmployeeTone,
-                Stream = true
-            }, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            error = ex;
-            _logger.LogError(ex, "Agent chat stream failed");
-        }
-
-        if (error is not null)
-        {
-            yield return new AgentStreamChunkDto { Type = "error", Content = error.Message };
-            yield break;
-        }
-
-        if (final is null)
-            yield break;
-
-        if (final.WorkflowId is not null)
-        {
-            yield return new AgentStreamChunkDto
-            {
-                Type = "status",
-                Content = "Running workflow…",
-                WorkflowId = final.WorkflowId
-            };
-
-            foreach (var step in final.WorkflowSteps)
+            var mapped = MapOnboardingToChat(onboarding);
+            foreach (var step in mapped.WorkflowSteps)
             {
                 yield return new AgentStreamChunkDto
                 {
                     Type = "workflow_step",
                     Content = step.Title,
                     WorkflowStep = step,
-                    WorkflowId = final.WorkflowId
+                    WorkflowId = mapped.WorkflowId
                 };
             }
+
+            yield return new AgentStreamChunkDto
+            {
+                Type = "final",
+                Content = mapped.Reply,
+                FinalResponse = mapped,
+                WorkflowId = mapped.WorkflowId
+            };
+            yield break;
         }
 
-        foreach (var word in final.Reply.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        await foreach (var chunk in _runtime.RunStreamAsync(
+                           request, agentKey, language, persona, cancellationToken))
         {
-            yield return new AgentStreamChunkDto { Type = "token", Content = word + " " };
-            await Task.Delay(12, cancellationToken);
+            yield return chunk;
         }
-
-        yield return new AgentStreamChunkDto
-        {
-            Type = "final",
-            Content = final.Reply,
-            FinalResponse = final,
-            WorkflowId = final.WorkflowId
-        };
     }
 
     public Task<IReadOnlyList<AgentEmployeeDto>> ListEmployeesAsync(
@@ -362,6 +213,14 @@ public sealed class AgentEmployeeService : IAgentEmployeeService
                 Category = "recommendations",
                 AgentKey = AgentKeys.Adam,
                 Icon = "🛒"
+            },
+            new()
+            {
+                Label = language == AgentLanguages.Urdu ? "نیا کسٹمر" : "Create a customer",
+                Message = "Create a new customer",
+                Category = "customers",
+                AgentKey = AgentKeys.Sophia,
+                Icon = "👤"
             }
         };
 
@@ -446,7 +305,4 @@ public sealed class AgentEmployeeService : IAgentEmployeeService
         WorkflowSteps = o.WorkflowSteps,
         Suggestions = o.Suggestions
     };
-
-    private static string Truncate(string text, int max) =>
-        text.Length <= max ? text : text[..max] + "…";
 }

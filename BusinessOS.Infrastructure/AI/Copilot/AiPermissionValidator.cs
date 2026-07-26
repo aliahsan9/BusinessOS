@@ -76,12 +76,25 @@ public sealed class AiPermissionValidator : IAiPermissionValidator
             return Denied("Revenue analytics require Manager, Admin, or Owner access.", PermissionCodes.AnalyticsView);
         }
 
-        if (tool is AiToolName.ApplyOnboardingProfile or AiToolName.GetBusinessSettings)
+        if (tool is AiToolName.ApplyOnboardingProfile or AiToolName.GetBusinessSettings
+            or AiToolName.UpdateCompanyProfile or AiToolName.UpdateTaxDefaults)
         {
             if (HasAnyRole("Owner", "Admin"))
                 return Allowed();
 
             return Denied("Business settings and onboarding require Owner or Admin access.", PermissionCodes.SettingsManage);
+        }
+
+        if (tool is AiToolName.ShowProfit)
+        {
+            if (HasAnyRole("Owner", "Admin", "Manager", "Accountant")
+                || _currentUser.HasPermission(PermissionCodes.FinanceView)
+                || _currentUser.HasPermission(PermissionCodes.AnalyticsView))
+            {
+                return Allowed();
+            }
+
+            return Denied("Profit insights require Finance.View or Manager access.", PermissionCodes.FinanceView);
         }
 
         if (tool is AiToolName.GetProjects)
@@ -138,6 +151,25 @@ public sealed class AiPermissionValidator : IAiPermissionValidator
         AiToolName.GenerateInventoryReport or AiToolName.GenerateSalesReport => [PermissionCodes.ReportView],
         AiToolName.ApplyOnboardingProfile or AiToolName.GetBusinessSettings => [],
         AiToolName.GetNotificationsSummary => [],
+        AiToolName.SearchCustomer => [PermissionCodes.CustomerView],
+        AiToolName.UpdateCustomer => [PermissionCodes.CustomerUpdate],
+        AiToolName.DeleteCustomer => [PermissionCodes.CustomerDelete],
+        AiToolName.SearchProduct => [PermissionCodes.ProductView],
+        AiToolName.CreateProduct => [PermissionCodes.ProductCreate],
+        AiToolName.UpdateProduct => [PermissionCodes.ProductUpdate],
+        AiToolName.DeleteProduct => [PermissionCodes.ProductDelete],
+        AiToolName.AdjustInventory or AiToolName.ReceiveStock => [PermissionCodes.InventoryAdjust],
+        AiToolName.CreateSale => [PermissionCodes.OrderCreate],
+        AiToolName.CancelInvoice => [PermissionCodes.InvoiceUpdate],
+        AiToolName.SearchInvoice => [PermissionCodes.InvoiceView],
+        AiToolName.CreatePurchaseOrder => [PermissionCodes.PurchaseOrderCreate],
+        AiToolName.ApprovePurchaseOrder or AiToolName.ReceivePurchase => [PermissionCodes.PurchaseOrderUpdate],
+        AiToolName.SearchSupplier => [PermissionCodes.SupplierView],
+        AiToolName.CreateSupplier => [PermissionCodes.SupplierCreate],
+        AiToolName.UpdateSupplier => [PermissionCodes.SupplierUpdate],
+        AiToolName.DeleteSupplier => [PermissionCodes.SupplierDelete],
+        AiToolName.ShowProfit => [PermissionCodes.FinanceView],
+        AiToolName.UpdateCompanyProfile or AiToolName.UpdateTaxDefaults => [PermissionCodes.SettingsManage],
         _ => []
     };
 
