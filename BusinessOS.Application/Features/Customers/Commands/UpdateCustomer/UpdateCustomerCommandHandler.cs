@@ -56,6 +56,8 @@ public sealed class UpdateCustomerCommandHandler : IRequestHandler<UpdateCustome
         customer.City = request.City.Trim();
         customer.Country = request.Country.Trim();
         customer.PostalCode = request.PostalCode.Trim();
+        customer.Company = string.IsNullOrWhiteSpace(request.Company) ? null : request.Company.Trim();
+        customer.Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
         customer.IsActive = request.IsActive;
 
         await _context.SaveChangesAsync(cancellationToken);

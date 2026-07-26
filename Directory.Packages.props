@@ -38,5 +38,7 @@
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
     <PackageVersion Include="Stripe.net" Version="48.0.0" />
+    <PackageVersion Include="Qdrant.Client" Version="1.15.1" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Polly" Version="10.0.9" />
   </ItemGroup>
 </Project>

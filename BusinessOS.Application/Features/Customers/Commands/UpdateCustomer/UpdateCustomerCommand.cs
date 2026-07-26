@@ -12,5 +12,7 @@ public record UpdateCustomerCommand(
     string City,
     string Country,
     string PostalCode,
-    bool IsActive
+    bool IsActive,
+    string? Company = null,
+    string? Notes = null
 ) : IRequest<Unit>;

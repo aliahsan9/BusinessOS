@@ -10,5 +10,7 @@ public record CreateCustomerCommand(
     string Address,
     string City,
     string Country,
-    string PostalCode
+    string PostalCode,
+    string? Company = null,
+    string? Notes = null
 ) : IRequest<Guid>;

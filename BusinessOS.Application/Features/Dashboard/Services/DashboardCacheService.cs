@@ -2,7 +2,7 @@ using BusinessOS.Application.Common.Interfaces;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 
-namespace BusinessOS.Application.Features.Dashboard.Services;
+namespace BusinessOS.Application.Features.Dashboard.Services; 
 
 public sealed class DashboardCacheOptions
 {
@@ -10,7 +10,6 @@ public sealed class DashboardCacheOptions
 
     public int CacheExpirationMinutes { get; set; } = 5;
 }
-
 public sealed class DashboardCacheService : IDashboardCacheService
 {
     private readonly IMemoryCache _cache;

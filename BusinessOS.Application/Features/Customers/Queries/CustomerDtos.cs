@@ -12,6 +12,8 @@ public class CustomerResponse
     public string City { get; set; } = default!;
     public string Country { get; set; } = default!;
     public string PostalCode { get; set; } = default!;
+    public string? Company { get; set; }
+    public string? Notes { get; set; }
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
@@ -25,6 +27,7 @@ public class CustomerSummaryResponse
     public string PhoneNumber { get; set; } = default!;
     public string City { get; set; } = default!;
     public string Country { get; set; } = default!;
+    public string? Company { get; set; }
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
 }
@@ -56,7 +59,9 @@ public record CreateCustomerRequest(
     string Address,
     string City,
     string Country,
-    string PostalCode);
+    string PostalCode,
+    string? Company = null,
+    string? Notes = null);
 
 public record UpdateCustomerRequest(
     string FirstName,
@@ -67,4 +72,6 @@ public record UpdateCustomerRequest(
     string City,
     string Country,
     string PostalCode,
-    bool IsActive);
+    bool IsActive,
+    string? Company = null,
+    string? Notes = null);

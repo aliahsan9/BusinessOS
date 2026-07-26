@@ -140,6 +140,7 @@ try
     app.UseAuthorization();
 
     app.MapControllers();
+    app.MapHealthChecks("/api/health/ready");
     app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", service = "BusinessOS.API" }))
         .WithTags("Health")
         .WithName("HealthCheck");

@@ -1,33 +1,37 @@
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Services;
+using BusinessOS.Application.Features.VectorSearch;
+using BusinessOS.Application.Features.VectorSearch.Models;
+using BusinessOS.Application.Features.VectorSearch.Options;
+using BusinessOS.Application.Features.VectorSearch.Services;
 using BusinessOS.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace BusinessOS.Infrastructure.AI.Copilot;
 
 public sealed class AiVectorRagService : IAiVectorRagService
 {
-    private const int ChunkSize = 800;
-    private const int ChunkOverlap = 100;
-
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUser;
-    private readonly OpenAiEmbeddingClient _embeddings;
+    private readonly IVectorSearchService _vectorSearch;
+    private readonly QdrantOptions _qdrantOptions;
     private readonly ILogger<AiVectorRagService> _logger;
 
     public AiVectorRagService(
         IApplicationDbContext context,
         ICurrentUserService currentUser,
-        OpenAiEmbeddingClient embeddings,
+        IVectorSearchService vectorSearch,
+        IOptions<QdrantOptions> qdrantOptions,
         ILogger<AiVectorRagService> logger)
     {
         _context = context;
         _currentUser = currentUser;
-        _embeddings = embeddings;
+        _vectorSearch = vectorSearch;
+        _qdrantOptions = qdrantOptions.Value;
         _logger = logger;
     }
 
@@ -59,20 +63,10 @@ public sealed class AiVectorRagService : IAiVectorRagService
 
         _context.AiDocuments.Add(document);
 
-        var chunks = ChunkText(content);
+        var chunks = VectorTextChunker.Chunk(content);
         for (var i = 0; i < chunks.Count; i++)
         {
             var chunkContent = chunks[i];
-            float[]? embedding = null;
-            try
-            {
-                embedding = await _embeddings.GenerateEmbeddingAsync(chunkContent, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Embedding generation failed; storing keyword-only chunk");
-            }
-
             _context.AiDocumentChunks.Add(new AiDocumentChunk
             {
                 Id = Guid.NewGuid(),
@@ -80,8 +74,8 @@ public sealed class AiVectorRagService : IAiVectorRagService
                 DocumentId = document.Id,
                 ChunkIndex = i,
                 Content = chunkContent,
-                EmbeddingJson = embedding is null ? null : JsonSerializer.Serialize(embedding),
-                Keywords = ExtractKeywords(chunkContent),
+                EmbeddingJson = null,
+                Keywords = VectorTextChunker.NormalizeKeywords(chunkContent),
                 DocumentType = documentType,
                 CreatedByUserId = userId,
                 Tags = tags
@@ -89,6 +83,7 @@ public sealed class AiVectorRagService : IAiVectorRagService
         }
 
         document.IsIndexed = true;
+        // Outbox interceptor enqueues Qdrant upsert for AiDocument.
         await _context.SaveChangesAsync(cancellationToken);
     }
 
@@ -99,8 +94,61 @@ public sealed class AiVectorRagService : IAiVectorRagService
         CancellationToken cancellationToken = default)
     {
         var tenantId = _currentUser.TenantId ?? throw new InvalidOperationException("Tenant is required.");
+
+        if (_qdrantOptions.Enabled)
+        {
+            try
+            {
+                var filters = new Dictionary<string, object?>();
+                if (!string.IsNullOrWhiteSpace(documentType))
+                    filters["documentType"] = documentType;
+
+                var hits = await _vectorSearch.SearchAsync(new VectorSearchRequest
+                {
+                    Query = query,
+                    TenantId = tenantId,
+                    EntityType = null,
+                    MetadataFilters = filters.Count > 0 ? filters : null,
+                    Top = Math.Max(top, 1),
+                    ScoreThreshold = 0.05f
+                }, cancellationToken);
+
+                if (hits.Count > 0)
+                {
+                    return hits
+                        .Take(top)
+                        .Select(hit => new AiCitationDto
+                        {
+                            Title = hit.Title,
+                            DocumentType = hit.Payload.TryGetValue("documentType", out var dt)
+                                ? dt?.ToString() ?? hit.EntityType
+                                : hit.EntityType,
+                            SourceId = hit.EntityId.ToString(),
+                            Excerpt = VectorTextChunker.Truncate(hit.Excerpt ?? string.Empty, 200),
+                            Score = Math.Round(hit.Score, 3)
+                        })
+                        .ToList();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Qdrant search failed; falling back to SQL keyword search");
+            }
+        }
+
+        return await SearchSqlKeywordFallbackAsync(query, documentType, top, tenantId, cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<AiCitationDto>> SearchSqlKeywordFallbackAsync(
+        string query,
+        string? documentType,
+        int top,
+        Guid tenantId,
+        CancellationToken cancellationToken)
+    {
         var normalizedQuery = query.Trim().ToLowerInvariant();
-        var queryKeywords = ExtractKeywords(normalizedQuery).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var queryKeywords = VectorTextChunker.NormalizeKeywords(normalizedQuery)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
         var chunksQuery = _context.AiDocumentChunks
             .AsNoTracking()
@@ -114,25 +162,11 @@ public sealed class AiVectorRagService : IAiVectorRagService
         if (chunks.Count == 0)
             return [];
 
-        float[]? queryEmbedding = null;
-        try
-        {
-            queryEmbedding = await _embeddings.GenerateEmbeddingAsync(query, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Query embedding unavailable; using keyword search only");
-        }
-
-        var scored = chunks
-            .Select(chunk =>
+        return chunks
+            .Select(chunk => new
             {
-                var keywordScore = KeywordScore(chunk, queryKeywords, normalizedQuery);
-                var vectorScore = queryEmbedding is not null && !string.IsNullOrWhiteSpace(chunk.EmbeddingJson)
-                    ? CosineSimilarity(queryEmbedding, DeserializeEmbedding(chunk.EmbeddingJson))
-                    : 0;
-                var hybridScore = (keywordScore * 0.4) + (vectorScore * 0.6);
-                return new { chunk, hybridScore };
+                chunk,
+                hybridScore = KeywordScore(chunk, queryKeywords, normalizedQuery)
             })
             .Where(x => x.hybridScore > 0.05)
             .OrderByDescending(x => x.hybridScore)
@@ -142,12 +176,10 @@ public sealed class AiVectorRagService : IAiVectorRagService
                 Title = x.chunk.Document.Title,
                 DocumentType = x.chunk.DocumentType,
                 SourceId = x.chunk.DocumentId.ToString(),
-                Excerpt = Truncate(x.chunk.Content, 200),
+                Excerpt = VectorTextChunker.Truncate(x.chunk.Content, 200),
                 Score = Math.Round(x.hybridScore, 3)
             })
             .ToList();
-
-        return scored;
     }
 
     private static double KeywordScore(AiDocumentChunk chunk, string[] queryKeywords, string normalizedQuery)
@@ -167,50 +199,4 @@ public sealed class AiVectorRagService : IAiVectorRagService
 
         return Math.Min(score, 1.0);
     }
-
-    private static float[] DeserializeEmbedding(string json) =>
-        JsonSerializer.Deserialize<float[]>(json) ?? [];
-
-    private static double CosineSimilarity(float[] a, float[] b)
-    {
-        if (a.Length == 0 || b.Length == 0 || a.Length != b.Length)
-            return 0;
-
-        double dot = 0, magA = 0, magB = 0;
-        for (var i = 0; i < a.Length; i++)
-        {
-            dot += a[i] * b[i];
-            magA += a[i] * a[i];
-            magB += b[i] * b[i];
-        }
-
-        if (magA == 0 || magB == 0)
-            return 0;
-
-        return dot / (Math.Sqrt(magA) * Math.Sqrt(magB));
-    }
-
-    private static List<string> ChunkText(string content)
-    {
-        var chunks = new List<string>();
-        if (string.IsNullOrWhiteSpace(content))
-            return chunks;
-
-        var text = content.Trim();
-        for (var start = 0; start < text.Length; start += ChunkSize - ChunkOverlap)
-        {
-            var length = Math.Min(ChunkSize, text.Length - start);
-            chunks.Add(text.Substring(start, length));
-            if (start + length >= text.Length)
-                break;
-        }
-
-        return chunks;
-    }
-
-    private static string ExtractKeywords(string text) =>
-        Regex.Replace(text.ToLowerInvariant(), @"[^a-z0-9\s]", " ");
-
-    private static string Truncate(string text, int max) =>
-        text.Length <= max ? text : text[..max] + "…";
 }

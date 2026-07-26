@@ -20,6 +20,8 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(x => x.City).HasMaxLength(100).IsRequired();
         builder.Property(x => x.Country).HasMaxLength(100).IsRequired();
         builder.Property(x => x.PostalCode).HasMaxLength(20).IsRequired();
+        builder.Property(x => x.Company).HasMaxLength(200);
+        builder.Property(x => x.Notes).HasMaxLength(2000);
         builder.Property(x => x.IsActive).IsRequired();
         builder.Property(x => x.AssignedUserId).HasMaxLength(450);
 

@@ -33,7 +33,7 @@ public static class DbInitializer
         {
             await context.Database.EnsureCreatedAsync();
         }
-        else
+        else if (configuration.GetValue("Database:ApplyMigrationsOnStartup", true))
         {
             await MigrateWithRetryAsync(context, logger);
         }

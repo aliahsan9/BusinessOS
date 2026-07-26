@@ -15,6 +15,8 @@ public static class EntityAuditSnapshots
             customer.City,
             customer.Country,
             customer.PostalCode,
+            customer.Company,
+            customer.Notes,
             customer.IsActive
         };
 

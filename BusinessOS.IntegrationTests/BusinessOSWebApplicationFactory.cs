@@ -21,6 +21,8 @@ public class BusinessOSWebApplicationFactory : WebApplicationFactory<Program>
 
         builder.UseSetting("UseInMemoryDatabase", "true");
         builder.UseSetting("InMemoryDatabaseName", _databaseName);
+        builder.UseSetting("Qdrant:Enabled", "false");
+        builder.UseSetting("VectorSync:BackfillOnStartup", "false");
     }
 
     public void EnsureSeeded()

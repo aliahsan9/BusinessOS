@@ -8,7 +8,7 @@ using Microsoft.Extensions.Options;
 
 namespace BusinessOS.Infrastructure.AI;
 
-public sealed class CursorLlmChatClient : ILlmChatClient
+public sealed class CursorLlmChatClient : ILlmChatClient 
 {
     private readonly HttpClient _httpClient;
     private readonly AiOptions _options;

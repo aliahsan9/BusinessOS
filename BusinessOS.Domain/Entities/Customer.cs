@@ -14,6 +14,8 @@ public class Customer : AuditableEntity
     public string City { get; set; } = default!;
     public string Country { get; set; } = default!;
     public string PostalCode { get; set; } = default!;
+    public string? Company { get; set; }
+    public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
     public string? AssignedUserId { get; set; }
 

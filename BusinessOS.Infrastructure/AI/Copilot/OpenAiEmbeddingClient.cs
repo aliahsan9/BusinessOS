@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
@@ -25,10 +24,13 @@ public sealed class OpenAiEmbeddingClient
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_options.OpenAiApiKey);
 
-    public async Task<float[]> GenerateEmbeddingAsync(string text, CancellationToken cancellationToken = default)
+    public async Task<float[]> GenerateEmbeddingAsync(
+        string text,
+        CancellationToken cancellationToken = default,
+        int? vectorSize = null)
     {
         if (!IsConfigured)
-            return GenerateFallbackEmbedding(text);
+            return GenerateFallbackEmbedding(text, vectorSize ?? 64);
 
         try
         {
@@ -45,26 +47,31 @@ public sealed class OpenAiEmbeddingClient
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning("OpenAI embedding failed ({Status})", (int)response.StatusCode);
-                return GenerateFallbackEmbedding(text);
+                return GenerateFallbackEmbedding(text, vectorSize ?? 64);
             }
 
             var parsed = System.Text.Json.JsonSerializer.Deserialize<EmbeddingResponse>(body);
-            return parsed?.Data?.FirstOrDefault()?.Embedding ?? GenerateFallbackEmbedding(text);
+            var embedding = parsed?.Data?.FirstOrDefault()?.Embedding;
+            if (embedding is null || embedding.Length == 0)
+                return GenerateFallbackEmbedding(text, vectorSize ?? 64);
+
+            return Resize(embedding, vectorSize);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Embedding request failed");
-            return GenerateFallbackEmbedding(text);
+            return GenerateFallbackEmbedding(text, vectorSize ?? 64);
         }
     }
 
-    private static float[] GenerateFallbackEmbedding(string text)
+    private static float[] GenerateFallbackEmbedding(string text, int dimensions)
     {
-        var vector = new float[64];
+        var size = Math.Max(8, dimensions);
+        var vector = new float[size];
         var tokens = text.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
         foreach (var token in tokens)
         {
-            var hash = Math.Abs(token.GetHashCode()) % 64;
+            var hash = Math.Abs(token.GetHashCode()) % size;
             vector[hash] += 1f;
         }
 
@@ -76,6 +83,16 @@ public sealed class OpenAiEmbeddingClient
         }
 
         return vector;
+    }
+
+    private static float[] Resize(float[] embedding, int? vectorSize)
+    {
+        if (vectorSize is null || embedding.Length == vectorSize)
+            return embedding;
+
+        var resized = new float[vectorSize.Value];
+        Array.Copy(embedding, resized, Math.Min(embedding.Length, resized.Length));
+        return resized;
     }
 
     private sealed class EmbeddingResponse

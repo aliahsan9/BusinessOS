@@ -58,6 +58,8 @@ public sealed class CreateCustomerCommandHandler : IRequestHandler<CreateCustome
             City = request.City.Trim(),
             Country = request.Country.Trim(),
             PostalCode = request.PostalCode.Trim(),
+            Company = string.IsNullOrWhiteSpace(request.Company) ? null : request.Company.Trim(),
+            Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim(),
             IsActive = true
         };
 

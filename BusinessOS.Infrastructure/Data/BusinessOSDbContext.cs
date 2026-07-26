@@ -67,6 +67,7 @@ public class BusinessOSDbContext
     public DbSet<TeamInvitation> TeamInvitations => Set<TeamInvitation>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<WorkTask> WorkTasks => Set<WorkTask>();
+    public DbSet<VectorSyncOutboxMessage> VectorSyncOutboxMessages => Set<VectorSyncOutboxMessage>();
 
     public override Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default)
@@ -230,5 +231,7 @@ public class BusinessOSDbContext
 
         builder.Entity<AiCopilotAuditLog>()
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        // Outbox is cross-tenant for background workers; filter by Status, not TenantId.
     }
 }

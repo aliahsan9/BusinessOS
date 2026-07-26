@@ -36,5 +36,11 @@ public sealed class CreateCustomerCommandValidator : AbstractValidator<CreateCus
 
         RuleFor(x => x.PostalCode)
             .MaximumLength(20);
+
+        RuleFor(x => x.Company)
+            .MaximumLength(200);
+
+        RuleFor(x => x.Notes)
+            .MaximumLength(2000);
     }
 }

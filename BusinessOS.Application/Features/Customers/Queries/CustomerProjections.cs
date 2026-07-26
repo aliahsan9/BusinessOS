@@ -17,6 +17,8 @@ public static class CustomerProjections
         City = x.City,
         Country = x.Country,
         PostalCode = x.PostalCode,
+        Company = x.Company,
+        Notes = x.Notes,
         IsActive = x.IsActive,
         CreatedAt = x.CreatedAt,
         UpdatedAt = x.UpdatedAt
@@ -30,6 +32,7 @@ public static class CustomerProjections
         PhoneNumber = x.PhoneNumber,
         City = x.City,
         Country = x.Country,
+        Company = x.Company,
         IsActive = x.IsActive,
         CreatedAt = x.CreatedAt
     };

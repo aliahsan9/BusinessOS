@@ -18,6 +18,8 @@ using BusinessOS.Application.Features.Settings.Services;
 using BusinessOS.Application.Features.SystemAdmin.Services;
 using BusinessOS.Application.Features.Tenant.Services;
 using BusinessOS.Application.Features.Billing.Services;
+using BusinessOS.Application.Features.VectorSearch.Options;
+using BusinessOS.Application.Features.VectorSearch.Services;
 using BusinessOS.Infrastructure.AI;
 using BusinessOS.Infrastructure.AI.Copilot;
 using BusinessOS.Infrastructure.AI.Copilot.Tools;
@@ -26,10 +28,13 @@ using BusinessOS.Infrastructure.Data;
 using BusinessOS.Infrastructure.Identity;
 using BusinessOS.Infrastructure.MultiTenancy;
 using BusinessOS.Infrastructure.Services;
+using BusinessOS.Infrastructure.VectorSearch;
+using BusinessOS.Infrastructure.VectorSearch.Projectors;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Qdrant.Client;
 
 namespace BusinessOS.Infrastructure;
 
@@ -44,23 +49,36 @@ public static class DependencyInjection
         services.AddScoped<ISuperAdminContext, SuperAdminContext>();
         services.AddScoped<ITenantDbConnection, TenantDbConnection>();
 
-        void ConfigureOptions(DbContextOptionsBuilder options)
+        services.Configure<QdrantOptions>(configuration.GetSection(QdrantOptions.SectionName));
+        services.Configure<VectorSyncOptions>(configuration.GetSection(VectorSyncOptions.SectionName));
+
+        services.AddSingleton<IVectorEntityProjector, DocumentVectorProjector>();
+        services.AddSingleton<IVectorEntityProjector, ProductVectorProjector>();
+        services.AddSingleton<IVectorEntityProjector, ProjectVectorProjector>();
+        services.AddSingleton<IVectorEntityProjector, CustomerVectorProjector>();
+        services.AddSingleton<IVectorEntityProjectorRegistry, VectorEntityProjectorRegistry>();
+        services.AddSingleton<VectorSyncOutboxInterceptor>();
+
+        void ConfigureOptions(IServiceProvider sp, DbContextOptionsBuilder options)
         {
             if (configuration.GetValue<bool>("UseInMemoryDatabase"))
             {
                 options.UseInMemoryDatabase(configuration["InMemoryDatabaseName"] ?? "BusinessOS_Test");
-                return;
+            }
+            else
+            {
+                var connectionString = configuration.GetConnectionString("DefaultConnection")
+                    ?? throw new InvalidOperationException("DefaultConnection is not configured.");
+
+                options.UseSqlServer(connectionString);
             }
 
-            var connectionString = configuration.GetConnectionString("DefaultConnection")
-                ?? throw new InvalidOperationException("DefaultConnection is not configured.");
-
-            options.UseSqlServer(connectionString);
+            options.AddInterceptors(sp.GetRequiredService<VectorSyncOutboxInterceptor>());
         }
 
-        services.AddDbContext<BusinessOSDbContext>((_, options) => ConfigureOptions(options));
+        services.AddDbContext<BusinessOSDbContext>((sp, options) => ConfigureOptions(sp, options));
         services.AddDbContextFactory<BusinessOSDbContext>(
-            (_, options) => ConfigureOptions(options),
+            (sp, options) => ConfigureOptions(sp, options),
             ServiceLifetime.Scoped);
 
         services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
@@ -123,7 +141,6 @@ public static class DependencyInjection
         services.AddScoped<IAiInsightService, AiInsightService>();
         services.AddScoped<IAiCopilotOrchestrator, AiCopilotOrchestrator>();
         services.AddScoped<IAiAssistantService, AiAssistantService>();
-        services.AddScoped<OpenAiEmbeddingClient>();
         services.AddScoped<IAiTool, GetCustomersTool>();
         services.AddScoped<IAiTool, GetProjectsTool>();
         services.AddScoped<IAiTool, GetTasksTool>();
@@ -162,7 +179,16 @@ public static class DependencyInjection
             client.Timeout = TimeSpan.FromMinutes(3);
         });
 
+        services.AddHttpClient<OpenAiEmbeddingClient>((sp, client) =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AiOptions>>().Value;
+            client.BaseAddress = new Uri(options.OpenAiBaseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromMinutes(2);
+        });
+
         services.AddScoped<ILlmChatClient, LlmChatClientRouter>();
+
+        RegisterVectorSearch(services);
 
         services.AddScoped<BillingService>();
         services.AddScoped<IBillingService>(sp => sp.GetRequiredService<BillingService>());
@@ -176,5 +202,28 @@ public static class DependencyInjection
         services.AddScoped<IEasyPaisaPaymentService, EasyPaisaPaymentService>();
 
         return services;
+    }
+
+    private static void RegisterVectorSearch(IServiceCollection services)
+    {
+        services.AddSingleton(sp =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<QdrantOptions>>().Value;
+            return new QdrantClient(
+                host: options.Host,
+                port: options.Port,
+                https: options.Https,
+                apiKey: string.IsNullOrWhiteSpace(options.ApiKey) ? null : options.ApiKey);
+        });
+
+        services.AddSingleton<IVectorStore, QdrantVectorStore>();
+        services.AddScoped<IEmbeddingGenerator, OpenAiEmbeddingGenerator>();
+        services.AddScoped<IVectorSearchService, VectorSearchService>();
+        services.AddScoped<IVectorSyncOutboxWriter, VectorSyncOutboxWriter>();
+        services.AddHostedService<VectorSyncBackgroundService>();
+        services.AddHostedService<VectorBackfillHostedService>();
+
+        services.AddHealthChecks()
+            .AddCheck<QdrantHealthCheck>("qdrant");
     }
 }

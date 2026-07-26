@@ -14,6 +14,7 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
 
         builder.Property(x => x.Name).HasMaxLength(200).IsRequired();
         builder.Property(x => x.Description).HasMaxLength(2000);
+        builder.Property(x => x.Tags).HasMaxLength(500);
         builder.Property(x => x.AssignedUserId).HasMaxLength(450);
         builder.Property(x => x.Status).IsRequired();
 

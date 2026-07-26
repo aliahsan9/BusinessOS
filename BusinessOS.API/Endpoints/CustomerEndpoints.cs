@@ -110,7 +110,9 @@ public static class CustomerEndpoints
                 request.Address,
                 request.City,
                 request.Country,
-                request.PostalCode),
+                request.PostalCode,
+                request.Company,
+                request.Notes),
             cancellationToken);
 
         return Results.Created($"/api/customers/{id}", new { id });
@@ -167,7 +169,9 @@ public static class CustomerEndpoints
                 request.City,
                 request.Country,
                 request.PostalCode,
-                request.IsActive),
+                request.IsActive,
+                request.Company,
+                request.Notes),
             cancellationToken);
 
         return Results.NoContent();

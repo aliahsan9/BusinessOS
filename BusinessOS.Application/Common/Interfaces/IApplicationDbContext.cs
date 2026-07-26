@@ -48,6 +48,7 @@ public interface IApplicationDbContext
     DbSet<TeamInvitation> TeamInvitations { get; }
     DbSet<Project> Projects { get; }
     DbSet<WorkTask> WorkTasks { get; }
+    DbSet<VectorSyncOutboxMessage> VectorSyncOutboxMessages { get; }
 
     Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default);
