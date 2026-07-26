@@ -127,11 +127,10 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
 
         if (intentResult.Intent is AiCopilotIntent.Conversational or AiCopilotIntent.Help)
         {
+            var (chatReply, chatTokens) = await GenerateConversationalReplyAsync(
+                message, page, intentResult.Intent, cancellationToken);
             sw.Stop();
-            var reply = intentResult.Intent is AiCopilotIntent.Help
-                ? AiNaturalReplyBuilder.BuildHelpReply(message)
-                : AiNaturalReplyBuilder.BuildConversationalReply(message, page);
-            return await FinalizeAsync(request, chatRequest, sessionId, intentResult.Intent, message, reply, [], [], null, sw.ElapsedMilliseconds, null, stream, cancellationToken);
+            return await FinalizeAsync(request, chatRequest, sessionId, intentResult.Intent, message, chatReply, [], [], null, sw.ElapsedMilliseconds, chatTokens, stream, cancellationToken);
         }
 
         var tools = _toolRegistry.SelectTools(intentResult, message, page, memory);
@@ -186,6 +185,41 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
         sw.Stop();
         var (replyText, tokenUsage, streamTokens) = await GenerateReplyAsync(message, page, memory, intentResult.Intent, toolResults, citations, stream, cancellationToken);
         return await FinalizeAsync(request, chatRequest, sessionId, intentResult.Intent, message, replyText, toolsUsed, citations, actionResult, sw.ElapsedMilliseconds, tokenUsage, stream, cancellationToken, streamTokens);
+    }
+
+    private async Task<(string Reply, int? TokenUsage)> GenerateConversationalReplyAsync(
+        string message,
+        AiPageContextDto page,
+        AiCopilotIntent intent,
+        CancellationToken cancellationToken)
+    {
+        var fallback = intent is AiCopilotIntent.Help
+            ? AiNaturalReplyBuilder.BuildHelpReply(message)
+            : AiNaturalReplyBuilder.BuildConversationalReply(message, page);
+
+        if (!_llmChat.IsConfigured || _currentUser.UserId is null || _currentUser.TenantId is null)
+            return (fallback, null);
+
+        try
+        {
+            var systemPrompt = BuildConversationalSystemPrompt();
+            var (llmReply, usage) = await _llmChat.GenerateWithToolsAsync(
+                _currentUser.TenantId.Value,
+                _currentUser.UserId,
+                systemPrompt,
+                message,
+                [],
+                cancellationToken);
+
+            if (!string.IsNullOrWhiteSpace(llmReply))
+                return (llmReply.Trim(), usage);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Conversational LLM generation failed");
+        }
+
+        return (fallback, null);
     }
 
     private async Task<(string Reply, int? TokenUsage, IAsyncEnumerable<string>? Stream)> GenerateReplyAsync(
@@ -375,6 +409,16 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
             Email = _currentUser.Email,
             Roles = _currentUser.Roles
         };
+
+    private static string BuildConversationalSystemPrompt() =>
+        """
+        You are BusinessOS AI Copilot, a friendly and practical business assistant.
+        Answer like a helpful chatbot: clear, conversational, and actionable.
+        For strategy or "how can I increase sales?" style questions, give concrete tips and next steps.
+        You may use general business best practices. Do not invent specific numbers, customers, invoices, or account data.
+        If live numbers would help, invite the user to ask a factual question (e.g. revenue this month, top customers).
+        Keep answers concise — short paragraphs or bullets.
+        """;
 
     private static string BuildCopilotSystemPrompt() =>
         """

@@ -26,6 +26,9 @@ internal static class AiNaturalReplyBuilder
             return "Goodbye! I'll be here whenever you need help with BusinessOS.";
         }
 
+        if (IsAdviceQuestion(lower))
+            return BuildAdviceReply(message);
+
         var contextHint = page.Module switch
         {
             "customers" when page.CustomerId is not null =>
@@ -43,6 +46,70 @@ internal static class AiNaturalReplyBuilder
 
         return $"Hello! I'm BusinessOS AI, your business assistant. {contextHint}";
     }
+
+    public static string BuildAdviceReply(string message)
+    {
+        var lower = message.ToLowerInvariant();
+        var topic = ContainsAny(lower, "laptop", "computer", "notebook") ? "laptop"
+            : ContainsAny(lower, "sales", "sell", "revenue") ? "sales"
+            : ContainsAny(lower, "customer") ? "customer"
+            : "business";
+
+        return topic switch
+        {
+            "laptop" =>
+                """
+                Great question — here are practical ways to increase daily laptop sales:
+
+                1. **Push today’s bestsellers** — Feature 1–2 models with clear price/value (student, gaming, office) on your landing page and socials.
+                2. **Bundle to raise ticket size** — Offer laptop + bag/mouse/warranty packages so average order value climbs without discounting the device.
+                3. **Follow up warm leads same day** — Call or message quotes that didn’t convert; a short “still available / limited stock” nudge often closes sales.
+                4. **Make financing obvious** — Highlight installment / EMI options next to every price; many buyers stall on upfront cost.
+                5. **Track what actually sells** — Ask me “What are my sales this month?” or “Top products sold” so you double down on winners and cut slow movers.
+
+                Want me to pull your current sales numbers so we can tailor this to what’s working for you?
+                """,
+            "sales" =>
+                """
+                Here’s a focused playbook to grow daily sales:
+
+                1. **Protect the pipeline** — Follow up open quotes and unpaid invoices before chasing cold traffic.
+                2. **Win more from existing customers** — Upsell related products/services to people who already trust you.
+                3. **Tighten the offer** — Clear pricing, bundles, and a simple reason to buy today (stock, promo, or bonus).
+                4. **Measure daily** — Know units sold, revenue, and top customers so you can repeat what works.
+                5. **Remove friction** — Faster quotes, easier payment, and quicker delivery beat most “marketing tricks.”
+
+                If you want data-backed next steps, ask “What is our revenue this month?” or “Who are the top customers by revenue?”
+                """,
+            "customer" =>
+                """
+                To strengthen customer growth and retention:
+
+                1. Segment active vs inactive buyers and re-engage the quiet ones with a personal offer.
+                2. Shorten response time on quotes and support — speed often beats price.
+                3. Ask for referrals from your happiest customers after a successful delivery.
+                4. Keep a simple CRM habit: next action + due date on every open opportunity.
+
+                I can also summarize a specific customer or list overdue invoices if that helps.
+                """,
+            _ =>
+                """
+                Happy to help. A few solid moves for most businesses:
+
+                1. Focus on one clear offer and make buying easy.
+                2. Follow up leads and invoices the same day.
+                3. Improve repeat purchase from existing customers.
+                4. Use your live numbers to decide what to push next.
+
+                Ask me things like “Show overdue invoices”, “Revenue this month”, or tell me the product/channel you want to grow and I’ll go deeper.
+                """
+        };
+    }
+
+    private static bool IsAdviceQuestion(string lower) =>
+        ContainsAny(lower,
+            "how can i", "how should i", "increase", "improve", "boost", "grow my", "grow our",
+            "tips", "advice", "strateg", "recommend", "ways to", "best way to");
 
     public static string BuildHelpReply(string message)
     {

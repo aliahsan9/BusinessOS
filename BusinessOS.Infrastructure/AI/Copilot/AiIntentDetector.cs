@@ -20,7 +20,20 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
-        if (ContainsAny(text, "help", "how do i", "how to", "getting started", "what can you"))
+        // Strip leading "hi," / "hello" so compound messages can be classified correctly.
+        var content = StripLeadingGreeting(text);
+
+        // Advice / strategy questions ("how can I increase sales?") must NOT become Analytics lookups.
+        if (IsAdviceRequest(content))
+        {
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.Conversational,
+                Confidence = 0.93
+            };
+        }
+
+        if (ContainsAny(content, "help", "how do i", "how to", "how can i", "getting started", "what can you"))
         {
             return new AiIntentDetectionResult
             {
@@ -29,7 +42,7 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
-        if (IsFollowUp(text, memory))
+        if (IsFollowUp(content, memory))
         {
             tools.AddRange(InferToolsFromMemory(memory));
             return new AiIntentDetectionResult
@@ -40,7 +53,7 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
-        if (ContainsAny(text, "focus today", "what should i", "priorities", "dashboard", "actionable"))
+        if (ContainsAny(content, "focus today", "what should i focus", "priorities", "dashboard insight", "actionable"))
         {
             return new AiIntentDetectionResult
             {
@@ -49,7 +62,7 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
-        if (ContainsAny(text, "policy", "handbook", "contract", "faq", "terms", "documentation", "document", "uploaded"))
+        if (ContainsAny(content, "policy", "handbook", "contract", "faq", "terms", "documentation", "document", "uploaded"))
         {
             tools.Add(AiToolName.SearchDocuments);
             return new AiIntentDetectionResult
@@ -60,12 +73,12 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
-        if (ContainsAny(text, "create", "add", "new", "generate"))
+        if (ContainsAny(content, "create", "add", "new", "generate"))
         {
-            if (ContainsAny(text, "customer")) tools.Add(AiToolName.CreateCustomer);
-            if (ContainsAny(text, "project", "order")) tools.Add(AiToolName.CreateProject);
-            if (ContainsAny(text, "task")) tools.Add(AiToolName.CreateTask);
-            if (ContainsAny(text, "invoice")) tools.Add(AiToolName.CreateInvoice);
+            if (ContainsAny(content, "customer")) tools.Add(AiToolName.CreateCustomer);
+            if (ContainsAny(content, "project", "order")) tools.Add(AiToolName.CreateProject);
+            if (ContainsAny(content, "task")) tools.Add(AiToolName.CreateTask);
+            if (ContainsAny(content, "invoice")) tools.Add(AiToolName.CreateInvoice);
 
             return new AiIntentDetectionResult
             {
@@ -75,14 +88,15 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
-        if (ContainsAny(text, "revenue", "sales", "sold", "profit", "growth", "trend", "compare", "monthly", "quarterly", "yearly", "analytics"))
+        if (ContainsAny(content, "revenue", "sales", "sold", "profit", "growth", "trend", "compare", "monthly", "quarterly", "yearly", "analytics")
+            && IsFactualDataLookup(content))
         {
-            if (ContainsAny(text, "sold", "sales", "products sold", "orders"))
+            if (ContainsAny(content, "sold", "sales", "products sold", "orders"))
                 tools.Add(AiToolName.GetSalesSummary);
             else
                 tools.Add(AiToolName.GetRevenue);
 
-            if (ContainsAny(text, "top customer", "best customer", "highest revenue"))
+            if (ContainsAny(content, "top customer", "best customer", "highest revenue"))
                 tools.Add(AiToolName.GetCustomers);
 
             return new AiIntentDetectionResult
@@ -93,7 +107,7 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
-        if (ContainsAny(text, "overdue", "unpaid", "outstanding", "invoice"))
+        if (ContainsAny(content, "overdue", "unpaid", "outstanding", "invoice"))
         {
             tools.Add(AiToolName.GetInvoices);
             return new AiIntentDetectionResult
@@ -104,7 +118,7 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
-        if (ContainsAny(text, "expense", "spending", "cost"))
+        if (ContainsAny(content, "expense", "spending", "cost"))
         {
             tools.Add(AiToolName.GetExpenses);
             return new AiIntentDetectionResult
@@ -115,10 +129,10 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
-        if (ContainsAny(text, "project", "behind schedule", "delayed", "progress"))
+        if (ContainsAny(content, "project", "behind schedule", "delayed", "progress"))
         {
             tools.Add(AiToolName.GetProjects);
-            if (ContainsAny(text, "task", "delayed", "pending"))
+            if (ContainsAny(content, "task", "delayed", "pending"))
                 tools.Add(AiToolName.GetTasks);
             return new AiIntentDetectionResult
             {
@@ -128,7 +142,7 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
-        if (ContainsAny(text, "customer", "summarize", "activity"))
+        if (ContainsAny(content, "customer", "summarize", "activity"))
         {
             tools.Add(AiToolName.GetCustomers);
             return new AiIntentDetectionResult
@@ -139,7 +153,7 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
-        if (ContainsAny(text, "product", "inventory", "catalog"))
+        if (ContainsAny(content, "product", "inventory", "catalog"))
         {
             tools.Add(AiToolName.GetProducts);
             return new AiIntentDetectionResult
@@ -150,7 +164,7 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
-        if (ContainsAny(text, "task", "todo", "pending"))
+        if (ContainsAny(content, "task", "todo", "pending"))
         {
             tools.Add(AiToolName.GetTasks);
             return new AiIntentDetectionResult
@@ -161,22 +175,85 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
-        tools.Add(AiToolName.GetSalesSummary);
+        // Unknown / open chat — do not force sales tools.
         return new AiIntentDetectionResult
         {
-            Intent = AiCopilotIntent.BusinessIntelligence,
-            Confidence = 0.5,
-            SuggestedTools = tools
+            Intent = AiCopilotIntent.Conversational,
+            Confidence = 0.5
         };
     }
 
-    private static bool IsGreetingOrSmallTalk(string text) =>
-        text.Length < 40 && ContainsAny(text, "hi", "hello", "hey", "thanks", "thank you", "good morning", "good afternoon");
+    private static bool IsGreetingOrSmallTalk(string text)
+    {
+        if (ContainsAny(text, "thanks", "thank you", "bye", "goodbye"))
+            return text.Length < 60;
+
+        if (!ContainsAny(text, "hi", "hello", "hey", "good morning", "good afternoon", "good evening"))
+            return false;
+
+        // Pure greeting, or greeting + tiny filler ("hi there", "hello!").
+        var withoutGreeting = StripLeadingGreeting(text);
+        return string.IsNullOrWhiteSpace(withoutGreeting) || withoutGreeting.Length <= 12;
+    }
+
+    private static string StripLeadingGreeting(string text)
+    {
+        string[] prefixes =
+        [
+            "good morning", "good afternoon", "good evening",
+            "hello there", "hey there", "hi there",
+            "hello,", "hello!", "hello ",
+            "hey,", "hey!", "hey ",
+            "hi,", "hi!", "hi "
+        ];
+
+        foreach (var prefix in prefixes.OrderByDescending(p => p.Length))
+        {
+            if (text.StartsWith(prefix, StringComparison.Ordinal))
+                return text[prefix.Length..].TrimStart(' ', ',', '!', '?', '.', ':');
+        }
+
+        return text;
+    }
+
+    /// <summary>
+    /// Business advice / strategy questions should get a chatbot-style answer, not a data dump.
+    /// </summary>
+    private static bool IsAdviceRequest(string text)
+    {
+        // App/product how-tos belong to Help, not strategy advice.
+        if (ContainsAny(text, "create", "add a", "add new", "set up", "setup", "configure", "in businessos", "in the app"))
+            return false;
+
+        var hasStrategyCue = ContainsAny(text,
+            "increase", "improve", "boost", "grow my", "grow our",
+            "tips", "advice", "strateg", "recommend", "suggestions",
+            "ways to", "best way to", "what should i do to",
+            "how to increase", "how to improve", "how to boost", "how to grow",
+            "how do i increase", "how do i improve", "help me increase", "help me improve");
+
+        if (!hasStrategyCue)
+            return false;
+
+        // Pure strategy questions always win; mixed "how can I increase … this month?" stays advice.
+        var hasAdviceFraming = ContainsAny(text,
+            "how can i", "how should i", "how do we", "how can we", "ways to", "tips", "advice", "strateg", "recommend");
+
+        return !IsFactualDataLookup(text) || hasAdviceFraming;
+    }
+
+    private static bool IsFactualDataLookup(string text) =>
+        ContainsAny(text,
+            "how many", "what is my", "what's my", "what is our", "what's our", "what are my", "what are our",
+            "show me", "show ", "list ", "report", "breakdown", "total",
+            "this month", "last month", "this week", "last week", "this year", "last year", "ytd",
+            "today", "yesterday", "quarter", "so far", "to date",
+            "top customer", "best customer", "by revenue", "products sold");
 
     private static bool IsFollowUp(string text, AiMemoryStateDto memory) =>
         memory.RecentTurns.Count > 0
         && (ContainsAny(text, "last year", "last month", "what about", "same for", "and for", "how about", "that customer", "them", "those")
-            || (text.Split(' ').Length <= 6 && memory.SelectedCustomerId is not null));
+            || (text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length <= 6 && memory.SelectedCustomerId is not null));
 
     private static IReadOnlyList<AiToolName> InferToolsFromMemory(AiMemoryStateDto memory)
     {
