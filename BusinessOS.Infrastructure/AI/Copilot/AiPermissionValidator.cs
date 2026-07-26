@@ -20,6 +20,16 @@ public sealed class AiPermissionValidator : IAiPermissionValidator
         if (intent is AiCopilotIntent.Conversational or AiCopilotIntent.Help or AiCopilotIntent.DocumentSearch)
             return Allowed();
 
+        if (intent is AiCopilotIntent.Onboarding)
+        {
+            if (!HasAnyRole("Owner", "Admin"))
+            {
+                return Denied(
+                    "Business onboarding requires Owner or Admin access.",
+                    PermissionCodes.SettingsManage);
+            }
+        }
+
         if (intent is AiCopilotIntent.Analytics or AiCopilotIntent.DashboardInsight)
         {
             if (!HasAnyRole("Owner", "Admin", "Manager", "Accountant")
@@ -29,6 +39,15 @@ public sealed class AiPermissionValidator : IAiPermissionValidator
                 return Denied(
                     "Revenue and analytics insights require Manager, Admin, or Owner access.",
                     PermissionCodes.AnalyticsView);
+            }
+        }
+
+        if (intent is AiCopilotIntent.ReportGeneration)
+        {
+            if (!_currentUser.HasPermission(PermissionCodes.ReportView)
+                && !HasAnyRole("Owner", "Admin", "Manager", "Accountant"))
+            {
+                return Denied("Report generation requires Report.View permission.", PermissionCodes.ReportView);
             }
         }
 
@@ -55,6 +74,14 @@ public sealed class AiPermissionValidator : IAiPermissionValidator
             }
 
             return Denied("Revenue analytics require Manager, Admin, or Owner access.", PermissionCodes.AnalyticsView);
+        }
+
+        if (tool is AiToolName.ApplyOnboardingProfile or AiToolName.GetBusinessSettings)
+        {
+            if (HasAnyRole("Owner", "Admin"))
+                return Allowed();
+
+            return Denied("Business settings and onboarding require Owner or Admin access.", PermissionCodes.SettingsManage);
         }
 
         if (tool is AiToolName.GetProjects)
@@ -105,6 +132,12 @@ public sealed class AiPermissionValidator : IAiPermissionValidator
         AiToolName.CreateTask => [PermissionCodes.TaskCreate],
         AiToolName.CreateInvoice => [PermissionCodes.InvoiceCreate],
         AiToolName.SearchDocuments => [],
+        AiToolName.GetInventorySummary or AiToolName.GetLowStock or AiToolName.GetDeadStock
+            or AiToolName.GetPurchaseRecommendations => [PermissionCodes.InventoryView],
+        AiToolName.CreatePurchaseOrderDraft => [PermissionCodes.PurchaseOrderCreate],
+        AiToolName.GenerateInventoryReport or AiToolName.GenerateSalesReport => [PermissionCodes.ReportView],
+        AiToolName.ApplyOnboardingProfile or AiToolName.GetBusinessSettings => [],
+        AiToolName.GetNotificationsSummary => [],
         _ => []
     };
 

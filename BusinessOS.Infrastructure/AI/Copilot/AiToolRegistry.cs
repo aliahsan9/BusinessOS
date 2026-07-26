@@ -37,7 +37,14 @@ public sealed class AiToolRegistry : IAiToolRegistry
         }
 
         // Analytics / sales questions often need summary + bestsellers + trends together.
-        var limit = intent.Intent is AiCopilotIntent.Analytics or AiCopilotIntent.FollowUp ? 4 : 3;
+        // Agent report / recommendation flows may need several domain tools.
+        var limit = intent.Intent switch
+        {
+            AiCopilotIntent.Analytics or AiCopilotIntent.FollowUp => 4,
+            AiCopilotIntent.ReportGeneration or AiCopilotIntent.Recommendation or AiCopilotIntent.Workflow
+                or AiCopilotIntent.Onboarding => 5,
+            _ => 3
+        };
         return selected.Take(limit).ToList();
     }
 }

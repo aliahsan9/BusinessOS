@@ -11,7 +11,11 @@ public enum AiCopilotIntent
     ActionCreate = 6,
     ActionRead = 7,
     DashboardInsight = 8,
-    FollowUp = 9
+    FollowUp = 9,
+    Onboarding = 10,
+    ReportGeneration = 11,
+    Workflow = 12,
+    Recommendation = 13
 }
 
 public enum AiToolName
@@ -30,5 +34,15 @@ public enum AiToolName
     CreateInvoice,
     CreateCustomer,
     CreateProject,
-    SearchDocuments
+    SearchDocuments,
+    GetInventorySummary,
+    GetLowStock,
+    GetDeadStock,
+    CreatePurchaseOrderDraft,
+    GenerateInventoryReport,
+    GenerateSalesReport,
+    GetPurchaseRecommendations,
+    ApplyOnboardingProfile,
+    GetBusinessSettings,
+    GetNotificationsSummary
 }

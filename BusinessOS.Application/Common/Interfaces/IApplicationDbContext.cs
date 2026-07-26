@@ -49,6 +49,10 @@ public interface IApplicationDbContext
     DbSet<Project> Projects { get; }
     DbSet<WorkTask> WorkTasks { get; }
     DbSet<VectorSyncOutboxMessage> VectorSyncOutboxMessages { get; }
+    DbSet<AgentProfile> AgentProfiles { get; }
+    DbSet<VoicePreference> VoicePreferences { get; }
+    DbSet<AgentWorkflowRun> AgentWorkflowRuns { get; }
+    DbSet<AgentWorkflowStep> AgentWorkflowSteps { get; }
 
     Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default);

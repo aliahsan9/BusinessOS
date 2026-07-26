@@ -68,6 +68,10 @@ public class BusinessOSDbContext
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<WorkTask> WorkTasks => Set<WorkTask>();
     public DbSet<VectorSyncOutboxMessage> VectorSyncOutboxMessages => Set<VectorSyncOutboxMessage>();
+    public DbSet<AgentProfile> AgentProfiles => Set<AgentProfile>();
+    public DbSet<VoicePreference> VoicePreferences => Set<VoicePreference>();
+    public DbSet<AgentWorkflowRun> AgentWorkflowRuns => Set<AgentWorkflowRun>();
+    public DbSet<AgentWorkflowStep> AgentWorkflowSteps => Set<AgentWorkflowStep>();
 
     public override Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default)
@@ -88,10 +92,18 @@ public class BusinessOSDbContext
 
                 if (tenantIdProp is not null)
                 {
-                    var currentValue = tenantIdProp.CurrentValue as Guid? ?? Guid.Empty;
-                    if (currentValue == Guid.Empty && _tenantId != Guid.Empty)
+                    // Guid? TenantId may be intentionally null (system-scoped rows such as AgentProfile).
+                    if (tenantIdProp.Metadata.ClrType == typeof(Guid?))
                     {
-                        tenantIdProp.CurrentValue = _tenantId;
+                        var nullable = (Guid?)tenantIdProp.CurrentValue;
+                        if (nullable == Guid.Empty && _tenantId != Guid.Empty)
+                            tenantIdProp.CurrentValue = _tenantId;
+                    }
+                    else
+                    {
+                        var currentValue = tenantIdProp.CurrentValue as Guid? ?? Guid.Empty;
+                        if (currentValue == Guid.Empty && _tenantId != Guid.Empty)
+                            tenantIdProp.CurrentValue = _tenantId;
                     }
                 }
             }
@@ -231,6 +243,20 @@ public class BusinessOSDbContext
 
         builder.Entity<AiCopilotAuditLog>()
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        // Agent profiles: system defaults (TenantId null) + current tenant overrides.
+        builder.Entity<AgentProfile>()
+            .HasQueryFilter(x => !x.IsDeleted && (x.TenantId == null || x.TenantId == _tenantId));
+
+        builder.Entity<VoicePreference>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<AgentWorkflowRun>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        // Steps inherit tenant isolation via parent workflow run.
+        builder.Entity<AgentWorkflowStep>()
+            .HasQueryFilter(x => !x.IsDeleted && x.WorkflowRun.TenantId == _tenantId);
 
         // Outbox is cross-tenant for background workers; filter by Status, not TenantId.
     }

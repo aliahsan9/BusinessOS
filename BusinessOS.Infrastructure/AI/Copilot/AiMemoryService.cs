@@ -75,7 +75,12 @@ public sealed class AiMemoryService : IAiMemoryService
             SelectedInvoiceId = session.SelectedInvoiceId ?? stored?.SelectedInvoiceId,
             LastIntent = stored?.LastIntent,
             LastAnalyticsQuery = stored?.LastAnalyticsQuery,
-            RecentTurns = turns
+            RecentTurns = turns,
+            PreferredLanguage = stored?.PreferredLanguage,
+            PreferredAgentKey = stored?.PreferredAgentKey,
+            OnboardingStep = stored?.OnboardingStep,
+            OnboardingDataJson = stored?.OnboardingDataJson,
+            TonePreference = stored?.TonePreference
         };
     }
 
@@ -137,6 +142,7 @@ public sealed class AiMemoryService : IAiMemoryService
         session.SelectedProjectId = page.ProjectId ?? session.SelectedProjectId;
 
         var customerName = await ResolveCustomerNameFromMessage(userMessage, session.SelectedCustomerId, cancellationToken);
+        var prior = TryParseMemory(session.MemoryJson);
 
         var memory = new AiMemoryStateDto
         {
@@ -146,11 +152,30 @@ public sealed class AiMemoryService : IAiMemoryService
             SelectedOrderId = session.SelectedOrderId,
             SelectedInvoiceId = session.SelectedInvoiceId,
             LastIntent = intent.ToString(),
-            LastAnalyticsQuery = intent is AiCopilotIntent.Analytics ? userMessage : null
+            LastAnalyticsQuery = intent is AiCopilotIntent.Analytics ? userMessage : prior?.LastAnalyticsQuery,
+            PreferredLanguage = prior?.PreferredLanguage,
+            PreferredAgentKey = prior?.PreferredAgentKey,
+            OnboardingStep = prior?.OnboardingStep,
+            OnboardingDataJson = prior?.OnboardingDataJson,
+            TonePreference = prior?.TonePreference
         };
 
         session.MemoryJson = JsonSerializer.Serialize(memory, JsonOptions);
         await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    private static AiMemoryStateDto? TryParseMemory(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+        try
+        {
+            return JsonSerializer.Deserialize<AiMemoryStateDto>(json, JsonOptions);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public async Task<IReadOnlyList<AiConversationSessionDto>> ListSessionsAsync(int limit, CancellationToken cancellationToken = default)

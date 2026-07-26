@@ -168,6 +168,7 @@ try
     app.MapSettingsEndpoints();
     app.MapOnboardingEndpoints();
     app.MapAiEndpoints();
+    app.MapAgentEndpoints();
     app.MapHelpEndpoints();
     app.MapTeamEndpoints();
     app.MapOrganizationEndpoints();

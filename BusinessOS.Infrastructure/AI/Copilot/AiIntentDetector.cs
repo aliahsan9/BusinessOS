@@ -23,6 +23,89 @@ public sealed class AiIntentDetector : IAiIntentDetector
         // Strip leading "hi," / "hello" so compound messages can be classified correctly.
         var content = StripLeadingGreeting(text);
 
+        // Agent employee intents first (before advice/strategy classification).
+        if (IsOnboardingRequest(content))
+        {
+            tools.Add(AiToolName.ApplyOnboardingProfile);
+            tools.Add(AiToolName.GetBusinessSettings);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.Onboarding,
+                Confidence = 0.94,
+                SuggestedTools = tools
+            };
+        }
+
+        if (IsInventoryReportRequest(content))
+        {
+            tools.Add(AiToolName.GenerateInventoryReport);
+            tools.Add(AiToolName.GetInventorySummary);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.ReportGeneration,
+                Confidence = 0.94,
+                SuggestedTools = tools
+            };
+        }
+
+        if (IsSalesReportRequest(content))
+        {
+            tools.Add(AiToolName.GenerateSalesReport);
+            tools.Add(AiToolName.GetSalesSummary);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.ReportGeneration,
+                Confidence = 0.93,
+                SuggestedTools = tools
+            };
+        }
+
+        if (IsPurchaseOrderCreateRequest(content))
+        {
+            tools.Add(AiToolName.CreatePurchaseOrderDraft);
+            tools.Add(AiToolName.GetLowStock);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.ActionCreate,
+                Confidence = 0.93,
+                SuggestedTools = tools
+            };
+        }
+
+        if (IsLowOrDeadStockRequest(content))
+        {
+            if (ContainsAny(content, "dead stock", "slow moving", "unsold", "stale stock"))
+                tools.Add(AiToolName.GetDeadStock);
+            if (ContainsAny(content, "low stock", "reorder", "running low", "stock alert", "out of stock"))
+                tools.Add(AiToolName.GetLowStock);
+
+            if (tools.Count == 0)
+                tools.Add(AiToolName.GetLowStock);
+
+            var intent = ContainsAny(content, "recommend", "should i buy", "what should i")
+                ? AiCopilotIntent.Recommendation
+                : AiCopilotIntent.ActionRead;
+
+            return new AiIntentDetectionResult
+            {
+                Intent = intent,
+                Confidence = 0.92,
+                SuggestedTools = tools
+            };
+        }
+
+        if (IsPurchaseRecommendationRequest(content))
+        {
+            tools.Add(AiToolName.GetPurchaseRecommendations);
+            tools.Add(AiToolName.GetLowStock);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.Recommendation,
+                Confidence = 0.92,
+                SuggestedTools = tools
+            };
+        }
+
         // Advice / strategy questions ("how can I increase sales?") must NOT become Analytics lookups.
         // Orchestrator will still ground advice with live sales tools when relevant.
         if (IsAdviceRequest(content))
@@ -186,7 +269,12 @@ public sealed class AiIntentDetector : IAiIntentDetector
 
         if (ContainsAny(content, "product", "inventory", "catalog", "sku"))
         {
-            tools.Add(AiToolName.GetProducts);
+            // Prefer inventory summary when the ask is about stock levels broadly.
+            if (ContainsAny(content, "inventory", "stock", "warehouse"))
+                tools.Add(AiToolName.GetInventorySummary);
+            else
+                tools.Add(AiToolName.GetProducts);
+
             if (ContainsAny(content, "sell", "sold", "performance", "ranking"))
                 tools.Add(AiToolName.GetBestSellingProducts);
             return new AiIntentDetectionResult
@@ -215,6 +303,39 @@ public sealed class AiIntentDetector : IAiIntentDetector
             Confidence = 0.5
         };
     }
+
+    private static bool IsOnboardingRequest(string text) =>
+        ContainsAny(text,
+            "onboard", "onboarding",
+            "setup company", "set up company", "set up my business", "set up our business",
+            "configure my business", "start setup", "business setup wizard");
+
+    private static bool IsInventoryReportRequest(string text) =>
+        ContainsAny(text, "inventory report", "stock report", "warehouse report")
+        || (ContainsAny(text, "inventory", "stock", "warehouse")
+            && ContainsAny(text, "report", "pdf", "export"));
+
+    private static bool IsSalesReportRequest(string text) =>
+        ContainsAny(text, "sales report", "revenue report")
+        || (ContainsAny(text, "sales", "revenue")
+            && ContainsAny(text, "report", "pdf", "export")
+            && !IsBestSellerQuery(text)
+            && !IsTrendQuery(text));
+
+    private static bool IsPurchaseOrderCreateRequest(string text) =>
+        (ContainsAny(text, "purchase order", "create po", "draft po", "purchase-order")
+         && ContainsAny(text, "create", "add", "new", "generate", "draft", "make", "prepare"))
+        || ContainsAny(text, "create a purchase order", "create purchase order", "draft purchase order");
+
+    private static bool IsLowOrDeadStockRequest(string text) =>
+        ContainsAny(text,
+            "low stock", "dead stock", "slow moving", "reorder level",
+            "running low", "stock alert", "out of stock", "unsold", "stale stock");
+
+    private static bool IsPurchaseRecommendationRequest(string text) =>
+        ContainsAny(text,
+            "what should i buy", "what should we buy", "purchase recommend",
+            "reorder recommend", "buying recommend", "suggest purchases", "what to reorder");
 
     private static bool IsHelpRequest(string text)
     {

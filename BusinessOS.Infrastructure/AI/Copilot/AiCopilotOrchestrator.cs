@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Agents.Services;
 using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Enums;
 using BusinessOS.Application.Features.AI.Services;
@@ -31,6 +32,7 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
     private readonly IAiInsightService _insightService;
     private readonly IAiPromptBuilder _promptBuilder;
     private readonly ILlmChatClient _llmChat;
+    private readonly IAgentPersonaService? _personaService;
     private readonly ILogger<AiCopilotOrchestrator> _logger;
 
     public AiCopilotOrchestrator(
@@ -48,7 +50,8 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
         IAiInsightService insightService,
         IAiPromptBuilder promptBuilder,
         ILlmChatClient llmChat,
-        ILogger<AiCopilotOrchestrator> logger)
+        ILogger<AiCopilotOrchestrator> logger,
+        IAgentPersonaService? personaService = null)
     {
         _context = context;
         _currentUser = currentUser;
@@ -65,6 +68,7 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
         _promptBuilder = promptBuilder;
         _llmChat = llmChat;
         _logger = logger;
+        _personaService = personaService;
     }
 
     public async Task<AiCopilotChatResponse> ProcessAsync(
@@ -205,7 +209,7 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
         if (intentResult.Intent is AiCopilotIntent.Conversational or AiCopilotIntent.Help)
         {
             var (chatReply, chatTokens) = await GenerateConversationalReplyAsync(
-                message, page, intentResult.Intent, toolResults, citations, cancellationToken);
+                request, message, page, intentResult.Intent, toolResults, citations, cancellationToken);
             sw.Stop();
             return await FinalizeAsync(request, chatRequest, sessionId, intentResult.Intent, message, chatReply, toolsUsed, citations, null, sw.ElapsedMilliseconds, chatTokens, stream, cancellationToken);
         }
@@ -220,11 +224,12 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
         }
 
         sw.Stop();
-        var (replyText, tokenUsage, streamTokens) = await GenerateReplyAsync(message, page, memory, intentResult.Intent, toolResults, citations, stream, cancellationToken);
+        var (replyText, tokenUsage, streamTokens) = await GenerateReplyAsync(request, message, page, memory, intentResult.Intent, toolResults, citations, stream, cancellationToken);
         return await FinalizeAsync(request, chatRequest, sessionId, intentResult.Intent, message, replyText, toolsUsed, citations, actionResult, sw.ElapsedMilliseconds, tokenUsage, stream, cancellationToken, streamTokens);
     }
 
     private async Task<(string Reply, int? TokenUsage)> GenerateConversationalReplyAsync(
+        AiCopilotChatRequest request,
         string message,
         AiPageContextDto page,
         AiCopilotIntent intent,
@@ -248,7 +253,7 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
 
         try
         {
-            var systemPrompt = BuildConversationalSystemPrompt();
+            var systemPrompt = await BuildConversationalSystemPromptAsync(request, cancellationToken);
             var userPrompt = toolResults.Count > 0
                 ? AiCopilotResponseBuilder.BuildLlmUserPrompt(message, page, new AiMemoryStateDto(), toolResults, citations)
                 : message;
@@ -277,7 +282,9 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
             or AiCopilotIntent.BusinessIntelligence
             or AiCopilotIntent.ActionRead
             or AiCopilotIntent.DocumentSearch
-            or AiCopilotIntent.FollowUp;
+            or AiCopilotIntent.FollowUp
+            or AiCopilotIntent.ReportGeneration
+            or AiCopilotIntent.Recommendation;
 
     private static bool ShouldEnrichWithRag(AiCopilotIntent intent, string message)
     {
@@ -302,6 +309,7 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
     }
 
     private async Task<(string Reply, int? TokenUsage, IAsyncEnumerable<string>? Stream)> GenerateReplyAsync(
+        AiCopilotChatRequest request,
         string message,
         AiPageContextDto page,
         AiMemoryStateDto memory,
@@ -326,7 +334,7 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
             return (fallback, null, null);
         }
 
-        var systemPrompt = BuildCopilotSystemPrompt();
+        var systemPrompt = await BuildCopilotSystemPromptAsync(request, cancellationToken);
         var userPrompt = AiCopilotResponseBuilder.BuildLlmUserPrompt(message, page, memory, toolResults, citations);
 
         if (stream)
@@ -394,9 +402,26 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
 
         await _observability.LogAsync(sessionId, intent, message, toolsUsed, citations, (int)executionMs, tokenUsage, true, null, cancellationToken);
 
+        string? agentKey = request.AgentKey;
+        string? agentDisplayName = null;
+        if (!string.IsNullOrWhiteSpace(request.AgentKey) && _personaService is not null)
+        {
+            try
+            {
+                var persona = await _personaService.ResolvePersonaAsync(request.AgentKey, cancellationToken);
+                agentKey = persona.Key;
+                agentDisplayName = persona.DisplayName;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Optional agent persona resolve skipped");
+            }
+        }
+
         var response = new AiCopilotChatResponse
         {
             Reply = reply,
+            SpokenReply = reply,
             SessionId = sessionId,
             Intent = intent,
             ToolsUsed = toolsUsed,
@@ -420,7 +445,11 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
                 TokenUsage = tokenUsage,
                 RetrievedDocuments = citations.Count,
                 UsedLlm = _llmChat.IsConfigured
-            }
+            },
+            AgentKey = agentKey,
+            AgentDisplayName = agentDisplayName,
+            WorkflowId = request.WorkflowId,
+            WorkflowSteps = []
         };
 
         return new PipelineResult { Response = response, StreamTokens = streamTokens };
@@ -488,6 +517,64 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
             Email = _currentUser.Email,
             Roles = _currentUser.Roles
         };
+
+    private async Task<string> BuildConversationalSystemPromptAsync(
+        AiCopilotChatRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.PreferEmployeeTone
+            && !string.IsNullOrWhiteSpace(request.AgentKey)
+            && _personaService is not null)
+        {
+            try
+            {
+                return await _personaService.BuildSystemPromptAsync(
+                    request.AgentKey,
+                    request.Language,
+                    preferEmployeeTone: true,
+                    cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Employee persona prompt unavailable; using default conversational prompt");
+            }
+        }
+
+        return BuildConversationalSystemPrompt();
+    }
+
+    private async Task<string> BuildCopilotSystemPromptAsync(
+        AiCopilotChatRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.PreferEmployeeTone
+            && !string.IsNullOrWhiteSpace(request.AgentKey)
+            && _personaService is not null)
+        {
+            try
+            {
+                var personaPrompt = await _personaService.BuildSystemPromptAsync(
+                    request.AgentKey,
+                    request.Language,
+                    preferEmployeeTone: true,
+                    cancellationToken);
+
+                return personaPrompt + """
+
+                    Strict grounding rules:
+                    - Answer using ONLY the tool results, citations, and business context provided.
+                    - Never invent numbers, customers, invoices, products, or statuses.
+                    - If tool results are empty or say no data was found, say you don't have that data yet — do not guess.
+                    """;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Employee persona prompt unavailable; using default copilot prompt");
+            }
+        }
+
+        return BuildCopilotSystemPrompt();
+    }
 
     private static string BuildConversationalSystemPrompt() =>
         """

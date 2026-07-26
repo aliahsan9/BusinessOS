@@ -10,6 +10,7 @@ using BusinessOS.Application.Features.Activities.Services;
 using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Application.Features.Onboarding.Services;
 using BusinessOS.Application.Features.AI.Services;
+using BusinessOS.Application.Features.Agents.Services;
 using BusinessOS.Application.Features.Help.Services;
 using BusinessOS.Application.Features.Organization.Services;
 using BusinessOS.Application.Features.Roles.Services;
@@ -21,6 +22,8 @@ using BusinessOS.Application.Features.Billing.Services;
 using BusinessOS.Application.Features.VectorSearch.Options;
 using BusinessOS.Application.Features.VectorSearch.Services;
 using BusinessOS.Infrastructure.AI;
+using BusinessOS.Infrastructure.AI.Agents;
+using BusinessOS.Infrastructure.AI.Agents.Tools;
 using BusinessOS.Infrastructure.AI.Copilot;
 using BusinessOS.Infrastructure.AI.Copilot.Tools;
 using BusinessOS.Infrastructure.Payments;
@@ -72,6 +75,11 @@ public static class DependencyInjection
 
                 options.UseSqlServer(connectionString);
             }
+
+            // Runtime interceptors can make EF report a false pending-model-changes warning
+            // even when `dotnet ef migrations has-pending-model-changes` reports none.
+            options.ConfigureWarnings(w =>
+                w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
 
             options.AddInterceptors(sp.GetRequiredService<VectorSyncOutboxInterceptor>());
         }
@@ -139,6 +147,12 @@ public static class DependencyInjection
         services.AddScoped<IAiVectorRagService, AiVectorRagService>();
         services.AddScoped<IAiObservabilityService, AiObservabilityService>();
         services.AddScoped<IAiInsightService, AiInsightService>();
+        services.AddScoped<IAgentPersonaService, AgentPersonaService>();
+        services.AddScoped<IAgentPlanner, AgentPlanner>();
+        services.AddScoped<IAgentWorkflowService, AgentWorkflowService>();
+        services.AddScoped<IVoicePreferenceService, VoicePreferenceService>();
+        services.AddScoped<IAgentOnboardingOrchestrator, AgentOnboardingOrchestrator>();
+        services.AddScoped<IAgentEmployeeService, AgentEmployeeService>();
         services.AddScoped<IAiCopilotOrchestrator, AiCopilotOrchestrator>();
         services.AddScoped<IAiAssistantService, AiAssistantService>();
         services.AddScoped<IAiTool, GetCustomersTool>();
@@ -156,6 +170,16 @@ public static class DependencyInjection
         services.AddScoped<IAiTool, CreateTaskTool>();
         services.AddScoped<IAiTool, CreateInvoiceTool>();
         services.AddScoped<IAiTool, SearchDocumentsTool>();
+        services.AddScoped<IAiTool, GetInventorySummaryTool>();
+        services.AddScoped<IAiTool, GetLowStockTool>();
+        services.AddScoped<IAiTool, GetDeadStockTool>();
+        services.AddScoped<IAiTool, CreatePurchaseOrderDraftTool>();
+        services.AddScoped<IAiTool, GenerateInventoryReportTool>();
+        services.AddScoped<IAiTool, GenerateSalesReportTool>();
+        services.AddScoped<IAiTool, GetPurchaseRecommendationsTool>();
+        services.AddScoped<IAiTool, ApplyOnboardingProfileTool>();
+        services.AddScoped<IAiTool, GetBusinessSettingsTool>();
+        services.AddScoped<IAiTool, GetNotificationsSummaryTool>();
         services.AddScoped<IAiToolRegistry, AiToolRegistry>();
         services.AddScoped<IHelpService, HelpService>();
         services.AddScoped<ITeamService, TeamService>();

@@ -11,7 +11,11 @@ public record AiCopilotChatRequest(
     Guid? InvoiceId = null,
     Guid? ProjectId = null,
     Guid? SessionId = null,
-    bool Stream = false);
+    bool Stream = false,
+    string? AgentKey = null,
+    string? Language = null,
+    bool PreferEmployeeTone = true,
+    Guid? WorkflowId = null);
 
 public sealed class AiCopilotChatResponse
 {
@@ -27,6 +31,27 @@ public sealed class AiCopilotChatResponse
     public AiActionResultDto? ActionResult { get; init; }
     public AiCopilotDiagnosticsDto? Diagnostics { get; init; }
     public bool PermissionDenied { get; init; }
+    public string? AgentKey { get; init; }
+    public string? AgentDisplayName { get; init; }
+    public Guid? WorkflowId { get; init; }
+    public IReadOnlyList<AiWorkflowStepProgressDto> WorkflowSteps { get; init; } = [];
+    public string? SpokenReply { get; init; }
+}
+
+/// <summary>
+/// Lightweight workflow step progress carried on copilot responses
+/// (avoids a circular dependency on Agents DTOs).
+/// </summary>
+public sealed class AiWorkflowStepProgressDto
+{
+    public Guid Id { get; init; }
+    public string StepKey { get; init; } = default!;
+    public string Title { get; init; } = default!;
+    public string Status { get; init; } = default!;
+    public int SortOrder { get; init; }
+    public string? Message { get; init; }
+    public DateTime? StartedAt { get; init; }
+    public DateTime? CompletedAt { get; init; }
 }
 
 public sealed class AiCitationDto
@@ -157,6 +182,11 @@ public sealed class AiMemoryStateDto
     public string? LastIntent { get; init; }
     public string? LastAnalyticsQuery { get; init; }
     public IReadOnlyList<AiMemoryTurnDto> RecentTurns { get; init; } = [];
+    public string? PreferredLanguage { get; init; }
+    public string? PreferredAgentKey { get; init; }
+    public int? OnboardingStep { get; init; }
+    public string? OnboardingDataJson { get; init; }
+    public string? TonePreference { get; init; }
 }
 
 public sealed class AiMemoryTurnDto
@@ -191,7 +221,12 @@ public sealed class AiPermissionCheckResult
 
 public sealed class AiStreamChunkDto
 {
+    /// <summary>
+    /// token | status | workflow_step | done | final | error
+    /// </summary>
     public string Type { get; init; } = "token";
     public string? Content { get; init; }
+    public Guid? WorkflowId { get; init; }
+    public AiWorkflowStepProgressDto? WorkflowStep { get; init; }
     public AiCopilotChatResponse? FinalResponse { get; init; }
 }
