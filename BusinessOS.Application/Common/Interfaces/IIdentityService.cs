@@ -1,4 +1,5 @@
 using BusinessOS.Application.Common.Models;
+using BusinessOS.Application.Features.Account.DTOs;
 using BusinessOS.Application.Features.Users.DTOs;
 
 namespace BusinessOS.Application.Common.Interfaces;
@@ -37,6 +38,21 @@ public interface IIdentityService
 
     Task<IdentityOperationResult> ResetPasswordAsync(
         string userId,
+        string newPassword,
+        CancellationToken cancellationToken = default);
+
+    Task<AccountProfileResponse> GetAccountProfileAsync(
+        string userId,
+        CancellationToken cancellationToken = default);
+
+    Task<AccountProfileResponse> UpdateAccountProfileAsync(
+        string userId,
+        UpdateAccountProfileRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<IdentityOperationResult> ChangePasswordAsync(
+        string userId,
+        string currentPassword,
         string newPassword,
         CancellationToken cancellationToken = default);
 }

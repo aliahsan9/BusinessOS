@@ -1,5 +1,6 @@
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Common.Models;
+using BusinessOS.Application.Features.Account.DTOs;
 using BusinessOS.Application.Features.Users.DTOs;
 using BusinessOS.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
@@ -208,6 +209,70 @@ public sealed class IdentityService : IIdentityService
             result.Errors.Select(x => x.Description).ToList());
     }
 
+    public async Task<AccountProfileResponse> GetAccountProfileAsync(
+        string userId,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId)
+            ?? throw new NotFoundException($"User '{userId}' was not found.");
+
+        return await MapAccountProfileAsync(user);
+    }
+
+    public async Task<AccountProfileResponse> UpdateAccountProfileAsync(
+        string userId,
+        UpdateAccountProfileRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId)
+            ?? throw new NotFoundException($"User '{userId}' was not found.");
+
+        var email = request.Email.Trim();
+        if (!string.Equals(user.Email, email, StringComparison.OrdinalIgnoreCase))
+        {
+            var existing = await _userManager.FindByEmailAsync(email);
+            if (existing is not null && existing.Id != userId)
+            {
+                throw new BadRequestException("An account with this email already exists.");
+            }
+        }
+
+        user.Email = email;
+        user.UserName = email;
+        user.FirstName = request.FirstName.Trim();
+        user.LastName = request.LastName.Trim();
+        user.PhoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber)
+            ? null
+            : request.PhoneNumber.Trim();
+        user.AvatarUrl = string.IsNullOrWhiteSpace(request.AvatarUrl)
+            ? null
+            : request.AvatarUrl.Trim();
+        user.LastActiveAt = DateTime.UtcNow;
+
+        var result = await _userManager.UpdateAsync(user);
+        if (!result.Succeeded)
+        {
+            throw new BadRequestException(string.Join("; ", result.Errors.Select(x => x.Description)));
+        }
+
+        return await MapAccountProfileAsync(user);
+    }
+
+    public async Task<IdentityOperationResult> ChangePasswordAsync(
+        string userId,
+        string currentPassword,
+        string newPassword,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId)
+            ?? throw new NotFoundException($"User '{userId}' was not found.");
+
+        var result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
+        return new IdentityOperationResult(
+            result.Succeeded,
+            result.Errors.Select(x => x.Description).ToList());
+    }
+
     private async Task<UserResponse> MapUserResponseAsync(ApplicationUser user)
     {
         var roles = await _userManager.GetRolesAsync(user);
@@ -222,6 +287,27 @@ public sealed class IdentityService : IIdentityService
             TenantId = user.TenantId,
             IsActive = user.IsActive,
             Roles = roles.ToList()
+        };
+    }
+
+    private async Task<AccountProfileResponse> MapAccountProfileAsync(ApplicationUser user)
+    {
+        var roles = await _userManager.GetRolesAsync(user);
+
+        return new AccountProfileResponse
+        {
+            Id = user.Id,
+            Email = user.Email!,
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            FullName = $"{user.FirstName} {user.LastName}".Trim(),
+            PhoneNumber = user.PhoneNumber,
+            AvatarUrl = user.AvatarUrl,
+            TenantId = user.TenantId,
+            IsActive = user.IsActive,
+            Roles = roles.ToList(),
+            JoinedAt = user.JoinedAt,
+            LastActiveAt = user.LastActiveAt
         };
     }
 

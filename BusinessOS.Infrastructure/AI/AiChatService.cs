@@ -327,10 +327,10 @@ public sealed class AiChatService : IAiChatService
 
     private static IReadOnlyList<AiQuickActionDto> GetQuickActions() =>
     [
-        new() { Label = "Create Customer", Route = "/customers/new", Icon = "🤝" },
-        new() { Label = "Create Project", Route = "/orders/new", Icon = "📋" },
-        new() { Label = "Create Task", Route = "/orders/new", Icon = "✅" },
-        new() { Label = "Create Invoice", Route = "/invoices", Icon = "🧾" },
-        new() { Label = "Open Analytics", Route = "/analytics", Icon = "📈" }
+        new() { Label = "Create Customer", Route = "/customers/new", Icon = "bi-person-plus" },
+        new() { Label = "Create Project", Route = "/orders/new", Icon = "bi-clipboard-check" },
+        new() { Label = "Create Task", Route = "/orders/new", Icon = "bi-check2-square" },
+        new() { Label = "Create Invoice", Route = "/invoices", Icon = "bi-receipt" },
+        new() { Label = "Open Analytics", Route = "/analytics", Icon = "bi-graph-up-arrow" }
     ];
 }

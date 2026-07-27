@@ -145,6 +145,7 @@ try
         .WithTags("Health")
         .WithName("HealthCheck");
     app.MapAuthEndpoints();
+    app.MapAccountEndpoints();
     app.MapCategoryEndpoints();
     app.MapProductEndpoints();
     app.MapCustomerEndpoints();

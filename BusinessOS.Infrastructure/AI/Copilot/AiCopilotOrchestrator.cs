@@ -678,10 +678,10 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
 
     private static IReadOnlyList<AiQuickActionDto> GetQuickActions() =>
     [
-        new() { Label = "AI Workspace", Route = "/ai/workspace", Icon = "✨" },
-        new() { Label = "Analytics", Route = "/analytics", Icon = "📈" },
-        new() { Label = "Create Invoice", Route = "/invoices", Icon = "🧾" },
-        new() { Label = "Create Task", Route = "/orders", Icon = "✅" }
+        new() { Label = "AI Workspace", Route = "/ai/workspace", Icon = "bi-stars" },
+        new() { Label = "Analytics", Route = "/analytics", Icon = "bi-graph-up-arrow" },
+        new() { Label = "Create Invoice", Route = "/invoices", Icon = "bi-receipt" },
+        new() { Label = "Create Task", Route = "/orders", Icon = "bi-check2-square" }
     ];
 
     private sealed class PipelineResult
