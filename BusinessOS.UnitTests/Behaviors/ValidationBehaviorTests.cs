@@ -19,7 +19,8 @@ public class ValidationBehaviorTests
             .ReturnsAsync(new ValidationResult());
 
         var behavior = new ValidationBehavior<CreateCategoryCommand, Guid>(
-            new[] { validator.Object });
+            new[] { validator.Object },
+            Mock.Of<Microsoft.Extensions.Logging.ILogger<ValidationBehavior<CreateCategoryCommand, Guid>>>());
 
         var invoked = false;
         RequestHandlerDelegate<Guid> next = _ =>
@@ -44,7 +45,8 @@ public class ValidationBehaviorTests
             ]));
 
         var behavior = new ValidationBehavior<CreateCategoryCommand, Guid>(
-            new[] { validator.Object });
+            new[] { validator.Object },
+            Mock.Of<Microsoft.Extensions.Logging.ILogger<ValidationBehavior<CreateCategoryCommand, Guid>>>());
 
         var act = () => behavior.Handle(
             new CreateCategoryCommand("", null),

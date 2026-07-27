@@ -122,7 +122,8 @@ public class InventoryQueryHandlerTests
             new InventoryRepository(context),
             new StockTransactionRepository(context),
             context,
-            currentUser.Object);
+            currentUser.Object,
+            Mock.Of<Microsoft.Extensions.Logging.ILogger<InventoryService>>());
 
         await service.AdjustStockAsync(new StockAdjustmentRequest
         {
@@ -152,7 +153,8 @@ public class InventoryQueryHandlerTests
             new InventoryRepository(context),
             new StockTransactionRepository(context),
             context,
-            currentUser.Object);
+            currentUser.Object,
+            Mock.Of<Microsoft.Extensions.Logging.ILogger<InventoryService>>());
 
         var reorder = await service.GetReorderProductsAsync();
 

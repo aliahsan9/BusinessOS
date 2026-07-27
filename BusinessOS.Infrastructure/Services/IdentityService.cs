@@ -6,16 +6,21 @@ using BusinessOS.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using BusinessOS.Application.Common.Exceptions;
+using Microsoft.Extensions.Logging;
 
 namespace BusinessOS.Infrastructure.Services;
 
 public sealed class IdentityService : IIdentityService
 {
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly ILogger<IdentityService> _logger;
 
-    public IdentityService(UserManager<ApplicationUser> userManager)
+    public IdentityService(
+        UserManager<ApplicationUser> userManager,
+        ILogger<IdentityService> logger)
     {
         _userManager = userManager;
+        _logger = logger;
     }
 
     public async Task<UserAuthResult?> FindByEmailAsync(
@@ -203,6 +208,18 @@ public sealed class IdentityService : IIdentityService
 
         var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
         var result = await _userManager.ResetPasswordAsync(user, resetToken, newPassword);
+
+        if (result.Succeeded)
+        {
+            _logger.LogInformation("Password reset completed for user {UserId}", userId);
+        }
+        else
+        {
+            _logger.LogWarning(
+                "Password reset failed for user {UserId}: {Errors}",
+                userId,
+                string.Join("; ", result.Errors.Select(e => e.Description)));
+        }
 
         return new IdentityOperationResult(
             result.Succeeded,

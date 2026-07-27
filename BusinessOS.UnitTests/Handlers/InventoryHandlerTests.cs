@@ -202,7 +202,8 @@ public class InventoryServiceTests
             new InventoryRepository(context),
             new StockTransactionRepository(context),
             context,
-            currentUser.Object);
+            currentUser.Object,
+            Mock.Of<Microsoft.Extensions.Logging.ILogger<InventoryService>>());
 
         return (service, context, productId);
     }

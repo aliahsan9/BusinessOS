@@ -79,6 +79,11 @@ public sealed class SettingsService : ISettingsService
 
         await _context.SaveChangesAsync(cancellationToken);
 
+        _logger.LogInformation(
+            "Settings updated for Tenant {TenantId} by User {UserId}",
+            _currentUserService.TenantId,
+            _currentUserService.UserId);
+
         await PublishSettingsUpdatedAsync(settings.Id, cancellationToken);
 
         return MapSettings(settings);

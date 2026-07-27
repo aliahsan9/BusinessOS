@@ -4,6 +4,7 @@ using BusinessOS.Application.Features.Inventory.Services;
 using BusinessOS.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace BusinessOS.Application.Features.Products.Commands.CreateProduct;
 
@@ -11,13 +12,16 @@ public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand,
 {
     private readonly IApplicationDbContext _context;
     private readonly IInventoryService _inventoryService;
+    private readonly ILogger<CreateProductCommandHandler> _logger;
 
     public CreateProductCommandHandler(
         IApplicationDbContext context,
-        IInventoryService inventoryService)
+        IInventoryService inventoryService,
+        ILogger<CreateProductCommandHandler> logger)
     {
         _context = context;
         _inventoryService = inventoryService;
+        _logger = logger;
     }
 
     public async Task<Guid> Handle(CreateProductCommand request, CancellationToken cancellationToken)
@@ -44,6 +48,12 @@ public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand,
         await _context.SaveChangesAsync(cancellationToken);
 
         await _inventoryService.CreateInventoryForProductAsync(product, cancellationToken);
+
+        _logger.LogInformation(
+            "Product {ProductName} ({ProductId}) created with SKU {SKU}",
+            product.Name,
+            product.Id,
+            product.SKU);
 
         return product.Id;
     }

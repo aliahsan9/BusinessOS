@@ -28,7 +28,9 @@ using BusinessOS.Infrastructure.AI.Agents.Tools;
 using BusinessOS.Infrastructure.AI.Copilot;
 using BusinessOS.Infrastructure.AI.Copilot.Tools;
 using BusinessOS.Infrastructure.Payments;
+using BusinessOS.Application.Common.Options;
 using BusinessOS.Infrastructure.Data;
+using BusinessOS.Infrastructure.Diagnostics;
 using BusinessOS.Infrastructure.Identity;
 using BusinessOS.Infrastructure.MultiTenancy;
 using BusinessOS.Infrastructure.Services;
@@ -55,6 +57,8 @@ public static class DependencyInjection
 
         services.Configure<QdrantOptions>(configuration.GetSection(QdrantOptions.SectionName));
         services.Configure<VectorSyncOptions>(configuration.GetSection(VectorSyncOptions.SectionName));
+        services.Configure<LoggingPerformanceOptions>(
+            configuration.GetSection(LoggingPerformanceOptions.SectionName));
 
         services.AddSingleton<IVectorEntityProjector, DocumentVectorProjector>();
         services.AddSingleton<IVectorEntityProjector, ProductVectorProjector>();
@@ -62,6 +66,7 @@ public static class DependencyInjection
         services.AddSingleton<IVectorEntityProjector, CustomerVectorProjector>();
         services.AddSingleton<IVectorEntityProjectorRegistry, VectorEntityProjectorRegistry>();
         services.AddSingleton<VectorSyncOutboxInterceptor>();
+        services.AddSingleton<SlowQueryInterceptor>();
 
         void ConfigureOptions(IServiceProvider sp, DbContextOptionsBuilder options)
         {
@@ -82,7 +87,9 @@ public static class DependencyInjection
             options.ConfigureWarnings(w =>
                 w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
 
-            options.AddInterceptors(sp.GetRequiredService<VectorSyncOutboxInterceptor>());
+            options.AddInterceptors(
+                sp.GetRequiredService<VectorSyncOutboxInterceptor>(),
+                sp.GetRequiredService<SlowQueryInterceptor>());
         }
 
         services.AddDbContext<BusinessOSDbContext>((sp, options) => ConfigureOptions(sp, options));

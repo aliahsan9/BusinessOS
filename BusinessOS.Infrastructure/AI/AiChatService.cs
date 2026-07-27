@@ -50,52 +50,35 @@ public sealed class AiChatService : IAiChatService
         AiChatRequest request,
         CancellationToken cancellationToken = default)
     {
-        await _featureFlags.EnsureFeatureEnabledAsync(FeatureFlags.AiAssistant, cancellationToken);
-        await _limitService.EnsureWithinLimitAsync("ai", cancellationToken);
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        _logger.LogInformation(
+            "AI request started for User {UserId} on Tenant {TenantId}",
+            _currentUserService.UserId,
+            _currentUserService.TenantId);
 
-        var message = request.Message.Trim();
-        var page = _contextService.BuildPageContext(request);
-
-        var searchQuery = request.SearchQuery?.Trim();
-        var searchResults = string.IsNullOrWhiteSpace(searchQuery)
-            ? []
-            : await SearchAsync(searchQuery, cancellationToken);
-
-        AiActionResultDto? actionResult = null;
-        if (!string.IsNullOrWhiteSpace(message))
+        try
         {
-            actionResult = await _actionService.TryExecuteAsync(message, page, cancellationToken);
-        }
+            await _featureFlags.EnsureFeatureEnabledAsync(FeatureFlags.AiAssistant, cancellationToken);
+            await _limitService.EnsureWithinLimitAsync("ai", cancellationToken);
 
-        AiContextDto context;
-        string reply;
+            var message = request.Message.Trim();
+            var page = _contextService.BuildPageContext(request);
 
-        if (actionResult is { Success: true })
-        {
-            context = new AiContextDto
+            var searchQuery = request.SearchQuery?.Trim();
+            var searchResults = string.IsNullOrWhiteSpace(searchQuery)
+                ? []
+                : await SearchAsync(searchQuery, cancellationToken);
+
+            AiActionResultDto? actionResult = null;
+            if (!string.IsNullOrWhiteSpace(message))
             {
-                User = new AiUserContextDto
-                {
-                    UserId = _currentUserService.UserId ?? "unknown",
-                    Email = _currentUserService.Email,
-                    Roles = _currentUserService.Roles
-                },
-                Page = page
-            };
-            reply = actionResult.Message;
-            if (actionResult.Route is not null)
-            {
-                reply += $" Open: {actionResult.Route}";
+                actionResult = await _actionService.TryExecuteAsync(message, page, cancellationToken);
             }
-        }
-        else if (!string.IsNullOrWhiteSpace(message))
-        {
-            var intent = AiMessageAnalyzer.Classify(message);
-            if (AiMessageAnalyzer.RequiresRetrieval(intent))
-            {
-                context = await _retrievalService.RetrieveAsync(request, cancellationToken);
-            }
-            else
+
+            AiContextDto context;
+            string reply;
+
+            if (actionResult is { Success: true })
             {
                 context = new AiContextDto
                 {
@@ -107,39 +90,81 @@ public sealed class AiChatService : IAiChatService
                     },
                     Page = page
                 };
+                reply = actionResult.Message;
+                if (actionResult.Route is not null)
+                {
+                    reply += $" Open: {actionResult.Route}";
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(message))
+            {
+                var intent = AiMessageAnalyzer.Classify(message);
+                if (AiMessageAnalyzer.RequiresRetrieval(intent))
+                {
+                    context = await _retrievalService.RetrieveAsync(request, cancellationToken);
+                }
+                else
+                {
+                    context = new AiContextDto
+                    {
+                        User = new AiUserContextDto
+                        {
+                            UserId = _currentUserService.UserId ?? "unknown",
+                            Email = _currentUserService.Email,
+                            Roles = _currentUserService.Roles
+                        },
+                        Page = page
+                    };
+                }
+
+                reply = await ResolveReplyAsync(message, context, intent, actionResult, cancellationToken);
+            }
+            else
+            {
+                context = new AiContextDto
+                {
+                    User = new AiUserContextDto { UserId = _currentUserService.UserId ?? "unknown" },
+                    Page = page
+                };
+                reply = string.Empty;
             }
 
-            reply = await ResolveReplyAsync(message, context, intent, actionResult, cancellationToken);
-        }
-        else
-        {
-            context = new AiContextDto
+            var sources = _retrievalService.BuildSources(context);
+            var suggestions = GetContextSuggestions(page);
+            var quickActions = GetQuickActions();
+
+            if (!string.IsNullOrWhiteSpace(message))
             {
-                User = new AiUserContextDto { UserId = _currentUserService.UserId ?? "unknown" },
-                Page = page
+                await SaveConversationAsync(message, reply, cancellationToken);
+                await _limitService.IncrementAiUsageAsync(cancellationToken);
+            }
+
+            stopwatch.Stop();
+            _logger.LogInformation(
+                "AI request completed for User {UserId} in {ElapsedMilliseconds}ms",
+                _currentUserService.UserId,
+                stopwatch.ElapsedMilliseconds);
+
+            return new AiChatResponse
+            {
+                Reply = reply,
+                Suggestions = suggestions,
+                QuickActions = quickActions,
+                SearchResults = searchResults,
+                Sources = sources,
+                ActionResult = actionResult
             };
-            reply = string.Empty;
         }
-
-        var sources = _retrievalService.BuildSources(context);
-        var suggestions = GetContextSuggestions(page);
-        var quickActions = GetQuickActions();
-
-        if (!string.IsNullOrWhiteSpace(message))
+        catch (Exception ex)
         {
-            await SaveConversationAsync(message, reply, cancellationToken);
-            await _limitService.IncrementAiUsageAsync(cancellationToken);
+            stopwatch.Stop();
+            _logger.LogError(
+                ex,
+                "AI request failed for User {UserId} after {ElapsedMilliseconds}ms",
+                _currentUserService.UserId,
+                stopwatch.ElapsedMilliseconds);
+            throw;
         }
-
-        return new AiChatResponse
-        {
-            Reply = reply,
-            Suggestions = suggestions,
-            QuickActions = quickActions,
-            SearchResults = searchResults,
-            Sources = sources,
-            ActionResult = actionResult
-        };
     }
 
     private async Task<string> ResolveReplyAsync(

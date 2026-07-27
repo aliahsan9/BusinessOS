@@ -6,6 +6,7 @@ using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.MultiTenancy;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace BusinessOS.Infrastructure.Services;
 
@@ -15,17 +16,20 @@ public sealed class TenantService : ITenantService
     private readonly ICurrentUserService _currentUserService;
     private readonly ITenantLimitService _limitService;
     private readonly ITenantAuditService _auditService;
+    private readonly ILogger<TenantService> _logger;
 
     public TenantService(
         IApplicationDbContext context,
         ICurrentUserService currentUserService,
         ITenantLimitService limitService,
-        ITenantAuditService auditService)
+        ITenantAuditService auditService,
+        ILogger<TenantService> logger)
     {
         _context = context;
         _currentUserService = currentUserService;
         _limitService = limitService;
         _auditService = auditService;
+        _logger = logger;
     }
 
     public async Task<TenantDto> GetTenantAsync(CancellationToken cancellationToken = default)
@@ -66,6 +70,12 @@ public sealed class TenantService : ITenantService
             oldValue,
             SerializeTenant(tenant),
             cancellationToken: cancellationToken);
+
+        _logger.LogInformation(
+            "Tenant {TenantId} ({TenantName}) updated by User {UserId}",
+            tenant.Id,
+            tenant.Name,
+            _currentUserService.UserId);
 
         return MapTenant(tenant);
     }
@@ -115,6 +125,11 @@ public sealed class TenantService : ITenantService
             oldValue,
             RbacAuditService.Serialize(new { tenant.Name, settings.Currency, settings.Timezone }),
             cancellationToken: cancellationToken);
+
+        _logger.LogInformation(
+            "Tenant settings updated for Tenant {TenantId} by User {UserId}",
+            tenant.Id,
+            _currentUserService.UserId);
 
         return MapSettings(tenant, settings);
     }

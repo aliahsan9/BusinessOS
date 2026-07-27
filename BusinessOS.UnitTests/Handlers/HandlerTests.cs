@@ -99,7 +99,8 @@ public class CreateProductSuccessHandlerTests
 
         var handler = new CreateProductCommandHandler(
             context.Object,
-            InventoryServiceTestHelper.CreateMock().Object);
+            InventoryServiceTestHelper.CreateMock().Object,
+            Mock.Of<Microsoft.Extensions.Logging.ILogger<CreateProductCommandHandler>>());
 
         var id = await handler.Handle(
             new CreateProductCommand(categoryId, "Laptop", "SKU-1", null, 100, 200, 5),

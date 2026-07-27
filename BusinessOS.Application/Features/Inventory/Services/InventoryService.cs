@@ -4,6 +4,7 @@ using BusinessOS.Application.Features.Inventory.Queries;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace BusinessOS.Application.Features.Inventory.Services;
 
@@ -30,17 +31,20 @@ public sealed class InventoryService : IInventoryService
     private readonly IStockTransactionRepository _transactionRepository;
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
+    private readonly ILogger<InventoryService> _logger;
 
     public InventoryService(
         IInventoryRepository inventoryRepository,
         IStockTransactionRepository transactionRepository,
         IApplicationDbContext context,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        ILogger<InventoryService> logger)
     {
         _inventoryRepository = inventoryRepository;
         _transactionRepository = transactionRepository;
         _context = context;
         _currentUserService = currentUserService;
+        _logger = logger;
     }
 
     public async Task<InventoryResponse> GetByProductIdAsync(
@@ -285,6 +289,23 @@ public sealed class InventoryService : IInventoryService
 
         _context.StockTransactions.Add(transaction);
         await _context.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Stock updated for Product {ProductId}: {PreviousStock} -> {NewStock} ({TransactionType})",
+            productId,
+            previousStock,
+            newStock,
+            transactionType);
+
+        if (newStock > 0 && newStock <= inventory.ReorderLevel)
+        {
+            _logger.LogWarning(
+                "Low stock warning for Product {ProductId} ({ProductName}): {CurrentStock} (reorder level {ReorderLevel})",
+                productId,
+                inventory.Product?.Name ?? "unknown",
+                newStock,
+                inventory.ReorderLevel);
+        }
     }
 
     private static void SyncProductStockFields(Domain.Entities.Inventory inventory)

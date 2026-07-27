@@ -7,6 +7,8 @@ using BusinessOS.API.Middleware;
 using BusinessOS.API.OpenApi;
 using BusinessOS.API.Services;
 using BusinessOS.Application;
+using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Common.Options;
 using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Infrastructure;
 using BusinessOS.Infrastructure.Data;
@@ -15,8 +17,11 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using Serilog;
+using Serilog.Events;
 
 Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
+    .Enrich.FromLogContext()
     .WriteTo.Console()
     .CreateBootstrapLogger();
 
@@ -27,8 +32,10 @@ try
     builder.Host.UseSerilog((context, services, configuration) => configuration
         .ReadFrom.Configuration(context.Configuration)
         .ReadFrom.Services(services)
-        .Enrich.FromLogContext()
-        .WriteTo.Console());
+        .Enrich.FromLogContext());
+
+    builder.Services.Configure<LoggingPerformanceOptions>(
+        builder.Configuration.GetSection(LoggingPerformanceOptions.SectionName));
 
     builder.Services.AddControllers();
     builder.Services.AddApplication();
@@ -83,6 +90,62 @@ try
                     }
 
                     return Task.CompletedTask;
+                },
+                OnAuthenticationFailed = context =>
+                {
+                    var logger = context.HttpContext.RequestServices
+                        .GetRequiredService<ILoggerFactory>()
+                        .CreateLogger("JwtAuthentication");
+
+                    if (context.Exception is SecurityTokenExpiredException)
+                    {
+                        logger.LogWarning(
+                            "Expired JWT rejected for {Path} (RequestId={RequestId})",
+                            context.HttpContext.Request.Path,
+                            context.HttpContext.TraceIdentifier);
+                    }
+                    else
+                    {
+                        logger.LogWarning(
+                            context.Exception,
+                            "JWT authentication failed for {Path} (RequestId={RequestId})",
+                            context.HttpContext.Request.Path,
+                            context.HttpContext.TraceIdentifier);
+                    }
+
+                    return Task.CompletedTask;
+                },
+                OnChallenge = context =>
+                {
+                    if (!string.IsNullOrEmpty(context.Error))
+                    {
+                        var logger = context.HttpContext.RequestServices
+                            .GetRequiredService<ILoggerFactory>()
+                            .CreateLogger("JwtAuthentication");
+
+                        logger.LogWarning(
+                            "Unauthorized access to {Path}: {Error} {ErrorDescription} (RequestId={RequestId})",
+                            context.HttpContext.Request.Path,
+                            context.Error,
+                            context.ErrorDescription,
+                            context.HttpContext.TraceIdentifier);
+                    }
+
+                    return Task.CompletedTask;
+                },
+                OnForbidden = context =>
+                {
+                    var logger = context.HttpContext.RequestServices
+                        .GetRequiredService<ILoggerFactory>()
+                        .CreateLogger("JwtAuthentication");
+
+                    logger.LogWarning(
+                        "Forbidden access to {Path} by User {UserId} (RequestId={RequestId})",
+                        context.HttpContext.Request.Path,
+                        context.HttpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+                        context.HttpContext.TraceIdentifier);
+
+                    return Task.CompletedTask;
                 }
             };
         });
@@ -128,7 +191,73 @@ try
         });
     }
 
-    app.UseSerilogRequestLogging();
+    // Correlation ID must run first so all subsequent logs share it.
+    app.UseMiddleware<CorrelationIdMiddleware>();
+
+    app.UseSerilogRequestLogging(options =>
+    {
+        options.GetLevel = (httpContext, elapsed, ex) =>
+        {
+            if (ex is not null || httpContext.Response.StatusCode >= 500)
+            {
+                return LogEventLevel.Error;
+            }
+
+            if (httpContext.Response.StatusCode >= 400)
+            {
+                return LogEventLevel.Warning;
+            }
+
+            var threshold = httpContext.RequestServices
+                .GetService<Microsoft.Extensions.Options.IOptionsMonitor<LoggingPerformanceOptions>>()
+                ?.CurrentValue.HttpWarningThresholdMs ?? 3000;
+
+            if (threshold > 0 && elapsed >= threshold)
+            {
+                return LogEventLevel.Warning;
+            }
+
+            return LogEventLevel.Information;
+        };
+
+        options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+        {
+            diagnosticContext.Set("RequestMethod", httpContext.Request.Method);
+            diagnosticContext.Set("RequestPath", httpContext.Request.Path.Value);
+            diagnosticContext.Set("StatusCode", httpContext.Response.StatusCode);
+            diagnosticContext.Set("RemoteIP", httpContext.Connection.RemoteIpAddress?.ToString());
+            diagnosticContext.Set("RequestId", httpContext.TraceIdentifier);
+            diagnosticContext.Set("TraceId", httpContext.TraceIdentifier);
+
+            var correlationId = CorrelationIdMiddleware.GetCorrelationId(httpContext);
+            if (!string.IsNullOrWhiteSpace(correlationId))
+            {
+                diagnosticContext.Set("CorrelationId", correlationId);
+            }
+
+            var userId = httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (!string.IsNullOrWhiteSpace(userId))
+            {
+                diagnosticContext.Set("UserId", userId);
+            }
+
+            var tenantProvider = httpContext.RequestServices.GetService<ITenantProvider>();
+            if (tenantProvider?.HasTenant() == true)
+            {
+                diagnosticContext.Set("TenantId", tenantProvider.TenantId);
+            }
+
+            var tenantContext = httpContext.RequestServices.GetService<ITenantContext>();
+            if (tenantContext?.IsLoaded == true && !string.IsNullOrWhiteSpace(tenantContext.TenantName))
+            {
+                diagnosticContext.Set("TenantName", tenantContext.TenantName);
+            }
+        };
+
+        options.MessageTemplate =
+            "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms (RemoteIP={RemoteIP}, RequestId={RequestId}, TraceId={TraceId}, CorrelationId={CorrelationId})";
+    });
+
     app.UseMiddleware<ExceptionHandlingMiddleware>();
     if (!app.Environment.IsDevelopment())
     {
@@ -137,6 +266,7 @@ try
     app.UseCors(corsPolicyName);
     app.UseAuthentication();
     app.UseMiddleware<TenantMiddleware>();
+    app.UseMiddleware<SerilogEnrichmentMiddleware>();
     app.UseAuthorization();
 
     app.MapControllers();

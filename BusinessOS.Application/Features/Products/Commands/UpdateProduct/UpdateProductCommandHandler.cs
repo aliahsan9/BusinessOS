@@ -2,16 +2,21 @@ using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace BusinessOS.Application.Features.Products.Commands.UpdateProduct;
 
 public sealed class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ILogger<UpdateProductCommandHandler> _logger;
 
-    public UpdateProductCommandHandler(IApplicationDbContext context)
+    public UpdateProductCommandHandler(
+        IApplicationDbContext context,
+        ILogger<UpdateProductCommandHandler> logger)
     {
         _context = context;
+        _logger = logger;
     }
 
     public async Task<Unit> Handle(
@@ -40,6 +45,11 @@ public sealed class UpdateProductCommandHandler : IRequestHandler<UpdateProductC
         product.IsActive = request.IsActive;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Product {ProductName} ({ProductId}) updated",
+            product.Name,
+            product.Id);
 
         return Unit.Value;
     }

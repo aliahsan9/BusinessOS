@@ -8,6 +8,7 @@ using BusinessOS.Application.Features.Auth.Services;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace BusinessOS.Infrastructure.Services;
 
@@ -21,6 +22,7 @@ public sealed class AuthService : IAuthService
     private readonly IRoleRepository _roleRepository;
     private readonly IRbacAuditService _auditService;
     private readonly IActivityService _activityService;
+    private readonly ILogger<AuthService> _logger;
 
     public AuthService(
         IIdentityService identityService,
@@ -30,7 +32,8 @@ public sealed class AuthService : IAuthService
         IDbContextFactory<BusinessOSDbContext> dbContextFactory,
         IRoleRepository roleRepository,
         IRbacAuditService auditService,
-        IActivityService activityService)
+        IActivityService activityService,
+        ILogger<AuthService> logger)
     {
         _identityService = identityService;
         _tenantRegistrationService = tenantRegistrationService;
@@ -40,6 +43,7 @@ public sealed class AuthService : IAuthService
         _roleRepository = roleRepository;
         _auditService = auditService;
         _activityService = activityService;
+        _logger = logger;
     }
 
     public async Task<AuthResponse> LoginAsync(
@@ -52,6 +56,7 @@ public sealed class AuthService : IAuthService
         if (user is null ||
             !await _identityService.ValidatePasswordAsync(user, password, cancellationToken))
         {
+            _logger.LogWarning("Failed login attempt for {Email}", email);
             throw new UnauthorizedException("Invalid credentials");
         }
 
@@ -67,6 +72,10 @@ public sealed class AuthService : IAuthService
                 {
                     if (!appUser.IsActive)
                     {
+                        _logger.LogWarning(
+                            "Login blocked for deactivated user {UserId} ({Email})",
+                            user.Id,
+                            email);
                         throw new UnauthorizedException("Account is deactivated.");
                     }
 
@@ -84,6 +93,12 @@ public sealed class AuthService : IAuthService
 
         var permissions = await _roleRepository.GetUserPermissionCodesAsync(user.Id, cancellationToken);
         var token = _jwtTokenGenerator.GenerateToken(user.Id, user.Email, user.TenantId, roles, permissions);
+
+        _logger.LogInformation(
+            "User {UserId} ({Email}) logged in successfully for Tenant {TenantId}. JWT generated.",
+            user.Id,
+            user.Email,
+            user.TenantId);
 
         await _auditService.LogAsync(
             "UserLogin",
@@ -156,6 +171,11 @@ public sealed class AuthService : IAuthService
                 industry),
             cancellationToken);
 
+        _logger.LogInformation(
+            "Tenant {TenantId} created for business {BusinessName}",
+            tenantId,
+            businessName);
+
         var createResult = await _identityService.CreateUserAsync(
             new CreateUserRequest(email, password, firstName, lastName, tenantId),
             cancellationToken);
@@ -179,6 +199,12 @@ public sealed class AuthService : IAuthService
         var roles = await _roleRepository.GetUserRoleNamesAsync(user.Id, cancellationToken);
         var permissions = await _roleRepository.GetUserPermissionCodesAsync(user.Id, cancellationToken);
         var token = _jwtTokenGenerator.GenerateToken(user.Id, user.Email, user.TenantId, roles, permissions);
+
+        _logger.LogInformation(
+            "User {UserId} ({Email}) registered successfully for Tenant {TenantId}. JWT generated.",
+            user.Id,
+            user.Email,
+            tenantId);
 
         return new AuthResponse
         {

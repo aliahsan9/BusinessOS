@@ -57,7 +57,16 @@ public static class DbInitializer
         {
             try
             {
+                if (!await context.Database.CanConnectAsync())
+                {
+                    logger.LogWarning(
+                        "Database connection unavailable on migration attempt {Attempt}/{MaxAttempts}",
+                        attempt,
+                        maxAttempts);
+                }
+
                 await context.Database.MigrateAsync();
+                logger.LogInformation("Database migrations applied successfully");
                 return;
             }
             catch (Exception ex) when (attempt < maxAttempts)
@@ -69,6 +78,14 @@ public static class DbInitializer
                     maxAttempts);
 
                 await Task.Delay(TimeSpan.FromSeconds(attempt * 2));
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    ex,
+                    "Database migration failed after {MaxAttempts} attempts",
+                    maxAttempts);
+                throw;
             }
         }
     }

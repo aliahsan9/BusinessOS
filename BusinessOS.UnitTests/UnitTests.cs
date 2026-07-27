@@ -89,7 +89,8 @@ public class AuthServiceTests
             Mock.Of<IDbContextFactory<BusinessOS.Infrastructure.Data.BusinessOSDbContext>>(),
             roleRepository,
             Mock.Of<IRbacAuditService>(),
-            Mock.Of<IActivityService>());
+            Mock.Of<IActivityService>(),
+            Mock.Of<Microsoft.Extensions.Logging.ILogger<AuthService>>());
     }
 }
 
@@ -99,7 +100,9 @@ public class CategoryHandlerTests
     public async Task CreateCategory_WithDuplicateName_ThrowsConflictException()
     {
         var context = CreateContextWithCategory("Electronics");
-        var handler = new CreateCategoryCommandHandler(context.Object);
+        var handler = new CreateCategoryCommandHandler(
+            context.Object,
+            Mock.Of<Microsoft.Extensions.Logging.ILogger<CreateCategoryCommandHandler>>());
 
         var act = () => handler.Handle(
             new CreateCategoryCommand("Electronics", "Desc"),
@@ -112,7 +115,9 @@ public class CategoryHandlerTests
     public async Task CreateCategory_WithValidData_ReturnsId()
     {
         var context = CreateEmptyContext();
-        var handler = new CreateCategoryCommandHandler(context.Object);
+        var handler = new CreateCategoryCommandHandler(
+            context.Object,
+            Mock.Of<Microsoft.Extensions.Logging.ILogger<CreateCategoryCommandHandler>>());
 
         var id = await handler.Handle(
             new CreateCategoryCommand("Books", "Reading"),
@@ -164,7 +169,8 @@ public class ProductHandlerTests
 
         var handler = new CreateProductCommandHandler(
             context.Object,
-            InventoryServiceTestHelper.CreateMock().Object);
+            InventoryServiceTestHelper.CreateMock().Object,
+            Mock.Of<Microsoft.Extensions.Logging.ILogger<CreateProductCommandHandler>>());
 
         var act = () => handler.Handle(
             new CreateProductCommand(Guid.NewGuid(), "Item", "SKU", null, 1, 2, 1),

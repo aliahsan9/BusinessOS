@@ -1,7 +1,9 @@
+using System.Security.Claims;
+using System.Text.Json;
 using BusinessOS.Application.Common.Exceptions;
+using BusinessOS.Application.Common.Interfaces;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
-using System.Text.Json;
 
 namespace BusinessOS.API.Middleware;
 
@@ -41,6 +43,16 @@ public sealed class ExceptionHandlingMiddleware
     private async Task HandleExceptionAsync(HttpContext context, Exception exception)
     {
         var traceId = context.TraceIdentifier;
+        var correlationId = CorrelationIdMiddleware.GetCorrelationId(context) ?? traceId;
+        var endpoint = context.GetEndpoint()?.DisplayName ?? context.Request.Path.Value ?? "unknown";
+        var userId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        Guid? tenantId = null;
+
+        var tenantProvider = context.RequestServices.GetService<ITenantProvider>();
+        if (tenantProvider?.HasTenant() == true)
+        {
+            tenantId = tenantProvider.TenantId;
+        }
 
         var (statusCode, title, type, errors, logLevel) = exception switch
         {
@@ -60,7 +72,7 @@ public sealed class ExceptionHandlingMiddleware
                 notFound.Message,
                 "https://tools.ietf.org/html/rfc9110#section-15.5.5",
                 (Dictionary<string, string[]>?)null,
-                LogLevel.Information),
+                LogLevel.Warning),
 
             UnauthorizedException unauthorized => (
                 StatusCodes.Status401Unauthorized,
@@ -101,10 +113,15 @@ public sealed class ExceptionHandlingMiddleware
         _logger.Log(
             logLevel,
             exception,
-            "Request failed with status {StatusCode}: {Message} (TraceId: {TraceId})",
+            "Unhandled exception {ExceptionType} at {Endpoint} with status {StatusCode}. Message={Message}. RequestId={RequestId}, CorrelationId={CorrelationId}, UserId={UserId}, TenantId={TenantId}",
+            exception.GetType().FullName,
+            endpoint,
             statusCode,
             exception.Message,
-            traceId);
+            traceId,
+            correlationId,
+            userId,
+            tenantId);
 
         context.Response.StatusCode = statusCode;
         context.Response.ContentType = "application/problem+json";
@@ -121,6 +138,7 @@ public sealed class ExceptionHandlingMiddleware
         };
 
         problem.Extensions["traceId"] = traceId;
+        problem.Extensions["correlationId"] = correlationId;
 
         if (errors is not null)
         {
