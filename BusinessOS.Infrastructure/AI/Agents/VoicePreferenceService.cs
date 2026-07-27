@@ -3,6 +3,7 @@ using BusinessOS.Application.Features.Agents.DTOs;
 using BusinessOS.Application.Features.Agents.Enums;
 using BusinessOS.Application.Features.Agents.Services;
 using BusinessOS.Domain.Entities;
+using BusinessOS.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -113,8 +114,8 @@ public sealed class VoicePreferenceService : IVoicePreferenceService
     private static VoicePreferenceDto Map(VoicePreference entity) => new()
     {
         Id = entity.Id,
-        Language = AgentLanguages.FromVoiceLanguage(entity.Language),
-        VoiceLanguage = entity.Language,
+        Language = AgentLanguages.English,
+        VoiceLanguage = AgentVoiceLanguage.En,
         VoiceName = entity.VoiceName,
         SpeechRate = entity.SpeechRate,
         Pitch = entity.Pitch,
