@@ -37,7 +37,7 @@ public class AgentPlannerTests
     }
 
     [Fact]
-    public void Plan_PurchaseOrder_IncludesLowStockAndCreatePo()
+    public void Plan_PurchaseOrder_IncludesLowStockAndDraftPo()
     {
         var plan = _planner.Plan(
             "adam",
@@ -47,15 +47,29 @@ public class AgentPlannerTests
             new AiMemoryStateDto());
 
         plan.Steps.Select(s => s.ToolName).Should().Contain(AiToolName.GetLowStock);
-        plan.Steps.Select(s => s.ToolName).Should().Contain(AiToolName.CreatePurchaseOrder);
+        plan.Steps.Select(s => s.ToolName).Should().Contain(AiToolName.CreatePurchaseOrderDraft);
     }
 
     [Fact]
-    public void PlanOnboarding_Urdu_UsesUrduTitles()
+    public void Plan_PurchaseOrderWithNamedProduct_CreatesDirectly()
     {
-        var plan = _planner.PlanOnboarding("sophia", "ur");
+        var plan = _planner.Plan(
+            "sophia",
+            AiCopilotIntent.ActionCreate,
+            "Create purchase order for Laptop",
+            new AiPageContextDto(),
+            new AiMemoryStateDto());
 
-        plan.Title.Should().Contain("سیٹ");
+        plan.Steps.Select(s => s.ToolName).Should().Contain(AiToolName.CreatePurchaseOrder);
+        plan.Steps.Select(s => s.ToolName).Should().NotContain(AiToolName.CreatePurchaseOrderDraft);
+    }
+
+    [Fact]
+    public void PlanOnboarding_UsesEnglishTitles()
+    {
+        var plan = _planner.PlanOnboarding("sophia", "en");
+
+        plan.Title.Should().Be("Business onboarding");
         plan.Steps.Should().Contain(s => s.ToolName == AiToolName.ApplyOnboardingProfile);
     }
 }

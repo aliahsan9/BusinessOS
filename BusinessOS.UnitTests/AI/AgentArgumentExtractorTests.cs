@@ -55,4 +55,46 @@ public class AgentArgumentExtractorTests
         args!.Value.GetProperty("quantity").GetDecimal().Should().Be(5);
         args.Value.GetProperty("productId").GetString().Should().Be(state.ProductId.ToString());
     }
+
+    [Fact]
+    public void Heuristic_CreatePurchaseOrder_ExtractsProductAndQuantity()
+    {
+        var args = AgentArgumentExtractor.ExtractHeuristic(
+            AiToolName.CreatePurchaseOrder,
+            "Create purchase order for Laptop quantity 5",
+            new AgentExecutionState(),
+            new AiPageContextDto());
+
+        args.Should().NotBeNull();
+        args!.Value.GetProperty("productName").GetString().Should().Contain("Laptop");
+        args.Value.GetProperty("items").EnumerateArray().Should().NotBeEmpty();
+        args.Value.GetProperty("quantity").GetDecimal().Should().Be(5);
+    }
+
+    [Fact]
+    public void Heuristic_CreatePurchaseOrder_ProductOnlyReply()
+    {
+        var args = AgentArgumentExtractor.ExtractHeuristic(
+            AiToolName.CreatePurchaseOrder,
+            "Laptop",
+            new AgentExecutionState(),
+            new AiPageContextDto());
+
+        args.Should().NotBeNull();
+        args!.Value.GetProperty("productName").GetString().Should().Be("Laptop");
+    }
+
+    [Fact]
+    public void Heuristic_CreateSupplier_ExtractsName()
+    {
+        var args = AgentArgumentExtractor.ExtractHeuristic(
+            AiToolName.CreateSupplier,
+            "Create supplier Acme Traders phone 03001112233",
+            new AgentExecutionState(),
+            new AiPageContextDto());
+
+        args.Should().NotBeNull();
+        args!.Value.GetProperty("name").GetString().Should().Contain("Acme");
+        args.Value.GetProperty("phone").GetString().Should().Contain("03001112233");
+    }
 }

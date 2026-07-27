@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Agents.Enums;
 using BusinessOS.Application.Features.Agents.Services;
 using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Enums;
@@ -239,11 +240,19 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
     {
         var fallback = intent is AiCopilotIntent.Help
             ? AiNaturalReplyBuilder.BuildHelpReply(message)
-            : AiNaturalReplyBuilder.BuildConversationalReply(message, page);
+            : AiNaturalReplyBuilder.BuildConversationalReply(
+                message,
+                page,
+                request.PreferEmployeeTone ? ResolveEmployeeDisplayName(request.AgentKey) : null,
+                request.Language);
 
-        if (toolResults.Count > 0 && intent is AiCopilotIntent.Conversational)
+        // Never ground pure greetings with sales/revenue tool dumps.
+        var isGreetingOnly = toolResults.Count > 0
+            && intent is AiCopilotIntent.Conversational
+            && LooksLikeGreetingOnly(message);
+        if (toolResults.Count > 0 && intent is AiCopilotIntent.Conversational && !isGreetingOnly)
         {
-            var groundedFallback = AiCopilotResponseBuilder.BuildGroundedAdviceReply(message, toolResults, citations);
+            var groundedFallback = AiCopilotResponseBuilder.BuildGroundedAdviceReply(message, toolResults, citations, request.Language);
             if (!string.IsNullOrWhiteSpace(groundedFallback))
                 fallback = groundedFallback;
         }
@@ -306,6 +315,17 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
             || lower.Contains("couldn't find")
             || lower.Contains("could not find")
             || lower.Contains("0 products sold across 0 orders");
+    }
+
+    private static bool LooksLikeGreetingOnly(string message)
+    {
+        var text = message.Trim().ToLowerInvariant();
+        if (text.Length > 40) return false;
+        return text is "hi" or "hello" or "hey" or "salam" or "assalamualaikum"
+            || text.StartsWith("hi ") || text.StartsWith("hello") || text.StartsWith("hey ")
+            || text.StartsWith("good morning") || text.StartsWith("good afternoon")
+            || text.StartsWith("good evening") || text.StartsWith("salam")
+            || message.Contains("سلام", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<(string Reply, int? TokenUsage, IAsyncEnumerable<string>? Stream)> GenerateReplyAsync(
@@ -574,6 +594,20 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
         }
 
         return BuildCopilotSystemPrompt();
+    }
+
+    private static string? ResolveEmployeeDisplayName(string? agentKey)
+    {
+        if (string.IsNullOrWhiteSpace(agentKey))
+            return "Sophia";
+
+        return AgentKeys.Normalize(agentKey) switch
+        {
+            AgentKeys.Sophia => "Sophia",
+            AgentKeys.Adam => "Adam",
+            AgentKeys.Emma => "Emma",
+            _ => "Sophia"
+        };
     }
 
     private static string BuildConversationalSystemPrompt() =>

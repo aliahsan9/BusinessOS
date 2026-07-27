@@ -75,6 +75,7 @@ public sealed class AgentEmployeeService : IAgentEmployeeService
             ?? voice.PreferredAgentKey
             ?? await _personaService.GetDefaultAgentKeyAsync(cancellationToken));
         var language = AgentLanguages.Normalize(request.Language ?? voice.Language);
+
         var persona = await _personaService.ResolvePersonaAsync(agentKey, cancellationToken);
 
         if (await ShouldRouteToOnboardingAsync(request, cancellationToken))
@@ -177,50 +178,48 @@ public sealed class AgentEmployeeService : IAgentEmployeeService
         CancellationToken cancellationToken = default)
     {
         var persona = await _personaService.ResolvePersonaAsync(AgentKeys.Sophia, cancellationToken);
-        var voice = await _voicePreferenceService.GetAsync(cancellationToken);
-        var language = AgentLanguages.Normalize(voice.Language);
 
         var suggestions = new List<AskSophiaSuggestionDto>
         {
             new()
             {
-                Label = language == AgentLanguages.Urdu ? "انوینٹری خلاصہ" : "Inventory summary",
+                Label = "Inventory summary",
                 Message = "Show my inventory summary",
                 Category = "inventory",
                 AgentKey = AgentKeys.Adam,
-                Icon = "📦"
+                Icon = "bi-box-seam"
             },
             new()
             {
-                Label = language == AgentLanguages.Urdu ? "کم اسٹاک" : "Low stock alerts",
+                Label = "Low stock alerts",
                 Message = "Which products are low in stock?",
                 Category = "inventory",
                 AgentKey = AgentKeys.Adam,
-                Icon = "⚠️"
+                Icon = "bi-exclamation-triangle"
             },
             new()
             {
-                Label = language == AgentLanguages.Urdu ? "سیلز رپورٹ" : "Sales report",
+                Label = "Sales report",
                 Message = "Generate a sales report for this month",
                 Category = "sales",
                 AgentKey = AgentKeys.Emma,
-                Icon = "📈"
+                Icon = "bi-graph-up-arrow"
             },
             new()
             {
-                Label = language == AgentLanguages.Urdu ? "خریداری تجاویز" : "What should I buy?",
+                Label = "What should I buy?",
                 Message = "What should I buy or reorder?",
                 Category = "recommendations",
                 AgentKey = AgentKeys.Adam,
-                Icon = "🛒"
+                Icon = "bi-cart3"
             },
             new()
             {
-                Label = language == AgentLanguages.Urdu ? "نیا کسٹمر" : "Create a customer",
+                Label = "Create a customer",
                 Message = "Create a new customer",
                 Category = "customers",
                 AgentKey = AgentKeys.Sophia,
-                Icon = "👤"
+                Icon = "bi-person-plus"
             }
         };
 
@@ -235,7 +234,9 @@ public sealed class AgentEmployeeService : IAgentEmployeeService
                     Message = insight.Message,
                     Category = insight.Type,
                     AgentKey = AgentKeys.Sophia,
-                    Icon = insight.Severity.Equals("high", StringComparison.OrdinalIgnoreCase) ? "🔴" : "💡"
+                    Icon = insight.Severity.Equals("high", StringComparison.OrdinalIgnoreCase)
+                        ? "bi-exclamation-circle"
+                        : "bi-lightbulb"
                 });
             }
         }
@@ -244,9 +245,7 @@ public sealed class AgentEmployeeService : IAgentEmployeeService
             _logger.LogDebug(ex, "Proactive insights unavailable for Ask Sophia");
         }
 
-        var greeting = language == AgentLanguages.Urdu
-            ? $"السلام علیکم — میں {persona.DisplayName} ہوں۔ آج کس میں مدد کر سکتی ہوں؟"
-            : $"Hi — I'm {persona.DisplayName}. How can I help your business today?";
+        var greeting = $"Hi — I'm {persona.DisplayName}. How can I help your business today?";
 
         return new AskSophiaSuggestionsDto
         {

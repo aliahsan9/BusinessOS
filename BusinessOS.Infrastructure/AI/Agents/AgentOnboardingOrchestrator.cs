@@ -96,9 +96,7 @@ public sealed class AgentOnboardingOrchestrator : IAgentOnboardingOrchestrator
             JsonSerializer.Serialize(data, JsonOptions),
             cancellationToken);
 
-        var reply = language == AgentLanguages.Urdu
-            ? $"السلام علیکم! میں {persona.DisplayName} ہوں، آپ کی سینئر بزنس اینالسٹ۔ آئیے آپ کا کاروبار سیٹ اپ کرتے ہیں۔ سب سے پہلے، آپ کے کاروبار کا نام کیا ہے؟"
-            : $"Hi — I'm {persona.DisplayName}, your Senior Business Analyst. Let's set up your business together. First, what's your business name?";
+        var reply = $"Hi — I'm {persona.DisplayName}, your Senior Business Analyst. Let's set up your business together. First, what's your business name?";
 
         var refreshed = await _workflowService.GetAsync(workflow.Id, cancellationToken) ?? workflow;
 
@@ -173,9 +171,7 @@ public sealed class AgentOnboardingOrchestrator : IAgentOnboardingOrchestrator
 
             nextStep = StepKeys.Length - 1;
             isComplete = true;
-            reply = language == AgentLanguages.Urdu
-                ? $"بہترین! میں نے آپ کی سیٹنگز محفوظ کر لی ہیں۔ {persona.DisplayName} کے طور پر میں اب آپ کے ساتھ روزمرہ کے کاموں میں مدد کے لیے تیار ہوں۔"
-                : $"Perfect — I've saved your business profile and defaults. I'm {persona.DisplayName}, ready to help with day-to-day work whenever you need me.";
+            reply = $"Perfect — I've saved your business profile and defaults. I'm {persona.DisplayName}, ready to help with day-to-day work whenever you need me.";
         }
         else
         {
@@ -340,44 +336,21 @@ public sealed class AgentOnboardingOrchestrator : IAgentOnboardingOrchestrator
         string stepKey,
         string language,
         string displayName,
-        IReadOnlyDictionary<string, string?> data)
-    {
-        var ur = language == AgentLanguages.Urdu;
-        return stepKey switch
+        IReadOnlyDictionary<string, string?> data) =>
+        stepKey switch
         {
-            "welcome" => ur
-                ? $"السلام علیکم! میں {displayName} ہوں۔ آئیے سیٹ اپ شروع کریں۔"
-                : $"Hi — I'm {displayName}. Let's get your business set up.",
-            "business_name" => ur
-                ? "آپ کے کاروبار کا نام کیا ہے؟"
-                : "What's your business name?",
-            "industry" => ur
-                ? "آپ کس صنعت میں کام کرتے ہیں؟ مثلاً ریٹیل، مینوفیکچرنگ، سروسز۔"
-                : "What industry are you in? (e.g. retail, manufacturing, services)",
-            "size" => ur
-                ? "آپ کی ٹیم تقریباً کتنی بڑی ہے؟ (مثلاً 1–5، 6–20، 20+)"
-                : "Roughly how large is the team? (e.g. 1–5, 6–20, 20+)",
-            "currency" => ur
-                ? "آپ کون سی کرنسی استعمال کرنا چاہتے ہیں؟ (مثلاً PKR، USD، EUR)"
-                : "Which currency should we use? (e.g. PKR, USD, EUR)",
-            "country_timezone" => ur
-                ? "آپ کا ملک اور ٹائم زون کیا ہے؟"
-                : "Which country and timezone should we use?",
-            "tax" => ur
-                ? "ڈیفالٹ ٹیکس شرح کیا ہے؟ (فیصد میں، مثلاً 17)"
-                : "What's your default tax rate? (percent, e.g. 17)",
-            "warehouse" => ur
-                ? "کیا آپ کا ایک مین گودام/لوکیشن ہے؟ اس کا نام بتائیں۔"
-                : "Do you have a main warehouse or location? What should we call it?",
-            "categories" => ur
-                ? "شروع کے لیے چند پروڈکٹ زمرے بتائیں (کاما سے الگ)۔"
-                : "List a few starting product categories (comma-separated).",
-            "confirm_apply" => ur
-                ? $"میں یہ محفوظ کرنے والی ہوں: {Summarize(data)}۔ تصدیق کریں؟"
-                : $"I'll apply this profile: {Summarize(data)}. Shall I confirm?",
-            _ => ur ? "جاری رکھیں…" : "Let's continue…"
+            "welcome" => $"Hi — I'm {displayName}. Let's get your business set up.",
+            "business_name" => "What's your business name?",
+            "industry" => "What industry are you in? (e.g. retail, manufacturing, services)",
+            "size" => "Roughly how large is the team? (e.g. 1–5, 6–20, 20+)",
+            "currency" => "Which currency should we use? (e.g. PKR, USD, EUR)",
+            "country_timezone" => "Which country and timezone should we use?",
+            "tax" => "What's your default tax rate? (percent, e.g. 17)",
+            "warehouse" => "Do you have a main warehouse or location? What should we call it?",
+            "categories" => "List a few starting product categories (comma-separated).",
+            "confirm_apply" => $"I'll apply this profile: {Summarize(data)}. Shall I confirm?",
+            _ => "Let's continue…"
         };
-    }
 
     private static string Summarize(IReadOnlyDictionary<string, string?> data)
     {

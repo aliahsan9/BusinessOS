@@ -28,7 +28,10 @@ public static class AiCopilotResponseBuilder
             sb.AppendLine(result.Summary);
         }
 
-        if (memory.SelectedCustomerName is not null && message.Contains("customer", StringComparison.OrdinalIgnoreCase))
+        if (memory.SelectedCustomerName is not null
+            && !string.Equals(memory.SelectedCustomerName, "with name", StringComparison.OrdinalIgnoreCase)
+            && !memory.SelectedCustomerName.Contains("Unknown", StringComparison.OrdinalIgnoreCase)
+            && message.Contains("customer", StringComparison.OrdinalIgnoreCase))
             sb.AppendLine($"(Context: {memory.SelectedCustomerName})");
 
         return AppendCitations(sb.ToString().Trim(), citations);
@@ -63,7 +66,8 @@ public static class AiCopilotResponseBuilder
     public static string BuildGroundedAdviceReply(
         string message,
         IReadOnlyList<AiToolResult> toolResults,
-        IReadOnlyList<AiCitationDto> citations)
+        IReadOnlyList<AiCitationDto> citations,
+        string? language = null)
     {
         var dataBlock = string.Join("\n\n", toolResults
             .Where(r => !string.IsNullOrWhiteSpace(r.Summary))
@@ -72,9 +76,8 @@ public static class AiCopilotResponseBuilder
         if (string.IsNullOrWhiteSpace(dataBlock))
             return string.Empty;
 
-        var reply =
-            $"""
-            Here's advice grounded in your live data:
+        var reply = $"""
+            Based on your live numbers:
 
             {dataBlock}
 
@@ -83,7 +86,6 @@ public static class AiCopilotResponseBuilder
             2. Follow up open quotes and overdue invoices the same day — cash and conversion often beat new ads.
             3. Bundle a top seller with an accessory or service to raise average order value.
             4. Re-engage quiet customers who bought bestsellers before with a short personal offer.
-            5. Review the trend lines weekly and cut spend on SKUs that aren't moving.
 
             Ask a follow-up like “Which products are best selling this month?” or “Show overdue invoices” if you want a deeper cut.
             """;

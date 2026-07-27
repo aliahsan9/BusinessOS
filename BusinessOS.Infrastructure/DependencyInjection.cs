@@ -152,6 +152,11 @@ public static class DependencyInjection
         services.AddScoped<IAgentPlanner, AgentPlanner>();
         services.AddScoped<IAgentWorkflowService, AgentWorkflowService>();
         services.AddScoped<IVoicePreferenceService, VoicePreferenceService>();
+        services.AddSingleton<ISophiaTtsService, EdgeNeuralTtsService>();
+        services.AddHttpClient("SophiaTts", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
         services.AddScoped<IAgentOnboardingOrchestrator, AgentOnboardingOrchestrator>();
         services.AddScoped<IAgentIntentParser, AgentIntentParser>();
         services.AddScoped<IAgentArgumentExtractor, AgentArgumentExtractor>();

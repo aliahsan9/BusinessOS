@@ -46,8 +46,8 @@ public sealed class CreateSaleTool : AiToolBase
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
         intent is AiCopilotIntent.ActionCreate
-        && ContainsAny(message, "sale", "sales order", "create order", "فروخت")
-        && !ContainsAny(message, "purchase order", "خرید");
+        && ContainsAny(message, "sale", "sales order", "create order")
+        && !ContainsAny(message, "purchase order");
 
     public override Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default) =>
         ExecuteWithArgsAsync(context, context.ToolArgs ?? JsonDocument.Parse("{}").RootElement, cancellationToken);
@@ -76,7 +76,16 @@ public sealed class CreateSaleTool : AiToolBase
             }
 
             if (customerId is null)
-                return Fail("Customer is required to create a sale.");
+            {
+                var refersToThis = ContainsAny(context.Message,
+                    "this customer", "the customer");
+                if (refersToThis)
+                {
+                    return Fail("Open the customer page first, then say \"Create order for this customer\" — or tell me the customer name.");
+                }
+
+                return Fail("Which customer is this for? Example: \"Create order for Ahmed Ali\".");
+            }
 
             var items = new List<CreateOrderItemDto>();
             if (args.TryGetProperty("items", out var itemsEl) && itemsEl.ValueKind == JsonValueKind.Array)
@@ -107,7 +116,9 @@ public sealed class CreateSaleTool : AiToolBase
                 items.Add(new CreateOrderItemDto(pid, 1));
 
             if (items.Count == 0)
-                return Fail("At least one product line item is required.");
+            {
+                return Fail("Which product and how many? Example: \"Laptop quantity 5\".");
+            }
 
             var orderId = await _mediator.Send(new CreateOrderCommand(
                 customerId.Value,
@@ -118,7 +129,11 @@ public sealed class CreateSaleTool : AiToolBase
             if (context.ExecutionState is not null)
                 context.ExecutionState.OrderId = orderId;
 
-            return Ok($"Sale/order created successfully.", "Order", orderId, $"/orders/{orderId}");
+            return Ok(
+                "Sale/order created successfully.",
+                "Order",
+                orderId,
+                $"/orders/{orderId}");
         }
         catch (Exception ex)
         {
@@ -164,7 +179,7 @@ public sealed class StructuredCreateInvoiceTool : AiToolBase
     public override string? ParameterSchemaJson => AgentToolSchemas.For(AiToolName.CreateInvoice);
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
-        intent is AiCopilotIntent.ActionCreate && ContainsAny(message, "invoice", "انوائس");
+        intent is AiCopilotIntent.ActionCreate && ContainsAny(message, "invoice");
 
     public override Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default) =>
         ExecuteWithArgsAsync(context, context.ToolArgs ?? JsonDocument.Parse("{}").RootElement, cancellationToken);
@@ -264,7 +279,7 @@ public sealed class CancelInvoiceTool : AiToolBase
     public override string? ParameterSchemaJson => AgentToolSchemas.For(AiToolName.CancelInvoice);
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
-        ContainsAny(message, "cancel invoice", "void invoice", "انوائس منسوخ");
+        ContainsAny(message, "cancel invoice", "void invoice");
 
     public override Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default) =>
         ExecuteWithArgsAsync(context, context.ToolArgs ?? JsonDocument.Parse("{}").RootElement, cancellationToken);
@@ -321,7 +336,7 @@ public sealed class SearchInvoiceTool : AiToolBase
     public override string? ParameterSchemaJson => AgentToolSchemas.For(AiToolName.SearchInvoice);
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
-        ContainsAny(message, "search invoice", "find invoice", "انوائس تلاش");
+        ContainsAny(message, "search invoice", "find invoice");
 
     public override Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default) =>
         ExecuteWithArgsAsync(context, context.ToolArgs ?? JsonDocument.Parse("{}").RootElement, cancellationToken);
@@ -376,7 +391,7 @@ public sealed class CreatePurchaseOrderTool : AiToolBase
     public override string? ParameterSchemaJson => AgentToolSchemas.For(AiToolName.CreatePurchaseOrder);
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
-        ContainsAny(message, "purchase order", "create po", "خرید آرڈر");
+        ContainsAny(message, "purchase order", "create po", "buy stock", "reorder", "order from supplier");
 
     public override Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default) =>
         ExecuteWithArgsAsync(context, context.ToolArgs ?? JsonDocument.Parse("{}").RootElement, cancellationToken);
@@ -389,7 +404,8 @@ public sealed class CreatePurchaseOrderTool : AiToolBase
             var supplierId = AgentToolArgHelpers.GuidVal(args, "supplierId") ?? context.ExecutionState?.SupplierId;
             if (supplierId is null)
             {
-                var sname = AgentToolArgHelpers.Str(args, "supplierName");
+                var sname = AgentToolArgHelpers.Str(args, "supplierName")
+                    ?? context.ExecutionState?.SupplierName;
                 if (!string.IsNullOrWhiteSpace(sname))
                 {
                     var q = sname.ToLowerInvariant();
@@ -398,35 +414,61 @@ public sealed class CreatePurchaseOrderTool : AiToolBase
                         .Select(s => (Guid?)s.Id)
                         .FirstOrDefaultAsync(cancellationToken);
                 }
-                supplierId ??= await _db.Suppliers.AsNoTracking().Select(s => (Guid?)s.Id).FirstOrDefaultAsync(cancellationToken);
+                supplierId ??= await _db.Suppliers.AsNoTracking()
+                    .OrderBy(s => s.Name)
+                    .Select(s => (Guid?)s.Id)
+                    .FirstOrDefaultAsync(cancellationToken);
             }
 
             if (supplierId is null)
-                return Fail("Supplier is required. Create a supplier first.");
+                return Fail("No supplier found. Create a supplier first (e.g. \"Create supplier Acme Traders\"), then I can create the purchase order.");
 
             var items = new List<CreatePurchaseOrderLineItemDto>();
             if (args.TryGetProperty("items", out var itemsEl) && itemsEl.ValueKind == JsonValueKind.Array)
             {
                 foreach (var item in itemsEl.EnumerateArray())
                 {
-                    var productId = AgentToolArgHelpers.GuidVal(item, "productId");
-                    if (productId is null)
-                    {
-                        var pname = AgentToolArgHelpers.Str(item, "productName");
-                        if (!string.IsNullOrWhiteSpace(pname))
-                        {
-                            var pq = pname.ToLowerInvariant();
-                            productId = await _db.Products.AsNoTracking()
-                                .Where(p => p.Name.ToLower().Contains(pq))
-                                .Select(p => (Guid?)p.Id)
-                                .FirstOrDefaultAsync(cancellationToken);
-                        }
-                    }
+                    var line = await ResolveLineAsync(item, cancellationToken);
+                    if (line is not null)
+                        items.Add(line);
+                }
+            }
 
-                    var qty = AgentToolArgHelpers.Dec(item, "quantity") ?? 1;
-                    var unit = AgentToolArgHelpers.Dec(item, "unitCost") ?? 0;
-                    if (productId is not null)
-                        items.Add(new CreatePurchaseOrderLineItemDto(productId.Value, qty, unit));
+            // Top-level productName / quantity (from heuristics or clarification replies).
+            if (items.Count == 0)
+            {
+                var topName = AgentToolArgHelpers.Str(args, "productName")
+                    ?? context.ExecutionState?.ProductName;
+                var topQty = AgentToolArgHelpers.Dec(args, "quantity") ?? 1m;
+                var topId = AgentToolArgHelpers.GuidVal(args, "productId")
+                    ?? context.ExecutionState?.ProductId;
+
+                if (topId is Guid knownId)
+                {
+                    var cost = await _db.Products.AsNoTracking()
+                        .Where(p => p.Id == knownId)
+                        .Select(p => p.CostPrice)
+                        .FirstOrDefaultAsync(cancellationToken);
+                    items.Add(new CreatePurchaseOrderLineItemDto(knownId, topQty, cost));
+                }
+                else if (!string.IsNullOrWhiteSpace(topName))
+                {
+                    var resolved = await ResolveProductByNameAsync(topName, cancellationToken);
+                    if (resolved is null)
+                        return Fail($"I couldn't find a product named \"{topName}\". Check the name or create the product first.");
+                    if (resolved.Value.Ambiguous)
+                        return Fail($"Multiple products match \"{topName}\". Please be more specific (use exact name or SKU).");
+
+                    items.Add(new CreatePurchaseOrderLineItemDto(
+                        resolved.Value.Id,
+                        topQty,
+                        resolved.Value.CostPrice));
+
+                    if (context.ExecutionState is not null)
+                    {
+                        context.ExecutionState.ProductId = resolved.Value.Id;
+                        context.ExecutionState.ProductName = resolved.Value.Name;
+                    }
                 }
             }
 
@@ -439,8 +481,27 @@ public sealed class CreatePurchaseOrderTool : AiToolBase
                 items.Add(new CreatePurchaseOrderLineItemDto(pid, 1, cost));
             }
 
+            // Last resort: scan the raw message for a known product name.
+            if (items.Count == 0 && !string.IsNullOrWhiteSpace(context.Message))
+            {
+                var fromMessage = await FindProductMentionedInMessageAsync(context.Message, cancellationToken);
+                if (fromMessage is not null)
+                {
+                    items.Add(new CreatePurchaseOrderLineItemDto(
+                        fromMessage.Value.Id, 1, fromMessage.Value.CostPrice));
+                    if (context.ExecutionState is not null)
+                    {
+                        context.ExecutionState.ProductId = fromMessage.Value.Id;
+                        context.ExecutionState.ProductName = fromMessage.Value.Name;
+                    }
+                }
+            }
+
             if (items.Count == 0)
-                return Fail("At least one purchase line item is required.");
+            {
+                return Fail(
+                    "Which product should I order, and how many? Example: \"Create purchase order for Laptop quantity 5\" — or say \"draft purchase order from low stock\" to auto-fill from inventory.");
+            }
 
             var poId = await _mediator.Send(new CreatePurchaseOrderCommand(
                 supplierId.Value,
@@ -453,13 +514,104 @@ public sealed class CreatePurchaseOrderTool : AiToolBase
             if (context.ExecutionState is not null)
                 context.ExecutionState.PurchaseOrderId = poId;
 
-            return Ok("Purchase order draft created.", "PurchaseOrder", poId, $"/purchase-orders/{poId}");
+            var supplierLabel = await _db.Suppliers.AsNoTracking()
+                .Where(s => s.Id == supplierId.Value)
+                .Select(s => s.Name)
+                .FirstOrDefaultAsync(cancellationToken) ?? "supplier";
+
+            return Ok(
+                $"Purchase order draft created for {supplierLabel} with {items.Count} line(s).",
+                "PurchaseOrder",
+                poId,
+                $"/purchase-orders/{poId}");
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "CreatePurchaseOrder failed");
             return Fail(ex.Message);
         }
+    }
+
+    private async Task<CreatePurchaseOrderLineItemDto?> ResolveLineAsync(JsonElement item, CancellationToken cancellationToken)
+    {
+        var productId = AgentToolArgHelpers.GuidVal(item, "productId");
+        string? resolvedName = null;
+        decimal cost = AgentToolArgHelpers.Dec(item, "unitCost") ?? 0;
+
+        if (productId is null)
+        {
+            var pname = AgentToolArgHelpers.Str(item, "productName");
+            if (string.IsNullOrWhiteSpace(pname))
+                return null;
+
+            var resolved = await ResolveProductByNameAsync(pname, cancellationToken);
+            if (resolved is null || resolved.Value.Ambiguous)
+                return null;
+
+            productId = resolved.Value.Id;
+            resolvedName = resolved.Value.Name;
+            if (cost <= 0)
+                cost = resolved.Value.CostPrice;
+        }
+        else if (cost <= 0)
+        {
+            cost = await _db.Products.AsNoTracking()
+                .Where(p => p.Id == productId.Value)
+                .Select(p => p.CostPrice)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        var qty = AgentToolArgHelpers.Dec(item, "quantity") ?? 1;
+        _ = resolvedName;
+        return new CreatePurchaseOrderLineItemDto(productId.Value, qty, cost);
+    }
+
+    private async Task<(Guid Id, string Name, decimal CostPrice, bool Ambiguous)?> ResolveProductByNameAsync(
+        string name,
+        CancellationToken cancellationToken)
+    {
+        var q = name.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(q))
+            return null;
+
+        var matches = await _db.Products.AsNoTracking()
+            .Where(p => p.IsActive && (p.Name.ToLower().Contains(q) || (p.SKU != null && p.SKU.ToLower().Contains(q))))
+            .OrderBy(p => p.Name)
+            .Select(p => new { p.Id, p.Name, p.CostPrice })
+            .Take(5)
+            .ToListAsync(cancellationToken);
+
+        if (matches.Count == 0)
+            return null;
+
+        var exact = matches.FirstOrDefault(m => m.Name.Equals(name.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (exact is not null)
+            return (exact.Id, exact.Name, exact.CostPrice, false);
+
+        if (matches.Count > 1)
+            return (matches[0].Id, matches[0].Name, matches[0].CostPrice, true);
+
+        return (matches[0].Id, matches[0].Name, matches[0].CostPrice, false);
+    }
+
+    private async Task<(Guid Id, string Name, decimal CostPrice)?> FindProductMentionedInMessageAsync(
+        string message,
+        CancellationToken cancellationToken)
+    {
+        var products = await _db.Products.AsNoTracking()
+            .Where(p => p.IsActive)
+            .OrderByDescending(p => p.Name.Length)
+            .Select(p => new { p.Id, p.Name, p.CostPrice })
+            .Take(200)
+            .ToListAsync(cancellationToken);
+
+        foreach (var p in products)
+        {
+            if (message.Contains(p.Name, StringComparison.OrdinalIgnoreCase))
+                return (p.Id, p.Name, p.CostPrice);
+        }
+
+        return null;
     }
 
     private AiToolResult Fail(string m) => new() { ToolName = ToolName.ToString(), Success = false, Summary = m };
@@ -497,7 +649,7 @@ public sealed class ApprovePurchaseOrderTool : AiToolBase
     public override string? ParameterSchemaJson => AgentToolSchemas.For(AiToolName.ApprovePurchaseOrder);
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
-        ContainsAny(message, "approve purchase", "approve po", "منظور");
+        ContainsAny(message, "approve purchase", "approve po");
 
     public override Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default) =>
         ExecuteWithArgsAsync(context, context.ToolArgs ?? JsonDocument.Parse("{}").RootElement, cancellationToken);
@@ -551,7 +703,7 @@ public sealed class ReceivePurchaseTool : AiToolBase
     public override string? ParameterSchemaJson => AgentToolSchemas.For(AiToolName.ReceivePurchase);
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
-        ContainsAny(message, "receive purchase", "receive po", "وصول خرید");
+        ContainsAny(message, "receive purchase", "receive po");
 
     public override Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default) =>
         ExecuteWithArgsAsync(context, context.ToolArgs ?? JsonDocument.Parse("{}").RootElement, cancellationToken);
@@ -592,7 +744,7 @@ public sealed class SearchSupplierTool : AiToolBase
     public override string? ParameterSchemaJson => AgentToolSchemas.For(AiToolName.SearchSupplier);
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
-        ContainsAny(message, "search supplier", "find supplier", "سپلائر تلاش");
+        ContainsAny(message, "search supplier", "find supplier");
 
     public override Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default) =>
         ExecuteWithArgsAsync(context, context.ToolArgs ?? JsonDocument.Parse("{}").RootElement, cancellationToken);
@@ -643,7 +795,7 @@ public sealed class CreateSupplierTool : AiToolBase
     public override string? ParameterSchemaJson => AgentToolSchemas.For(AiToolName.CreateSupplier);
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
-        intent is AiCopilotIntent.ActionCreate && ContainsAny(message, "supplier", "سپلائر");
+        intent is AiCopilotIntent.ActionCreate && ContainsAny(message, "supplier");
 
     public override Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default) =>
         ExecuteWithArgsAsync(context, context.ToolArgs ?? JsonDocument.Parse("{}").RootElement, cancellationToken);
@@ -835,7 +987,7 @@ public sealed class ShowProfitTool : AiToolBase
     public override IReadOnlyList<string> RequiredPermissions => [PermissionCodes.FinanceView];
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
-        ContainsAny(message, "profit", "p&l", "منافع", "show expenses", "expense summary");
+        ContainsAny(message, "profit", "p&l", "show expenses", "expense summary");
 
     public override async Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default)
     {
@@ -907,7 +1059,7 @@ public sealed class UpdateTaxDefaultsTool : AiToolBase
     public override string? ParameterSchemaJson => AgentToolSchemas.For(AiToolName.UpdateTaxDefaults);
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
-        ContainsAny(message, "update tax", "tax rate", "set tax", "currency", "ٹیکس");
+        ContainsAny(message, "update tax", "tax rate", "set tax", "currency");
 
     public override Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default) =>
         ExecuteWithArgsAsync(context, context.ToolArgs ?? JsonDocument.Parse("{}").RootElement, cancellationToken);

@@ -27,7 +27,7 @@ public sealed class SearchProductTool : AiToolBase
     public override string? ParameterSchemaJson => AgentToolSchemas.For(AiToolName.SearchProduct);
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
-        ContainsAny(message, "search product", "find product", "پروڈکٹ تلاش");
+        ContainsAny(message, "search product", "find product");
 
     public override Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default) =>
         ExecuteWithArgsAsync(context, context.ToolArgs ?? JsonDocument.Parse("{}").RootElement, cancellationToken);
@@ -95,7 +95,7 @@ public sealed class CreateProductTool : AiToolBase
     public override string? ParameterSchemaJson => AgentToolSchemas.For(AiToolName.CreateProduct);
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
-        intent is AiCopilotIntent.ActionCreate && ContainsAny(message, "product", "پروڈکٹ");
+        intent is AiCopilotIntent.ActionCreate && ContainsAny(message, "product");
 
     public override Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default) =>
         ExecuteWithArgsAsync(context, context.ToolArgs ?? JsonDocument.Parse("{}").RootElement, cancellationToken);
@@ -180,7 +180,7 @@ public sealed class UpdateProductTool : AiToolBase
     public override string? ParameterSchemaJson => AgentToolSchemas.For(AiToolName.UpdateProduct);
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
-        ContainsAny(message, "update product", "edit product", "پروڈکٹ اپڈیٹ");
+        ContainsAny(message, "update product", "edit product");
 
     public override Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default) =>
         ExecuteWithArgsAsync(context, context.ToolArgs ?? JsonDocument.Parse("{}").RootElement, cancellationToken);
@@ -252,7 +252,7 @@ public sealed class DeleteProductTool : AiToolBase
     public override string? ParameterSchemaJson => AgentToolSchemas.For(AiToolName.DeleteProduct);
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
-        ContainsAny(message, "delete product", "remove product", "پروڈکٹ حذف");
+        ContainsAny(message, "delete product", "remove product");
 
     public override Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default) =>
         ExecuteWithArgsAsync(context, context.ToolArgs ?? JsonDocument.Parse("{}").RootElement, cancellationToken);
@@ -312,7 +312,7 @@ public sealed class AdjustInventoryTool : AiToolBase
     public override string? ParameterSchemaJson => AgentToolSchemas.For(AiToolName.AdjustInventory);
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
-        ContainsAny(message, "adjust inventory", "adjust stock", "اسٹاک ایڈجسٹ");
+        ContainsAny(message, "adjust inventory", "adjust stock");
 
     public override Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default) =>
         ExecuteWithArgsAsync(context, context.ToolArgs ?? JsonDocument.Parse("{}").RootElement, cancellationToken);
@@ -383,7 +383,7 @@ public sealed class ReceiveStockTool : AiToolBase
     public override string? ParameterSchemaJson => AgentToolSchemas.For(AiToolName.ReceiveStock);
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
-        ContainsAny(message, "receive stock", "receive inventory", "اسٹاک وصول");
+        ContainsAny(message, "receive stock", "receive inventory");
 
     public override Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default) =>
         ExecuteWithArgsAsync(context, context.ToolArgs ?? JsonDocument.Parse("{}").RootElement, cancellationToken);

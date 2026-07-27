@@ -29,33 +29,23 @@ public static class AgentKeys
 }
 
 /// <summary>
-/// ISO-style language codes used by AI employee voice and chat.
+/// ISO-style language codes used by AI employee voice and chat (English only).
 /// </summary>
 public static class AgentLanguages
 {
     public const string English = "en";
-    public const string Urdu = "ur";
 
     public static readonly IReadOnlyList<string> All =
     [
-        English,
-        Urdu
+        English
     ];
 
     public static bool IsSupported(string? language) =>
-        !string.IsNullOrWhiteSpace(language)
-        && All.Any(l => string.Equals(l, language.Trim(), StringComparison.OrdinalIgnoreCase));
+        string.Equals(language?.Trim(), English, StringComparison.OrdinalIgnoreCase);
 
-    public static string Normalize(string? language) =>
-        string.Equals(language?.Trim(), Urdu, StringComparison.OrdinalIgnoreCase)
-            ? Urdu
-            : English;
+    public static string Normalize(string? language) => English;
 
-    public static AgentVoiceLanguage ToVoiceLanguage(string? language) =>
-        Normalize(language) == Urdu
-            ? AgentVoiceLanguage.Ur
-            : AgentVoiceLanguage.En;
+    public static AgentVoiceLanguage ToVoiceLanguage(string? language) => AgentVoiceLanguage.En;
 
-    public static string FromVoiceLanguage(AgentVoiceLanguage language) =>
-        language == AgentVoiceLanguage.Ur ? Urdu : English;
+    public static string FromVoiceLanguage(AgentVoiceLanguage language) => English;
 }

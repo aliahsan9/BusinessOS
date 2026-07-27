@@ -43,7 +43,7 @@ public class AgentSelfCorrectorTests
     }
 
     [Fact]
-    public void Analyze_MissingFields_UrduClarification()
+    public void Analyze_MissingFields_Clarification()
     {
         using var doc = JsonDocument.Parse("""{"quantity":5}""");
         var result = _corrector.Analyze(
@@ -51,7 +51,7 @@ public class AgentSelfCorrectorTests
             new AiToolResult { ToolName = "AdjustInventory", Success = false, Summary = "Product is required." },
             null,
             doc.RootElement,
-            "ur");
+            "en");
 
         result.FailureKind.Should().Be(AgentFailureKind.ValidationMissingFields);
         result.NeedsClarification.Should().BeTrue();

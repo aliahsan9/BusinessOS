@@ -186,15 +186,25 @@ public sealed class AiIntentDetector : IAiIntentDetector
 
         if (ContainsAny(content, "create", "add", "new", "generate", "register"))
         {
-            if (ContainsAny(content, "customer", "client")) tools.Add(AiToolName.CreateCustomer);
-            if (ContainsAny(content, "product", "item")) tools.Add(AiToolName.CreateProduct);
-            if (ContainsAny(content, "supplier", "vendor")) tools.Add(AiToolName.CreateSupplier);
-            if (ContainsAny(content, "project")) tools.Add(AiToolName.CreateProject);
-            if (ContainsAny(content, "sale") || (ContainsAny(content, "order") && !ContainsAny(content, "purchase")))
+            var creatingSaleOrOrder =
+                ContainsAny(content, "create sale", "create order", "new sale", "new order", "sales order", "sale order")
+                || (ContainsAny(content, "sale", "order")
+                    && !ContainsAny(content, "purchase", "buy stock", "order stock")
+                    && !IsExplicitCreateCustomer(content));
+
+            // "Create order for this customer" must create a sale — not a new customer record.
+            if (creatingSaleOrOrder)
                 tools.Add(AiToolName.CreateSale);
+            else if (IsExplicitCreateCustomer(content))
+                tools.Add(AiToolName.CreateCustomer);
+
+            if (ContainsAny(content, "product", "item") && !creatingSaleOrOrder)
+                tools.Add(AiToolName.CreateProduct);
+            if (ContainsAny(content, "supplier", "vendor")) tools.Add(AiToolName.CreateSupplier);
+            if (ContainsAny(content, "project") && !creatingSaleOrOrder) tools.Add(AiToolName.CreateProject);
             if (ContainsAny(content, "task")) tools.Add(AiToolName.CreateTask);
             if (ContainsAny(content, "invoice")) tools.Add(AiToolName.CreateInvoice);
-            if (ContainsAny(content, "purchase order", "po ")) tools.Add(AiToolName.CreatePurchaseOrder);
+            if (ContainsAny(content, "purchase order", "po ", "buy stock", "order stock")) tools.Add(AiToolName.CreatePurchaseOrder);
 
             if (tools.Count > 0)
             {
@@ -326,17 +336,23 @@ public sealed class AiIntentDetector : IAiIntentDetector
 
         if (ContainsAny(content, "create", "add", "new", "generate"))
         {
-            if (ContainsAny(content, "customer")) tools.Add(AiToolName.CreateCustomer);
-            if (ContainsAny(content, "project", "order")) tools.Add(AiToolName.CreateProject);
+            if (IsExplicitCreateCustomer(content)) tools.Add(AiToolName.CreateCustomer);
+            if (ContainsAny(content, "create order", "create sale", "new order", "new sale", "sales order")
+                || (ContainsAny(content, "order", "sale") && !ContainsAny(content, "purchase") && !IsExplicitCreateCustomer(content)))
+                tools.Add(AiToolName.CreateSale);
+            if (ContainsAny(content, "project") && !ContainsAny(content, "order", "sale")) tools.Add(AiToolName.CreateProject);
             if (ContainsAny(content, "task")) tools.Add(AiToolName.CreateTask);
             if (ContainsAny(content, "invoice")) tools.Add(AiToolName.CreateInvoice);
 
-            return new AiIntentDetectionResult
+            if (tools.Count > 0)
             {
-                Intent = AiCopilotIntent.ActionCreate,
-                Confidence = 0.9,
-                SuggestedTools = tools
-            };
+                return new AiIntentDetectionResult
+                {
+                    Intent = AiCopilotIntent.ActionCreate,
+                    Confidence = 0.9,
+                    SuggestedTools = tools
+                };
+            }
         }
 
         if (ContainsAny(content, "revenue", "sales", "sold", "profit", "growth", "trend", "compare", "monthly", "quarterly", "yearly", "analytics")
@@ -396,7 +412,11 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
-        if (ContainsAny(content, "customer", "summarize", "activity"))
+        // Do not treat action phrases like "create order for this customer" as analytics.
+        if (ContainsAny(content, "summarize", "activity", "tell me about")
+            || (ContainsAny(content, "customer")
+                && ContainsAny(content, "show", "list", "who", "which", "revenue", "unpaid")
+                && !ContainsAny(content, "create", "add", "new", "order", "sale", "invoice")))
         {
             tools.Add(AiToolName.GetCustomers);
             return new AiIntentDetectionResult
@@ -463,9 +483,11 @@ public sealed class AiIntentDetector : IAiIntentDetector
             && !IsTrendQuery(text));
 
     private static bool IsPurchaseOrderCreateRequest(string text) =>
-        (ContainsAny(text, "purchase order", "create po", "draft po", "purchase-order")
-         && ContainsAny(text, "create", "add", "new", "generate", "draft", "make", "prepare"))
-        || ContainsAny(text, "create a purchase order", "create purchase order", "draft purchase order");
+        (ContainsAny(text, "purchase order", "create po", "draft po", "purchase-order", "buy stock", "order stock")
+         && ContainsAny(text, "create", "add", "new", "generate", "draft", "make", "prepare", "buy", "order"))
+        || ContainsAny(text,
+            "create a purchase order", "create purchase order", "draft purchase order",
+            "create po for", "reorder from low stock", "draft po from low stock");
 
     private static bool IsLowOrDeadStockRequest(string text) =>
         ContainsAny(text,
@@ -537,12 +559,28 @@ public sealed class AiIntentDetector : IAiIntentDetector
         return tools;
     }
 
+    private static bool IsExplicitCreateCustomer(string text) =>
+        ContainsAny(text,
+            "create customer", "add customer", "new customer", "register customer",
+            "create client", "add client", "new client", "register client",
+            "create a customer", "add a customer", "create a client");
+
     private static bool IsGreetingOrSmallTalk(string text)
     {
-        if (ContainsAny(text, "thanks", "thank you", "bye", "goodbye"))
+        if (ContainsPhrase(text, "thanks") || ContainsPhrase(text, "thank you")
+            || ContainsPhrase(text, "bye") || ContainsPhrase(text, "goodbye")
+            || ContainsPhrase(text, "shukriya") || ContainsPhrase(text, "shukria"))
             return text.Length < 60;
 
-        if (!ContainsAny(text, "hi", "hello", "hey", "good morning", "good afternoon", "good evening"))
+        var hasGreeting =
+            ContainsPhrase(text, "hi") || ContainsPhrase(text, "hello") || ContainsPhrase(text, "hey")
+            || ContainsPhrase(text, "good morning") || ContainsPhrase(text, "good afternoon")
+            || ContainsPhrase(text, "good evening") || ContainsPhrase(text, "salam")
+            || ContainsPhrase(text, "assalam") || ContainsPhrase(text, "assalamualaikum")
+            || text.Contains("السلام", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("سلام", StringComparison.OrdinalIgnoreCase);
+
+        if (!hasGreeting)
             return false;
 
         // Pure greeting, or greeting + tiny filler ("hi there", "hello!").
@@ -554,11 +592,13 @@ public sealed class AiIntentDetector : IAiIntentDetector
     {
         string[] prefixes =
         [
+            "assalamualaikum", "assalam o alaikum", "assalam",
             "good morning", "good afternoon", "good evening",
             "hello there", "hey there", "hi there",
             "hello,", "hello!", "hello ",
             "hey,", "hey!", "hey ",
-            "hi,", "hi!", "hi "
+            "hi,", "hi!", "hi ",
+            "salam,", "salam!", "salam "
         ];
 
         foreach (var prefix in prefixes.OrderByDescending(p => p.Length))

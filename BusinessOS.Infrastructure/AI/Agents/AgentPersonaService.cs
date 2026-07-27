@@ -78,10 +78,7 @@ public sealed class AgentPersonaService : IAgentPersonaService
         CancellationToken cancellationToken = default)
     {
         var persona = await ResolvePersonaAsync(agentKey, cancellationToken);
-        var lang = AgentLanguages.Normalize(language ?? persona.DefaultLanguage);
-        var languageLine = lang == AgentLanguages.Urdu
-            ? "Respond primarily in clear Urdu (Roman or Nastaliq as natural). Keep business terms understandable."
-            : "Respond in clear, professional English.";
+        var languageLine = "Respond in clear, professional English.";
 
         if (!preferEmployeeTone)
         {
@@ -102,6 +99,9 @@ public sealed class AgentPersonaService : IAgentPersonaService
             - Use natural employee language: "I'll check that", "From our inventory…", "I recommend we…".
             - Be concise, practical, and accountable — like a trusted colleague.
             - Use the business data and tool results provided; never invent numbers or records.
+            - Ask ONE focused clarifying question when details are missing (customer name, product, quantity) — never dump unrelated revenue stats.
+            - Never invent placeholder names like "Customer Unknown" or "with name".
+            - When the user says "this customer", use the open customer page context.
 
             {languageLine}
 

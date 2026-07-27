@@ -81,15 +81,34 @@ internal static class AgentToolArgHelpers
         };
     }
 
-    public static (string First, string Last) SplitName(string? full, string? first, string? last)
+    public static (string First, string Last)? SplitNameOrNull(string? full, string? first, string? last)
     {
         if (!string.IsNullOrWhiteSpace(first))
-            return (first.Trim(), string.IsNullOrWhiteSpace(last) ? "." : last.Trim());
+        {
+            var f = first.Trim();
+            if (IsPlaceholder(f)) return null;
+            return (f, string.IsNullOrWhiteSpace(last) ? "." : last.Trim());
+        }
+
         if (string.IsNullOrWhiteSpace(full))
-            return ("Customer", "Unknown");
-        var parts = full.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return null;
+
+        var cleaned = full.Trim();
+        if (IsPlaceholder(cleaned)) return null;
+
+        var parts = cleaned.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length == 1) return (parts[0], ".");
         return (parts[0], string.Join(' ', parts.Skip(1)));
+    }
+
+    public static (string First, string Last) SplitName(string? full, string? first, string? last) =>
+        SplitNameOrNull(full, first, last) ?? ("Customer", "Unknown");
+
+    private static bool IsPlaceholder(string value)
+    {
+        var lower = value.Trim().ToLowerInvariant();
+        return lower is "customer" or "unknown" or "customer unknown" or "with name" or "this" or "the"
+            || lower.StartsWith("customer unknown");
     }
 }
 
@@ -111,7 +130,8 @@ public sealed class StructuredCreateCustomerTool : AiToolBase
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
         intent is AiCopilotIntent.ActionCreate
-        && ContainsAny(message, "customer", "client", "گاہک", "کسٹمر");
+        && ContainsAny(message, "create customer", "add customer", "new customer")
+        && !ContainsAny(message, "create order", "create sale", "for this customer");
 
     public override Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default) =>
         ExecuteWithArgsAsync(context, context.ToolArgs ?? JsonDocument.Parse("{}").RootElement, cancellationToken);
@@ -123,10 +143,22 @@ public sealed class StructuredCreateCustomerTool : AiToolBase
     {
         try
         {
-            var (first, last) = AgentToolArgHelpers.SplitName(
+            var parsed = AgentToolArgHelpers.SplitNameOrNull(
                 AgentToolArgHelpers.Str(args, "fullName"),
                 AgentToolArgHelpers.Str(args, "firstName"),
                 AgentToolArgHelpers.Str(args, "lastName"));
+
+            if (parsed is null)
+            {
+                return new AiToolResult
+                {
+                    ToolName = ToolName.ToString(),
+                    Success = false,
+                    Summary = "What's the customer's full name?"
+                };
+            }
+
+            var (first, last) = parsed.Value;
 
             var email = AgentToolArgHelpers.Str(args, "email")
                 ?? $"customer-{Guid.NewGuid().ToString("N")[..8]}@businessos.local";
@@ -148,21 +180,16 @@ public sealed class StructuredCreateCustomerTool : AiToolBase
             }
 
             var display = $"{first} {last}".Trim();
-            var isUrdu = string.Equals(context.Language, "ur", StringComparison.OrdinalIgnoreCase);
             return new AiToolResult
             {
                 ToolName = ToolName.ToString(),
                 Success = true,
-                Summary = isUrdu
-                    ? $"{display} کامیابی سے شامل کر دیا گیا ہے"
-                    : $"Customer \"{display}\" has been created successfully.",
+                Summary = $"Customer \"{display}\" has been created successfully.",
                 ActionResult = new AiActionResultDto
                 {
                     Action = "CreateCustomer",
                     Success = true,
-                    Message = isUrdu
-                        ? $"{display} کامیابی سے شامل کر دیا گیا ہے"
-                        : $"Customer \"{display}\" has been created successfully.",
+                    Message = $"Customer \"{display}\" has been created successfully.",
                     EntityType = "Customer",
                     EntityId = id,
                     Route = $"/customers/{id}"
@@ -195,7 +222,7 @@ public sealed class SearchCustomerTool : AiToolBase
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
         intent is AiCopilotIntent.ActionRead or AiCopilotIntent.FollowUp
-        && ContainsAny(message, "search customer", "find customer", "گاہک تلاش", "کسٹمر تلاش");
+        && ContainsAny(message, "search customer", "find customer");
 
     public override Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default) =>
         ExecuteWithArgsAsync(context, context.ToolArgs ?? JsonDocument.Parse("{}").RootElement, cancellationToken);
@@ -269,7 +296,7 @@ public sealed class UpdateCustomerTool : AiToolBase
     public override string? ParameterSchemaJson => AgentToolSchemas.For(AiToolName.UpdateCustomer);
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
-        ContainsAny(message, "update customer", "edit customer", "change customer", "کسٹمر اپڈیٹ");
+        ContainsAny(message, "update customer", "edit customer", "change customer");
 
     public override Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default) =>
         ExecuteWithArgsAsync(context, context.ToolArgs ?? JsonDocument.Parse("{}").RootElement, cancellationToken);
@@ -360,7 +387,7 @@ public sealed class DeleteCustomerTool : AiToolBase
     public override string? ParameterSchemaJson => AgentToolSchemas.For(AiToolName.DeleteCustomer);
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
-        ContainsAny(message, "delete customer", "remove customer", "کسٹمر حذف");
+        ContainsAny(message, "delete customer", "remove customer");
 
     public override Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default) =>
         ExecuteWithArgsAsync(context, context.ToolArgs ?? JsonDocument.Parse("{}").RootElement, cancellationToken);

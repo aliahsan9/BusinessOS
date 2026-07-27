@@ -41,6 +41,11 @@ public static class AgentEndpoints
             .WithName("AgentSaveVoicePreferences")
             .Produces<VoicePreferenceDto>(StatusCodes.Status200OK);
 
+        group.MapPost("/tts", SynthesizeSpeech)
+            .WithName("AgentSynthesizeSpeech")
+            .Produces(StatusCodes.Status200OK, contentType: "audio/mpeg")
+            .Produces(StatusCodes.Status400BadRequest);
+
         group.MapPost("/onboarding/start", StartOnboarding)
             .WithName("AgentStartOnboarding")
             .Produces<AgentOnboardingResponse>(StatusCodes.Status200OK);
@@ -124,6 +129,32 @@ public static class AgentEndpoints
     {
         var prefs = await agentService.SaveVoicePreferencesAsync(request, cancellationToken);
         return Results.Ok(prefs);
+    }
+
+    private static async Task<IResult> SynthesizeSpeech(
+        SophiaTtsRequest request,
+        ISophiaTtsService tts,
+        IVoicePreferenceService voicePrefs,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Text))
+            return Results.BadRequest(new { error = "Text is required." });
+
+        var prefs = await voicePrefs.GetAsync(cancellationToken);
+        var language = string.IsNullOrWhiteSpace(request.Language)
+            ? prefs.Language
+            : request.Language;
+        var rate = request.SpeechRate ?? prefs.SpeechRate;
+
+        try
+        {
+            var result = await tts.SynthesizeAsync(request.Text, language, rate, cancellationToken);
+            return Results.File(result.AudioBytes, result.ContentType, fileDownloadName: null);
+        }
+        catch (Exception ex)
+        {
+            return Results.BadRequest(new { error = "Speech synthesis failed.", detail = ex.Message });
+        }
     }
 
     private static async Task<IResult> StartOnboarding(

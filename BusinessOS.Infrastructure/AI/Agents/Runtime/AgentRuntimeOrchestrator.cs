@@ -114,7 +114,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
                 request.Stream,
                 agentKey,
                 language,
-                request.PreferEmployeeTone,
+                PreferEmployeeTone: true,
                 request.WorkflowId);
 
             var copilotResponse = await _copilot.ProcessAsync(copilotRequest, cancellationToken);
@@ -438,7 +438,6 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         return text.Contains(" then ")
             || text.Contains(" and then ")
             || text.Contains("after that")
-            || text.Contains("اس کے بعد")
             || (text.Contains("create customer") && text.Contains("invoice"))
             || (text.Contains("create customer") && text.Contains("sale"));
     }
@@ -465,7 +464,6 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         string language,
         AiActionResultDto? action)
     {
-        var isUrdu = AgentLanguages.Normalize(language) == AgentLanguages.Urdu;
         if (!string.IsNullOrWhiteSpace(clarification))
             return clarification;
 
@@ -475,7 +473,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         if (action?.Success == true)
             return action.Message;
 
-        return isUrdu ? "کام مکمل ہو گیا۔" : "Done.";
+        return "Done.";
     }
 
     private static string BuildSpoken(string reply, string language, AiActionResultDto? action)
@@ -510,14 +508,23 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         AiCopilotChatResponse c,
         AgentPersonaDto persona,
         string agentKey,
-        string language) =>
-        new()
+        string language)
+    {
+        var reply = c.Reply ?? "";
+        if (!string.IsNullOrWhiteSpace(persona.DisplayName))
         {
-            Reply = c.Reply,
-            SpokenReply = c.SpokenReply ?? c.Reply,
+            reply = reply
+                .Replace("BusinessOS AI Copilot", persona.DisplayName, StringComparison.OrdinalIgnoreCase)
+                .Replace("BusinessOS AI", persona.DisplayName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return new AgentChatResponse
+        {
+            Reply = reply,
+            SpokenReply = c.SpokenReply ?? reply,
             SessionId = c.SessionId,
             AgentKey = c.AgentKey ?? agentKey,
-            AgentDisplayName = c.AgentDisplayName ?? persona.DisplayName,
+            AgentDisplayName = persona.DisplayName,
             Intent = c.Intent,
             WorkflowId = c.WorkflowId,
             WorkflowSteps = c.WorkflowSteps.Select(s => new AgentWorkflowStepDto
@@ -542,6 +549,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             ActionResult = c.ActionResult,
             PermissionDenied = c.PermissionDenied
         };
+    }
 
     private static AgentStreamChunkDto Status(string content) =>
         new() { Type = "status", Content = content };

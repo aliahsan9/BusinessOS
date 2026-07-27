@@ -26,7 +26,7 @@ public class AgentProfile : AuditableEntity
     /// <summary>System prompt that defines this employee's persona and tone.</summary>
     public string SystemPersonaPrompt { get; set; } = default!;
 
-    /// <summary>Default language code (en / ur).</summary>
+    /// <summary>Default language code (en only).</summary>
     public string DefaultLanguage { get; set; } = "en";
 
     public bool IsDefault { get; set; }

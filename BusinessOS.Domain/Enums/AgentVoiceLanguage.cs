@@ -6,8 +6,5 @@ namespace BusinessOS.Domain.Enums;
 public enum AgentVoiceLanguage
 {
     /// <summary>English (en).</summary>
-    En = 0,
-
-    /// <summary>Urdu (ur).</summary>
-    Ur = 1
+    En = 0
 }

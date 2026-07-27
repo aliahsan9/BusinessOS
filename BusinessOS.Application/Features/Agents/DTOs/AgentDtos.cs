@@ -115,6 +115,13 @@ public sealed class SaveVoicePreferenceRequest
     public string? PreferredAgentKey { get; init; }
 }
 
+public sealed class SophiaTtsRequest
+{
+    public string Text { get; init; } = "";
+    public string? Language { get; init; }
+    public double? SpeechRate { get; init; }
+}
+
 // ── Workflow progress ─────────────────────────────────────────────────────────
 
 public sealed class AgentWorkflowStepDto

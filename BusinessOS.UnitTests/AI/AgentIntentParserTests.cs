@@ -25,22 +25,6 @@ public class AgentIntentParserTests
     }
 
     [Fact]
-    public void Parse_UrduCreateCustomer_NormalizesAndSuggestsCreateCustomer()
-    {
-        var result = _parser.Parse("صوفیہ ایک نیا کسٹمر بناؤ نام علی احسن فون 03001234567", Page, Memory, "ur");
-
-        result.Intent.Should().Be(AiCopilotIntent.ActionCreate);
-        result.SuggestedTools.Should().Contain(AiToolName.CreateCustomer);
-    }
-
-    [Fact]
-    public void NormalizeBilingual_MapsUrduPhrases()
-    {
-        var normalized = AgentIntentParser.NormalizeBilingual("نیا گاہک بناؤ");
-        normalized.Should().Contain("create customer");
-    }
-
-    [Fact]
     public void Parse_PageAwareCreateOne_UsesCustomersPage()
     {
         var result = _parser.Parse("create one", Page, Memory, "en");

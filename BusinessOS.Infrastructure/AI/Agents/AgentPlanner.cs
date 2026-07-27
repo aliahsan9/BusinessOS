@@ -26,7 +26,12 @@ public sealed class AgentPlanner : IAgentPlanner
             return true;
 
         if (ContainsAny(text, "purchase order", "create po", "draft po", "reorder")
-            && ContainsAny(text, "create", "draft", "generate", "make", "prepare"))
+            && ContainsAny(text, "create", "draft", "generate", "make", "prepare", "buy", "order"))
+            return true;
+
+        // Named product purchase: "create PO for Laptop", "order 5 laptops from supplier"
+        if (ContainsAny(text, "purchase order", "create po", "draft po")
+            || (ContainsAny(text, "buy stock", "reorder stock", "order stock")))
             return true;
 
         if (ContainsAny(text, "multi-step", "workflow", "end to end", "full report"))
@@ -35,7 +40,7 @@ public sealed class AgentPlanner : IAgentPlanner
         if (LooksLikeCustomerThenInvoice(text))
             return true;
 
-        if (ContainsAny(text, " then ", " and then ", "after that", "اس کے بعد"))
+        if (ContainsAny(text, " then ", " and then ", "after that"))
             return true;
 
         if (memory.OnboardingStep is > 0 && memory.OnboardingStep < 10)
@@ -115,9 +120,27 @@ public sealed class AgentPlanner : IAgentPlanner
             };
         }
 
-        if (ContainsAny(text, "purchase order", "create po", "draft po")
-            || (ContainsAny(text, "reorder") && ContainsAny(text, "create", "draft", "purchase")))
+        if (ContainsAny(text, "purchase order", "create po", "draft po", "buy stock", "order stock")
+            || (ContainsAny(text, "reorder") && ContainsAny(text, "create", "draft", "purchase", "buy", "order")))
         {
+            var namedProduct = MessageNamesProduct(text);
+            if (namedProduct)
+            {
+                // User already named what to buy — skip recommendation workflow and create directly.
+                return new AgentWorkflowPlanDto
+                {
+                    Title = "Create purchase order",
+                    AgentKey = key,
+                    Intent = AiCopilotIntent.ActionCreate,
+                    Steps =
+                    [
+                        Step("create_po", "Create purchase order", 0, AiToolName.CreatePurchaseOrder),
+                        Step("summarize", "Confirm draft", 1, null)
+                    ]
+                };
+            }
+
+            // Generic "create purchase order" → draft from low stock (works without line items).
             return new AgentWorkflowPlanDto
             {
                 Title = "Purchase order draft",
@@ -127,7 +150,7 @@ public sealed class AgentPlanner : IAgentPlanner
                 [
                     Step("read_inventory", "Check low stock", 0, AiToolName.GetLowStock),
                     Step("analyze_demand", "Build purchase recommendations", 1, AiToolName.GetPurchaseRecommendations),
-                    Step("create_po", "Create purchase order", 2, AiToolName.CreatePurchaseOrder),
+                    Step("create_po", "Create purchase order draft", 2, AiToolName.CreatePurchaseOrderDraft),
                     Step("summarize", "Confirm draft", 3, null)
                 ]
             };
@@ -179,25 +202,24 @@ public sealed class AgentPlanner : IAgentPlanner
     public AgentWorkflowPlanDto PlanOnboarding(string agentKey, string? language)
     {
         var key = AgentKeys.Normalize(agentKey);
-        var isUrdu = AgentLanguages.Normalize(language) == AgentLanguages.Urdu;
 
         return new AgentWorkflowPlanDto
         {
-            Title = isUrdu ? "کاروبار سیٹ اپ" : "Business onboarding",
+            Title = "Business onboarding",
             AgentKey = key,
             Intent = AiCopilotIntent.Onboarding,
             Steps =
             [
-                Step("welcome", isUrdu ? "خوش آمدید" : "Welcome", 0, null),
-                Step("business_name", isUrdu ? "کاروبار کا نام" : "Business name", 1, null),
-                Step("industry", isUrdu ? "صنعت" : "Industry", 2, null),
-                Step("size", isUrdu ? "کاروبار کا سائز" : "Business size", 3, null),
-                Step("currency", isUrdu ? "کرنسی" : "Currency", 4, null),
-                Step("country_timezone", isUrdu ? "ملک اور ٹائم زون" : "Country & timezone", 5, null),
-                Step("tax", isUrdu ? "ٹیکس" : "Tax defaults", 6, null),
-                Step("warehouse", isUrdu ? "گودام" : "Warehouse defaults", 7, null),
-                Step("categories", isUrdu ? "زمرے" : "Product categories", 8, null),
-                Step("confirm_apply", isUrdu ? "تصدیق اور اطلاق" : "Confirm & apply", 9, AiToolName.ApplyOnboardingProfile)
+                Step("welcome", "Welcome", 0, null),
+                Step("business_name", "Business name", 1, null),
+                Step("industry", "Industry", 2, null),
+                Step("size", "Business size", 3, null),
+                Step("currency", "Currency", 4, null),
+                Step("country_timezone", "Country & timezone", 5, null),
+                Step("tax", "Tax defaults", 6, null),
+                Step("warehouse", "Warehouse defaults", 7, null),
+                Step("categories", "Product categories", 8, null),
+                Step("confirm_apply", "Confirm & apply", 9, AiToolName.ApplyOnboardingProfile)
             ]
         };
     }
@@ -205,6 +227,28 @@ public sealed class AgentPlanner : IAgentPlanner
     private static bool LooksLikeCustomerThenInvoice(string text) =>
         (ContainsAny(text, "customer", "client") && ContainsAny(text, "invoice"))
         || (ContainsAny(text, "create customer") && ContainsAny(text, "sale", "order", "invoice"));
+
+    private static bool MessageNamesProduct(string text)
+    {
+        // Strip common PO phrasing; if meaningful tokens remain, treat as a named product.
+        var stripped = text;
+        foreach (var phrase in new[]
+                 {
+                     "create a purchase order", "create purchase order", "draft purchase order",
+                     "create po", "draft po", "purchase order", "buy stock", "order stock",
+                     "reorder items", "reorder", "low stock", "from low stock",
+                     "create", "draft", "generate", "make", "prepare", "new", "please",
+                     "for me", "for us"
+                 })
+        {
+            stripped = stripped.Replace(phrase, " ", StringComparison.OrdinalIgnoreCase);
+        }
+
+        stripped = System.Text.RegularExpressions.Regex.Replace(stripped, @"\b(for|of|from|supplier|vendor|quantity|qty|units?|and|the|a|an|items?|products?|recommendations?|stock)\b", " ", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        stripped = System.Text.RegularExpressions.Regex.Replace(stripped, @"\d+(?:\.\d+)?", " ");
+        stripped = System.Text.RegularExpressions.Regex.Replace(stripped, @"\s+", " ").Trim();
+        return stripped.Length >= 2;
+    }
 
     private static AgentPlannedStepDto Step(
         string key,
