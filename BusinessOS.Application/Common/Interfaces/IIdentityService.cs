@@ -41,6 +41,22 @@ public interface IIdentityService
         string newPassword,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Generates a password-reset token for an active user. Returns null when the email is unknown or inactive.
+    /// </summary>
+    Task<string?> GeneratePasswordResetTokenAsync(
+        string email,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Resets a password using an emailed Identity reset token.
+    /// </summary>
+    Task<IdentityOperationResult> ResetPasswordWithTokenAsync(
+        string email,
+        string token,
+        string newPassword,
+        CancellationToken cancellationToken = default);
+
     Task<AccountProfileResponse> GetAccountProfileAsync(
         string userId,
         CancellationToken cancellationToken = default);

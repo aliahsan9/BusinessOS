@@ -1,10 +1,13 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Common.Options;
 using BusinessOS.Application.Features.Activities.Services;
 using BusinessOS.Application.Features.Auth.DTOs;
+using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Infrastructure.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace BusinessOS.UnitTests.Services;
@@ -19,16 +22,7 @@ public class AuthServiceRegistrationTests
             .Setup(x => x.FindByEmailAsync("a@test.com", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new UserAuthResult("user-1", "a@test.com", Guid.NewGuid()));
 
-        var sut = new AuthService(
-            identityService.Object,
-            Mock.Of<ITenantRegistrationService>(),
-            Mock.Of<BusinessOS.Application.Features.Auth.Services.IJwtTokenGenerator>(),
-            Mock.Of<ITenantProvider>(),
-            Mock.Of<IDbContextFactory<BusinessOS.Infrastructure.Data.BusinessOSDbContext>>(),
-            Mock.Of<IRoleRepository>(),
-            Mock.Of<IRbacAuditService>(),
-            Mock.Of<IActivityService>(),
-            Mock.Of<Microsoft.Extensions.Logging.ILogger<AuthService>>());
+        var sut = CreateAuthService(identityService.Object);
 
         var act = () => sut.RegisterAsync(
             "a@test.com",
@@ -53,8 +47,16 @@ public class AuthServiceRegistrationTests
             .Setup(x => x.ValidatePasswordAsync(user, "WrongPass1!", It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
-        var sut = new AuthService(
-            identityService.Object,
+        var sut = CreateAuthService(identityService.Object);
+
+        var act = () => sut.LoginAsync("a@test.com", "WrongPass1!", CancellationToken.None);
+
+        await act.Should().ThrowAsync<UnauthorizedException>();
+    }
+
+    private static AuthService CreateAuthService(IIdentityService identityService) =>
+        new(
+            identityService,
             Mock.Of<ITenantRegistrationService>(),
             Mock.Of<BusinessOS.Application.Features.Auth.Services.IJwtTokenGenerator>(),
             Mock.Of<ITenantProvider>(),
@@ -62,10 +64,7 @@ public class AuthServiceRegistrationTests
             Mock.Of<IRoleRepository>(),
             Mock.Of<IRbacAuditService>(),
             Mock.Of<IActivityService>(),
+            Mock.Of<IEmailNotificationService>(),
+            Options.Create(new AppOptions()),
             Mock.Of<Microsoft.Extensions.Logging.ILogger<AuthService>>());
-
-        var act = () => sut.LoginAsync("a@test.com", "WrongPass1!", CancellationToken.None);
-
-        await act.Should().ThrowAsync<UnauthorizedException>();
-    }
 }

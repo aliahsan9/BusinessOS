@@ -1,5 +1,7 @@
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Common.Options;
 using BusinessOS.Infrastructure.Repositories;
+using Microsoft.AspNetCore.Identity;
 using BusinessOS.Application.Features.Audit.Services;
 using BusinessOS.Application.Features.Auth.Services;
 using BusinessOS.Application.Features.Analytics.Services;
@@ -28,7 +30,6 @@ using BusinessOS.Infrastructure.AI.Agents.Tools;
 using BusinessOS.Infrastructure.AI.Copilot;
 using BusinessOS.Infrastructure.AI.Copilot.Tools;
 using BusinessOS.Infrastructure.Payments;
-using BusinessOS.Application.Common.Options;
 using BusinessOS.Infrastructure.Data;
 using BusinessOS.Infrastructure.Diagnostics;
 using BusinessOS.Infrastructure.Identity;
@@ -36,7 +37,6 @@ using BusinessOS.Infrastructure.MultiTenancy;
 using BusinessOS.Infrastructure.Services;
 using BusinessOS.Infrastructure.VectorSearch;
 using BusinessOS.Infrastructure.VectorSearch.Projectors;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -59,6 +59,10 @@ public static class DependencyInjection
         services.Configure<VectorSyncOptions>(configuration.GetSection(VectorSyncOptions.SectionName));
         services.Configure<LoggingPerformanceOptions>(
             configuration.GetSection(LoggingPerformanceOptions.SectionName));
+        services.Configure<AppOptions>(configuration.GetSection(AppOptions.SectionName));
+        services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
+        services.Configure<DataProtectionTokenProviderOptions>(options =>
+            options.TokenLifespan = TimeSpan.FromHours(24));
 
         services.AddSingleton<IVectorEntityProjector, DocumentVectorProjector>();
         services.AddSingleton<IVectorEntityProjector, ProductVectorProjector>();

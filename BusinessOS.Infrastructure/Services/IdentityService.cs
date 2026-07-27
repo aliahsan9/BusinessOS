@@ -226,6 +226,57 @@ public sealed class IdentityService : IIdentityService
             result.Errors.Select(x => x.Description).ToList());
     }
 
+    public async Task<string?> GeneratePasswordResetTokenAsync(
+        string email,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByEmailAsync(email.Trim());
+        if (user is null || !user.IsActive)
+        {
+            return null;
+        }
+
+        return await _userManager.GeneratePasswordResetTokenAsync(user);
+    }
+
+    public async Task<IdentityOperationResult> ResetPasswordWithTokenAsync(
+        string email,
+        string token,
+        string newPassword,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByEmailAsync(email.Trim());
+        if (user is null)
+        {
+            return new IdentityOperationResult(false, ["Invalid or expired password reset link."]);
+        }
+
+        if (!user.IsActive)
+        {
+            return new IdentityOperationResult(false, ["Account is deactivated."]);
+        }
+
+        var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
+
+        if (result.Succeeded)
+        {
+            _logger.LogInformation("Password reset via token completed for user {UserId}", user.Id);
+        }
+        else
+        {
+            _logger.LogWarning(
+                "Password reset via token failed for {Email}: {Errors}",
+                email,
+                string.Join("; ", result.Errors.Select(e => e.Description)));
+        }
+
+        return new IdentityOperationResult(
+            result.Succeeded,
+            result.Succeeded
+                ? Array.Empty<string>()
+                : result.Errors.Select(x => x.Description).ToList());
+    }
+
     public async Task<AccountProfileResponse> GetAccountProfileAsync(
         string userId,
         CancellationToken cancellationToken = default)

@@ -1,5 +1,7 @@
+using BusinessOS.Application.Features.Auth.Commands.ForgotPassword;
 using BusinessOS.Application.Features.Auth.Commands.Login;
 using BusinessOS.Application.Features.Auth.Commands.Register;
+using BusinessOS.Application.Features.Auth.Commands.ResetPassword;
 using BusinessOS.Application.Features.Auth.DTOs;
 using BusinessOS.Application.Features.Team.DTOs;
 using BusinessOS.Application.Features.Team.Services;
@@ -8,7 +10,7 @@ using MediatR;
 namespace BusinessOS.API.Endpoints;
 
 /// <summary>
-/// Authentication endpoints for registration and login.
+/// Authentication endpoints for registration, login, and password reset.
 /// </summary>
 public static class AuthEndpoints
 {
@@ -34,6 +36,20 @@ public static class AuthEndpoints
             .WithDescription("Validates credentials and returns a bearer token including the tenant claim.")
             .Produces<AuthResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status400BadRequest);
+
+        group.MapPost("/forgot-password", ForgotPassword)
+            .WithName("ForgotPassword")
+            .WithSummary("Request a password reset email")
+            .WithDescription("Always returns a generic success message to avoid email enumeration. Sends a reset link when the account exists and is active.")
+            .Produces<PasswordResetResponse>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest);
+
+        group.MapPost("/reset-password", ResetPassword)
+            .WithName("ResetPassword")
+            .WithSummary("Reset password with emailed token")
+            .WithDescription("Validates the Identity password-reset token and sets a new password.")
+            .Produces<PasswordResetResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest);
 
         group.MapGet("/invitation/{token}", GetInvitationPreview)
@@ -62,6 +78,24 @@ public static class AuthEndpoints
 
     private static async Task<IResult> Login(
         LoginCommand command,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(command, cancellationToken);
+        return Results.Ok(result);
+    }
+
+    private static async Task<IResult> ForgotPassword(
+        ForgotPasswordCommand command,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(command, cancellationToken);
+        return Results.Ok(result);
+    }
+
+    private static async Task<IResult> ResetPassword(
+        ResetPasswordCommand command,
         ISender sender,
         CancellationToken cancellationToken)
     {

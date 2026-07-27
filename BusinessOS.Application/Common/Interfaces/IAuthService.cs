@@ -16,4 +16,12 @@ public interface IAuthService
         string timezone = "UTC",
         string currency = "PKR",
         string industry = "General");
+
+    Task<PasswordResetResponse> ForgotPasswordAsync(string email, CancellationToken cancellationToken);
+
+    Task<PasswordResetResponse> ResetPasswordAsync(
+        string email,
+        string token,
+        string newPassword,
+        CancellationToken cancellationToken);
 }

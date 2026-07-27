@@ -1,19 +1,25 @@
 using BusinessOS.Application.Common.Authorization;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Common.Exceptions;
+using BusinessOS.Application.Common.Options;
 using BusinessOS.Application.Features.Activities.DTOs;
 using BusinessOS.Application.Features.Activities.Services;
 using BusinessOS.Application.Features.Auth.DTOs;
 using BusinessOS.Application.Features.Auth.Services;
+using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace BusinessOS.Infrastructure.Services;
 
 public sealed class AuthService : IAuthService
 {
+    private const string ForgotPasswordSuccessMessage =
+        "If an account exists for that email, password reset instructions have been sent.";
+
     private readonly IIdentityService _identityService;
     private readonly ITenantRegistrationService _tenantRegistrationService;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
@@ -22,6 +28,8 @@ public sealed class AuthService : IAuthService
     private readonly IRoleRepository _roleRepository;
     private readonly IRbacAuditService _auditService;
     private readonly IActivityService _activityService;
+    private readonly IEmailNotificationService _emailService;
+    private readonly AppOptions _appOptions;
     private readonly ILogger<AuthService> _logger;
 
     public AuthService(
@@ -33,6 +41,8 @@ public sealed class AuthService : IAuthService
         IRoleRepository roleRepository,
         IRbacAuditService auditService,
         IActivityService activityService,
+        IEmailNotificationService emailService,
+        IOptions<AppOptions> appOptions,
         ILogger<AuthService> logger)
     {
         _identityService = identityService;
@@ -43,6 +53,8 @@ public sealed class AuthService : IAuthService
         _roleRepository = roleRepository;
         _auditService = auditService;
         _activityService = activityService;
+        _emailService = emailService;
+        _appOptions = appOptions.Value;
         _logger = logger;
     }
 
@@ -217,6 +229,72 @@ public sealed class AuthService : IAuthService
             ExpiresAt = _jwtTokenGenerator.GetTokenExpiration()
         };
     }
+
+    public async Task<PasswordResetResponse> ForgotPasswordAsync(
+        string email,
+        CancellationToken cancellationToken)
+    {
+        var normalizedEmail = email.Trim();
+        var token = await _identityService.GeneratePasswordResetTokenAsync(normalizedEmail, cancellationToken);
+
+        if (token is not null)
+        {
+            var baseUrl = _appOptions.FrontendBaseUrl.TrimEnd('/');
+            var resetUrl =
+                $"{baseUrl}/auth/reset-password" +
+                $"?email={Uri.EscapeDataString(normalizedEmail)}" +
+                $"&token={Uri.EscapeDataString(token)}";
+
+            await _emailService.SendAsync(
+                normalizedEmail,
+                "Reset your BusinessOS password",
+                BuildResetEmailBody(resetUrl),
+                cancellationToken);
+
+            _logger.LogInformation("Password reset email queued for {Email}", normalizedEmail);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "Password reset requested for unknown or inactive email {Email}",
+                normalizedEmail);
+        }
+
+        return new PasswordResetResponse { Message = ForgotPasswordSuccessMessage };
+    }
+
+    public async Task<PasswordResetResponse> ResetPasswordAsync(
+        string email,
+        string token,
+        string newPassword,
+        CancellationToken cancellationToken)
+    {
+        var result = await _identityService.ResetPasswordWithTokenAsync(
+            email.Trim(),
+            token,
+            newPassword,
+            cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            throw new BadRequestException(
+                result.Errors.Count > 0
+                    ? string.Join("; ", result.Errors)
+                    : "Unable to reset password. The link may be invalid or expired.");
+        }
+
+        return new PasswordResetResponse { Message = "Your password has been reset successfully." };
+    }
+
+    private static string BuildResetEmailBody(string resetUrl) =>
+        $"""
+        You requested a password reset for your BusinessOS account.
+
+        Open this link to choose a new password (valid for a limited time):
+        {resetUrl}
+
+        If you did not request this, you can ignore this email.
+        """;
 
     private async Task AssignRbacRoleAsync(string userId, string roleName, CancellationToken cancellationToken)
     {

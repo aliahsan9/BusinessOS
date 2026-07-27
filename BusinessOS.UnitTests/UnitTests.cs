@@ -1,9 +1,11 @@
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Common.Options;
 using BusinessOS.Application.Features.Activities.Services;
 using BusinessOS.Application.Features.Auth.Services;
 using BusinessOS.Application.Features.Categories.Commands.CreateCategory;
 using BusinessOS.Application.Features.Inventory.Services;
+using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Application.Features.Products.Commands.CreateProduct;
 using BusinessOS.Domain.Entities;
 using BusinessOS.UnitTests.Handlers;
@@ -11,6 +13,7 @@ using BusinessOS.Infrastructure.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Query;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace BusinessOS.UnitTests;
@@ -90,6 +93,8 @@ public class AuthServiceTests
             roleRepository,
             Mock.Of<IRbacAuditService>(),
             Mock.Of<IActivityService>(),
+            Mock.Of<IEmailNotificationService>(),
+            Options.Create(new AppOptions()),
             Mock.Of<Microsoft.Extensions.Logging.ILogger<AuthService>>());
     }
 }
