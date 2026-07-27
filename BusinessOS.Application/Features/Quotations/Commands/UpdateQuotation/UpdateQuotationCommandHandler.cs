@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Quotations.Queries;
@@ -13,13 +14,19 @@ namespace BusinessOS.Application.Features.Quotations.Commands.UpdateQuotation;
 public sealed class UpdateQuotationCommandHandler : IRequestHandler<UpdateQuotationCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<UpdateQuotationCommandHandler> _logger;
 
     public UpdateQuotationCommandHandler(
         IApplicationDbContext context,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<UpdateQuotationCommandHandler> logger)
     {
         _context = context;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -130,6 +137,12 @@ public sealed class UpdateQuotationCommandHandler : IRequestHandler<UpdateQuotat
             : request.Notes.Trim();
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateQuotationAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            quotation.Id,
+            cancellationToken);
 
         _logger.LogInformation("Updated quotation {QuotationId}", quotation.Id);
 

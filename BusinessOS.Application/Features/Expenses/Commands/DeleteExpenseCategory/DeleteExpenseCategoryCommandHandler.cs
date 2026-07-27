@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using MediatR;
@@ -8,10 +9,17 @@ namespace BusinessOS.Application.Features.Expenses.Commands.DeleteExpenseCategor
 public sealed class DeleteExpenseCategoryCommandHandler : IRequestHandler<DeleteExpenseCategoryCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
 
-    public DeleteExpenseCategoryCommandHandler(IApplicationDbContext context)
+    public DeleteExpenseCategoryCommandHandler(
+        IApplicationDbContext context,
+        ICacheService cache,
+        ITenantProvider tenantProvider)
     {
         _context = context;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
     }
 
     public async Task<Unit> Handle(DeleteExpenseCategoryCommand request, CancellationToken cancellationToken)
@@ -29,6 +37,11 @@ public sealed class DeleteExpenseCategoryCommandHandler : IRequestHandler<Delete
 
         _context.ExpenseCategories.Remove(category);
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateExpenseAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            cancellationToken: cancellationToken);
 
         return Unit.Value;
     }

@@ -1,5 +1,6 @@
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Common.Models;
+using BusinessOS.Application.Common.Options;
 using BusinessOS.Application.Features.Dashboard.DTOs;
 using BusinessOS.Application.Features.Dashboard.Models;
 using BusinessOS.Application.Features.Dashboard.Services;
@@ -7,8 +8,9 @@ using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using BusinessOS.UnitTests.Common;
 using FluentAssertions;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Moq;
 
 namespace BusinessOS.UnitTests.Services;
 
@@ -169,9 +171,11 @@ public class DashboardQueryHandlerTests
         tenantProvider.SetTenantId(Guid.NewGuid());
 
         var cache = new DashboardCacheService(
-            new MemoryCache(new MemoryCacheOptions()),
+            TestHandlerDependencies.CreateCache(),
             tenantProvider,
-            Options.Create(new DashboardCacheOptions()));
+            TestHandlerDependencies.CreateCacheSettings(),
+            Options.Create(new DashboardCacheOptions()),
+            Mock.Of<ILogger<DashboardCacheService>>());
 
         return new Application.Features.Dashboard.Queries.GetOrderAnalytics.GetOrderAnalyticsQueryHandler(
             new DashboardDateRangeResolver(),
@@ -186,9 +190,11 @@ public class DashboardQueryHandlerTests
         tenantProvider.SetTenantId(Guid.NewGuid());
 
         var cache = new DashboardCacheService(
-            new MemoryCache(new MemoryCacheOptions()),
+            TestHandlerDependencies.CreateCache(),
             tenantProvider,
-            Options.Create(new DashboardCacheOptions()));
+            TestHandlerDependencies.CreateCacheSettings(),
+            Options.Create(new DashboardCacheOptions()),
+            Mock.Of<ILogger<DashboardCacheService>>());
 
         return new Application.Features.Dashboard.Queries.GetCustomerAnalytics.GetCustomerAnalyticsDashboardQueryHandler(
             new DashboardDateRangeResolver(),

@@ -36,6 +36,9 @@ public class QueryHandlerTests : IDisposable
     {
         var handler = new GetAllCategoriesQueryHandler(
             _context,
+            TestHandlerDependencies.CreateCache(),
+            _tenantProvider,
+            TestHandlerDependencies.CreateCacheSettings(),
             Mock.Of<ILogger<GetAllCategoriesQueryHandler>>());
 
         var result = await handler.Handle(
@@ -51,6 +54,9 @@ public class QueryHandlerTests : IDisposable
     {
         var handler = new GetAllProductsQueryHandler(
             _context,
+            TestHandlerDependencies.CreateCache(),
+            _tenantProvider,
+            TestHandlerDependencies.CreateCacheSettings(),
             Mock.Of<ILogger<GetAllProductsQueryHandler>>());
 
         var result = await handler.Handle(
@@ -99,6 +105,9 @@ public class QueryHandlerTests : IDisposable
 
         var handler = new GetAllOrdersQueryHandler(
             _context,
+            TestHandlerDependencies.CreateCache(),
+            _tenantProvider,
+            TestHandlerDependencies.CreateCacheSettings(),
             Mock.Of<ILogger<GetAllOrdersQueryHandler>>());
 
         var result = await handler.Handle(

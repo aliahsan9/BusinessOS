@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Domain.Entities;
@@ -11,13 +12,19 @@ namespace BusinessOS.Application.Features.Payments.Commands.CreatePayment;
 public sealed class CreatePaymentCommandHandler : IRequestHandler<CreatePaymentCommand, Guid>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<CreatePaymentCommandHandler> _logger;
 
     public CreatePaymentCommandHandler(
         IApplicationDbContext context,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<CreatePaymentCommandHandler> logger)
     {
         _context = context;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -60,6 +67,12 @@ public sealed class CreatePaymentCommandHandler : IRequestHandler<CreatePaymentC
 
         _context.Payments.Add(payment);
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidatePaymentAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            payment.Id,
+            cancellationToken);
 
         _logger.LogInformation(
             "Created payment {PaymentId} for order {OrderId}",

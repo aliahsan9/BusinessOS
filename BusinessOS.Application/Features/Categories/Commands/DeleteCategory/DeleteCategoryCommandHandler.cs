@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using MediatR;
@@ -8,10 +9,17 @@ namespace BusinessOS.Application.Features.Categories.Commands.DeleteCategory;
 public class DeleteCategoryCommandHandler : IRequestHandler<DeleteCategoryCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
 
-    public DeleteCategoryCommandHandler(IApplicationDbContext context)
+    public DeleteCategoryCommandHandler(
+        IApplicationDbContext context,
+        ICacheService cache,
+        ITenantProvider tenantProvider)
     {
         _context = context;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
     }
 
     public async Task<Unit> Handle(DeleteCategoryCommand request, CancellationToken cancellationToken)
@@ -31,6 +39,12 @@ public class DeleteCategoryCommandHandler : IRequestHandler<DeleteCategoryComman
         _context.Categories.Remove(category);
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateCategoryAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            request.Id,
+            cancellationToken);
 
         return Unit.Value;
     }

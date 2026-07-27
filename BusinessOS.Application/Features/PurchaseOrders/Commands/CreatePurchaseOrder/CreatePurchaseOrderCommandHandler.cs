@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.PurchaseOrders.Queries;
@@ -12,13 +13,19 @@ namespace BusinessOS.Application.Features.PurchaseOrders.Commands.CreatePurchase
 public sealed class CreatePurchaseOrderCommandHandler : IRequestHandler<CreatePurchaseOrderCommand, Guid>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<CreatePurchaseOrderCommandHandler> _logger;
 
     public CreatePurchaseOrderCommandHandler(
         IApplicationDbContext context,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<CreatePurchaseOrderCommandHandler> logger)
     {
         _context = context;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -95,6 +102,12 @@ public sealed class CreatePurchaseOrderCommandHandler : IRequestHandler<CreatePu
 
         _context.Purchases.Add(purchase);
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidatePurchaseOrderAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            purchase.Id,
+            cancellationToken);
 
         _logger.LogInformation(
             "Created purchase order {PurchaseOrderId} for supplier {SupplierId}",

@@ -27,7 +27,11 @@ public class InventoryQueryHandlerTests
                 new InventorySummaryResponse { ProductId = Guid.NewGuid(), CurrentStock = 0, IsOutOfStock = true }
             ]);
 
-        var handler = new GetOutOfStockProductsQueryHandler(inventoryService.Object);
+        var handler = new GetOutOfStockProductsQueryHandler(
+            inventoryService.Object,
+            TestHandlerDependencies.CreateCache(),
+            Mock.Of<ITenantProvider>(),
+            TestHandlerDependencies.CreateCacheSettings());
         var result = await handler.Handle(new GetOutOfStockProductsQuery(), CancellationToken.None);
 
         result.Should().HaveCount(1);
@@ -45,7 +49,11 @@ public class InventoryQueryHandlerTests
                 new InventorySummaryResponse { ProductId = Guid.NewGuid(), CurrentStock = 2, ReorderLevel = 5, IsLowStock = true }
             ]);
 
-        var handler = new GetReorderProductsQueryHandler(inventoryService.Object);
+        var handler = new GetReorderProductsQueryHandler(
+            inventoryService.Object,
+            TestHandlerDependencies.CreateCache(),
+            Mock.Of<ITenantProvider>(),
+            TestHandlerDependencies.CreateCacheSettings());
         var result = await handler.Handle(new GetReorderProductsQuery(), CancellationToken.None);
 
         result.Should().HaveCount(1);
@@ -61,7 +69,10 @@ public class InventoryQueryHandlerTests
             .Setup(x => x.AdjustStockAsync(It.IsAny<StockAdjustmentRequest>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        var handler = new AdjustStockCommandHandler(inventoryService.Object);
+        var handler = new AdjustStockCommandHandler(
+            inventoryService.Object,
+            TestHandlerDependencies.CreateCache(),
+            Mock.Of<ITenantProvider>());
         await handler.Handle(
             new AdjustStockCommand(productId, 5, StockTransactionTypeNames.Adjustment, null, "Cycle count"),
             CancellationToken.None);
@@ -91,7 +102,11 @@ public class InventoryQueryHandlerTests
                 product));
         await context.SaveChangesAsync();
 
-        var handler = new GetStockTransactionsQueryHandler(new StockTransactionRepository(context));
+        var handler = new GetStockTransactionsQueryHandler(
+            new StockTransactionRepository(context),
+            TestHandlerDependencies.CreateCache(),
+            Mock.Of<ITenantProvider>(),
+            TestHandlerDependencies.CreateCacheSettings());
         var result = await handler.Handle(
             new GetStockTransactionsQuery(product.Id, null, null, 1, 10, "createdAt", SortDirection.Desc),
             CancellationToken.None);

@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Invoices.Services;
@@ -10,13 +11,19 @@ namespace BusinessOS.Application.Features.Invoices.Commands.DeleteInvoice;
 public sealed class DeleteInvoiceCommandHandler : IRequestHandler<DeleteInvoiceCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<DeleteInvoiceCommandHandler> _logger;
 
     public DeleteInvoiceCommandHandler(
         IApplicationDbContext context,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<DeleteInvoiceCommandHandler> logger)
     {
         _context = context;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -36,6 +43,12 @@ public sealed class DeleteInvoiceCommandHandler : IRequestHandler<DeleteInvoiceC
 
         _context.Invoices.Remove(invoice);
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateInvoiceAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            invoice.Id,
+            cancellationToken);
 
         _logger.LogInformation("Deleted invoice {InvoiceId}", invoice.Id);
 

@@ -1,5 +1,6 @@
 using System.Reflection;
 using BusinessOS.Application.Behaviors;
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Features.Analytics.Services;
 using BusinessOS.Application.Features.Dashboard.Services;
 using BusinessOS.Application.Features.Inventory.Services;
@@ -26,6 +27,9 @@ public static class DependencyInjection
 
         services.AddValidatorsFromAssembly(
             typeof(CreateProductCommand).Assembly);
+
+        // Singleton: shares stampede locks and key index across all requests.
+        services.AddSingleton<ICacheService, CacheService>();
 
         services.AddScoped<IOrderNumberGenerator, OrderNumberGenerator>();
         services.AddScoped<IInvoiceNumberGenerator, InvoiceNumberGenerator>();

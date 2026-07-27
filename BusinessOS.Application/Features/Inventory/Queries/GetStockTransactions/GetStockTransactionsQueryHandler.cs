@@ -1,12 +1,15 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Extensions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Common.Models;
+using BusinessOS.Application.Common.Options;
 using BusinessOS.Application.Common.Validators;
 using BusinessOS.Application.Features.Inventory.Queries;
 using BusinessOS.Domain.Enums;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace BusinessOS.Application.Features.Inventory.Queries.GetStockTransactions;
 
@@ -32,10 +35,20 @@ public sealed class GetStockTransactionsQueryHandler
         };
 
     private readonly IStockTransactionRepository _transactionRepository;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
+    private readonly CacheSettings _cacheSettings;
 
-    public GetStockTransactionsQueryHandler(IStockTransactionRepository transactionRepository)
+    public GetStockTransactionsQueryHandler(
+        IStockTransactionRepository transactionRepository,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
+        IOptions<CacheSettings> cacheSettings)
     {
         _transactionRepository = transactionRepository;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
+        _cacheSettings = cacheSettings.Value;
     }
 
     public async Task<PagedResult<StockTransactionResponse>> Handle(
@@ -43,43 +56,52 @@ public sealed class GetStockTransactionsQueryHandler
         CancellationToken cancellationToken)
     {
         var (page, pageSize) = PaginationParams.Normalize(request.Page, request.PageSize);
+        var tenantId = _tenantProvider.TenantId;
+        var key = $"{CacheKeys.InventoryStockTransactions(tenantId, request.ProductId, page, pageSize)}_tt{request.TransactionType ?? "none"}_q{request.Search ?? "none"}_sb{request.SortBy ?? "none"}_sd{request.SortDirection}";
 
-        var query = _transactionRepository.Query().Select(InventoryProjections.ToTransactionResponse);
+        return await _cache.GetOrSetAsync(
+            key,
+            async ct =>
+            {
+                var query = _transactionRepository.Query().Select(InventoryProjections.ToTransactionResponse);
 
-        if (request.ProductId.HasValue)
-            query = query.Where(x => x.ProductId == request.ProductId.Value);
+                if (request.ProductId.HasValue)
+                    query = query.Where(x => x.ProductId == request.ProductId.Value);
 
-        if (!string.IsNullOrWhiteSpace(request.TransactionType))
-            query = query.Where(x => x.TransactionType == request.TransactionType);
+                if (!string.IsNullOrWhiteSpace(request.TransactionType))
+                    query = query.Where(x => x.TransactionType == request.TransactionType);
 
-        if (!string.IsNullOrWhiteSpace(request.Search))
-        {
-            var search = request.Search.Trim();
-            query = query.Where(x =>
-                (x.ReferenceNumber != null && x.ReferenceNumber.Contains(search)) ||
-                (x.Notes != null && x.Notes.Contains(search)) ||
-                x.ProductName.Contains(search));
-        }
+                if (!string.IsNullOrWhiteSpace(request.Search))
+                {
+                    var search = request.Search.Trim();
+                    query = query.Where(x =>
+                        (x.ReferenceNumber != null && x.ReferenceNumber.Contains(search)) ||
+                        (x.Notes != null && x.Notes.Contains(search)) ||
+                        x.ProductName.Contains(search));
+                }
 
-        var totalCount = await query.CountAsync(cancellationToken);
+                var totalCount = await query.CountAsync(ct);
 
-        var items = await query
-            .ApplySort(
-                request.SortBy,
-                request.SortDirection,
-                SortFields,
-                x => x.CreatedAt)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync(cancellationToken);
+                var items = await query
+                    .ApplySort(
+                        request.SortBy,
+                        request.SortDirection,
+                        SortFields,
+                        x => x.CreatedAt)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync(ct);
 
-        return new PagedResult<StockTransactionResponse>
-        {
-            Items = items,
-            Page = page,
-            PageSize = pageSize,
-            TotalCount = totalCount
-        };
+                return new PagedResult<StockTransactionResponse>
+                {
+                    Items = items,
+                    Page = page,
+                    PageSize = pageSize,
+                    TotalCount = totalCount
+                };
+            },
+            absoluteExpiration: _cacheSettings.DefaultExpiration,
+            cancellationToken: cancellationToken);
     }
 }
 

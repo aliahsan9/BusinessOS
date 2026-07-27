@@ -1,8 +1,11 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Common.Options;
 using BusinessOS.Application.Features.Inventory.Queries;
 using BusinessOS.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace BusinessOS.Application.Features.Inventory.Queries.GetInventoryAnalytics;
 
@@ -13,18 +16,39 @@ public sealed class GetInventoryAnalyticsQueryHandler
 {
     private readonly IInventoryRepository _inventoryRepository;
     private readonly IStockTransactionRepository _transactionRepository;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
+    private readonly CacheSettings _cacheSettings;
 
     public GetInventoryAnalyticsQueryHandler(
         IInventoryRepository inventoryRepository,
-        IStockTransactionRepository transactionRepository)
+        IStockTransactionRepository transactionRepository,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
+        IOptions<CacheSettings> cacheSettings)
     {
         _inventoryRepository = inventoryRepository;
         _transactionRepository = transactionRepository;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
+        _cacheSettings = cacheSettings.Value;
     }
 
     public async Task<InventoryAnalyticsResponse> Handle(
         GetInventoryAnalyticsQuery request,
         CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantProvider.TenantId;
+        var key = CacheKeys.InventoryAnalytics(tenantId);
+
+        return await _cache.GetOrSetAsync(
+            key,
+            async ct => await BuildAnalyticsAsync(ct),
+            absoluteExpiration: _cacheSettings.ReportExpiration,
+            cancellationToken: cancellationToken);
+    }
+
+    private async Task<InventoryAnalyticsResponse> BuildAnalyticsAsync(CancellationToken cancellationToken)
     {
         var inventories = await _inventoryRepository.Query()
             .Select(x => new

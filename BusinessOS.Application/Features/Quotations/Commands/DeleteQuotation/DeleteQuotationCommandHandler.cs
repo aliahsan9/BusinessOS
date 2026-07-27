@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Quotations.Services;
@@ -10,13 +11,19 @@ namespace BusinessOS.Application.Features.Quotations.Commands.DeleteQuotation;
 public sealed class DeleteQuotationCommandHandler : IRequestHandler<DeleteQuotationCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<DeleteQuotationCommandHandler> _logger;
 
     public DeleteQuotationCommandHandler(
         IApplicationDbContext context,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<DeleteQuotationCommandHandler> logger)
     {
         _context = context;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -36,6 +43,12 @@ public sealed class DeleteQuotationCommandHandler : IRequestHandler<DeleteQuotat
 
         _context.Quotations.Remove(quotation);
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateQuotationAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            quotation.Id,
+            cancellationToken);
 
         _logger.LogInformation("Deleted quotation {QuotationId}", quotation.Id);
 

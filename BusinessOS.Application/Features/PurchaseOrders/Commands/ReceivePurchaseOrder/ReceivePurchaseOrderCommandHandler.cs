@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Inventory.Queries;
@@ -14,15 +15,21 @@ public sealed class ReceivePurchaseOrderCommandHandler : IRequestHandler<Receive
 {
     private readonly IApplicationDbContext _context;
     private readonly IInventoryService _inventoryService;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<ReceivePurchaseOrderCommandHandler> _logger;
 
     public ReceivePurchaseOrderCommandHandler(
         IApplicationDbContext context,
         IInventoryService inventoryService,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<ReceivePurchaseOrderCommandHandler> logger)
     {
         _context = context;
         _inventoryService = inventoryService;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -59,6 +66,12 @@ public sealed class ReceivePurchaseOrderCommandHandler : IRequestHandler<Receive
 
         purchase.Status = PurchaseOrderStatusNames.Received;
         await _context.SaveChangesAsync(cancellationToken);
+
+        var tenantId = _tenantProvider.TenantId;
+        await EntityCacheInvalidator.InvalidatePurchaseOrderAsync(_cache, tenantId, purchase.Id, cancellationToken);
+
+        foreach (var item in purchase.PurchaseItems)
+            await EntityCacheInvalidator.InvalidateInventoryAsync(_cache, tenantId, item.ProductId, cancellationToken);
 
         _logger.LogInformation(
             "Received purchase order {PurchaseOrderId} and increased stock for {ItemCount} items",

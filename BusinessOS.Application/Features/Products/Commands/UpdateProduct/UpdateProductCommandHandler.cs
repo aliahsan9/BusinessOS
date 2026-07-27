@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using MediatR;
@@ -9,13 +10,19 @@ namespace BusinessOS.Application.Features.Products.Commands.UpdateProduct;
 public sealed class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<UpdateProductCommandHandler> _logger;
 
     public UpdateProductCommandHandler(
         IApplicationDbContext context,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<UpdateProductCommandHandler> logger)
     {
         _context = context;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -45,6 +52,12 @@ public sealed class UpdateProductCommandHandler : IRequestHandler<UpdateProductC
         product.IsActive = request.IsActive;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateProductAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            product.Id,
+            cancellationToken);
 
         _logger.LogInformation(
             "Product {ProductName} ({ProductId}) updated",

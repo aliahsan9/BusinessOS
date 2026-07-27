@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Quotations.Queries;
@@ -14,15 +15,21 @@ public sealed class CreateQuotationCommandHandler : IRequestHandler<CreateQuotat
 {
     private readonly IApplicationDbContext _context;
     private readonly IQuotationNumberGenerator _quotationNumberGenerator;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<CreateQuotationCommandHandler> _logger;
 
     public CreateQuotationCommandHandler(
         IApplicationDbContext context,
         IQuotationNumberGenerator quotationNumberGenerator,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<CreateQuotationCommandHandler> logger)
     {
         _context = context;
         _quotationNumberGenerator = quotationNumberGenerator;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -111,6 +118,12 @@ public sealed class CreateQuotationCommandHandler : IRequestHandler<CreateQuotat
 
         _context.Quotations.Add(quotation);
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateQuotationAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            quotation.Id,
+            cancellationToken);
 
         _logger.LogInformation(
             "Created quotation {QuotationNumber} ({QuotationId}) for customer {CustomerId}",

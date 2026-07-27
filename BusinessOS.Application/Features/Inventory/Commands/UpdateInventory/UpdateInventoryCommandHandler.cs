@@ -1,3 +1,5 @@
+using BusinessOS.Application.Common.Caching;
+using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Inventory.Queries;
 using BusinessOS.Application.Features.Inventory.Services;
 using FluentValidation;
@@ -15,10 +17,17 @@ public sealed record UpdateInventoryCommand(
 public sealed class UpdateInventoryCommandHandler : IRequestHandler<UpdateInventoryCommand, Unit>
 {
     private readonly IInventoryService _inventoryService;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
 
-    public UpdateInventoryCommandHandler(IInventoryService inventoryService)
+    public UpdateInventoryCommandHandler(
+        IInventoryService inventoryService,
+        ICacheService cache,
+        ITenantProvider tenantProvider)
     {
         _inventoryService = inventoryService;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
     }
 
     public async Task<Unit> Handle(UpdateInventoryCommand request, CancellationToken cancellationToken)
@@ -31,6 +40,12 @@ public sealed class UpdateInventoryCommandHandler : IRequestHandler<UpdateInvent
                 MaximumStockLevel = request.MaximumStockLevel,
                 ReorderLevel = request.ReorderLevel
             },
+            cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateInventoryAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            request.ProductId,
             cancellationToken);
 
         return Unit.Value;

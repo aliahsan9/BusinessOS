@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Activities.DTOs;
@@ -15,15 +16,21 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
 {
     private readonly IApplicationDbContext _context;
     private readonly IBusinessEventService _businessEvents;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<UpdateOrderCommandHandler> _logger;
 
     public UpdateOrderCommandHandler(
         IApplicationDbContext context,
         IBusinessEventService businessEvents,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<UpdateOrderCommandHandler> logger)
     {
         _context = context;
         _businessEvents = businessEvents;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -109,6 +116,12 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
         order.GrandTotal = grandTotal;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateOrderAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            order.Id,
+            cancellationToken);
 
         _logger.LogInformation("Updated order {OrderId}", order.Id);
 

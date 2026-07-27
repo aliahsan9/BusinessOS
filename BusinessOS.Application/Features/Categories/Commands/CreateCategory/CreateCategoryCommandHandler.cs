@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Domain.Entities;
@@ -10,13 +11,19 @@ namespace BusinessOS.Application.Features.Categories.Commands.CreateCategory;
 public class CreateCategoryCommandHandler : IRequestHandler<CreateCategoryCommand, Guid>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<CreateCategoryCommandHandler> _logger;
 
     public CreateCategoryCommandHandler(
         IApplicationDbContext context,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<CreateCategoryCommandHandler> logger)
     {
         _context = context;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -38,6 +45,12 @@ public class CreateCategoryCommandHandler : IRequestHandler<CreateCategoryComman
         _context.Categories.Add(category);
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateCategoryAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            category.Id,
+            cancellationToken);
 
         _logger.LogInformation(
             "Category {CategoryName} ({CategoryId}) created",

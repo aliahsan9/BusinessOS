@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Activities.DTOs;
@@ -14,15 +15,21 @@ public sealed class DeleteOrderCommandHandler : IRequestHandler<DeleteOrderComma
 {
     private readonly IApplicationDbContext _context;
     private readonly IBusinessEventService _businessEvents;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<DeleteOrderCommandHandler> _logger;
 
     public DeleteOrderCommandHandler(
         IApplicationDbContext context,
         IBusinessEventService businessEvents,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<DeleteOrderCommandHandler> logger)
     {
         _context = context;
         _businessEvents = businessEvents;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -46,6 +53,12 @@ public sealed class DeleteOrderCommandHandler : IRequestHandler<DeleteOrderComma
 
         _context.Orders.Remove(order);
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateOrderAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            order.Id,
+            cancellationToken);
 
         _logger.LogInformation("Deleted order {OrderId}", order.Id);
 

@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Activities.DTOs;
@@ -16,17 +17,23 @@ public sealed class UpdateCustomerCommandHandler : IRequestHandler<UpdateCustome
     private readonly IApplicationDbContext _context;
     private readonly IBusinessEventService _businessEvents;
     private readonly IEntityAuditService _entityAudit;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<UpdateCustomerCommandHandler> _logger;
 
     public UpdateCustomerCommandHandler(
         IApplicationDbContext context,
         IBusinessEventService businessEvents,
         IEntityAuditService entityAudit,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<UpdateCustomerCommandHandler> logger)
     {
         _context = context;
         _businessEvents = businessEvents;
         _entityAudit = entityAudit;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -61,6 +68,12 @@ public sealed class UpdateCustomerCommandHandler : IRequestHandler<UpdateCustome
         customer.IsActive = request.IsActive;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateCustomerAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            customer.Id,
+            cancellationToken);
 
         var customerName = $"{customer.FirstName} {customer.LastName}".Trim();
         var newSnapshot = EntityAuditSnapshots.CustomerSnapshot(customer);

@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Domain.Enums;
@@ -10,13 +11,19 @@ namespace BusinessOS.Application.Features.Payments.Commands.UpdatePayment;
 public sealed class UpdatePaymentCommandHandler : IRequestHandler<UpdatePaymentCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<UpdatePaymentCommandHandler> _logger;
 
     public UpdatePaymentCommandHandler(
         IApplicationDbContext context,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<UpdatePaymentCommandHandler> logger)
     {
         _context = context;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -60,6 +67,12 @@ public sealed class UpdatePaymentCommandHandler : IRequestHandler<UpdatePaymentC
             : request.ReferenceNo.Trim();
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidatePaymentAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            payment.Id,
+            cancellationToken);
 
         _logger.LogInformation("Updated payment {PaymentId}", payment.Id);
 

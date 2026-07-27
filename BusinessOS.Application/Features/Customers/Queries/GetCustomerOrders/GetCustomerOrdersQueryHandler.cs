@@ -1,11 +1,14 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Extensions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Common.Models;
+using BusinessOS.Application.Common.Options;
 using BusinessOS.Application.Features.Customers.Queries;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace BusinessOS.Application.Features.Customers.Queries.GetCustomerOrders;
 
@@ -23,13 +26,22 @@ public sealed class GetCustomerOrdersQueryHandler
         };
 
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
+    private readonly CacheSettings _cacheSettings;
     private readonly ILogger<GetCustomerOrdersQueryHandler> _logger;
 
     public GetCustomerOrdersQueryHandler(
         IApplicationDbContext context,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
+        IOptions<CacheSettings> cacheSettings,
         ILogger<GetCustomerOrdersQueryHandler> logger)
     {
         _context = context;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
+        _cacheSettings = cacheSettings.Value;
         _logger = logger;
     }
 
@@ -37,43 +49,52 @@ public sealed class GetCustomerOrdersQueryHandler
         GetCustomerOrdersQuery request,
         CancellationToken cancellationToken)
     {
-        var customerExists = await _context.Customers
-            .AsNoTracking()
-            .AnyAsync(x => x.Id == request.CustomerId, cancellationToken);
-
-        if (!customerExists)
-            throw new NotFoundException("Customer not found");
-
         var (page, pageSize) = PaginationParams.Normalize(request.Page, request.PageSize);
+        var tenantId = _tenantProvider.TenantId;
+        var key = CacheKeys.CustomerOrders(tenantId, request.CustomerId, page, pageSize);
 
-        var query = _context.Orders
-            .AsNoTracking()
-            .Where(x => x.CustomerId == request.CustomerId)
-            .Select(CustomerProjections.ToOrderResponse);
+        return await _cache.GetOrSetAsync(
+            key,
+            async ct =>
+            {
+                var customerExists = await _context.Customers
+                    .AsNoTracking()
+                    .AnyAsync(x => x.Id == request.CustomerId, ct);
 
-        var totalCount = await query.CountAsync(cancellationToken);
+                if (!customerExists)
+                    throw new NotFoundException("Customer not found");
 
-        var items = await query
-            .ApplySort(
-                request.SortBy,
-                request.SortDirection,
-                SortFields,
-                x => x.CreatedAt)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync(cancellationToken);
+                var query = _context.Orders
+                    .AsNoTracking()
+                    .Where(x => x.CustomerId == request.CustomerId)
+                    .Select(CustomerProjections.ToOrderResponse);
 
-        _logger.LogInformation(
-            "Retrieved {Count} orders for customer {CustomerId}",
-            items.Count,
-            request.CustomerId);
+                var totalCount = await query.CountAsync(ct);
 
-        return new PagedResult<CustomerOrderResponse>
-        {
-            Items = items,
-            Page = page,
-            PageSize = pageSize,
-            TotalCount = totalCount
-        };
+                var items = await query
+                    .ApplySort(
+                        request.SortBy,
+                        request.SortDirection,
+                        SortFields,
+                        x => x.CreatedAt)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync(ct);
+
+                _logger.LogInformation(
+                    "Retrieved {Count} orders for customer {CustomerId}",
+                    items.Count,
+                    request.CustomerId);
+
+                return new PagedResult<CustomerOrderResponse>
+                {
+                    Items = items,
+                    Page = page,
+                    PageSize = pageSize,
+                    TotalCount = totalCount
+                };
+            },
+            absoluteExpiration: _cacheSettings.DefaultExpiration,
+            cancellationToken: cancellationToken);
     }
 }

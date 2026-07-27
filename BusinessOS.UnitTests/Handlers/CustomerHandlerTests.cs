@@ -51,6 +51,8 @@ public class CreateCustomerHandlerTests
             TestHandlerDependencies.CreateBusinessEvents(),
             TestHandlerDependencies.CreateEntityAudit(),
             limitService.Object,
+            TestHandlerDependencies.CreateCache(),
+            Mock.Of<ITenantProvider>(),
             TestHandlerDependencies.CreateLogger<CreateCustomerCommandHandler>());
 
         var act = () => handler.Handle(
@@ -85,6 +87,8 @@ public class CreateCustomerHandlerTests
             TestHandlerDependencies.CreateBusinessEvents(),
             TestHandlerDependencies.CreateEntityAudit(),
             limitService.Object,
+            TestHandlerDependencies.CreateCache(),
+            Mock.Of<ITenantProvider>(),
             TestHandlerDependencies.CreateLogger<CreateCustomerCommandHandler>());
 
         var id = await handler.Handle(
@@ -116,6 +120,8 @@ public class UpdateCustomerHandlerTests
             context.Object,
             TestHandlerDependencies.CreateBusinessEvents(),
             TestHandlerDependencies.CreateEntityAudit(),
+            TestHandlerDependencies.CreateCache(),
+            Mock.Of<ITenantProvider>(),
             TestHandlerDependencies.CreateLogger<UpdateCustomerCommandHandler>());
 
         var act = () => handler.Handle(
@@ -161,6 +167,8 @@ public class UpdateCustomerHandlerTests
             context.Object,
             TestHandlerDependencies.CreateBusinessEvents(),
             TestHandlerDependencies.CreateEntityAudit(),
+            TestHandlerDependencies.CreateCache(),
+            Mock.Of<ITenantProvider>(),
             TestHandlerDependencies.CreateLogger<UpdateCustomerCommandHandler>());
 
         await handler.Handle(
@@ -194,6 +202,8 @@ public class DeleteCustomerHandlerTests
             context.Object,
             TestHandlerDependencies.CreateBusinessEvents(),
             TestHandlerDependencies.CreateEntityAudit(),
+            TestHandlerDependencies.CreateCache(),
+            Mock.Of<ITenantProvider>(),
             TestHandlerDependencies.CreateLogger<DeleteCustomerCommandHandler>());
 
         var act = () => handler.Handle(new DeleteCustomerCommand(Guid.NewGuid()), CancellationToken.None);
@@ -228,6 +238,8 @@ public class DeleteCustomerHandlerTests
             context.Object,
             TestHandlerDependencies.CreateBusinessEvents(),
             TestHandlerDependencies.CreateEntityAudit(),
+            TestHandlerDependencies.CreateCache(),
+            Mock.Of<ITenantProvider>(),
             TestHandlerDependencies.CreateLogger<DeleteCustomerCommandHandler>());
 
         await handler.Handle(new DeleteCustomerCommand(customerId), CancellationToken.None);
@@ -245,7 +257,11 @@ public class GetCustomerByIdHandlerTests
         var context = new Mock<IApplicationDbContext>();
         context.Setup(x => x.Customers).Returns(TestMockDbSet.CreateMockDbSet(new List<Customer>().AsQueryable()).Object);
 
-        var handler = new GetCustomerByIdQueryHandler(context.Object);
+        var handler = new GetCustomerByIdQueryHandler(
+            context.Object,
+            TestHandlerDependencies.CreateCache(),
+            Mock.Of<ITenantProvider>(),
+            TestHandlerDependencies.CreateCacheSettings());
 
         var act = () => handler.Handle(new GetCustomerByIdQuery(Guid.NewGuid()), CancellationToken.None);
 
@@ -310,7 +326,11 @@ public class GetCustomerAnalyticsHandlerTests
 
         await db.SaveChangesAsync();
 
-        var handler = new GetCustomerAnalyticsQueryHandler(db);
+        var handler = new GetCustomerAnalyticsQueryHandler(
+            db,
+            TestHandlerDependencies.CreateCache(),
+            tenantProvider,
+            TestHandlerDependencies.CreateCacheSettings());
 
         var result = await handler.Handle(new GetCustomerAnalyticsQuery(customerId), CancellationToken.None);
 
@@ -332,6 +352,9 @@ public class GetCustomerOrdersHandlerTests
 
         var handler = new GetCustomerOrdersQueryHandler(
             context.Object,
+            TestHandlerDependencies.CreateCache(),
+            Mock.Of<ITenantProvider>(),
+            TestHandlerDependencies.CreateCacheSettings(),
             Mock.Of<Microsoft.Extensions.Logging.ILogger<GetCustomerOrdersQueryHandler>>());
 
         var act = () => handler.Handle(

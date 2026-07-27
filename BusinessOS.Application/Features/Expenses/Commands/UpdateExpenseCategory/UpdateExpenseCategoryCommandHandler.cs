@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using MediatR;
@@ -8,10 +9,17 @@ namespace BusinessOS.Application.Features.Expenses.Commands.UpdateExpenseCategor
 public sealed class UpdateExpenseCategoryCommandHandler : IRequestHandler<UpdateExpenseCategoryCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
 
-    public UpdateExpenseCategoryCommandHandler(IApplicationDbContext context)
+    public UpdateExpenseCategoryCommandHandler(
+        IApplicationDbContext context,
+        ICacheService cache,
+        ITenantProvider tenantProvider)
     {
         _context = context;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
     }
 
     public async Task<Unit> Handle(UpdateExpenseCategoryCommand request, CancellationToken cancellationToken)
@@ -34,6 +42,11 @@ public sealed class UpdateExpenseCategoryCommandHandler : IRequestHandler<Update
         category.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateExpenseAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            cancellationToken: cancellationToken);
 
         return Unit.Value;
     }

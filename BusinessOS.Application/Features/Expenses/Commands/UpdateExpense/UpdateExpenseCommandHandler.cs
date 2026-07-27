@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Activities.DTOs;
@@ -16,17 +17,23 @@ public sealed class UpdateExpenseCommandHandler : IRequestHandler<UpdateExpenseC
     private readonly IApplicationDbContext _context;
     private readonly IBusinessEventService _businessEvents;
     private readonly IEntityAuditService _entityAudit;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<UpdateExpenseCommandHandler> _logger;
 
     public UpdateExpenseCommandHandler(
         IApplicationDbContext context,
         IBusinessEventService businessEvents,
         IEntityAuditService entityAudit,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<UpdateExpenseCommandHandler> logger)
     {
         _context = context;
         _businessEvents = businessEvents;
         _entityAudit = entityAudit;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -60,6 +67,12 @@ public sealed class UpdateExpenseCommandHandler : IRequestHandler<UpdateExpenseC
         expense.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateExpenseAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            expense.Id,
+            cancellationToken);
 
         _logger.LogInformation("Updated expense {ExpenseId}", expense.Id);
 

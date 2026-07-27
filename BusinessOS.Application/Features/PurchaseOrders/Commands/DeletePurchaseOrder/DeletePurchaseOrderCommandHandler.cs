@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.PurchaseOrders.Services;
@@ -10,13 +11,19 @@ namespace BusinessOS.Application.Features.PurchaseOrders.Commands.DeletePurchase
 public sealed class DeletePurchaseOrderCommandHandler : IRequestHandler<DeletePurchaseOrderCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<DeletePurchaseOrderCommandHandler> _logger;
 
     public DeletePurchaseOrderCommandHandler(
         IApplicationDbContext context,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<DeletePurchaseOrderCommandHandler> logger)
     {
         _context = context;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -36,6 +43,12 @@ public sealed class DeletePurchaseOrderCommandHandler : IRequestHandler<DeletePu
 
         _context.Purchases.Remove(purchase);
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidatePurchaseOrderAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            purchase.Id,
+            cancellationToken);
 
         _logger.LogInformation("Deleted purchase order {PurchaseOrderId}", purchase.Id);
 

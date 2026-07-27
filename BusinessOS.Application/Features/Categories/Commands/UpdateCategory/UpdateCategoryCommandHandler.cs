@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using MediatR;
@@ -8,10 +9,17 @@ namespace BusinessOS.Application.Features.Categories.Commands.UpdateCategory;
 public class UpdateCategoryCommandHandler : IRequestHandler<UpdateCategoryCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
 
-    public UpdateCategoryCommandHandler(IApplicationDbContext context)
+    public UpdateCategoryCommandHandler(
+        IApplicationDbContext context,
+        ICacheService cache,
+        ITenantProvider tenantProvider)
     {
         _context = context;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
     }
 
     public async Task<Unit> Handle(UpdateCategoryCommand request, CancellationToken cancellationToken)
@@ -32,6 +40,12 @@ public class UpdateCategoryCommandHandler : IRequestHandler<UpdateCategoryComman
         category.Description = request.Description;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateCategoryAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            category.Id,
+            cancellationToken);
 
         return Unit.Value;
     }

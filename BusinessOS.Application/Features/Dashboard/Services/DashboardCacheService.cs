@@ -1,8 +1,10 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Interfaces;
-using Microsoft.Extensions.Caching.Memory;
+using BusinessOS.Application.Common.Options;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace BusinessOS.Application.Features.Dashboard.Services; 
+namespace BusinessOS.Application.Features.Dashboard.Services;
 
 public sealed class DashboardCacheOptions
 {
@@ -10,43 +12,47 @@ public sealed class DashboardCacheOptions
 
     public int CacheExpirationMinutes { get; set; } = 5;
 }
+
+/// <summary>
+/// Dashboard-specific cache facade. Delegates to the centralized <see cref="ICacheService"/>
+/// while preserving the existing <see cref="IDashboardCacheService"/> contract.
+/// </summary>
 public sealed class DashboardCacheService : IDashboardCacheService
 {
-    private readonly IMemoryCache _cache;
+    private readonly ICacheService _cache;
     private readonly ITenantProvider _tenantProvider;
     private readonly TimeSpan _expiration;
+    private readonly ILogger<DashboardCacheService> _logger;
 
     public DashboardCacheService(
-        IMemoryCache cache,
+        ICacheService cache,
         ITenantProvider tenantProvider,
-        IOptions<DashboardCacheOptions> options)
+        IOptions<CacheSettings> cacheSettings,
+        IOptions<DashboardCacheOptions> dashboardOptions,
+        ILogger<DashboardCacheService> logger)
     {
         _cache = cache;
         _tenantProvider = tenantProvider;
-        _expiration = TimeSpan.FromMinutes(Math.Max(1, options.Value.CacheExpirationMinutes));
+        _logger = logger;
+
+        // Prefer CacheSettings; keep Dashboard:CacheExpirationMinutes as a legacy override when CacheSettings is unset (0).
+        _expiration = cacheSettings.Value.DashboardExpirationMinutes > 0
+            ? cacheSettings.Value.DashboardExpiration
+            : TimeSpan.FromMinutes(Math.Max(1, dashboardOptions.Value.CacheExpirationMinutes));
     }
 
-    public async Task<T> GetOrCreateAsync<T>(
+    public Task<T> GetOrCreateAsync<T>(
         string cacheKey,
         Func<CancellationToken, Task<T>> factory,
         CancellationToken cancellationToken = default)
     {
-        var tenantKey = _tenantProvider.HasTenant()
-            ? _tenantProvider.TenantId.ToString()
-            : "global";
-
-        var fullKey = $"dashboard:{tenantKey}:{cacheKey}";
-
-        if (_cache.TryGetValue(fullKey, out T? cached) && cached is not null)
-            return cached;
-
-        var result = await factory(cancellationToken);
-
-        _cache.Set(fullKey, result, new MemoryCacheEntryOptions
+        if (!_tenantProvider.HasTenant())
         {
-            AbsoluteExpirationRelativeToNow = _expiration
-        });
+            _logger.LogDebug("Dashboard cache bypassed — no tenant context for key {CacheKey}", cacheKey);
+            return factory(cancellationToken);
+        }
 
-        return result;
+        var fullKey = CacheKeys.Dashboard(_tenantProvider.TenantId, cacheKey);
+        return _cache.GetOrSetAsync(fullKey, factory, _expiration, cancellationToken: cancellationToken);
     }
 }

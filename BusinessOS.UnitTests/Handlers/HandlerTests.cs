@@ -22,7 +22,10 @@ public class UpdateCategoryHandlerTests
         var context = new Mock<IApplicationDbContext>();
         context.Setup(x => x.Categories).Returns(categories.Object);
 
-        var handler = new UpdateCategoryCommandHandler(context.Object);
+        var handler = new UpdateCategoryCommandHandler(
+            context.Object,
+            TestHandlerDependencies.CreateCache(),
+            Mock.Of<ITenantProvider>());
 
         var act = () => handler.Handle(
             new UpdateCategoryCommand(Guid.NewGuid(), "Name", null),
@@ -52,7 +55,10 @@ public class DeleteCategoryHandlerTests
         context.Setup(x => x.Categories).Returns(categories.Object);
         context.Setup(x => x.Products).Returns(products.Object);
 
-        var handler = new DeleteCategoryCommandHandler(context.Object);
+        var handler = new DeleteCategoryCommandHandler(
+            context.Object,
+            TestHandlerDependencies.CreateCache(),
+            Mock.Of<ITenantProvider>());
 
         var act = () => handler.Handle(new DeleteCategoryCommand(categoryId), CancellationToken.None);
 
@@ -71,6 +77,9 @@ public class GetCategoryByIdHandlerTests
 
         var handler = new GetCategoryByIdQueryHandler(
             context.Object,
+            TestHandlerDependencies.CreateCache(),
+            Mock.Of<ITenantProvider>(),
+            TestHandlerDependencies.CreateCacheSettings(),
             Mock.Of<ILogger<GetCategoryByIdQueryHandler>>());
 
         var act = () => handler.Handle(new GetCategoryByIdQuery(Guid.NewGuid()), CancellationToken.None);
@@ -100,6 +109,8 @@ public class CreateProductSuccessHandlerTests
         var handler = new CreateProductCommandHandler(
             context.Object,
             InventoryServiceTestHelper.CreateMock().Object,
+            TestHandlerDependencies.CreateCache(),
+            Mock.Of<ITenantProvider>(),
             Mock.Of<Microsoft.Extensions.Logging.ILogger<CreateProductCommandHandler>>());
 
         var id = await handler.Handle(

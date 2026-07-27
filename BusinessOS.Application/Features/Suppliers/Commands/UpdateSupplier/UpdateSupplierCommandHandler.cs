@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using MediatR;
@@ -8,10 +9,17 @@ namespace BusinessOS.Application.Features.Suppliers.Commands.UpdateSupplier;
 public sealed class UpdateSupplierCommandHandler : IRequestHandler<UpdateSupplierCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
 
-    public UpdateSupplierCommandHandler(IApplicationDbContext context)
+    public UpdateSupplierCommandHandler(
+        IApplicationDbContext context,
+        ICacheService cache,
+        ITenantProvider tenantProvider)
     {
         _context = context;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
     }
 
     public async Task<Unit> Handle(UpdateSupplierCommand request, CancellationToken cancellationToken)
@@ -42,6 +50,12 @@ public sealed class UpdateSupplierCommandHandler : IRequestHandler<UpdateSupplie
             : request.Notes.Trim();
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateSupplierAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            supplier.Id,
+            cancellationToken);
 
         return Unit.Value;
     }

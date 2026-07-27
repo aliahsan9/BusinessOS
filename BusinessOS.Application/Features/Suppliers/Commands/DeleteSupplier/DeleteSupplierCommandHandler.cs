@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using MediatR;
@@ -8,10 +9,17 @@ namespace BusinessOS.Application.Features.Suppliers.Commands.DeleteSupplier;
 public sealed class DeleteSupplierCommandHandler : IRequestHandler<DeleteSupplierCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
 
-    public DeleteSupplierCommandHandler(IApplicationDbContext context)
+    public DeleteSupplierCommandHandler(
+        IApplicationDbContext context,
+        ICacheService cache,
+        ITenantProvider tenantProvider)
     {
         _context = context;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
     }
 
     public async Task<Unit> Handle(DeleteSupplierCommand request, CancellationToken cancellationToken)
@@ -24,6 +32,12 @@ public sealed class DeleteSupplierCommandHandler : IRequestHandler<DeleteSupplie
 
         _context.Suppliers.Remove(supplier);
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateSupplierAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            request.Id,
+            cancellationToken);
 
         return Unit.Value;
     }

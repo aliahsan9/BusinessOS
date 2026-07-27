@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Activities.DTOs;
@@ -19,6 +20,8 @@ public sealed class CreateCustomerCommandHandler : IRequestHandler<CreateCustome
     private readonly IBusinessEventService _businessEvents;
     private readonly IEntityAuditService _entityAudit;
     private readonly ITenantLimitService _limitService;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<CreateCustomerCommandHandler> _logger;
 
     public CreateCustomerCommandHandler(
@@ -26,12 +29,16 @@ public sealed class CreateCustomerCommandHandler : IRequestHandler<CreateCustome
         IBusinessEventService businessEvents,
         IEntityAuditService entityAudit,
         ITenantLimitService limitService,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<CreateCustomerCommandHandler> logger)
     {
         _context = context;
         _businessEvents = businessEvents;
         _entityAudit = entityAudit;
         _limitService = limitService;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -65,6 +72,12 @@ public sealed class CreateCustomerCommandHandler : IRequestHandler<CreateCustome
 
         _context.Customers.Add(customer);
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateCustomerAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            customer.Id,
+            cancellationToken);
 
         var customerName = $"{customer.FirstName} {customer.LastName}".Trim();
 

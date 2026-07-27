@@ -102,6 +102,8 @@ public class CategoryHandlerTests
         var context = CreateContextWithCategory("Electronics");
         var handler = new CreateCategoryCommandHandler(
             context.Object,
+            TestHandlerDependencies.CreateCache(),
+            Mock.Of<ITenantProvider>(),
             Mock.Of<Microsoft.Extensions.Logging.ILogger<CreateCategoryCommandHandler>>());
 
         var act = () => handler.Handle(
@@ -117,6 +119,8 @@ public class CategoryHandlerTests
         var context = CreateEmptyContext();
         var handler = new CreateCategoryCommandHandler(
             context.Object,
+            TestHandlerDependencies.CreateCache(),
+            Mock.Of<ITenantProvider>(),
             Mock.Of<Microsoft.Extensions.Logging.ILogger<CreateCategoryCommandHandler>>());
 
         var id = await handler.Handle(
@@ -170,6 +174,8 @@ public class ProductHandlerTests
         var handler = new CreateProductCommandHandler(
             context.Object,
             InventoryServiceTestHelper.CreateMock().Object,
+            TestHandlerDependencies.CreateCache(),
+            Mock.Of<ITenantProvider>(),
             Mock.Of<Microsoft.Extensions.Logging.ILogger<CreateProductCommandHandler>>());
 
         var act = () => handler.Handle(

@@ -1,3 +1,5 @@
+using BusinessOS.Application.Common.Caching;
+using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Inventory.Constants;
 using BusinessOS.Application.Features.Inventory.Queries;
 using BusinessOS.Application.Features.Inventory.Services;
@@ -16,10 +18,17 @@ public sealed record IncreaseStockCommand(
 public sealed class IncreaseStockCommandHandler : IRequestHandler<IncreaseStockCommand, Unit>
 {
     private readonly IInventoryService _inventoryService;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
 
-    public IncreaseStockCommandHandler(IInventoryService inventoryService)
+    public IncreaseStockCommandHandler(
+        IInventoryService inventoryService,
+        ICacheService cache,
+        ITenantProvider tenantProvider)
     {
         _inventoryService = inventoryService;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
     }
 
     public async Task<Unit> Handle(IncreaseStockCommand request, CancellationToken cancellationToken)
@@ -32,6 +41,12 @@ public sealed class IncreaseStockCommandHandler : IRequestHandler<IncreaseStockC
                 ReferenceNumber = request.ReferenceNumber,
                 Notes = request.Notes
             },
+            cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateInventoryAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            request.ProductId,
             cancellationToken);
 
         return Unit.Value;

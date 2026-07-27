@@ -1,7 +1,10 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Common.Options;
 using BusinessOS.Application.Features.Expenses.Queries;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace BusinessOS.Application.Features.Expenses.Queries.GetExpenseAnalytics;
 
@@ -9,13 +12,38 @@ public sealed class GetExpenseAnalyticsQueryHandler
     : IRequestHandler<GetExpenseAnalyticsQuery, ExpenseAnalyticsResponse>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
+    private readonly CacheSettings _cacheSettings;
 
-    public GetExpenseAnalyticsQueryHandler(IApplicationDbContext context)
+    public GetExpenseAnalyticsQueryHandler(
+        IApplicationDbContext context,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
+        IOptions<CacheSettings> cacheSettings)
     {
         _context = context;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
+        _cacheSettings = cacheSettings.Value;
     }
 
     public async Task<ExpenseAnalyticsResponse> Handle(
+        GetExpenseAnalyticsQuery request,
+        CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantProvider.TenantId;
+        var suffix = $"df{request.DateFrom:yyyyMMdd}_dt{request.DateTo:yyyyMMdd}";
+        var key = CacheKeys.ExpenseAnalytics(tenantId, suffix);
+
+        return await _cache.GetOrSetAsync(
+            key,
+            ct => BuildAnalyticsAsync(request, ct),
+            absoluteExpiration: _cacheSettings.ReportExpiration,
+            cancellationToken: cancellationToken);
+    }
+
+    private async Task<ExpenseAnalyticsResponse> BuildAnalyticsAsync(
         GetExpenseAnalyticsQuery request,
         CancellationToken cancellationToken)
     {

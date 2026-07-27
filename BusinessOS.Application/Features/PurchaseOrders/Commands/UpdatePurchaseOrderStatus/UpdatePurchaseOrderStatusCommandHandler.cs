@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.PurchaseOrders.Services;
@@ -12,13 +13,19 @@ public sealed class UpdatePurchaseOrderStatusCommandHandler
     : IRequestHandler<UpdatePurchaseOrderStatusCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<UpdatePurchaseOrderStatusCommandHandler> _logger;
 
     public UpdatePurchaseOrderStatusCommandHandler(
         IApplicationDbContext context,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<UpdatePurchaseOrderStatusCommandHandler> logger)
     {
         _context = context;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -44,6 +51,12 @@ public sealed class UpdatePurchaseOrderStatusCommandHandler
 
         purchase.Status = newStatus;
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidatePurchaseOrderAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            purchase.Id,
+            cancellationToken);
 
         _logger.LogInformation(
             "Updated purchase order {PurchaseOrderId} status to {Status}",

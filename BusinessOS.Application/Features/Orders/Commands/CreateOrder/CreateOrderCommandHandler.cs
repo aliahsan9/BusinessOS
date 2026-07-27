@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Activities.DTOs;
@@ -18,6 +19,8 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
     private readonly IOrderNumberGenerator _orderNumberGenerator;
     private readonly IInventoryService _inventoryService;
     private readonly IBusinessEventService _businessEvents;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<CreateOrderCommandHandler> _logger;
 
     public CreateOrderCommandHandler(
@@ -25,12 +28,16 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
         IOrderNumberGenerator orderNumberGenerator,
         IInventoryService inventoryService,
         IBusinessEventService businessEvents,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<CreateOrderCommandHandler> logger)
     {
         _context = context;
         _orderNumberGenerator = orderNumberGenerator;
         _inventoryService = inventoryService;
         _businessEvents = businessEvents;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -112,6 +119,12 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
         await _context.SaveChangesAsync(cancellationToken);
 
         await _inventoryService.DeductForOrderAsync(order, orderItems, cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateOrderAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            order.Id,
+            cancellationToken);
 
         _logger.LogInformation(
             "Created order {OrderNumber} ({OrderId}) for customer {CustomerId}",

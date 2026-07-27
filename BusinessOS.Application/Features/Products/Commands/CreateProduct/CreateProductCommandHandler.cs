@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Inventory.Services;
@@ -12,15 +13,21 @@ public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand,
 {
     private readonly IApplicationDbContext _context;
     private readonly IInventoryService _inventoryService;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<CreateProductCommandHandler> _logger;
 
     public CreateProductCommandHandler(
         IApplicationDbContext context,
         IInventoryService inventoryService,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<CreateProductCommandHandler> logger)
     {
         _context = context;
         _inventoryService = inventoryService;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -48,6 +55,12 @@ public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand,
         await _context.SaveChangesAsync(cancellationToken);
 
         await _inventoryService.CreateInventoryForProductAsync(product, cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateProductAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            product.Id,
+            cancellationToken);
 
         _logger.LogInformation(
             "Product {ProductName} ({ProductId}) created with SKU {SKU}",

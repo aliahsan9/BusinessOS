@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Activities.DTOs;
@@ -18,17 +19,23 @@ public sealed class UpdateInvoiceStatusCommandHandler
     private readonly IApplicationDbContext _context;
     private readonly IBusinessEventService _businessEvents;
     private readonly IEntityAuditService _entityAudit;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<UpdateInvoiceStatusCommandHandler> _logger;
 
     public UpdateInvoiceStatusCommandHandler(
         IApplicationDbContext context,
         IBusinessEventService businessEvents,
         IEntityAuditService entityAudit,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<UpdateInvoiceStatusCommandHandler> logger)
     {
         _context = context;
         _businessEvents = businessEvents;
         _entityAudit = entityAudit;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -49,6 +56,12 @@ public sealed class UpdateInvoiceStatusCommandHandler
 
         invoice.Status = newStatus;
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateInvoiceAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            invoice.Id,
+            cancellationToken);
 
         _logger.LogInformation(
             "Updated invoice {InvoiceId} status to {Status}",

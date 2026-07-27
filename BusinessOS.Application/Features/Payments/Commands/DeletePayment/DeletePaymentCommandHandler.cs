@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using MediatR;
@@ -9,13 +10,19 @@ namespace BusinessOS.Application.Features.Payments.Commands.DeletePayment;
 public sealed class DeletePaymentCommandHandler : IRequestHandler<DeletePaymentCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<DeletePaymentCommandHandler> _logger;
 
     public DeletePaymentCommandHandler(
         IApplicationDbContext context,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<DeletePaymentCommandHandler> logger)
     {
         _context = context;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -29,6 +36,12 @@ public sealed class DeletePaymentCommandHandler : IRequestHandler<DeletePaymentC
 
         _context.Payments.Remove(payment);
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidatePaymentAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            payment.Id,
+            cancellationToken);
 
         _logger.LogInformation("Deleted payment {PaymentId}", payment.Id);
 

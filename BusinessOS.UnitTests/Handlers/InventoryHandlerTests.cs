@@ -139,7 +139,10 @@ public class InventoryServiceTests
         var (service, context, _) = await CreateServiceWithProduct(stock: 10, costPrice: 5, reorderLevel: 20);
         var handler = new GetInventoryAnalyticsQueryHandler(
             new InventoryRepository(context),
-            new StockTransactionRepository(context));
+            new StockTransactionRepository(context),
+            TestHandlerDependencies.CreateCache(),
+            Mock.Of<ITenantProvider>(),
+            TestHandlerDependencies.CreateCacheSettings());
 
         var analytics = await handler.Handle(new GetInventoryAnalyticsQuery(), CancellationToken.None);
 

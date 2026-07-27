@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Activities.DTOs;
@@ -17,17 +18,23 @@ public sealed class CreateExpenseCommandHandler : IRequestHandler<CreateExpenseC
     private readonly IApplicationDbContext _context;
     private readonly IBusinessEventService _businessEvents;
     private readonly IEntityAuditService _entityAudit;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<CreateExpenseCommandHandler> _logger;
 
     public CreateExpenseCommandHandler(
         IApplicationDbContext context,
         IBusinessEventService businessEvents,
         IEntityAuditService entityAudit,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<CreateExpenseCommandHandler> logger)
     {
         _context = context;
         _businessEvents = businessEvents;
         _entityAudit = entityAudit;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -59,6 +66,12 @@ public sealed class CreateExpenseCommandHandler : IRequestHandler<CreateExpenseC
 
         _context.Expenses.Add(expense);
         await _context.SaveChangesAsync(cancellationToken);
+
+        await EntityCacheInvalidator.InvalidateExpenseAsync(
+            _cache,
+            _tenantProvider.TenantId,
+            expense.Id,
+            cancellationToken);
 
         _logger.LogInformation("Created expense {ExpenseId}", expense.Id);
 

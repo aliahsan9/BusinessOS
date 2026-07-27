@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Inventory.Services;
@@ -17,17 +18,23 @@ public sealed class ConvertQuotationToOrderCommandHandler
     private readonly IApplicationDbContext _context;
     private readonly IOrderNumberGenerator _orderNumberGenerator;
     private readonly IInventoryService _inventoryService;
+    private readonly ICacheService _cache;
+    private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<ConvertQuotationToOrderCommandHandler> _logger;
 
     public ConvertQuotationToOrderCommandHandler(
         IApplicationDbContext context,
         IOrderNumberGenerator orderNumberGenerator,
         IInventoryService inventoryService,
+        ICacheService cache,
+        ITenantProvider tenantProvider,
         ILogger<ConvertQuotationToOrderCommandHandler> logger)
     {
         _context = context;
         _orderNumberGenerator = orderNumberGenerator;
         _inventoryService = inventoryService;
+        _cache = cache;
+        _tenantProvider = tenantProvider;
         _logger = logger;
     }
 
@@ -102,6 +109,10 @@ public sealed class ConvertQuotationToOrderCommandHandler
         await _context.SaveChangesAsync(cancellationToken);
 
         await _inventoryService.DeductForOrderAsync(order, orderItems, cancellationToken);
+
+        var tenantId = _tenantProvider.TenantId;
+        await EntityCacheInvalidator.InvalidateQuotationAsync(_cache, tenantId, quotation.Id, cancellationToken);
+        await EntityCacheInvalidator.InvalidateOrderAsync(_cache, tenantId, order.Id, cancellationToken);
 
         _logger.LogInformation(
             "Converted quotation {QuotationId} to order {OrderNumber} ({OrderId})",

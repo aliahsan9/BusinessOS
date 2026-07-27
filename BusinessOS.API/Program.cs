@@ -37,6 +37,9 @@ try
     builder.Services.Configure<LoggingPerformanceOptions>(
         builder.Configuration.GetSection(LoggingPerformanceOptions.SectionName));
 
+    builder.Services.Configure<CacheSettings>(
+        builder.Configuration.GetSection(CacheSettings.SectionName));
+
     builder.Services.AddControllers();
     builder.Services.AddApplication();
     builder.Services.AddInfrastructure(builder.Configuration);
