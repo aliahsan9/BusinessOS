@@ -34,4 +34,12 @@
         <PackageReference Include="Serilog.Sinks.File" />
     </ItemGroup>
 
+    <!-- Copy XML documentation from referenced projects so Scalar/OpenAPI can surface DTO summaries. -->
+    <Target Name="CopyProjectReferenceXmlDocumentation" AfterTargets="Build">
+        <ItemGroup>
+            <ReferenceXmlDocFiles Include="@(ReferencePath->'%(RootDir)%(Directory)%(Filename).xml')" Condition="Exists('%(RootDir)%(Directory)%(Filename).xml')" />
+        </ItemGroup>
+        <Copy SourceFiles="@(ReferenceXmlDocFiles)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+    </Target>
+
 </Project>

@@ -189,8 +189,9 @@ try
             options.DefaultHttpClient = new(ScalarTarget.CSharp, ScalarClient.HttpClient);
             options.Authentication = new()
             {
-                PreferredSecuritySchemes = ["Bearer"]
+                PreferredSecuritySchemes = ["Bearer", "TenantHeader"]
             };
+            options.ShowSidebar = true;
         });
     }
 
