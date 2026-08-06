@@ -204,6 +204,8 @@ public static class AuthEndpoints
 
     /// <summary>Creates a new tenant and user; returns JWT on success.</summary>
     /// <param name="command">Registration payload with email, password, name, and business name.</param>
+    /// <param name="sender">Mediator sender for handling the command.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>201 Created with <see cref="AuthResponse"/> at login URL.</returns>
     private static async Task<IResult> Register(
         RegisterCommand command,
@@ -216,6 +218,8 @@ public static class AuthEndpoints
 
     /// <summary>Authenticates user credentials and returns a JWT.</summary>
     /// <param name="command">Login payload with email and password.</param>
+    /// <param name="sender">Mediator sender for handling the command.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>200 OK with <see cref="AuthResponse"/>.</returns>
     private static async Task<IResult> Login(
         LoginCommand command,
@@ -228,6 +232,8 @@ public static class AuthEndpoints
 
     /// <summary>Initiates password reset flow via email.</summary>
     /// <param name="command">Forgot-password payload with email address.</param>
+    /// <param name="sender">Mediator sender for handling the command.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>200 OK with generic success message.</returns>
     private static async Task<IResult> ForgotPassword(
         ForgotPasswordCommand command,
@@ -240,6 +246,8 @@ public static class AuthEndpoints
 
     /// <summary>Completes password reset using emailed token.</summary>
     /// <param name="command">Reset payload with email, token, and new password.</param>
+    /// <param name="sender">Mediator sender for handling the command.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>200 OK on successful password change.</returns>
     private static async Task<IResult> ResetPassword(
         ResetPasswordCommand command,
@@ -252,6 +260,8 @@ public static class AuthEndpoints
 
     /// <summary>Previews a team invitation by token.</summary>
     /// <param name="token">Invitation token from the email link.</param>
+    /// <param name="teamService">Team service for handling invitation preview.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>200 OK with <see cref="InvitationPreviewDto"/>.</returns>
     private static async Task<IResult> GetInvitationPreview(
         string token,
@@ -264,6 +274,8 @@ public static class AuthEndpoints
 
     /// <summary>Accepts a team invitation and joins the tenant.</summary>
     /// <param name="request">Acceptance payload with token and optional profile fields.</param>
+    /// <param name="teamService">Team service for handling invitation acceptance.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>204 No Content on success.</returns>
     private static async Task<IResult> AcceptInvitation(
         AcceptInvitationRequest request,
