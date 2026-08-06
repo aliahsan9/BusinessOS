@@ -1,365 +1,127 @@
-# BusinessOS
+# BusinessOS - Enterprise Multi-Tenant Business Operating System
 
-BusinessOS is a modern business management platform built for freelancers, startups, agencies, and growing businesses that need a centralized workspace to manage their daily operations.
+BusinessOS is a modern, enterprise-grade business management platform built on **.NET 10 Web API**, **Clean Architecture**, **CQRS with MediatR**, **PostgreSQL (EF Core 10)**, **Qdrant Vector Database**, and an **Autonomous AI Agent & RAG Framework**.
 
-<img width="1901" height="873" alt="admin_panel" src="https://github.com/user-attachments/assets/c8761ff7-6dc8-40e2-94ac-8d496c4098b9" />
-
-Instead of relying on multiple disconnected tools for customer management, project tracking, invoicing, task organization, and financial monitoring, BusinessOS provides a single platform where everything can be managed efficiently.
-
-The platform is designed with scalability, maintainability, and user experience in mind. It combines a modern Angular frontend with a secure ASP.NET Core backend to deliver a fast, reliable, and extensible business management solution.
+It provides freelancers, startups, agencies, and enterprises with a unified platform for multi-tenant workspace management, customer CRM, invoicing, procurement, inventory tracking, financial analytics, and AI copilot execution.
 
 ---
 
-## Overview
+## 🏛 System Architecture Overview
 
-Managing a business often involves juggling multiple systems to handle clients, projects, finances, and day-to-day operations. BusinessOS simplifies this process by bringing essential business functions together in one place.
+BusinessOS follows **Clean Architecture** and **Domain-Driven Design (DDD)** principles to separate concerns into decoupled layers:
 
-Users can manage customers, projects, tasks, invoices, expenses, notes, and business activities from a unified dashboard. Every account operates within its own secure workspace, ensuring data privacy and isolation between users.
+```mermaid
+graph TD
+    Client[Web & Mobile Clients] -->|REST API / SignalR| API[BusinessOS.API Layer]
 
-The project follows modern software architecture principles and serves as both a practical business solution and a reference implementation of a full-stack enterprise application.
+    subgraph Backend ["BusinessOS Backend Engine"]
+        API --> Middleware[Middleware Pipeline: Auth, Tenant, Correlation, Exception]
+        API --> Endpoints[32 Minimal API Endpoint Modules]
+        Endpoints --> MediatR[MediatR CQRS Pipeline]
+        
+        MediatR --> App[BusinessOS.Application]
+        App --> Domain[BusinessOS.Domain]
+        
+        App --> Infra[BusinessOS.Infrastructure]
+        App --> Persist[BusinessOS.Persistence]
+        
+        Infra --> AIAgent[AI Agent & Planner]
+        Infra --> QdrantSync[Outbox Vector Sync]
+        Persist --> PostgreSQL[(PostgreSQL Database)]
+    end
 
----
-
----
-
-## Database Design
-
-<img width="1024" height="559" alt="9e5a0304-d62d-48f7-8f4d-7dd6835d1a8f" src="https://github.com/user-attachments/assets/9782dc79-251b-4b9a-b7ce-b26d4fe4889a" />
-
----
-## Features
-
-### User Authentication
-
-BusinessOS provides secure user registration and authentication using JWT-based authorization. Users can create accounts, log in securely, manage their profiles, and update account settings.
-
-### Customer Management
-
-Maintain a centralized customer database with contact information, notes, business details, and relationship history.
-
-### Project Management
-
-Create, organize, and monitor projects from a dedicated workspace. Projects act as a central hub for related activities and business processes.
-
-### Task Management
-
-Track work efficiently through a task management system that supports planning, prioritization, progress tracking, and completion monitoring.
-
-### Invoice Management
-
-Generate and manage invoices while maintaining billing records and payment information.
-
-### Expense Tracking
-
-Record business expenses and monitor operational costs to gain better financial visibility.
-
-### Notes and Documentation
-
-Store business notes, meeting summaries, ideas, documentation, and important operational information.
-
-### Dashboard and Insights
-
-Access a centralized dashboard that provides an overview of business activity, project status, financial summaries, and key metrics.
-
-### Theme Customization
-
-Personalize the user experience through configurable themes and appearance settings.
-
-### Responsive Design
-
-BusinessOS is fully responsive and optimized for desktop, tablet, and mobile devices.
-
----
-
-## Technology Stack
-
-### Frontend
-
-* Angular
-* TypeScript
-* RxJS
-* Angular Router
-* Angular Signals
-* Bootstrap / Tailwind CSS
-* JWT Authentication
-
-### Backend
-
-* ASP.NET Core Web API
-* C#
-* Entity Framework Core
-* SQL Server
-* JWT Authentication
-* Dependency Injection
-
-### Database
-
-* Microsoft SQL Server
-
-### Development Tools
-
-* Visual Studio
-* Visual Studio Code
-* Cursor
-* Git
-* GitHub
-* Postman
-
----
-
-## Architecture
-
-BusinessOS follows a layered architecture to ensure separation of concerns and long-term maintainability.
-
-### Presentation Layer
-
-The Angular frontend handles user interaction, routing, validation, state management, and API communication.
-
-### API Layer
-
-ASP.NET Core Web API exposes secure REST endpoints and acts as the bridge between the frontend and business logic.
-
-### Business Layer
-
-Contains application rules, workflows, validations, and domain-specific services.
-
-### Data Layer
-
-Entity Framework Core manages database operations, persistence, and data access.
-
-This architecture promotes scalability, testability, and clean code organization.
-
----
-
-## Project Structure
-
-```text
-BusinessOS
-│
-├── frontend/
-│   ├── src/
-│   ├── assets/
-│   ├── environments/
-│   └── app/
-│
-├── backend/
-│   ├── Controllers/
-│   ├── Services/
-│   ├── Repositories/
-│   ├── Entities/
-│   ├── DTOs/
-│   ├── Data/
-│   └── Middleware/
-│
-├── database/
-│
-└── docs/
+    AIAgent --> OpenAI[OpenAI API]
+    QdrantSync --> QdrantDB[(Qdrant Vector DB)]
 ```
 
-The structure may evolve as new modules and features are introduced.
+---
+
+## 📚 Technical Documentation Index (`/docs`)
+
+Comprehensive documentation is available inside the [`/docs`](file:///d:/Business_OS/BusinessOS/docs/README.md) directory:
+
+| Section | Topic | Documentation Link |
+| :--- | :--- | :--- |
+| 📍 **Portal** | Documentation Index & Overview | [docs/README.md](file:///d:/Business_OS/BusinessOS/docs/README.md) |
+| 🏗 **Architecture** | Clean Architecture & Layering Principles | [docs/Architecture.md](file:///d:/Business_OS/BusinessOS/docs/Architecture.md) |
+| 📁 **Structure** | Folder & Directory Guide | [docs/Folder-Structure.md](file:///d:/Business_OS/BusinessOS/docs/Folder-Structure.md) |
+| 🔄 **Lifecycle** | End-to-End Request Execution Trace | [docs/Request-Lifecycle.md](file:///d:/Business_OS/BusinessOS/docs/Request-Lifecycle.md) |
+| 🔑 **Authentication**| ASP.NET Core Identity & JWT Tokens | [docs/Authentication.md](file:///d:/Business_OS/BusinessOS/docs/Authentication.md) |
+| 🛡 **Authorization** | Dynamic RBAC & Permission Policies | [docs/Authorization.md](file:///d:/Business_OS/BusinessOS/docs/Authorization.md) |
+| 🔌 **DI Container** | IoC Lifetimes & Extension Methods | [docs/Dependency-Injection.md](file:///d:/Business_OS/BusinessOS/docs/Dependency-Injection.md) |
+| ⚙️ **Middleware** | Pipeline Execution Order & Handlers | [docs/Middleware.md](file:///d:/Business_OS/BusinessOS/docs/Middleware.md) |
+| ⚡️ **CQRS** | MediatR Commands, Queries & Behaviors | [docs/CQRS.md](file:///d:/Business_OS/BusinessOS/docs/CQRS.md) |
+| 🤖 **AI Agent** | Autonomous Planning & Tool Invocation | [docs/AI-Agent.md](file:///d:/Business_OS/BusinessOS/docs/AI-Agent.md) |
+| 🔍 **RAG Engine** | Retrieval-Augmented Generation | [docs/RAG.md](file:///d:/Business_OS/BusinessOS/docs/RAG.md) |
+| 📝 **Prompts** | Dynamic Prompt Pipeline & Grounding | [docs/Prompt-Pipeline.md](file:///d:/Business_OS/BusinessOS/docs/Prompt-Pipeline.md) |
+| 📊 **Vector DB** | Qdrant Vector Store & Outbox Worker | [docs/Vector-Search.md](file:///d:/Business_OS/BusinessOS/docs/Vector-Search.md) |
+| 🗄 **Database** | EF Core 10, Multi-Tenancy & Filters | [docs/Database.md](file:///d:/Business_OS/BusinessOS/docs/Database.md) |
+| 🔗 **ERD Schema** | Entity Dictionary & Mermaid ERDs | [docs/Entity-Relationships.md](file:///d:/Business_OS/BusinessOS/docs/Entity-Relationships.md) |
+| 🛠 **Services** | Core Infrastructure & App Services Index | [docs/Services.md](file:///d:/Business_OS/BusinessOS/docs/Services.md) |
+| 📡 **API Routes** | Minimal Endpoints Route Matrix | [docs/Controllers.md](file:///d:/Business_OS/BusinessOS/docs/Controllers.md) |
+| 🔀 **API Flows** | End-to-End Sequence Diagrams | [docs/API-Flow.md](file:///d:/Business_OS/BusinessOS/docs/API-Flow.md) |
+| ⚙️ **Settings** | Configuration Matrix (`appsettings.json`) | [docs/Configuration.md](file:///d:/Business_OS/BusinessOS/docs/Configuration.md) |
+| 📜 **Logging** | Serilog Structured Logs & Audit Trails | [docs/Logging.md](file:///d:/Business_OS/BusinessOS/docs/Logging.md) |
+| ⚠️ **Errors** | RFC 7807 ProblemDetails Error Pipeline | [docs/Error-Handling.md](file:///d:/Business_OS/BusinessOS/docs/Error-Handling.md) |
+| 🐳 **DevOps** | Docker Compose & Production Deployment | [docs/Deployment.md](file:///d:/Business_OS/BusinessOS/docs/Deployment.md) |
+| 💼 **Workflows** | Domain Business Process Flows | [docs/Workflows.md](file:///d:/Business_OS/BusinessOS/docs/Workflows.md) |
 
 ---
 
-## Getting Started
+## 🛠 Tech Stack
+
+* **Framework**: .NET 10 SDK Web API
+* **Architecture**: Clean Architecture, Domain-Driven Design, CQRS with MediatR
+* **Persistence**: Entity Framework Core 10, PostgreSQL (`Npgsql`)
+* **Vector Search**: Qdrant Vector Database (`Qdrant.Client`)
+* **AI Framework**: OpenAI API (`gpt-4o`, `text-embedding-3-small`), Heuristic & LLM Tool Agent
+* **Speech Synthesis**: Microsoft Edge Neural TTS (`EdgeNeuralTtsService`)
+* **Realtime Communications**: ASP.NET Core SignalR
+* **Security & Auth**: ASP.NET Core Identity, JWT Bearer Token Signing, Dynamic Permission Policies
+* **Payment Gateways**: Stripe, JazzCash, EasyPaisa
+* **Document Generation**: QuestPDF & HTML/CSS rendering
+* **Logging**: Serilog (Console, Rolling File Sinks, Context Enrichers)
+* **DevOps**: Docker, Docker Compose, EF Core CLI Migrations
+
+---
+
+## ⚡ Quick Start Guide
 
 ### Prerequisites
+* [.NET 10 SDK](https://dotnet.microsoft.com/download)
+* [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 
-Before running the project locally, ensure you have the following installed:
-
-* .NET SDK 9.0 or later
-* Node.js 22 or later
-* Angular CLI
-* SQL Server
-* Git
-
----
-
-## Clone the Repository
-
+### 1. Clone & Set Up Local Infrastructure
 ```bash
-git clone https://github.com/your-username/BusinessOS.git
-
-cd BusinessOS
+# Start PostgreSQL & Qdrant containers
+docker-compose up -d
 ```
 
----
-
-## Backend Setup
-
-Navigate to the backend project:
-
+### 2. Apply Database Migrations
 ```bash
-cd backend
+dotnet ef database update --project BusinessOS.Infrastructure --startup-project BusinessOS.API
 ```
 
-Restore dependencies:
-
+### 3. Run the Backend API
 ```bash
-dotnet restore
+dotnet run --project BusinessOS.API
 ```
 
-Configure your database connection string inside `appsettings.json`.
-
-Apply database migrations:
-
-```bash
-dotnet ef database update
-```
-
-Run the API:
-
-```bash
-dotnet run
-```
+The Web API will launch at `https://localhost:7197` (or configured HTTP/HTTPS ports). OpenAPI / Swagger UI will be available at `/swagger`.
 
 ---
 
-## Frontend Setup
+## 🌐 Environment Variables Matrix
 
-Navigate to the frontend project:
-
-```bash
-cd frontend
-```
-
-Install dependencies:
-
-```bash
-npm install
-```
-
-Start the development server:
-
-```bash
-ng serve
-```
-
-The application will be available at:
-
-```text
-http://localhost:4200
-```
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `ConnectionStrings__DefaultConnection` | Database Connection String | PostgreSQL localhost connection |
+| `Jwt__Key` | JWT HMAC-SHA256 Secret Key | Min 32 character key |
+| `Ai__OpenAiApiKey` | OpenAI Secret API Key | `sk-proj-...` |
+| `Qdrant__Host` | Qdrant DB Host Address | `localhost` |
+| `Qdrant__Port` | Qdrant gRPC Port | `6334` |
 
 ---
 
-## Configuration
-
-### Frontend Environment
-
-```typescript
-export const environment = {
-  production: false,
-  apiUrl: "https://localhost:5001/api"
-};
-```
-
-### Backend Configuration
-
-```json
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "Server=.;Database=BusinessOS;Trusted_Connection=True;"
-  }
-}
-```
-
-Update these values according to your development, staging, or production environment.
-
----
-
-## Security
-
-Security is a core consideration throughout the platform.
-
-BusinessOS includes:
-
-* JWT-based authentication
-* Password hashing
-* Role-based authorization
-* Input validation
-* Secure API communication
-* Protection against common web vulnerabilities
-* User-level data isolation
-
-All business data is associated with authenticated users, ensuring secure access control throughout the application.
-
----
-
-## API Endpoints
-
-The backend follows RESTful principles and exposes endpoints such as:
-
-```text
-/api/auth
-/api/users
-/api/customers
-/api/projects
-/api/tasks
-/api/invoices
-/api/expenses
-/api/notes
-/api/dashboard
-```
-
-Standard HTTP methods are used for creating, retrieving, updating, and deleting resources.
-
----
-
-## Development Principles
-
-BusinessOS is built around a set of core engineering principles:
-
-* Clean Architecture
-* Separation of Concerns
-* Reusable Components
-* Maintainable Code
-* Consistent API Design
-* Scalable System Design
-* Modern Development Practices
-
-The objective is to create a codebase that remains easy to understand, extend, and maintain as the project grows.
-
----
-
-## Roadmap
-
-Planned future enhancements include:
-
-* Team collaboration and workspace management
-* Advanced analytics and reporting
-* Email notifications
-* Calendar integration
-* File and document management
-* Workflow automation
-* Multi-tenant architecture
-* Third-party integrations
-* AI-powered business insights
-* Native mobile applications
-
----
-
-## Contributing
-
-Contributions are welcome.
-
-Whether you are fixing bugs, improving documentation, optimizing performance, or introducing new features, your contributions help improve the project.
-
-Please follow existing coding standards and maintain consistency across the codebase when submitting pull requests.
-
----
-
-## License
-
-This project is licensed under the MIT License.
-
-For more information, see the `LICENSE` file.
-
----
-
-## Author
-
-**Ali Ahsan**
-
-Full-Stack Developer focused on building scalable web applications using ASP.NET Core, Angular, SQL Server, and modern software engineering practices.
-
-BusinessOS is an ongoing effort to create a practical, scalable, and maintainable operating system for modern businesses.
+## 📄 License
+This project is released under the standard repository license. See [LICENSE.txt](file:///d:/Business_OS/BusinessOS/LICENSE.txt) for details.
