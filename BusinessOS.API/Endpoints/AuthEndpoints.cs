@@ -78,7 +78,7 @@ public static class AuthEndpoints
                             EndpointDocumentation.WithStatusCodes(
                                 "Validates credentials and returns a bearer token including the tenant claim.\n\n" +
                                 "**Permission:** Not required (public).\n\n" +
-                                EndpointDocumentation.PublicNote,
+                                EndpointDocumentation.PublicNote, 
                                 (400, "Validation failed — missing email or password."),
                                 (401, "Unauthorized — invalid credentials or inactive account."),
                                 (500, "Internal server error.")),
