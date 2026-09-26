@@ -1,8 +1,8 @@
 using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Options;
-using BusinessOS.Application.Features.Activities.DTOs;
 using BusinessOS.Application.Features.Audit.Services;
 using BusinessOS.Application.Features.Notifications.Services;
+using BusinessOS.Infrastructure.Caching;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

@@ -1,11 +1,12 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace BusinessOS.Application.Common.Caching;
+namespace BusinessOS.Infrastructure.Caching;
 
 /// <summary>
 /// Production-ready <see cref="IMemoryCache"/> wrapper with stampede protection,
