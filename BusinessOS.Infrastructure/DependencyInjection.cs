@@ -41,6 +41,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Qdrant.Client;
+using BusinessOS.Application.Common.Caching;
+using BusinessOS.Infrastructure.Caching;
 
 namespace BusinessOS.Infrastructure;
 
@@ -50,6 +52,9 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // Singleton: shares stampede locks and key index across all requests.
+        services.AddSingleton<ICacheService, CacheService>();
+
         services.AddScoped<ITenantProvider, TenantProvider>();
         services.AddScoped<ITenantContext, TenantContextService>();
         services.AddScoped<ISuperAdminContext, SuperAdminContext>();

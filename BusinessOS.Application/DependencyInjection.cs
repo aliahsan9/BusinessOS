@@ -28,9 +28,6 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(
             typeof(CreateProductCommand).Assembly);
 
-        // Singleton: shares stampede locks and key index across all requests.
-        services.AddSingleton<ICacheService, CacheService>();
-
         services.AddScoped<IOrderNumberGenerator, OrderNumberGenerator>();
         services.AddScoped<IInvoiceNumberGenerator, InvoiceNumberGenerator>();
         services.AddScoped<IQuotationNumberGenerator, QuotationNumberGenerator>();
