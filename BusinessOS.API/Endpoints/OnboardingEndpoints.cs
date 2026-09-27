@@ -10,7 +10,8 @@ public static class OnboardingEndpoints
     {
         var group = app.MapGroup("/api/onboarding")
             .WithTags("Onboarding")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapGet("/status", GetStatus)
             .WithName("GetOnboardingStatus")

@@ -23,7 +23,8 @@ public static class CategoryEndpoints
     {
         var group = app.MapGroup("/api/categories")
             .WithTags("Categories")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapPost("", CreateCategory)
             .RequirePermission(PermissionCodes.CategoryCreate)

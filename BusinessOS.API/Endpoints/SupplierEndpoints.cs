@@ -26,7 +26,8 @@ public static class SupplierEndpoints
     {
         var group = app.MapGroup("/api/suppliers")
             .WithTags("Suppliers")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapPost("", CreateSupplier)
             .RequirePermission(PermissionCodes.SupplierCreate)

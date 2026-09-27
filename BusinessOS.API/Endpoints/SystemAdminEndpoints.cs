@@ -13,7 +13,8 @@ public static class SystemAdminEndpoints
     {
         var group = app.MapGroup("/api/system")
             .WithTags("System Admin")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapGet("/health", GetHealth)
             .RequirePermission(PermissionCodes.SystemAdminView)

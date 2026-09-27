@@ -13,7 +13,8 @@ public static class BillingEndpoints
             .WithTags("Billing")
             .WithName("GetBillingPlansPublic")
             .AllowAnonymous()
-            .Produces<IReadOnlyList<SubscriptionPlanDto>>(StatusCodes.Status200OK);
+            .Produces<IReadOnlyList<SubscriptionPlanDto>>(StatusCodes.Status200OK)
+            .RequireRateLimiting("api");
 
         var group = app.MapGroup("/api/billing")
             .WithTags("Billing")

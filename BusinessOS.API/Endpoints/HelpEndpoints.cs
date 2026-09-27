@@ -9,7 +9,8 @@ public static class HelpEndpoints
     {
         var group = app.MapGroup("/api/help")
             .WithTags("Help Center")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapGet("/faqs", GetFaqs)
             .WithName("GetHelpFaqs")

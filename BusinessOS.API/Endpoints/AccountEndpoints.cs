@@ -13,7 +13,8 @@ public static class AccountEndpoints
     {
         var group = app.MapGroup("/api/account")
             .WithTags("Account")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapGet("/me", GetMyProfile)
             .WithName("GetMyProfile")

@@ -12,7 +12,8 @@ public static class TenantEndpoints
     {
         var group = app.MapGroup("/api/tenant")
             .WithTags("Tenant")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapGet("", GetTenant)
             .RequirePermission(PermissionCodes.TenantView)

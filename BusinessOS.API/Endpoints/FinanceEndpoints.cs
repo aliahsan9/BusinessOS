@@ -11,7 +11,8 @@ public static class FinanceEndpoints
     {
         var group = app.MapGroup("/api/finance")
             .WithTags("Finance")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapGet("/dashboard", GetDashboard)
             .RequirePermission(PermissionCodes.FinanceView)

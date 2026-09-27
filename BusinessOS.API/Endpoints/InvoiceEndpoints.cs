@@ -26,7 +26,8 @@ public static class InvoiceEndpoints
     {
         var group = app.MapGroup("/api/invoices")
             .WithTags("Invoices")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapPost("/from-order/{orderId:guid}", CreateInvoiceFromOrder)
             .RequirePermission(PermissionCodes.InvoiceCreate)

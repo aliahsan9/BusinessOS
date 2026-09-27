@@ -11,7 +11,8 @@ public static class SettingsEndpoints
     {
         var group = app.MapGroup("/api/settings")
             .WithTags("Settings")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapGet("", GetSettings)
             .RequirePermission(PermissionCodes.SettingsView)

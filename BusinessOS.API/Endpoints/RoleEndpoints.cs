@@ -17,7 +17,8 @@ public static class RoleEndpoints
     {
         var roles = app.MapGroup("/api/roles")
             .WithTags("Roles & Permissions")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         roles.MapPost("", CreateRole)
             .RequirePermission(PermissionCodes.RoleCreate)

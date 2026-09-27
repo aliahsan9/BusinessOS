@@ -25,7 +25,8 @@ public static class OrderEndpoints
     {
         var group = app.MapGroup("/api/orders")
             .WithTags("Orders")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapPost("", CreateOrder)
             .RequirePermission(PermissionCodes.OrderCreate)

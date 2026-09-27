@@ -26,7 +26,8 @@ public static class PurchaseOrderEndpoints
     {
         var group = app.MapGroup("/api/purchase-orders")
             .WithTags("Purchase Orders")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapPost("", CreatePurchaseOrder)
             .RequirePermission(PermissionCodes.PurchaseOrderCreate)
