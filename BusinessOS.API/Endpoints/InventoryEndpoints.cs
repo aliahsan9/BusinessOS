@@ -30,7 +30,8 @@ public static class InventoryEndpoints
     {
         var group = app.MapGroup("/api/inventory")
             .WithTags("Inventory")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapGet("", GetAllInventory)
             .RequirePermission(PermissionCodes.InventoryView)

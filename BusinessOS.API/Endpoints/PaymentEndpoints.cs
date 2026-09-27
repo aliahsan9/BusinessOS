@@ -24,7 +24,8 @@ public static class PaymentEndpoints
     {
         var group = app.MapGroup("/api/payments")
             .WithTags("Payments")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapPost("", CreatePayment)
             .RequirePermission(PermissionCodes.PaymentCreate)

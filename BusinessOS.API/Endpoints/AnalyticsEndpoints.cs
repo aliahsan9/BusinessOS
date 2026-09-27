@@ -15,7 +15,8 @@ public static class AnalyticsEndpoints
     {
         var group = app.MapGroup("/api/analytics")
             .WithTags("Analytics")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapGet("/overview", GetOverview)
             .RequirePermission(PermissionCodes.ReportView)

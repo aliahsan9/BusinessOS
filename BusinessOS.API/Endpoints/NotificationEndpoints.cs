@@ -13,7 +13,8 @@ public static class NotificationEndpoints
     {
         var group = app.MapGroup("/api/notifications")
             .WithTags("Notifications")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapGet("", GetNotifications)
             .RequirePermission(PermissionCodes.NotificationView)

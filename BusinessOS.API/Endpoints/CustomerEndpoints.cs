@@ -26,7 +26,8 @@ public static class CustomerEndpoints
     {
         var group = app.MapGroup("/api/customers")
             .WithTags("Customers")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapPost("", CreateCustomer)
             .RequirePermission(PermissionCodes.CustomerCreate)

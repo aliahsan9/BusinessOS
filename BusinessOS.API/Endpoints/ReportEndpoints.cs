@@ -14,7 +14,8 @@ public static class ReportEndpoints
     {
         var group = app.MapGroup("/api/reports")
             .WithTags("Reports")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapGet("/business-summary", GenerateBusinessSummary)
             .RequirePermission(PermissionCodes.ReportView)

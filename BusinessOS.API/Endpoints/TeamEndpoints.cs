@@ -12,7 +12,8 @@ public static class TeamEndpoints
     {
         var group = app.MapGroup("/api/team")
             .WithTags("Team")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapGet("", GetTeamDashboard)
             .RequirePermission(PermissionCodes.TeamView)

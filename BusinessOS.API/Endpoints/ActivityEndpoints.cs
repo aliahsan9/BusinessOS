@@ -12,7 +12,8 @@ public static class ActivityEndpoints
     {
         var group = app.MapGroup("/api/activity")
             .WithTags("Activity")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapGet("", GetActivities)
             .RequirePermission(PermissionCodes.ActivityView)

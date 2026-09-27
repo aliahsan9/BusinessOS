@@ -25,7 +25,8 @@ public static class ExpenseEndpoints
     {
         var expenses = app.MapGroup("/api/expenses")
             .WithTags("Expenses")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         expenses.MapPost("", CreateExpense)
             .RequirePermission(PermissionCodes.ExpenseCreate)

@@ -12,7 +12,8 @@ public static class AuditEndpoints
     {
         var group = app.MapGroup("/api/audit-logs")
             .WithTags("Audit")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapGet("", GetAuditLogs)
             .RequirePermission(PermissionCodes.AuditView)

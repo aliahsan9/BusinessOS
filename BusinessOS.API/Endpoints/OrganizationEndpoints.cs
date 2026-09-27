@@ -11,7 +11,8 @@ public static class OrganizationEndpoints
     {
         var group = app.MapGroup("/api/organization")
             .WithTags("Organization")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapGet("", GetOrganization)
             .RequirePermission(PermissionCodes.OrganizationView)

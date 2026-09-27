@@ -26,7 +26,8 @@ public static class QuotationEndpoints
     {
         var group = app.MapGroup("/api/quotations")
             .WithTags("Quotations")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapPost("", CreateQuotation)
             .RequirePermission(PermissionCodes.QuotationCreate)

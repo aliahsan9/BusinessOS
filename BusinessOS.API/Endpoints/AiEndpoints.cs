@@ -10,7 +10,8 @@ public static class AiEndpoints
     {
         var group = app.MapGroup("/api/ai")
             .WithTags("AI Copilot")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapPost("/chat", Chat)
             .WithName("AiChat")

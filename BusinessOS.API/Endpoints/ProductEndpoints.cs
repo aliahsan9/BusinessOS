@@ -25,7 +25,8 @@ public static class ProductEndpoints
     {
         var group = app.MapGroup("/api/products")
             .WithTags("Products")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("api");
 
         group.MapPost("", CreateProduct)
             .RequirePermission(PermissionCodes.ProductCreate)
