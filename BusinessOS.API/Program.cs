@@ -13,6 +13,7 @@ using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Infrastructure;
 using BusinessOS.Infrastructure.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
@@ -48,6 +49,20 @@ try
     builder.Services.AddMemoryCache();
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddProblemDetails();
+    // Adding Rate Limiting services
+
+    builder.Services.AddRateLimiter(options =>
+    {
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+        options.AddFixedWindowLimiter("api", limiterOptions =>
+        {
+            limiterOptions.PermitLimit = 100;
+            limiterOptions.Window = TimeSpan.FromMinutes(1);
+            limiterOptions.QueueLimit = 0;
+        });
+    });
+
     builder.Services.AddSignalR();
     builder.Services.AddSingleton<IUserIdProvider, NameIdentifierUserIdProvider>();
     builder.Services.AddScoped<IRealtimeNotificationService, SignalRRealtimeNotificationService>();
@@ -268,6 +283,7 @@ try
         app.UseHttpsRedirection();
     }
     app.UseCors(corsPolicyName);
+    app.UseRateLimiter();
     app.UseAuthentication();
     app.UseMiddleware<TenantMiddleware>();
     app.UseMiddleware<SerilogEnrichmentMiddleware>();
