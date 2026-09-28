@@ -34,6 +34,10 @@
         <PackageReference Include="Serilog.Sinks.File" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="Logs\" />
+    </ItemGroup>
+
     <!-- Copy XML documentation from referenced projects so Scalar/OpenAPI can surface DTO summaries. -->
     <Target Name="CopyProjectReferenceXmlDocumentation" AfterTargets="Build">
         <ItemGroup>

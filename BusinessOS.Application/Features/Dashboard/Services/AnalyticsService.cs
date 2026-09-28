@@ -143,17 +143,19 @@ public sealed class AnalyticsService : IAnalyticsService
             .ToList();
 
         var customerDetails = await _context.Customers
-            .AsNoTracking()
-            .Where(x => topCustomerIds.Contains(x.Id))
-            .Select(x => new { x.Id, x.FirstName, x.LastName, x.Email })
-            .ToListAsync(cancellationToken);
+        .AsNoTracking()
+        .Where(x => topCustomerIds.Contains(x.Id))
+        .Select(x => new { x.Id, x.FirstName, x.LastName, x.Email })
+        .ToDictionaryAsync(x => x.Id, cancellationToken);
 
         var topCustomers = orderAggregates
             .OrderByDescending(x => x.TotalSpending)
             .Take(10)
-            .Select((x, index) =>
+            .Where(x => customerDetails.ContainsKey(x.CustomerId))
+            .Select(x =>
             {
-                var customer = customerDetails.First(c => c.Id == x.CustomerId);
+                var customer = customerDetails[x.CustomerId];
+
                 return new TopCustomerDto
                 {
                     CustomerId = x.CustomerId,
