@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Asp.Versioning;
 using BusinessOS.API.Authorization;
 using BusinessOS.API.Endpoints;
 using BusinessOS.API.Hubs;
@@ -42,6 +43,17 @@ try
         builder.Configuration.GetSection(CacheSettings.SectionName));
 
     builder.Services.AddControllers();
+
+    // Adding Versioning
+    builder.Services.AddApiVersioning(options =>
+    {
+        options.DefaultApiVersion = new ApiVersion(1, 0);
+
+        options.AssumeDefaultVersionWhenUnspecified = true;
+
+        options.ReportApiVersions = true;
+    });
+
     builder.Services.AddApplication();
     builder.Services.AddInfrastructure(builder.Configuration);
     builder.Services.Configure<BusinessOS.Application.Features.Dashboard.Services.DashboardCacheOptions>(
