@@ -1,10 +1,7 @@
 using BusinessOS.Application.Features.Customers.Commands.CreateCustomer;
 using BusinessOS.Application.Features.Customers.Commands.DeleteCustomer;
-using BusinessOS.Application.Features.Customers.Commands.UpdateCustomer;
 using BusinessOS.Application.Features.Customers.Queries.GetAllCustomers;
 using BusinessOS.Application.Features.Customers.Queries.GetCustomerById;
-using BusinessOS.Application.Features.Customers.Queries.GetCustomerAnalytics;
-using BusinessOS.Application.Features.Customers.Queries.GetCustomerOrders;
 using BusinessOS.Application.Features.Auth.Commands.Login;
 using BusinessOS.Application.Features.Auth.Commands.Register;
 using BusinessOS.Application.Features.Categories.Commands.CreateCategory;
@@ -14,7 +11,6 @@ using BusinessOS.Application.Features.Categories.Queries.GetAllCategories;
 using BusinessOS.Application.Features.Categories.Queries.GetCategoryById;
 using BusinessOS.Application.Features.Orders.Commands.CreateOrder;
 using BusinessOS.Application.Features.Orders.Commands.DeleteOrder;
-using BusinessOS.Application.Features.Orders.Commands.UpdateOrder;
 using BusinessOS.Application.Features.Orders.Commands.UpdateOrderStatus;
 using BusinessOS.Application.Features.Orders.Queries;
 using BusinessOS.Application.Features.Orders.Queries.GetAllOrders;
@@ -25,7 +21,6 @@ using BusinessOS.Application.Features.Products.Commands.UpdateProduct;
 using BusinessOS.Application.Features.Products.Queries.GetAllProducts;
 using BusinessOS.Application.Features.Products.Queries.GetProductById;
 using BusinessOS.Application.Features.Products.Queries.GetProductsByCategory;
-using FluentAssertions;
 using FluentValidation.TestHelper;
 
 namespace BusinessOS.UnitTests.Validators;

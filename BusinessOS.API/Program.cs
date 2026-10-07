@@ -69,7 +69,7 @@ try
 
         options.AddFixedWindowLimiter("api", limiterOptions =>
         {
-            limiterOptions.PermitLimit = 100;
+            limiterOptions.PermitLimit = 10000;
             limiterOptions.Window = TimeSpan.FromMinutes(1);
             limiterOptions.QueueLimit = 0;
         });

@@ -4,7 +4,6 @@ using BusinessOS.Application.Common.Options;
 using BusinessOS.Application.Features.Activities.Services;
 using BusinessOS.Application.Features.Auth.Services;
 using BusinessOS.Application.Features.Categories.Commands.CreateCategory;
-using BusinessOS.Application.Features.Inventory.Services;
 using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Application.Features.Products.Commands.CreateProduct;
 using BusinessOS.Domain.Entities;

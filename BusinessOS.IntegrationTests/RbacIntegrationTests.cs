@@ -18,42 +18,119 @@ public class RbacIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task AdminUser_CanAccessRolesAndPermissions()
+    public async Task OwnerUser_CanAccessRolesAndPermissions()
     {
+        // Registration creates the tenant owner.
         var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
 
-        var rolesResponse = await IntegrationHttp.SendAuthorizedAsync(Client, HttpMethod.Get, "/api/roles", auth);
+        auth.Roles.Should().Contain(RoleNames.Owner);
+
+        var rolesResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            "/api/roles",
+            auth);
+
         rolesResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var permissionsResponse = await IntegrationHttp.SendAuthorizedAsync(Client, HttpMethod.Get, "/api/permissions", auth);
+        var permissionsResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            "/api/permissions",
+            auth);
+
         permissionsResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var permissions = await permissionsResponse.Content.ReadFromJsonAsync<List<PermissionDto>>();
+        var permissions =
+            await permissionsResponse.Content.ReadFromJsonAsync<List<PermissionDto>>();
+
         permissions.Should().NotBeNull();
         permissions!.Should().Contain(x => x.Code == PermissionCodes.ProductView);
     }
 
     [Fact]
-    public async Task ViewerUser_IsDeniedProductCreate()
+    public async Task AdminUser_CanAccessRolesAndPermissions()
     {
-        var adminAuth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
-        var adminRoleId = await GetRoleIdAsync(RoleNames.Admin);
-        var viewerRoleId = await GetRoleIdAsync(RoleNames.Viewer);
+        // Registration creates the Owner.
+        var ownerAuth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
 
-        await IntegrationHttp.SendAuthorizedAsync(
+        // Get Admin role.
+        var adminRoleId = await GetRoleIdAsync(RoleNames.Admin);
+
+        // Remove Owner role.
+        var removeOwnerResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Delete,
-            $"/api/users/{adminAuth.UserId}/roles/{adminRoleId}",
-            adminAuth);
+            $"/api/users/{ownerAuth.UserId}/roles/{await GetRoleIdAsync(RoleNames.Owner)}",
+            ownerAuth);
 
-        await IntegrationHttp.SendAuthorizedAsync(
+        removeOwnerResponse.IsSuccessStatusCode.Should().BeTrue();
+
+        // Assign Admin role.
+        var assignAdminResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            $"/api/users/{adminAuth.UserId}/roles",
-            adminAuth,
+            $"/api/users/{ownerAuth.UserId}/roles",
+            ownerAuth,
+            new AssignUserRoleRequest(adminRoleId));
+
+        assignAdminResponse.IsSuccessStatusCode.Should().BeTrue();
+
+        // Login again so the JWT contains the new role/permissions.
+        var adminAuth = await LoginAsync(ownerAuth.Email);
+
+        adminAuth.Roles.Should().Contain(RoleNames.Admin);
+        adminAuth.Permissions.Should().Contain(PermissionCodes.RoleView);
+
+        var rolesResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            "/api/roles",
+            adminAuth);
+
+        rolesResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var permissionsResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            "/api/permissions",
+            adminAuth);
+
+        permissionsResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task ViewerUser_IsDeniedProductCreate()
+    {
+        // Registration creates the Owner.
+        var ownerAuth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+
+        var ownerRoleId = await GetRoleIdAsync(RoleNames.Owner);
+        var viewerRoleId = await GetRoleIdAsync(RoleNames.Viewer);
+
+        // Remove Owner role.
+        var removeOwnerResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Delete,
+            $"/api/users/{ownerAuth.UserId}/roles/{ownerRoleId}",
+            ownerAuth);
+
+        removeOwnerResponse.IsSuccessStatusCode.Should().BeTrue();
+
+        // Assign Viewer role.
+        var assignViewerResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            $"/api/users/{ownerAuth.UserId}/roles",
+            ownerAuth,
             new AssignUserRoleRequest(viewerRoleId));
 
-        var viewerAuth = await LoginAsync(adminAuth.Email);
+        assignViewerResponse.IsSuccessStatusCode.Should().BeTrue();
+
+        // Login again so the JWT contains Viewer permissions.
+        var viewerAuth = await LoginAsync(ownerAuth.Email);
+
+        viewerAuth.Roles.Should().Contain(RoleNames.Viewer);
 
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
@@ -74,24 +151,35 @@ public class RbacIntegrationTests : IntegrationTestBase
     [Fact]
     public async Task ViewerUser_CanViewProducts()
     {
-        var adminAuth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
-        var adminRoleId = await GetRoleIdAsync(RoleNames.Admin);
+        // Registration creates the Owner.
+        var ownerAuth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+
+        var ownerRoleId = await GetRoleIdAsync(RoleNames.Owner);
         var viewerRoleId = await GetRoleIdAsync(RoleNames.Viewer);
 
-        await IntegrationHttp.SendAuthorizedAsync(
+        // Remove Owner role.
+        var removeOwnerResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Delete,
-            $"/api/users/{adminAuth.UserId}/roles/{adminRoleId}",
-            adminAuth);
+            $"/api/users/{ownerAuth.UserId}/roles/{ownerRoleId}",
+            ownerAuth);
 
-        await IntegrationHttp.SendAuthorizedAsync(
+        removeOwnerResponse.IsSuccessStatusCode.Should().BeTrue();
+
+        // Assign Viewer role.
+        var assignViewerResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            $"/api/users/{adminAuth.UserId}/roles",
-            adminAuth,
+            $"/api/users/{ownerAuth.UserId}/roles",
+            ownerAuth,
             new AssignUserRoleRequest(viewerRoleId));
 
-        var viewerAuth = await LoginAsync(adminAuth.Email);
+        assignViewerResponse.IsSuccessStatusCode.Should().BeTrue();
+
+        // Login again so the JWT contains Viewer permissions.
+        var viewerAuth = await LoginAsync(ownerAuth.Email);
+
+        viewerAuth.Roles.Should().Contain(RoleNames.Viewer);
 
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
@@ -103,31 +191,38 @@ public class RbacIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task AdminJwt_ContainsPermissionClaim()
+    public async Task OwnerJwt_ContainsPermissionClaim()
     {
         var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
 
+        auth.Roles.Should().Contain(RoleNames.Owner);
         auth.Permissions.Should().Contain(PermissionCodes.RoleView);
-        auth.Roles.Should().Contain(RoleNames.Admin);
     }
 
     private Task<Guid> GetRoleIdAsync(string roleName)
     {
         using var scope = Factory.Services.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<BusinessOSDbContext>();
+
+        var context = scope.ServiceProvider
+            .GetRequiredService<BusinessOSDbContext>();
+
         var role = context.RbacRoles.Single(x => x.Name == roleName);
+
         return Task.FromResult(role.Id);
     }
 
     private async Task<AuthResponse> LoginAsync(string email)
     {
-        var response = await Client.PostAsJsonAsync("/api/auth/login", new
-        {
-            email,
-            password = "Password1!"
-        });
+        var response = await Client.PostAsJsonAsync(
+            "/api/auth/login",
+            new
+            {
+                email,
+                password = "Password1!"
+            });
 
         response.EnsureSuccessStatusCode();
+
         return (await response.Content.ReadFromJsonAsync<AuthResponse>())!;
     }
 }
