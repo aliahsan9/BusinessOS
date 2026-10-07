@@ -35,22 +35,28 @@ public class AiCopilotResponseBuilderTests
     }
 
     [Fact]
-    public void BuildGroundedAdviceReply_IncludesLiveDataBlock()
+    public void BuildGroundedAdviceReply_IncludesLiveDataAndPracticalAdvice()
     {
         var reply = AiCopilotResponseBuilder.BuildGroundedAdviceReply(
             "How can I increase sales?",
             [
                 new AiToolResult
-                {
-                    ToolName = "GetBestSellingProducts",
-                    Summary = "Best-selling products this month:\n1. Laptop Pro: 40 units, $20,000.00 revenue"
-                }
+            {
+                ToolName = "GetBestSellingProducts",
+                Summary = """
+                    Best-selling products this month:
+                    1. Laptop Pro: 40 units, $20,000.00 revenue
+                    """
+            }
             ],
             []);
 
+        reply.Should().Contain("Based on your live numbers:");
         reply.Should().Contain("Laptop Pro");
-        reply.Should().Contain("Practical next steps");
-        reply.Should().Contain("grounded in your live data");
+        reply.Should().Contain("40 units");
+        reply.Should().Contain("$20,000.00 revenue");
+        reply.Should().Contain("Practical next steps:");
+        reply.Should().Contain("Double down on your current bestsellers");
     }
 
     [Fact]
