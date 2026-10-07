@@ -69,7 +69,7 @@ try
 
         options.AddFixedWindowLimiter("api", limiterOptions =>
         {
-            limiterOptions.PermitLimit = 10000;
+            limiterOptions.PermitLimit = 100;
             limiterOptions.Window = TimeSpan.FromMinutes(1);
             limiterOptions.QueueLimit = 0;
         });
@@ -290,12 +290,21 @@ try
     });
 
     app.UseMiddleware<ExceptionHandlingMiddleware>();
+
     if (!app.Environment.IsDevelopment())
     {
         app.UseHttpsRedirection();
     }
+
     app.UseCors(corsPolicyName);
-    app.UseRateLimiter();
+
+    // Keep rate limiting enabled everywhere except the automated test environment.
+    // Development API testing (Scalar/Postman/Swagger) will still be rate limited.
+    if (!app.Environment.IsEnvironment("Testing"))
+    {
+        app.UseRateLimiter();
+    }
+
     app.UseAuthentication();
     app.UseMiddleware<TenantMiddleware>();
     app.UseMiddleware<SerilogEnrichmentMiddleware>();
@@ -306,6 +315,7 @@ try
     app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", service = "BusinessOS.API" }))
         .WithTags("Health")
         .WithName("HealthCheck");
+
     app.MapAuthEndpoints();
     app.MapAccountEndpoints();
     app.MapCategoryEndpoints();
@@ -339,6 +349,7 @@ try
     app.MapBillingEndpoints();
     app.MapBusinessRegistrationEndpoint();
     app.MapSystemAdminEndpoints();
+
     app.MapHub<NotificationHub>("/hubs/notifications")
         .RequireAuthorization();
 
