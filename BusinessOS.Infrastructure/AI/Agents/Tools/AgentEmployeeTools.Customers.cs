@@ -160,16 +160,37 @@ public sealed class StructuredCreateCustomerTool : AiToolBase
 
             var (first, last) = parsed.Value;
 
-            var email = AgentToolArgHelpers.Str(args, "email")
-                ?? $"customer-{Guid.NewGuid().ToString("N")[..8]}@businessos.local";
-            var phone = AgentToolArgHelpers.Str(args, "phone") ?? "+0000000000";
-            var address = AgentToolArgHelpers.Str(args, "address") ?? "N/A";
-            var city = AgentToolArgHelpers.Str(args, "city") ?? "N/A";
-            var country = AgentToolArgHelpers.Str(args, "country") ?? "Pakistan";
-            var postal = AgentToolArgHelpers.Str(args, "postalCode") ?? "00000";
+            var email = AgentToolArgHelpers.Str(args, "email");
+            var phone = AgentToolArgHelpers.Str(args, "phone");
+            var address = AgentToolArgHelpers.Str(args, "address") ?? AgentToolArgHelpers.Str(args, "city");
+            var city = AgentToolArgHelpers.Str(args, "city") ?? address;
+            var country = AgentToolArgHelpers.Str(args, "country");
+            var postal = AgentToolArgHelpers.Str(args, "postalCode");
+
+            var missing = new List<string>();
+            if (string.IsNullOrWhiteSpace(email)) missing.Add("email");
+            if (string.IsNullOrWhiteSpace(phone)) missing.Add("phone");
+            if (string.IsNullOrWhiteSpace(address)) missing.Add("address or city");
+            if (string.IsNullOrWhiteSpace(country)) missing.Add("country");
+            if (missing.Count > 0)
+            {
+                return new AiToolResult
+                {
+                    ToolName = ToolName.ToString(),
+                    Success = false,
+                    Summary = "I still need the customer's " + string.Join(", ", missing) + " before I can save them."
+                };
+            }
 
             var id = await _mediator.Send(new CreateCustomerCommand(
-                first, last, email, phone, address, city, country, postal,
+                first,
+                last,
+                email!,
+                phone!,
+                address!,
+                string.IsNullOrWhiteSpace(city) ? address! : city,
+                country!,
+                string.IsNullOrWhiteSpace(postal) ? "" : postal,
                 AgentToolArgHelpers.Str(args, "company"),
                 AgentToolArgHelpers.Str(args, "notes")), cancellationToken);
 

@@ -84,8 +84,46 @@ public sealed class AiMemoryService : IAiMemoryService
             OnboardingStep = stored?.OnboardingStep,
             OnboardingDataJson = stored?.OnboardingDataJson,
             TonePreference = stored?.TonePreference,
-            LastClientRequestId = stored?.LastClientRequestId
+            LastClientRequestId = stored?.LastClientRequestId,
+            PendingActionJson = stored?.PendingActionJson
         };
+    }
+
+    public async Task SetPendingActionAsync(
+        Guid sessionId,
+        string? pendingActionJson,
+        CancellationToken cancellationToken = default)
+    {
+        var identity = RequireIdentity();
+        var session = await _context.AiConversationSessions
+            .FirstOrDefaultAsync(
+                s => s.Id == sessionId && s.UserId == identity.UserId && s.IsActive,
+                cancellationToken);
+        if (session is null)
+            return;
+
+        var prior = TryParseMemory(session.MemoryJson) ?? new AiMemoryStateDto();
+        var memory = new AiMemoryStateDto
+        {
+            SelectedCustomerId = prior.SelectedCustomerId,
+            SelectedCustomerName = prior.SelectedCustomerName,
+            SelectedProjectId = prior.SelectedProjectId,
+            SelectedOrderId = prior.SelectedOrderId,
+            SelectedInvoiceId = prior.SelectedInvoiceId,
+            LastIntent = prior.LastIntent,
+            LastAnalyticsQuery = prior.LastAnalyticsQuery,
+            PreferredLanguage = prior.PreferredLanguage,
+            PreferredAgentKey = prior.PreferredAgentKey,
+            OnboardingStep = prior.OnboardingStep,
+            OnboardingDataJson = prior.OnboardingDataJson,
+            TonePreference = prior.TonePreference,
+            LastClientRequestId = prior.LastClientRequestId,
+            PendingActionJson = string.IsNullOrWhiteSpace(pendingActionJson) ? null : pendingActionJson
+        };
+
+        session.MemoryJson = JsonSerializer.Serialize(memory, JsonOptions);
+        session.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
     }
 
     public Task<ConversationContext> GetContextAsync(Guid conversationId, CancellationToken cancellationToken = default) =>
@@ -141,7 +179,9 @@ public sealed class AiMemoryService : IAiMemoryService
         int? tokenUsage = null,
         string? clientRequestId = null,
         IReadOnlyList<AiToolResult>? toolResults = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool updatePendingAction = false,
+        string? pendingActionJson = null)
     {
         var identity = RequireIdentity();
         if (string.IsNullOrWhiteSpace(userMessage) && string.IsNullOrWhiteSpace(assistantReply))
@@ -179,7 +219,7 @@ public sealed class AiMemoryService : IAiMemoryService
         var memory = new AiMemoryStateDto
         {
             SelectedCustomerId = session.SelectedCustomerId,
-            SelectedCustomerName = customerName,
+            SelectedCustomerName = customerName ?? prior?.SelectedCustomerName,
             SelectedProjectId = session.SelectedProjectId,
             SelectedOrderId = session.SelectedOrderId,
             SelectedInvoiceId = session.SelectedInvoiceId,
@@ -190,7 +230,8 @@ public sealed class AiMemoryService : IAiMemoryService
             OnboardingStep = prior?.OnboardingStep,
             OnboardingDataJson = prior?.OnboardingDataJson,
             TonePreference = prior?.TonePreference,
-            LastClientRequestId = clientRequestId ?? prior?.LastClientRequestId
+            LastClientRequestId = clientRequestId ?? prior?.LastClientRequestId,
+            PendingActionJson = updatePendingAction ? pendingActionJson : prior?.PendingActionJson
         };
 
         session.MemoryJson = JsonSerializer.Serialize(memory, JsonOptions);

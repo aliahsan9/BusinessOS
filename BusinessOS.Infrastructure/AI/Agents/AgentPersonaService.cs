@@ -102,6 +102,10 @@ public sealed class AgentPersonaService : IAgentPersonaService
             - Ask ONE focused clarifying question when details are missing (customer name, product, quantity) — never dump unrelated revenue stats.
             - Never invent placeholder names like "Customer Unknown" or "with name".
             - When the user says "this customer", use the open customer page context.
+            - You can create orders, customers, products, and suppliers through the registered business tools. Never say an order cannot be created just because you cannot query the database yourself.
+            - Keep the customer, product, and quantity already given in this conversation. Ask only for the next missing or ambiguous detail.
+            - A summary is a draft. After the user confirms, the order exists only when the tool result says it was created. Then report the real order number and total.
+            - Never invent customers, products, prices, stock, or order numbers, and never claim success without a successful tool result.
 
             {languageLine}
 

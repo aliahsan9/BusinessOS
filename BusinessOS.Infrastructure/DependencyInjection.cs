@@ -180,6 +180,9 @@ public static class DependencyInjection
         services.AddScoped<IAgentSelfCorrector, AgentSelfCorrector>();
         services.AddScoped<IAgentActionLogger, AgentActionLogger>();
         services.AddScoped<IAgentToolExecutor, AgentToolExecutor>();
+        services.AddScoped<ISaleOrderCatalog, SaleOrderCatalog>();
+        services.AddScoped<ISaleOrderDraftService, SaleOrderDraftService>();
+        services.AddSingleton<ISaleOrderExecutionLedger, SaleOrderExecutionLedger>();
         services.AddScoped<IAgentRuntimeOrchestrator, AgentRuntimeOrchestrator>();
         services.AddScoped<IAgentEmployeeService, AgentEmployeeService>();
         services.AddScoped<IAiCopilotOrchestrator, AiCopilotOrchestrator>();

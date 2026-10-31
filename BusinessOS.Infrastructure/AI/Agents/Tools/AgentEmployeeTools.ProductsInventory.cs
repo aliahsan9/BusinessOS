@@ -117,8 +117,13 @@ public sealed class CreateProductTool : AiToolBase
                 return Fail("No product category found. Create a category first.");
 
             var sku = AgentToolArgHelpers.Str(args, "sku") ?? $"SKU-{Guid.NewGuid().ToString("N")[..8]}".ToUpperInvariant();
-            var cost = AgentToolArgHelpers.Dec(args, "costPrice") ?? 0;
+            var cost = AgentToolArgHelpers.Dec(args, "costPrice");
             var sale = AgentToolArgHelpers.Dec(args, "salePrice") ?? cost;
+            if (sale is null or <= 0 || cost is null or <= 0)
+            {
+                return Fail("I need a sale price and a cost price greater than zero before I create this product. Example: sale 2500, cost 1800.");
+            }
+
             var reorder = AgentToolArgHelpers.Int(args, "reorderLevel") ?? 10;
 
             var id = await _mediator.Send(new CreateProductCommand(
@@ -126,8 +131,8 @@ public sealed class CreateProductTool : AiToolBase
                 name,
                 sku,
                 AgentToolArgHelpers.Str(args, "description"),
-                cost,
-                sale,
+                cost!.Value,
+                sale!.Value,
                 reorder), cancellationToken);
 
             if (context.ExecutionState is not null)

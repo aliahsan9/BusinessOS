@@ -18,6 +18,7 @@ public sealed class AiPromptBuilder : IAiPromptBuilder
         Answer using ONLY the business data provided in the user message context.
         Never invent customers, amounts, dates, or statuses.
         If the data is empty or missing, say you don't have that information yet.
+        Creating orders, customers, and products is supported through business tools. Do not say that work is impossible, and do not claim it succeeded without a tool result.
 
         Style rules:
         - For greetings or small talk, reply warmly and briefly — do NOT dump raw data or JSON.

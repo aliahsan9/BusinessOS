@@ -30,12 +30,24 @@ public sealed class CreateSaleTool : AiToolBase
 {
     private readonly IMediator _mediator;
     private readonly IApplicationDbContext _db;
+    private readonly ISaleOrderCatalog _catalog;
+    private readonly ISaleOrderExecutionLedger _ledger;
+    private readonly ITenantProvider _tenant;
     private readonly ILogger<CreateSaleTool> _logger;
 
-    public CreateSaleTool(IMediator mediator, IApplicationDbContext db, ILogger<CreateSaleTool> logger)
+    public CreateSaleTool(
+        IMediator mediator,
+        IApplicationDbContext db,
+        ISaleOrderCatalog catalog,
+        ISaleOrderExecutionLedger ledger,
+        ITenantProvider tenant,
+        ILogger<CreateSaleTool> logger)
     {
         _mediator = mediator;
         _db = db;
+        _catalog = catalog;
+        _ledger = ledger;
+        _tenant = tenant;
         _logger = logger;
     }
 
@@ -46,7 +58,8 @@ public sealed class CreateSaleTool : AiToolBase
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
         intent is AiCopilotIntent.ActionCreate
-        && ContainsAny(message, "sale", "sales order", "create order")
+        && (ContainsAny(message, "sale", "sales order", "create order", "new order")
+            || (ContainsAny(message, "order") && ContainsAny(message, "create", "add", "new", "make")))
         && !ContainsAny(message, "purchase order");
 
     public override Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default) =>
@@ -57,90 +70,149 @@ public sealed class CreateSaleTool : AiToolBase
     {
         try
         {
-            var customerId = AgentToolArgHelpers.GuidVal(args, "customerId")
-                ?? context.ExecutionState?.CustomerId
-                ?? context.Page.CustomerId
-                ?? context.Memory.SelectedCustomerId;
-
-            if (customerId is null)
+            var claimedTenant = AgentToolArgHelpers.GuidVal(args, "tenantId");
+            if (claimedTenant is Guid tenantId
+                && _tenant.HasTenant()
+                && tenantId != _tenant.TenantId)
             {
-                var customerName = AgentToolArgHelpers.Str(args, "customerName");
-                if (!string.IsNullOrWhiteSpace(customerName))
-                {
-                    var q = customerName.ToLowerInvariant();
-                    customerId = await _db.Customers.AsNoTracking()
-                        .Where(c => (c.FirstName + " " + c.LastName).ToLower().Contains(q))
-                        .Select(c => (Guid?)c.Id)
-                        .FirstOrDefaultAsync(cancellationToken);
-                }
+                return Fail("The order was not created. You can't create an order for another business.");
             }
 
-            if (customerId is null)
-            {
-                var refersToThis = ContainsAny(context.Message,
-                    "this customer", "the customer");
-                if (refersToThis)
-                {
-                    return Fail("Open the customer page first, then say \"Create order for this customer\" — or tell me the customer name.");
-                }
+            var customer = await _catalog.ResolveCustomerAsync(
+                AgentToolArgHelpers.Str(args, "customerId"),
+                AgentToolArgHelpers.Str(args, "customerName")
+                    ?? (string.IsNullOrWhiteSpace(AgentToolArgHelpers.Str(args, "customerId"))
+                        ? context.Memory.SelectedCustomerName
+                        : null),
+                cancellationToken);
+            if (customer.Kind != SaleMatchKind.Unique || customer.Value is null)
+                return Fail(CustomerFailure(customer));
 
-                return Fail("Which customer is this for? Example: \"Create order for Ahmed Ali\".");
+            var line = ReadSingleLine(args);
+            var product = await _catalog.ResolveProductAsync(
+                line.ProductId?.ToString() ?? AgentToolArgHelpers.Str(args, "productId"),
+                line.ProductName ?? AgentToolArgHelpers.Str(args, "productName"),
+                cancellationToken);
+            if (product.Kind != SaleMatchKind.Unique || product.Value is null)
+                return Fail(ProductFailure(product, line.ProductName));
+
+            var quantity = line.Quantity
+                ?? AgentToolArgHelpers.Dec(args, "quantity")
+                ?? 0;
+            if (quantity <= 0)
+                return Fail("The order was not created. Tell me how many units to add.");
+
+            if (!product.Value.HasInventory)
+                return Fail($"The order was not created. No inventory record exists for {product.Value.Name}.");
+            if (product.Value.Stock < quantity)
+            {
+                return Fail(
+                    $"The order was not created. Insufficient stock for '{product.Value.Name}'. Available: {product.Value.Stock}, requested: {quantity}.");
             }
 
-            var items = new List<CreateOrderItemDto>();
-            if (args.TryGetProperty("items", out var itemsEl) && itemsEl.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var item in itemsEl.EnumerateArray())
-                {
-                    var productId = AgentToolArgHelpers.GuidVal(item, "productId");
-                    if (productId is null)
-                    {
-                        var pname = AgentToolArgHelpers.Str(item, "productName") ?? AgentToolArgHelpers.Str(item, "sku");
-                        if (!string.IsNullOrWhiteSpace(pname))
-                        {
-                            var pq = pname.ToLowerInvariant();
-                            productId = await _db.Products.AsNoTracking()
-                                .Where(p => p.Name.ToLower().Contains(pq) || p.SKU.ToLower().Contains(pq))
-                                .Select(p => (Guid?)p.Id)
-                                .FirstOrDefaultAsync(cancellationToken);
-                        }
-                    }
-
-                    var qty = AgentToolArgHelpers.Dec(item, "quantity") ?? 1;
-                    if (productId is not null)
-                        items.Add(new CreateOrderItemDto(productId.Value, qty));
-                }
-            }
-
-            if (items.Count == 0 && context.ExecutionState?.ProductId is Guid pid)
-                items.Add(new CreateOrderItemDto(pid, 1));
-
-            if (items.Count == 0)
-            {
-                return Fail("Which product and how many? Example: \"Laptop quantity 5\".");
-            }
+            var discount = AgentToolArgHelpers.Dec(args, "discount") ?? 0;
+            var tax = AgentToolArgHelpers.Dec(args, "tax") ?? 0;
+            var draftKey = $"{context.SessionId:N}:{customer.Value.Id:N}:{product.Value.Id:N}:{quantity}:{discount}:{tax}";
+            await using var lease = await _ledger.AcquireAsync(draftKey, cancellationToken);
+            if (lease.ExistingOrderId is Guid existingId)
+                return await ReportOrderAsync(existingId, alreadyCreated: true, cancellationToken);
 
             var orderId = await _mediator.Send(new CreateOrderCommand(
-                customerId.Value,
-                AgentToolArgHelpers.Dec(args, "discount") ?? 0,
-                AgentToolArgHelpers.Dec(args, "tax") ?? 0,
-                items), cancellationToken);
+                customer.Value.Id,
+                discount,
+                tax,
+                [new CreateOrderItemDto(product.Value.Id, quantity)]), cancellationToken);
 
             if (context.ExecutionState is not null)
+            {
                 context.ExecutionState.OrderId = orderId;
+                context.ExecutionState.CustomerId = customer.Value.Id;
+                context.ExecutionState.CustomerName = customer.Value.Name;
+                context.ExecutionState.ProductId = product.Value.Id;
+                context.ExecutionState.ProductName = product.Value.Name;
+            }
 
-            return Ok(
-                "Sale/order created successfully.",
-                "Order",
-                orderId,
-                $"/orders/{orderId}");
+            var reported = await ReportOrderAsync(orderId, alreadyCreated: false, cancellationToken);
+            if (reported.Success)
+                lease.Complete(orderId);
+            return reported;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "CreateSale failed");
-            return Fail(ex.Message);
+            return Fail($"The order was not created. {ex.Message}");
         }
     }
+
+    private async Task<AiToolResult> ReportOrderAsync(Guid orderId, bool alreadyCreated, CancellationToken cancellationToken)
+    {
+        var order = await _db.Orders.AsNoTracking()
+            .Where(row => row.Id == orderId)
+            .Select(row => new { row.Id, row.OrderNumber, row.GrandTotal, row.CustomerId })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (order is null)
+            return Fail("The order was not created. The order service did not return a saved order.");
+
+        var lead = alreadyCreated
+            ? "That order was already created."
+            : "The order was created successfully.";
+        var total = order.GrandTotal.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+        var message = $"{lead} Order {order.OrderNumber}. Total {total}.";
+        return Ok(message, "Order", order.Id, $"/orders/{order.Id}");
+    }
+
+    private static (Guid? ProductId, string? ProductName, decimal? Quantity) ReadSingleLine(JsonElement args)
+    {
+        if (!args.TryGetProperty("items", out var itemsEl) || itemsEl.ValueKind != JsonValueKind.Array)
+            return (null, null, null);
+
+        Guid? productId = null;
+        string? productName = null;
+        decimal? quantity = null;
+        var sawQuantity = false;
+        foreach (var item in itemsEl.EnumerateArray())
+        {
+            var id = AgentToolArgHelpers.GuidVal(item, "productId");
+            var name = AgentToolArgHelpers.Str(item, "productName") ?? AgentToolArgHelpers.Str(item, "sku");
+            var qty = AgentToolArgHelpers.Dec(item, "quantity");
+            if (productId is null)
+                productId = id;
+            else if (id is Guid other && other != productId)
+                return (null, name, null);
+
+            productName ??= name;
+            if (qty is decimal amount)
+            {
+                if (!sawQuantity)
+                {
+                    quantity = amount;
+                    sawQuantity = true;
+                }
+                else if (quantity != amount)
+                    quantity = null;
+            }
+        }
+
+        return (productId, productName, quantity);
+    }
+
+    private static string CustomerFailure(SaleMatch<SaleCustomerHit> match) => match.Kind switch
+    {
+        SaleMatchKind.Ambiguous => "The order was not created. More than one customer matches. Tell me which one.",
+        SaleMatchKind.Inactive => $"The order was not created. {match.Value?.Name ?? "That customer"} is inactive.",
+        SaleMatchKind.NotFound => "The order was not created. That customer isn't in this business.",
+        _ => "The order was not created. Which customer is this for?"
+    };
+
+    private static string ProductFailure(SaleMatch<SaleProductHit> match, string? requested) => match.Kind switch
+    {
+        SaleMatchKind.Ambiguous => "The order was not created. More than one product matches. Tell me which one.",
+        SaleMatchKind.Inactive => $"The order was not created. {match.Value?.Name ?? "That product"} is inactive.",
+        SaleMatchKind.NotFound => string.IsNullOrWhiteSpace(requested)
+            ? "The order was not created. That product isn't in this business."
+            : $"The order was not created. I couldn't find an inventory item matching \"{requested}\".",
+        _ => "The order was not created. Which product and how many?"
+    };
 
     private AiToolResult Fail(string m) => new() { ToolName = ToolName.ToString(), Success = false, Summary = m };
     private AiToolResult Ok(string m, string type, Guid id, string route) => new()
@@ -809,11 +881,28 @@ public sealed class CreateSupplierTool : AiToolBase
             if (string.IsNullOrWhiteSpace(name))
                 return new AiToolResult { ToolName = ToolName.ToString(), Success = false, Summary = "Supplier name is required." };
 
+            var email = AgentToolArgHelpers.Str(args, "email");
+            var phone = AgentToolArgHelpers.Str(args, "phone");
+            var address = AgentToolArgHelpers.Str(args, "address");
+            var missing = new List<string>();
+            if (string.IsNullOrWhiteSpace(email)) missing.Add("email");
+            if (string.IsNullOrWhiteSpace(phone)) missing.Add("phone");
+            if (string.IsNullOrWhiteSpace(address)) missing.Add("address");
+            if (missing.Count > 0)
+            {
+                return new AiToolResult
+                {
+                    ToolName = ToolName.ToString(),
+                    Success = false,
+                    Summary = "I still need the supplier's " + string.Join(", ", missing) + " before I can save them."
+                };
+            }
+
             var id = await _mediator.Send(new CreateSupplierCommand(
                 name,
-                AgentToolArgHelpers.Str(args, "email") ?? $"supplier-{Guid.NewGuid().ToString("N")[..6]}@businessos.local",
-                AgentToolArgHelpers.Str(args, "phone") ?? "+0000000000",
-                AgentToolArgHelpers.Str(args, "address") ?? "N/A",
+                email!,
+                phone!,
+                address!,
                 AgentToolArgHelpers.Str(args, "contactPerson"),
                 AgentToolArgHelpers.Str(args, "notes")), cancellationToken);
 
