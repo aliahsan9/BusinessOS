@@ -1,5 +1,6 @@
 using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
+using BusinessOS.Application.Common.Idempotency;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Activities.DTOs;
 using BusinessOS.Application.Features.Inventory.Services;
@@ -115,10 +116,35 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
             OrderItems = orderItems
         };
 
-        _context.Orders.Add(order);
-        await _context.SaveChangesAsync(cancellationToken);
+        var transaction = await _context.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            _context.Orders.Add(order);
+            await _context.SaveChangesAsync(cancellationToken);
+            await _inventoryService.DeductForOrderAsync(order, orderItems, cancellationToken);
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
+        }
+        catch (Exception ex) when (DbExceptionClassifier.IsUniqueViolation(ex))
+        {
+            if (transaction is not null)
+                await transaction.RollbackAsync(cancellationToken);
 
-        await _inventoryService.DeductForOrderAsync(order, orderItems, cancellationToken);
+            throw new ConflictException(
+                "The order could not be saved because of a concurrent update. Refresh and try again.",
+                ErrorCodes.ConcurrencyConflict);
+        }
+        catch
+        {
+            if (transaction is not null)
+                await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+        finally
+        {
+            if (transaction is not null)
+                await transaction.DisposeAsync();
+        }
 
         await EntityCacheInvalidator.InvalidateOrderAsync(
             _cache,

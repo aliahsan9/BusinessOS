@@ -77,6 +77,7 @@ public sealed class GetCustomerOrdersQueryHandler
                         request.SortDirection,
                         SortFields,
                         x => x.CreatedAt)
+                    .ThenBy(x => x.Id)
                     .Skip((page - 1) * pageSize)
                     .Take(pageSize)
                     .ToListAsync(ct);

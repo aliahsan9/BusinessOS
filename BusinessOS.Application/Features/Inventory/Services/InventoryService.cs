@@ -171,17 +171,17 @@ public sealed class InventoryService : IInventoryService
         IEnumerable<OrderItem> items,
         CancellationToken cancellationToken = default)
     {
-        foreach (var requirement in AggregateQuantities(items))
-        {
-            await ApplyStockChangeAsync(
-                requirement.ProductId,
-                -requirement.Quantity,
+        await ExecuteStockBatchAsync(
+            AggregateQuantities(items),
+            (productId, quantity, cancellationToken) => ApplyStockChangeAsync(
+                productId,
+                -quantity,
                 StockTransactionTypeNames.Sale,
                 order.OrderNumber,
                 order.Id,
                 $"Stock reserved for order {order.OrderNumber}",
-                cancellationToken);
-        }
+                cancellationToken),
+            cancellationToken);
     }
 
     public async Task RestoreForCancelledOrderAsync(
@@ -189,16 +189,47 @@ public sealed class InventoryService : IInventoryService
         IEnumerable<OrderItem> items,
         CancellationToken cancellationToken = default)
     {
-        foreach (var requirement in AggregateQuantities(items))
-        {
-            await ApplyStockChangeAsync(
-                requirement.ProductId,
-                requirement.Quantity,
+        await ExecuteStockBatchAsync(
+            AggregateQuantities(items),
+            (productId, quantity, cancellationToken) => ApplyStockChangeAsync(
+                productId,
+                quantity,
                 StockTransactionTypeNames.Return,
                 order.OrderNumber,
                 order.Id,
                 $"Stock restored for cancelled order {order.OrderNumber}",
-                cancellationToken);
+                cancellationToken),
+            cancellationToken);
+    }
+
+    private async Task ExecuteStockBatchAsync(
+        IEnumerable<(Guid ProductId, decimal Quantity)> requirements,
+        Func<Guid, decimal, CancellationToken, Task> apply,
+        CancellationToken cancellationToken)
+    {
+        var ownsTransaction = !_context.HasActiveTransaction;
+        var transaction = ownsTransaction
+            ? await _context.BeginTransactionAsync(cancellationToken)
+            : null;
+
+        try
+        {
+            foreach (var requirement in requirements)
+                await apply(requirement.ProductId, requirement.Quantity, cancellationToken);
+
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            if (transaction is not null)
+                await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+        finally
+        {
+            if (transaction is not null)
+                await transaction.DisposeAsync();
         }
     }
 

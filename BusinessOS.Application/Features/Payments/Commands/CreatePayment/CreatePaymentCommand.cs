@@ -9,5 +9,6 @@ public record CreatePaymentCommand(
     decimal Amount,
     string PaymentMethod,
     DateTime PaymentDate,
-    string? ReferenceNo
+    string? ReferenceNo,
+    string? IdempotencyKey = null
 ) : IRequest<Guid>;

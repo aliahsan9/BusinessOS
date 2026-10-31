@@ -183,7 +183,15 @@ public class PaymentAndInvoiceTests
         new(orderId, customerId, amount, PaymentMethodNames.BankTransfer, DateTime.UtcNow, "  REF-1  ");
 
     private static CreatePaymentCommandHandler Payments(BusinessOSDbContext context, ITenantProvider provider) =>
-        new(context, TestHandlerDependencies.CreateCache(), provider, TestHandlerDependencies.CreateLogger<CreatePaymentCommandHandler>());
+        new(
+            context,
+            TestHandlerDependencies.CreateCache(),
+            provider,
+            new BusinessOS.Application.Common.Idempotency.IdempotencyService(
+                context,
+                provider,
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<BusinessOS.Application.Common.Idempotency.IdempotencyService>.Instance),
+            TestHandlerDependencies.CreateLogger<CreatePaymentCommandHandler>());
 
     private static CreateInvoiceFromOrderCommandHandler Invoices(BusinessOSDbContext context)
     {

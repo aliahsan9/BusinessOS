@@ -25,7 +25,11 @@ public sealed class ConflictException : AppException
 {
     public string? ErrorCode { get; }
 
-    public ConflictException(string message, string? errorCode = null) : base(message)
+    public ConflictException(string message) : this(message, null)
+    {
+    }
+
+    public ConflictException(string message, string? errorCode) : base(message)
     {
         ErrorCode = errorCode;
     }

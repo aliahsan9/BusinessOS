@@ -399,65 +399,6 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.ToTable("AiConversationSessions", (string)null);
                 });
 
-            modelBuilder.Entity("BusinessOS.Domain.Entities.AiMessage", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<Guid>("ConversationId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("MetadataJson")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
-
-                    b.Property<int>("SequenceNumber")
-                        .HasColumnType("int");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<int?>("TokenCount")
-                        .HasColumnType("int");
-
-                    b.Property<Guid?>("TurnId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ConversationId", "CreatedAt");
-
-                    b.HasIndex("ConversationId", "SequenceNumber")
-                        .IsUnique();
-
-                    b.HasIndex("TenantId", "UserId", "CreatedAt");
-
-                    b.ToTable("AiMessages", (string)null);
-                });
-
             modelBuilder.Entity("BusinessOS.Domain.Entities.AiCopilotAuditLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -635,6 +576,123 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.ToTable("AiDocumentChunks", (string)null);
                 });
 
+            modelBuilder.Entity("BusinessOS.Domain.Entities.AiMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<int>("SequenceNumber")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("TokenCount")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("TurnId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConversationId", "CreatedAt");
+
+                    b.HasIndex("ConversationId", "SequenceNumber")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "UserId", "CreatedAt");
+
+                    b.ToTable("AiMessages", (string)null);
+                });
+
+            modelBuilder.Entity("BusinessOS.Domain.Entities.AuthSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeviceLabel")
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("LastUsedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ReplacedBySessionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("ReuseDetected")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("FamilyId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("AuthSessions", (string)null);
+                });
+
             modelBuilder.Entity("BusinessOS.Domain.Entities.BillingInvoice", b =>
                 {
                     b.Property<Guid>("Id")
@@ -751,6 +809,9 @@ namespace BusinessOS.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<Guid?>("IdempotencyRecordId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
@@ -761,9 +822,19 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.Property<int>("Provider")
                         .HasColumnType("int");
 
+                    b.Property<string>("ProviderOperationKey")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
                     b.Property<string>("ProviderReference")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
@@ -783,9 +854,17 @@ namespace BusinessOS.Infrastructure.Migrations
 
                     b.HasIndex("BillingInvoiceId");
 
+                    b.HasIndex("IdempotencyRecordId")
+                        .IsUnique()
+                        .HasFilter("[IdempotencyRecordId] IS NOT NULL");
+
                     b.HasIndex("TenantId");
 
-                    b.HasIndex("TransactionId");
+                    b.HasIndex("Provider", "TransactionId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "Status", "CreatedAt")
+                        .IsDescending(false, false, true);
 
                     b.ToTable("BillingTransactions", (string)null);
                 });
@@ -904,6 +983,8 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("PhoneNumber");
+
+                    b.HasIndex("TenantId", "City");
 
                     b.HasIndex("TenantId", "CreatedAt");
 
@@ -1203,62 +1284,63 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.ToTable("GeneratedReports", (string)null);
                 });
 
-            modelBuilder.Entity("BusinessOS.Domain.Entities.AuthSession", b =>
+            modelBuilder.Entity("BusinessOS.Domain.Entities.IdempotencyRecord", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateTime>("CreatedAt")
+                    b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("DeviceLabel")
-                        .HasMaxLength(160)
-                        .HasColumnType("nvarchar(160)");
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<Guid>("FamilyId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
 
-                    b.Property<DateTime?>("LastUsedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid?>("ReplacedBySessionId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<bool>("ReuseDetected")
-                        .HasColumnType("bit");
-
-                    b.Property<DateTime?>("RevokedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("TokenHash")
+                    b.Property<string>("Operation")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
-                    b.Property<string>("UserId")
+                    b.Property<string>("RequestHash")
                         .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid?>("ResourceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ResponseBody")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<int?>("ResponseStatusCode")
+                        .HasColumnType("int");
+
+                    b.Property<int>("State")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ExpiresAt");
+                    b.HasIndex("TenantId", "ExpiresAt");
 
-                    b.HasIndex("FamilyId");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("TokenHash")
+                    b.HasIndex("TenantId", "Operation", "Key")
                         .IsUnique();
 
-                    b.ToTable("AuthSessions", (string)null);
+                    b.ToTable("IdempotencyRecords", (string)null);
                 });
 
             modelBuilder.Entity("BusinessOS.Domain.Entities.Inventory", b =>
@@ -1296,6 +1378,12 @@ namespace BusinessOS.Infrastructure.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1314,7 +1402,10 @@ namespace BusinessOS.Infrastructure.Migrations
 
                     b.HasIndex("TenantId", "ReorderLevel");
 
-                    b.ToTable("Inventories", (string)null);
+                    b.ToTable("Inventories", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Inventories_CurrentStock_NonNegative", "[CurrentStock] >= 0");
+                        });
                 });
 
             modelBuilder.Entity("BusinessOS.Domain.Entities.Invoice", b =>
@@ -1493,6 +1584,12 @@ namespace BusinessOS.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -1523,7 +1620,11 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.HasIndex("TenantId", "OrderNumber")
                         .IsUnique();
 
-                    b.HasIndex("TenantId", "Status");
+                    b.HasIndex("TenantId", "CustomerId", "CreatedAt")
+                        .IsDescending(false, false, true);
+
+                    b.HasIndex("TenantId", "Status", "CreatedAt")
+                        .IsDescending(false, false, true);
 
                     b.ToTable("Orders", (string)null);
                 });
@@ -1582,6 +1683,13 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)")
+                        .HasDefaultValue("USD");
+
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1599,9 +1707,36 @@ namespace BusinessOS.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("ProviderOperationKey")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("ProviderReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<string>("ReferenceNo")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("RefundedAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasDefaultValue("Completed");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
@@ -1614,6 +1749,17 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("OrderId");
+
+                    b.HasIndex("TenantId", "OrderId");
+
+                    b.HasIndex("TenantId", "PaymentDate")
+                        .IsDescending(false, true);
+
+                    b.HasIndex("TenantId", "CustomerId", "PaymentDate")
+                        .IsDescending(false, false, true);
+
+                    b.HasIndex("TenantId", "Status", "PaymentDate")
+                        .IsDescending(false, false, true);
 
                     b.ToTable("Payments", (string)null);
                 });
@@ -1695,6 +1841,40 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.ToTable("Permissions", (string)null);
                 });
 
+            modelBuilder.Entity("BusinessOS.Domain.Entities.ProcessedWebhookEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Provider")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("State")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Provider", "EventId")
+                        .IsUnique();
+
+                    b.ToTable("ProcessedWebhookEvents", (string)null);
+                });
+
             modelBuilder.Entity("BusinessOS.Domain.Entities.Product", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1733,6 +1913,12 @@ namespace BusinessOS.Infrastructure.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
                     b.Property<string>("SKU")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -1761,7 +1947,10 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.HasIndex("TenantId", "SKU")
                         .IsUnique();
 
-                    b.ToTable("Products", (string)null);
+                    b.ToTable("Products", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Products_CurrentStock_NonNegative", "[CurrentStock] >= 0");
+                        });
                 });
 
             modelBuilder.Entity("BusinessOS.Domain.Entities.Project", b =>
@@ -2069,9 +2258,9 @@ namespace BusinessOS.Infrastructure.Migrations
 
                     b.HasIndex("ActorUserId");
 
-                    b.HasIndex("TenantId");
-
                     b.HasIndex("CreatedAt");
+
+                    b.HasIndex("TenantId");
 
                     b.HasIndex("EntityType", "EntityId");
 
@@ -3194,17 +3383,6 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.Navigation("Session");
                 });
 
-            modelBuilder.Entity("BusinessOS.Domain.Entities.AiMessage", b =>
-                {
-                    b.HasOne("BusinessOS.Domain.Entities.AiConversationSession", "Conversation")
-                        .WithMany("ConversationMessages")
-                        .HasForeignKey("ConversationId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Conversation");
-                });
-
             modelBuilder.Entity("BusinessOS.Domain.Entities.AgentWorkflowStep", b =>
                 {
                     b.HasOne("BusinessOS.Domain.Entities.AgentWorkflowRun", "WorkflowRun")
@@ -3225,6 +3403,17 @@ namespace BusinessOS.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Document");
+                });
+
+            modelBuilder.Entity("BusinessOS.Domain.Entities.AiMessage", b =>
+                {
+                    b.HasOne("BusinessOS.Domain.Entities.AiConversationSession", "Conversation")
+                        .WithMany("ConversationMessages")
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Conversation");
                 });
 
             modelBuilder.Entity("BusinessOS.Domain.Entities.BillingInvoice", b =>

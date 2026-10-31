@@ -77,6 +77,12 @@ public partial class BusinessOSDbContext
     public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
     public DbSet<ProcessedWebhookEvent> ProcessedWebhookEvents => Set<ProcessedWebhookEvent>();
 
+    public override int SaveChanges()
+    {
+        ApplyTenantAndAuditRules();
+        return base.SaveChanges();
+    }
+
     public override Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default)
     {
@@ -84,8 +90,30 @@ public partial class BusinessOSDbContext
         return base.SaveChangesAsync(cancellationToken);
     }
 
+    private void AssignInMemoryRowVersions()
+    {
+        foreach (var entry in ChangeTracker.Entries())
+        {
+            if (entry.State is not (EntityState.Added or EntityState.Modified))
+                continue;
+
+            var rowVersion = entry.Properties.FirstOrDefault(property => property.Metadata.Name == "RowVersion");
+            if (rowVersion?.CurrentValue is byte[] { Length: > 0 })
+                continue;
+
+            if (rowVersion is not null)
+            {
+                rowVersion.CurrentValue = Guid.NewGuid().ToByteArray()[..8];
+                rowVersion.IsTemporary = false;
+            }
+        }
+    }
+
     private void ApplyTenantAndAuditRules()
     {
+        if (!Database.IsRelational())
+            AssignInMemoryRowVersions();
+
         foreach (var entry in ChangeTracker.Entries().ToList())
         {
             // Assign TenantId automatically

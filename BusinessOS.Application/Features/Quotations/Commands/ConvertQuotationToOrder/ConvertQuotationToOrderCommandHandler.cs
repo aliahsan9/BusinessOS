@@ -105,10 +105,26 @@ public sealed class ConvertQuotationToOrderCommandHandler
             OrderItems = orderItems
         };
 
-        _context.Orders.Add(order);
-        await _context.SaveChangesAsync(cancellationToken);
-
-        await _inventoryService.DeductForOrderAsync(order, orderItems, cancellationToken);
+        var transaction = await _context.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            _context.Orders.Add(order);
+            await _context.SaveChangesAsync(cancellationToken);
+            await _inventoryService.DeductForOrderAsync(order, orderItems, cancellationToken);
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            if (transaction is not null)
+                await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+        finally
+        {
+            if (transaction is not null)
+                await transaction.DisposeAsync();
+        }
 
         var tenantId = _tenantProvider.TenantId;
         await EntityCacheInvalidator.InvalidateQuotationAsync(_cache, tenantId, quotation.Id, cancellationToken);

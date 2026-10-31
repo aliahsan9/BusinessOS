@@ -1,4 +1,5 @@
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Common.Idempotency;
 using BusinessOS.Application.Common.Options;
 using BusinessOS.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Identity;
@@ -304,6 +305,8 @@ public static class DependencyInjection
         services.AddScoped<Func<IBillingPlanSyncService>>(sp => () => sp.GetRequiredService<IBillingPlanSyncService>());
         services.AddScoped<IBillingWebhookService, BillingWebhookService>();
         services.AddScoped<IBillingMetricsService, BillingMetricsService>();
+        services.AddScoped<IWebhookEventStore, WebhookEventStore>();
+        services.AddScoped<IBillingPaymentReconciler, BillingPaymentReconciler>();
         services.AddScoped<IFeatureFlagService, FeatureFlagService>();
         services.AddScoped<IStripePaymentService, StripePaymentService>();
         services.AddScoped<IJazzCashPaymentService, JazzCashPaymentService>();

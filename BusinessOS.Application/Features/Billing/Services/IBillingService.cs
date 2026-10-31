@@ -15,9 +15,18 @@ public interface IBillingService
     Task<CurrentPlanDto> DowngradePlanAsync(DowngradePlanRequest request, CancellationToken cancellationToken = default);
     Task<CurrentPlanDto> CancelPlanAsync(CancelPlanRequest request, CancellationToken cancellationToken = default);
     Task<CurrentPlanDto> RenewPlanAsync(RenewPlanRequest request, CancellationToken cancellationToken = default);
-    Task<CheckoutSessionDto> CreateCheckoutSessionAsync(CheckoutRequest request, CancellationToken cancellationToken = default);
+    Task<CheckoutSessionDto> CreateCheckoutSessionAsync(
+        CheckoutRequest request,
+        CancellationToken cancellationToken = default,
+        string? idempotencyKey = null);
     Task<BillingPortalDto> CreateBillingPortalSessionAsync(string returnUrl, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<PaymentProviderDto>> GetPaymentProvidersAsync(CancellationToken cancellationToken = default);
+    Task<BillingTransactionDto> RefundTransactionAsync(
+        Guid transactionId,
+        decimal amount,
+        string? currency,
+        string idempotencyKey,
+        CancellationToken cancellationToken = default);
 }
 
 public interface IBillingWebhookService

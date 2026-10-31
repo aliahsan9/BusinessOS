@@ -209,6 +209,9 @@ public class CreateOrderHandlerTests
         context.Setup(x => x.Products).Returns(TestMockDbSet.CreateMockDbSet(products.AsQueryable()).Object);
         context.Setup(x => x.Orders).Returns(TestMockDbSet.CreateMockDbSet(orders.AsQueryable()).Object);
         context.Setup(x => x.OrderItems).Returns(TestMockDbSet.CreateMockDbSet(new List<OrderItem>().AsQueryable()).Object);
+        context.Setup(x => x.BeginTransactionAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IApplicationTransaction?)null);
+        context.SetupGet(x => x.HasActiveTransaction).Returns(false);
         return context;
     }
 }
@@ -415,6 +418,14 @@ public class UpdateOrderStatusHandlerTests
         var context = new Mock<IApplicationDbContext>();
         context.Setup(x => x.Orders).Returns(TestMockDbSet.CreateMockDbSet(orders.AsQueryable()).Object);
         context.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        context.Setup(x => x.BeginTransactionAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IApplicationTransaction?)null);
+        context.Setup(x => x.TryTransitionOrderStatusAsync(
+                orderId,
+                OrderStatusNames.Pending,
+                OrderStatusNames.Confirmed,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
 
         var handler = new UpdateOrderStatusCommandHandler(
             context.Object,

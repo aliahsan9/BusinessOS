@@ -150,7 +150,7 @@ public class PasswordResetIdentityTests
         (await users.FindByLoginAsync("Google", "sub-new"))!.Id.Should().Be(external.Id);
 
         var duplicate = await identity.LinkExternalLoginAsync(
-            user.Id,
+            user!.Id,
             "Google",
             "sub-new",
             CancellationToken.None);

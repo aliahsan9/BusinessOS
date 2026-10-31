@@ -55,21 +55,69 @@ public sealed class UpdateOrderStatusCommandHandler
         var previousStatus = order.Status;
         OrderStatusRules.ValidateTransition(previousStatus, request.Status);
 
-        if (request.Status.Equals(OrderStatusNames.Cancelled, StringComparison.OrdinalIgnoreCase) &&
-            !previousStatus.Equals(OrderStatusNames.Cancelled, StringComparison.OrdinalIgnoreCase) &&
-            !previousStatus.Equals(OrderStatusNames.Completed, StringComparison.OrdinalIgnoreCase))
-        {
-            await _inventoryService.RestoreForCancelledOrderAsync(order, order.OrderItems, cancellationToken);
-        }
+        var canonicalStatus = OrderStatusNames.All.First(status =>
+            status.Equals(request.Status, StringComparison.OrdinalIgnoreCase));
 
-        if (request.Status.Equals(OrderStatusNames.Completed, StringComparison.OrdinalIgnoreCase) &&
-            !previousStatus.Equals(OrderStatusNames.Completed, StringComparison.OrdinalIgnoreCase))
-        {
-            await _inventoryService.FinalizeOrderAsync(order, cancellationToken);
-        }
+        if (string.Equals(previousStatus, canonicalStatus, StringComparison.OrdinalIgnoreCase))
+            return Unit.Value;
 
-        order.Status = request.Status;
-        await _context.SaveChangesAsync(cancellationToken);
+        var transaction = await _context.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            var transitioned = await _context.TryTransitionOrderStatusAsync(
+                order.Id,
+                previousStatus,
+                canonicalStatus,
+                cancellationToken);
+
+            if (!transitioned)
+            {
+                throw new ConflictException(
+                    "This order was changed by someone else. Refresh and try again.",
+                    ErrorCodes.ConcurrencyConflict);
+            }
+
+            if (!string.Equals(order.Status, canonicalStatus, StringComparison.OrdinalIgnoreCase))
+                order.Status = canonicalStatus;
+
+            if (canonicalStatus.Equals(OrderStatusNames.Cancelled, StringComparison.OrdinalIgnoreCase) &&
+                !previousStatus.Equals(OrderStatusNames.Cancelled, StringComparison.OrdinalIgnoreCase) &&
+                !previousStatus.Equals(OrderStatusNames.Completed, StringComparison.OrdinalIgnoreCase))
+            {
+                await _inventoryService.RestoreForCancelledOrderAsync(order, order.OrderItems, cancellationToken);
+            }
+
+            if (canonicalStatus.Equals(OrderStatusNames.Completed, StringComparison.OrdinalIgnoreCase) &&
+                !previousStatus.Equals(OrderStatusNames.Completed, StringComparison.OrdinalIgnoreCase))
+            {
+                await _inventoryService.FinalizeOrderAsync(order, cancellationToken);
+            }
+
+            await _context.SaveChangesAsync(cancellationToken);
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            if (transaction is not null)
+                await transaction.RollbackAsync(cancellationToken);
+
+            _logger.LogWarning(ex, "Concurrency conflict while updating order {OrderId}", order.Id);
+            throw new ConflictException(
+                "This order was changed by someone else. Refresh and try again.",
+                ErrorCodes.ConcurrencyConflict);
+        }
+        catch
+        {
+            if (transaction is not null)
+                await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+        finally
+        {
+            if (transaction is not null)
+                await transaction.DisposeAsync();
+        }
 
         await EntityCacheInvalidator.InvalidateOrderAsync(
             _cache,

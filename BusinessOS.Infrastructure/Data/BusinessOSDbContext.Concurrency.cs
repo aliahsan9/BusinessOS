@@ -13,7 +13,7 @@ public partial class BusinessOSDbContext
 
     public async Task<IApplicationTransaction?> BeginTransactionAsync(CancellationToken cancellationToken = default)
     {
-        if (Database.CurrentTransaction is not null)
+        if (Database.CurrentTransaction is not null || !Database.IsRelational())
             return null;
 
         var transaction = await Database.BeginTransactionAsync(cancellationToken);

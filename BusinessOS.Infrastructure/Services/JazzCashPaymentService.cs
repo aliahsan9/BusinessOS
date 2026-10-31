@@ -1,7 +1,10 @@
 using System.Text.Json;
 using BusinessOS.Application.Common.Exceptions;
+using BusinessOS.Application.Common.Idempotency;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Billing.DTOs;
+using BusinessOS.Application.Features.Billing.Services;
+using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.Payments;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -11,13 +14,19 @@ namespace BusinessOS.Infrastructure.Services;
 public sealed class JazzCashPaymentService : IJazzCashPaymentService
 {
     private readonly JazzCashOptions _options;
+    private readonly IWebhookEventStore _events;
+    private readonly IBillingPaymentReconciler _reconciler;
     private readonly ILogger<JazzCashPaymentService> _logger;
 
     public JazzCashPaymentService(
         IOptions<JazzCashOptions> options,
+        IWebhookEventStore events,
+        IBillingPaymentReconciler reconciler,
         ILogger<JazzCashPaymentService> logger)
     {
         _options = options.Value;
+        _events = events;
+        _reconciler = reconciler;
         _logger = logger;
     }
 
@@ -27,11 +36,14 @@ public sealed class JazzCashPaymentService : IJazzCashPaymentService
         Guid tenantId,
         SubscriptionPlanDto plan,
         string billingInterval,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? operationKey = null)
     {
         var isYearly = billingInterval.Equals("yearly", StringComparison.OrdinalIgnoreCase);
         var amount = isYearly ? plan.AnnualPrice : plan.MonthlyPrice;
-        var txnRef = $"JC-{tenantId:N}-{DateTime.UtcNow:yyyyMMddHHmmss}";
+        var txnRef = string.IsNullOrWhiteSpace(operationKey)
+            ? $"JC-{tenantId:N}-{DateTime.UtcNow:yyyyMMddHHmmss}"
+            : operationKey;
         var txnDateTime = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
 
         var payload = new Dictionary<string, string>
@@ -76,7 +88,7 @@ public sealed class JazzCashPaymentService : IJazzCashPaymentService
         return Task.FromResult(false);
     }
 
-    public Task HandleWebhookAsync(string payload, CancellationToken cancellationToken = default)
+    public async Task HandleWebhookAsync(string payload, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("JazzCash callback received: {Length} bytes", payload?.Length ?? 0);
 
@@ -102,9 +114,82 @@ public sealed class JazzCashPaymentService : IJazzCashPaymentService
         }
 
         _logger.LogInformation(
-            "JazzCash callback signature accepted for {TxnRef}. Payment state was not changed.",
+            "JazzCash callback signature accepted for {TxnRef}",
             data.GetValueOrDefault("pp_TxnRefNo"));
-        return Task.CompletedTask;
+
+        var txnRef = data.GetValueOrDefault("pp_TxnRefNo");
+        var responseCode = data.GetValueOrDefault("pp_ResponseCode");
+        if (string.IsNullOrWhiteSpace(txnRef))
+            throw new BadRequestException("JazzCash callback is missing a transaction reference.");
+
+        var eventId = $"{txnRef}|{responseCode}|{data.GetValueOrDefault("pp_RetreivalReferenceNo")}";
+        var claim = await _events.TryBeginAsync(PaymentProviderType.JazzCash, eventId, cancellationToken);
+        if (claim is WebhookClaim.Duplicate)
+            return;
+
+        if (claim is WebhookClaim.Busy)
+        {
+            throw new ConflictException(
+                "Webhook event is already being processed.",
+                ErrorCodes.IdempotencyInProgress);
+        }
+
+        var started = (WebhookClaim.Started)claim;
+        try
+        {
+            if (responseCode is "000" or "121" or "200")
+            {
+                var amount = ParseMinorAmount(data.GetValueOrDefault("pp_Amount"));
+                var tenantId = await _reconciler.ApplyVerifiedResultAsync(
+                    PaymentProviderType.JazzCash,
+                    txnRef,
+                    BillingTransactionStatus.Completed,
+                    data.GetValueOrDefault("pp_RetreivalReferenceNo"),
+                    amount,
+                    "PKR",
+                    cancellationToken);
+
+                if (tenantId is null)
+                {
+                    await _events.AbandonAsync(started.EventRecordId, cancellationToken);
+                    throw new ConflictException("Payment operation was not found for this callback.");
+                }
+
+                await _events.CompleteAsync(started.EventRecordId, tenantId, cancellationToken);
+                return;
+            }
+
+            if (responseCode is not ("124" or "157"))
+            {
+                await _reconciler.ApplyVerifiedResultAsync(
+                    PaymentProviderType.JazzCash,
+                    txnRef,
+                    BillingTransactionStatus.Failed,
+                    data.GetValueOrDefault("pp_RetreivalReferenceNo"),
+                    null,
+                    "PKR",
+                    cancellationToken);
+            }
+
+            await _events.CompleteAsync(started.EventRecordId, null, cancellationToken);
+        }
+        catch (ConflictException)
+        {
+            throw;
+        }
+        catch
+        {
+            await _events.AbandonAsync(started.EventRecordId, cancellationToken);
+            throw;
+        }
+    }
+
+    private static decimal? ParseMinorAmount(string? minor)
+    {
+        if (!long.TryParse(minor, out var value))
+            return null;
+
+        return value / 100m;
     }
 
     private static Dictionary<string, string> ParseFields(string? payload)

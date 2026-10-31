@@ -57,16 +57,33 @@ public sealed class UpdatePaymentCommandHandler : IRequestHandler<UpdatePaymentC
         if (customer is null)
             throw new NotFoundException("Customer not found.");
 
+        if (string.Equals(payment.Status, PaymentStatusNames.Refunded, StringComparison.OrdinalIgnoreCase))
+            throw new ConflictException("A refunded payment cannot be edited.", ErrorCodes.ConcurrencyConflict);
+
+        var amount = Math.Round(request.Amount, 2);
+        if (payment.RefundedAmount > amount)
+            throw new BadRequestException("Payment amount cannot be less than the amount already refunded.");
+
         payment.OrderId = request.OrderId;
         payment.CustomerId = request.CustomerId;
-        payment.Amount = Math.Round(request.Amount, 2);
+        payment.Amount = amount;
         payment.PaymentMethod = paymentMethod;
         payment.PaymentDate = request.PaymentDate.ToUniversalTime();
         payment.ReferenceNo = string.IsNullOrWhiteSpace(request.ReferenceNo)
             ? null
             : request.ReferenceNo.Trim();
 
-        await _context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            _logger.LogWarning(ex, "Concurrency conflict while updating payment {PaymentId}", payment.Id);
+            throw new ConflictException(
+                "This payment was changed by someone else. Refresh and try again.",
+                ErrorCodes.ConcurrencyConflict);
+        }
 
         await EntityCacheInvalidator.InvalidatePaymentAsync(
             _cache,
