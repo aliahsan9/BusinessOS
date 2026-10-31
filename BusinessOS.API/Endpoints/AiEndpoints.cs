@@ -20,13 +20,28 @@ public static class AiEndpoints
         group.MapPost("/chat/stream", ChatStream)
             .WithName("AiChatStream");
 
+        group.MapPost("/conversations", CreateConversation)
+            .WithName("AiCreateConversation")
+            .Produces<AiConversationSessionDto>(StatusCodes.Status201Created);
+
         group.MapGet("/conversations", ListConversations)
             .WithName("AiListConversations")
             .Produces<IReadOnlyList<AiConversationSessionDto>>(StatusCodes.Status200OK);
 
         group.MapGet("/conversations/{sessionId:guid}", GetConversation)
             .WithName("AiGetConversation")
-            .Produces<IReadOnlyList<AiConversationMessageDto>>(StatusCodes.Status200OK);
+            .Produces<IReadOnlyList<AiConversationMessageDto>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
+
+        group.MapGet("/conversations/{sessionId:guid}/messages", GetConversationMessages)
+            .WithName("AiGetConversationMessages")
+            .Produces<IReadOnlyList<AiConversationMessageDto>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
+
+        group.MapPost("/conversations/{sessionId:guid}/messages", SendConversationMessage)
+            .WithName("AiSendConversationMessage")
+            .Produces<AiCopilotChatResponse>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
 
         group.MapDelete("/conversations/{sessionId:guid}", DeleteConversation)
             .WithName("AiDeleteConversation")
@@ -86,12 +101,21 @@ public static class AiEndpoints
         }
     }
 
+    private static async Task<IResult> CreateConversation(
+        IAiAssistantService aiService,
+        CancellationToken cancellationToken)
+    {
+        var session = await aiService.CreateConversationAsync(cancellationToken);
+        return Results.Created($"/api/ai/conversations/{session.Id}", session);
+    }
+
     private static async Task<IResult> ListConversations(
         IAiAssistantService aiService,
+        [FromQuery] int skip = 0,
         [FromQuery] int limit = 20,
         CancellationToken cancellationToken = default)
     {
-        var sessions = await aiService.ListConversationsAsync(limit, cancellationToken);
+        var sessions = await aiService.ListConversationsAsync(skip, limit, cancellationToken);
         return Results.Ok(sessions);
     }
 
@@ -100,8 +124,46 @@ public static class AiEndpoints
         IAiAssistantService aiService,
         CancellationToken cancellationToken)
     {
+        var session = await aiService.GetConversationSessionAsync(sessionId, cancellationToken);
+        if (session is null)
+            return Results.NotFound(new { error = "Conversation not found." });
+
         var messages = await aiService.GetConversationAsync(sessionId, cancellationToken);
         return Results.Ok(messages);
+    }
+
+    private static async Task<IResult> GetConversationMessages(
+        Guid sessionId,
+        IAiAssistantService aiService,
+        [FromQuery] int skip = 0,
+        [FromQuery] int take = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var session = await aiService.GetConversationSessionAsync(sessionId, cancellationToken);
+        if (session is null)
+            return Results.NotFound(new { error = "Conversation not found." });
+
+        var messages = await aiService.GetConversationAsync(sessionId, skip, take, cancellationToken);
+        return Results.Ok(messages);
+    }
+
+    private static async Task<IResult> SendConversationMessage(
+        Guid sessionId,
+        AiCopilotChatRequest request,
+        IAiAssistantService aiService,
+        CancellationToken cancellationToken)
+    {
+        var session = await aiService.GetConversationSessionAsync(sessionId, cancellationToken);
+        if (session is null)
+            return Results.NotFound(new { error = "Conversation not found." });
+
+        if (string.IsNullOrWhiteSpace(request.Message))
+            return Results.BadRequest(new { error = "Message is required." });
+
+        var result = await aiService.CopilotChatAsync(
+            request with { SessionId = sessionId, ConversationId = sessionId },
+            cancellationToken);
+        return Results.Ok(result);
     }
 
     private static async Task<IResult> DeleteConversation(

@@ -90,7 +90,7 @@ public sealed class AgentEmployeeService : IAgentEmployeeService
                     {
                         AgentKey = agentKey,
                         Language = language,
-                        SessionId = request.SessionId
+                        SessionId = request.SessionId ?? request.ConversationId
                     },
                     cancellationToken);
             }
@@ -102,7 +102,7 @@ public sealed class AgentEmployeeService : IAgentEmployeeService
                         Message = request.Message,
                         AgentKey = agentKey,
                         Language = language,
-                        SessionId = request.SessionId,
+                        SessionId = request.SessionId ?? request.ConversationId,
                         WorkflowId = request.WorkflowId
                     },
                     cancellationToken);

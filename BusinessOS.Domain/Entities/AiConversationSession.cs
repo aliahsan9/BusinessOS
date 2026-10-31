@@ -57,6 +57,20 @@ public class AiConversationSession : AuditableEntity
     public string? MemoryJson { get; set; }
 
     /// <summary>
+    /// Rolling summary of older messages that no longer fit in the recent context window.
+    /// </summary>
+    public string? Summary { get; set; }
+
+    public DateTime? LastSummarizedAt { get; set; }
+
+    public int LastSummarizedMessageSequence { get; set; }
+
+    /// <summary>
+    /// Role-based conversational messages (user/assistant/tool) used to reconstruct LLM context.
+    /// </summary>
+    public ICollection<AiMessage> ConversationMessages { get; set; } = [];
+
+    /// <summary>
     /// UTC timestamp of the most recent activity in this session. Defaults to the current UTC time on creation.
     /// </summary>
     public DateTime LastActivityAt { get; set; } = DateTime.UtcNow;

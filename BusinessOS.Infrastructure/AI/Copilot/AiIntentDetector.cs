@@ -647,8 +647,14 @@ public sealed class AiIntentDetector : IAiIntentDetector
 
     private static bool IsFollowUp(string text, AiMemoryStateDto memory) =>
         memory.RecentTurns.Count > 0
-        && (ContainsAny(text, "last year", "last month", "what about", "same for", "and for", "how about", "that customer", "them", "those")
-            || (text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length <= 6 && memory.SelectedCustomerId is not null));
+        && (ContainsAny(text,
+                "last year", "last month", "what about", "same for", "and for", "how about",
+                "that customer", "them", "those", "which one", "which of", "highest revenue",
+                "based on", "previous", "earlier", "you recommended", "your analysis",
+                "that analysis", "those products", "continue", "summarize our", "what did i ask",
+                "second recommendation", "why did you", "compare that")
+            || (text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length <= 8
+                && (memory.SelectedCustomerId is not null || memory.LastIntent is not null)));
 
     private static IReadOnlyList<AiToolName> InferToolsFromMemory(AiMemoryStateDto memory)
     {

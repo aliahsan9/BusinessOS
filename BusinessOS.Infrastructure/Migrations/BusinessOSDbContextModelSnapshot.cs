@@ -350,6 +350,12 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.Property<DateTime>("LastActivityAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("LastSummarizedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("LastSummarizedMessageSequence")
+                        .HasColumnType("int");
+
                     b.Property<string>("MemoryJson")
                         .HasColumnType("nvarchar(max)");
 
@@ -364,6 +370,9 @@ namespace BusinessOS.Infrastructure.Migrations
 
                     b.Property<Guid?>("SelectedProjectId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Summary")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
@@ -385,7 +394,68 @@ namespace BusinessOS.Infrastructure.Migrations
 
                     b.HasIndex("TenantId", "UserId", "LastActivityAt");
 
+                    b.HasIndex("TenantId", "UserId", "IsActive", "LastActivityAt");
+
                     b.ToTable("AiConversationSessions", (string)null);
+                });
+
+            modelBuilder.Entity("BusinessOS.Domain.Entities.AiMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<int>("SequenceNumber")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("TokenCount")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("TurnId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConversationId", "CreatedAt");
+
+                    b.HasIndex("ConversationId", "SequenceNumber")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "UserId", "CreatedAt");
+
+                    b.ToTable("AiMessages", (string)null);
                 });
 
             modelBuilder.Entity("BusinessOS.Domain.Entities.AiCopilotAuditLog", b =>
@@ -3057,6 +3127,17 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.Navigation("Session");
                 });
 
+            modelBuilder.Entity("BusinessOS.Domain.Entities.AiMessage", b =>
+                {
+                    b.HasOne("BusinessOS.Domain.Entities.AiConversationSession", "Conversation")
+                        .WithMany("ConversationMessages")
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Conversation");
+                });
+
             modelBuilder.Entity("BusinessOS.Domain.Entities.AgentWorkflowStep", b =>
                 {
                     b.HasOne("BusinessOS.Domain.Entities.AgentWorkflowRun", "WorkflowRun")
@@ -3471,6 +3552,8 @@ namespace BusinessOS.Infrastructure.Migrations
 
             modelBuilder.Entity("BusinessOS.Domain.Entities.AiConversationSession", b =>
                 {
+                    b.Navigation("ConversationMessages");
+
                     b.Navigation("Messages");
                 });
 

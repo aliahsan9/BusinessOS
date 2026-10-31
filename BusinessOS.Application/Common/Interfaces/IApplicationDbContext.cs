@@ -42,6 +42,7 @@ public interface IApplicationDbContext
     DbSet<UserOnboardingProgress> UserOnboardingProgress { get; }
     DbSet<AIConversation> AIConversations { get; }
     DbSet<AiConversationSession> AiConversationSessions { get; }
+    DbSet<AiMessage> AiMessages { get; }
     DbSet<AiDocument> AiDocuments { get; }
     DbSet<AiDocumentChunk> AiDocumentChunks { get; }
     DbSet<AiCopilotAuditLog> AiCopilotAuditLogs { get; }

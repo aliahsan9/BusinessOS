@@ -11,14 +11,16 @@ public interface ILlmChatClient
         string userId,
         string systemPrompt,
         string userPrompt,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<AiMemoryTurnDto>? conversationHistory = null);
 
     IAsyncEnumerable<string> StreamReplyAsync(
         Guid tenantId,
         string userId,
         string systemPrompt,
         string userPrompt,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<AiMemoryTurnDto>? conversationHistory = null);
 
     Task<(string? Reply, int? TokenUsage)> GenerateWithToolsAsync(
         Guid tenantId,
@@ -26,5 +28,6 @@ public interface ILlmChatClient
         string systemPrompt,
         string userPrompt,
         IReadOnlyList<object> toolResults,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<AiMemoryTurnDto>? conversationHistory = null);
 }

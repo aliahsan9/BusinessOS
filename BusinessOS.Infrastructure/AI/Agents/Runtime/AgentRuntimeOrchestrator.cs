@@ -77,7 +77,10 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             request.ProjectId);
 
         var page = _contextService.BuildPageContext(chatRequest);
-        var sessionId = await _memory.GetOrCreateSessionAsync(chatRequest, request.SessionId, cancellationToken);
+        var sessionId = await _memory.GetOrCreateSessionAsync(
+            chatRequest,
+            request.SessionId ?? request.ConversationId,
+            cancellationToken);
         var memory = await _memory.LoadAsync(sessionId, cancellationToken);
 
         yield return Status("Planning…");
@@ -115,7 +118,9 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
                 agentKey,
                 language,
                 PreferEmployeeTone: true,
-                request.WorkflowId);
+                request.WorkflowId,
+                sessionId,
+                request.ClientRequestId);
 
             var copilotResponse = await _copilot.ProcessAsync(copilotRequest, cancellationToken);
             var mapped = MapCopilot(copilotResponse, persona, agentKey, language);
@@ -177,7 +182,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
                     new AiCopilotChatRequest(
                         request.Message, request.CurrentPage, request.SearchQuery,
                         request.CustomerId, request.OrderId, request.InvoiceId, request.ProjectId,
-                        sessionId, false, agentKey, language, true, null),
+                        sessionId, false, agentKey, language, true, null, sessionId, request.ClientRequestId),
                     cancellationToken);
                 var mapped = MapCopilot(copilotResponse, persona, agentKey, language);
                 yield return new AgentStreamChunkDto { Type = "final", Content = mapped.Reply, FinalResponse = mapped };
@@ -369,13 +374,23 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             _logger.LogDebug(ex, "Proactive insights skipped");
         }
 
-        await _memory.UpdateAsync(sessionId, chatRequest, intent.Intent, request.Message, reply, cancellationToken);
+        await _memory.CompleteTurnAsync(
+            sessionId,
+            chatRequest,
+            intent.Intent,
+            request.Message,
+            reply,
+            toolsUsed,
+            citations: null,
+            clientRequestId: request.ClientRequestId,
+            cancellationToken: cancellationToken);
 
         var response = new AgentChatResponse
         {
             Reply = reply,
             SpokenReply = spoken,
             SessionId = sessionId,
+            ConversationId = sessionId,
             AgentKey = agentKey,
             AgentDisplayName = persona.DisplayName,
             Intent = intent.Intent,
@@ -498,6 +513,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             Reply = reply,
             SpokenReply = reply,
             SessionId = sessionId,
+            ConversationId = sessionId,
             AgentKey = agentKey,
             AgentDisplayName = persona.DisplayName,
             Intent = intent,
@@ -523,6 +539,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             Reply = reply,
             SpokenReply = c.SpokenReply ?? reply,
             SessionId = c.SessionId,
+            ConversationId = c.ConversationId ?? c.SessionId,
             AgentKey = c.AgentKey ?? agentKey,
             AgentDisplayName = persona.DisplayName,
             Intent = c.Intent,

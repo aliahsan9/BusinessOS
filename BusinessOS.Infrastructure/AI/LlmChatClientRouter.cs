@@ -1,3 +1,4 @@
+using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Services;
 
 namespace BusinessOS.Infrastructure.AI;
@@ -23,18 +24,19 @@ public sealed class LlmChatClientRouter : ILlmChatClient
         string userId,
         string systemPrompt,
         string userPrompt,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<AiMemoryTurnDto>? conversationHistory = null)
     {
         if (_openAi.IsConfigured)
         {
-            var reply = await _openAi.GenerateReplyAsync(tenantId, userId, systemPrompt, userPrompt, cancellationToken);
+            var reply = await _openAi.GenerateReplyAsync(tenantId, userId, systemPrompt, userPrompt, cancellationToken, conversationHistory);
             if (!string.IsNullOrWhiteSpace(reply))
                 return reply;
         }
 
         if (_cursor.IsConfigured)
         {
-            return await _cursor.GenerateReplyAsync(tenantId, userId, systemPrompt, userPrompt, cancellationToken);
+            return await _cursor.GenerateReplyAsync(tenantId, userId, systemPrompt, userPrompt, cancellationToken, conversationHistory);
         }
 
         return null;
@@ -45,18 +47,19 @@ public sealed class LlmChatClientRouter : ILlmChatClient
         string userId,
         string systemPrompt,
         string userPrompt,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default,
+        IReadOnlyList<AiMemoryTurnDto>? conversationHistory = null)
     {
         if (_openAi.IsConfigured)
         {
-            await foreach (var token in _openAi.StreamReplyAsync(tenantId, userId, systemPrompt, userPrompt, cancellationToken))
+            await foreach (var token in _openAi.StreamReplyAsync(tenantId, userId, systemPrompt, userPrompt, cancellationToken, conversationHistory))
             {
                 yield return token;
             }
             yield break;
         }
 
-        var reply = await GenerateReplyAsync(tenantId, userId, systemPrompt, userPrompt, cancellationToken);
+        var reply = await GenerateReplyAsync(tenantId, userId, systemPrompt, userPrompt, cancellationToken, conversationHistory);
         if (!string.IsNullOrWhiteSpace(reply))
         {
             foreach (var word in reply.Split(' ', StringSplitOptions.RemoveEmptyEntries))
@@ -72,14 +75,15 @@ public sealed class LlmChatClientRouter : ILlmChatClient
         string systemPrompt,
         string userPrompt,
         IReadOnlyList<object> toolResults,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<AiMemoryTurnDto>? conversationHistory = null)
     {
         if (_openAi.IsConfigured)
         {
-            return await _openAi.GenerateWithToolsAsync(tenantId, userId, systemPrompt, userPrompt, toolResults, cancellationToken);
+            return await _openAi.GenerateWithToolsAsync(tenantId, userId, systemPrompt, userPrompt, toolResults, cancellationToken, conversationHistory);
         }
 
-        var reply = await GenerateReplyAsync(tenantId, userId, systemPrompt, userPrompt, cancellationToken);
+        var reply = await GenerateReplyAsync(tenantId, userId, systemPrompt, userPrompt, cancellationToken, conversationHistory);
         return (reply, null);
     }
 }
