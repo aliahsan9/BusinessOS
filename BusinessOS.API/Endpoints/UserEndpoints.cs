@@ -86,15 +86,32 @@ public static class UserEndpoints
     private static async Task<IResult> CreateUser(
         CreateUserAdminRequest request,
         IIdentityService identityService,
+        ICurrentUserService currentUserService,
         CancellationToken cancellationToken)
     {
+        var tenantId = currentUserService.TenantId
+            ?? throw new Application.Common.Exceptions.BadRequestException("Tenant context is required.");
+
+        if (string.IsNullOrWhiteSpace(request.Email) ||
+            string.IsNullOrWhiteSpace(request.Password) ||
+            string.IsNullOrWhiteSpace(request.FirstName) ||
+            string.IsNullOrWhiteSpace(request.LastName))
+        {
+            return Results.BadRequest(new { errors = new[] { "Email, password, first name, and last name are required." } });
+        }
+
+        if (request.Password.Length > 128)
+        {
+            return Results.BadRequest(new { errors = new[] { "Password must not exceed 128 characters." } });
+        }
+
         var result = await identityService.CreateUserAsync(
             new CreateUserRequest(
                 request.Email,
                 request.Password,
                 request.FirstName,
                 request.LastName,
-                request.TenantId),
+                tenantId),
             cancellationToken);
 
         if (!result.Succeeded)
@@ -142,6 +159,13 @@ public static class UserEndpoints
         IIdentityService identityService,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(request.NewPassword) ||
+            request.NewPassword.Length < 8 ||
+            request.NewPassword.Length > 128)
+        {
+            return Results.BadRequest(new { errors = new[] { "New password must be between 8 and 128 characters." } });
+        }
+
         var result = await identityService.ResetPasswordAsync(
             userId, request.NewPassword, cancellationToken);
 

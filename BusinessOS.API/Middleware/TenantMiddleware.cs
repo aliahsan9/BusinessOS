@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using BusinessOS.API.Versioning;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Infrastructure.MultiTenancy;
@@ -25,7 +26,8 @@ public sealed class TenantMiddleware
     public async Task InvokeAsync(
         HttpContext context,
         ITenantProvider tenantProvider,
-        ITenantContext tenantContext)
+        ITenantContext tenantContext,
+        ITenantMembershipLookup membershipLookup)
     {
         var path = context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
 
@@ -35,92 +37,114 @@ public sealed class TenantMiddleware
             return;
         }
 
-        Guid? resolvedTenantId = null;
-
-        if (context.Request.Headers.TryGetValue("X-Tenant-ID", out var tenantHeader) &&
-            Guid.TryParse(tenantHeader, out var headerTenantId))
-        {
-            resolvedTenantId = headerTenantId;
-        }
-        else
-        {
-            var tenantClaim = context.User.FindFirst("TenantId")?.Value;
-            if (!string.IsNullOrWhiteSpace(tenantClaim) &&
-                Guid.TryParse(tenantClaim, out var claimTenantId))
-            {
-                resolvedTenantId = claimTenantId;
-            }
-        }
-
-        if (resolvedTenantId.HasValue)
-        {
-            tenantProvider.SetTenantId(resolvedTenantId.Value);
-            TenantContext.SetTenantId(resolvedTenantId.Value);
-
-            if (context.User.Identity?.IsAuthenticated == true)
-            {
-                await tenantContext.LoadAsync(context.RequestAborted);
-
-                if (tenantContext.IsLoaded && !tenantContext.IsActive)
-                {
-                    await WriteProblemAsync(
-                        context,
-                        StatusCodes.Status403Forbidden,
-                        "TENANT_INACTIVE",
-                        "Tenant account is inactive or suspended.");
-
-                    TenantContext.Clear();
-                    return;
-                }
-
-                if (tenantContext.IsLoaded &&
-                    context.User.Identity?.IsAuthenticated == true)
-                {
-                    var claimTenant = context.User.FindFirst("TenantId")?.Value;
-                    if (!string.IsNullOrWhiteSpace(claimTenant) &&
-                        Guid.TryParse(claimTenant, out var jwtTenantId) &&
-                        jwtTenantId != resolvedTenantId.Value)
-                    {
-                        _logger.LogWarning(
-                            "Tenant mismatch: JWT {JwtTenant} vs resolved {ResolvedTenant}",
-                            jwtTenantId,
-                            resolvedTenantId.Value);
-
-                        await WriteProblemAsync(
-                            context,
-                            StatusCodes.Status403Forbidden,
-                            "TENANT_MISMATCH",
-                            "Tenant context does not match authenticated user.");
-
-                        TenantContext.Clear();
-                        return;
-                    }
-                }
-            }
-
-            await _next(context);
-            TenantContext.Clear();
-            return;
-        }
-
         if (context.User.Identity?.IsAuthenticated != true)
         {
+            // Anonymous routes must not adopt a client-supplied tenant.
             await _next(context);
             return;
         }
 
-        _logger.LogWarning(
-            "Authenticated request missing tenant context for {Path} (TraceId: {TraceId})",
-            context.Request.Path,
-            context.TraceIdentifier);
+        var userId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            await WriteProblemAsync(
+                context,
+                StatusCodes.Status401Unauthorized,
+                "AUTH_REQUIRED",
+                "Authentication is required.");
+            return;
+        }
 
-        await WriteProblemAsync(
-            context,
-            StatusCodes.Status400BadRequest,
-            "TENANT_HEADER_REQUIRED",
-            "Missing or invalid X-Tenant-ID header");
+        var membership = await membershipLookup.FindByUserIdAsync(userId, context.RequestAborted);
+        if (membership is null || !membership.IsActive)
+        {
+            _logger.LogWarning(
+                "Rejected inactive or unknown account {UserId} for {Path}",
+                userId,
+                context.Request.Path);
 
-        TenantContext.Clear();
+            await WriteProblemAsync(
+                context,
+                StatusCodes.Status401Unauthorized,
+                "ACCOUNT_INACTIVE",
+                "Account is deactivated.");
+            return;
+        }
+
+        if (TryGetHeaderTenant(context, out var headerTenantId) &&
+            headerTenantId != membership.TenantId)
+        {
+            _logger.LogWarning(
+                "Rejected spoofed X-Tenant-ID {HeaderTenant} for user {UserId} who belongs to {MembershipTenant}",
+                headerTenantId,
+                userId,
+                membership.TenantId);
+
+            await WriteProblemAsync(
+                context,
+                StatusCodes.Status403Forbidden,
+                "TENANT_MISMATCH",
+                "Tenant context does not match authenticated user.");
+            return;
+        }
+
+        var claimTenant = context.User.FindFirst("TenantId")?.Value;
+        if (!Guid.TryParse(claimTenant, out var jwtTenantId) || jwtTenantId != membership.TenantId)
+        {
+            _logger.LogWarning(
+                "Rejected JWT tenant {JwtTenant} that does not match membership {MembershipTenant} for user {UserId}",
+                claimTenant,
+                membership.TenantId,
+                userId);
+
+            await WriteProblemAsync(
+                context,
+                StatusCodes.Status403Forbidden,
+                "TENANT_MISMATCH",
+                "Tenant context does not match authenticated user.");
+            return;
+        }
+
+        tenantProvider.SetTenantId(membership.TenantId);
+        TenantContext.SetTenantId(membership.TenantId);
+
+        try
+        {
+            await tenantContext.LoadAsync(context.RequestAborted);
+
+            if (!tenantContext.IsLoaded)
+            {
+                await WriteProblemAsync(
+                    context,
+                    StatusCodes.Status403Forbidden,
+                    "TENANT_NOT_FOUND",
+                    "Tenant account was not found.");
+                return;
+            }
+
+            if (!tenantContext.IsActive)
+            {
+                await WriteProblemAsync(
+                    context,
+                    StatusCodes.Status403Forbidden,
+                    "TENANT_INACTIVE",
+                    "Tenant account is inactive or suspended.");
+                return;
+            }
+
+            await _next(context);
+        }
+        finally
+        {
+            TenantContext.Clear();
+        }
+    }
+
+    private static bool TryGetHeaderTenant(HttpContext context, out Guid tenantId)
+    {
+        tenantId = Guid.Empty;
+        return context.Request.Headers.TryGetValue("X-Tenant-ID", out var tenantHeader) &&
+               Guid.TryParse(tenantHeader, out tenantId);
     }
 
     private static bool IsExcludedPath(string path)

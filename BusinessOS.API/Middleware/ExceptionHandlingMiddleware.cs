@@ -16,16 +16,13 @@ public sealed class ExceptionHandlingMiddleware
 
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
-    private readonly IHostEnvironment _environment;
 
     public ExceptionHandlingMiddleware(
         RequestDelegate next,
-        ILogger<ExceptionHandlingMiddleware> logger,
-        IHostEnvironment environment)
+        ILogger<ExceptionHandlingMiddleware> logger)
     {
         _next = next;
         _logger = logger;
-        _environment = environment;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -131,8 +128,8 @@ public sealed class ExceptionHandlingMiddleware
             Type = type,
             Status = statusCode,
             Title = title,
-            Detail = statusCode == StatusCodes.Status500InternalServerError && !_environment.IsDevelopment()
-                ? title
+            Detail = statusCode >= StatusCodes.Status500InternalServerError
+                ? "An unexpected error occurred."
                 : exception.Message,
             Instance = context.Request.Path
         };

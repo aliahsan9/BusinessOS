@@ -81,9 +81,9 @@ public static class AccountEndpoints
             return Results.BadRequest(new { detail = "Current password and new password are required." });
         }
 
-        if (request.NewPassword.Length < 8)
+        if (request.NewPassword.Length < 8 || request.NewPassword.Length > 128)
         {
-            return Results.BadRequest(new { detail = "New password must be at least 8 characters." });
+            return Results.BadRequest(new { detail = "New password must be between 8 and 128 characters." });
         }
 
         var userId = RequireUserId(currentUser);

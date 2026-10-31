@@ -13,13 +13,16 @@ namespace BusinessOS.Infrastructure.Services;
 public sealed class IdentityService : IIdentityService
 {
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly ICurrentUserService _currentUser;
     private readonly ILogger<IdentityService> _logger;
 
     public IdentityService(
         UserManager<ApplicationUser> userManager,
+        ICurrentUserService currentUser,
         ILogger<IdentityService> logger)
     {
         _userManager = userManager;
+        _currentUser = currentUser;
         _logger = logger;
     }
 
@@ -40,7 +43,30 @@ public sealed class IdentityService : IIdentityService
     private async Task<bool> ValidatePasswordInternalAsync(string userId, string password)
     {
         var appUser = await _userManager.FindByIdAsync(userId);
-        return appUser is not null && await _userManager.CheckPasswordAsync(appUser, password);
+        if (appUser is null)
+        {
+            return false;
+        }
+
+        if (await _userManager.IsLockedOutAsync(appUser))
+        {
+            _logger.LogWarning("Login rejected because account {UserId} is locked out", appUser.Id);
+            return false;
+        }
+
+        if (await _userManager.CheckPasswordAsync(appUser, password))
+        {
+            if (appUser.AccessFailedCount > 0)
+            {
+                await _userManager.ResetAccessFailedCountAsync(appUser);
+            }
+
+            return true;
+        }
+
+        await _userManager.AccessFailedAsync(appUser);
+        _logger.LogWarning("Failed password validation for user {UserId}", appUser.Id);
+        return false;
     }
 
     public async Task<IReadOnlyList<string>> GetRolesAsync(
@@ -57,13 +83,17 @@ public sealed class IdentityService : IIdentityService
         CreateUserRequest request,
         CancellationToken cancellationToken)
     {
+        var tenantId = _currentUser.TenantId is Guid currentTenant && currentTenant != Guid.Empty
+            ? currentTenant
+            : request.TenantId;
+
         var user = new ApplicationUser
         {
             UserName = request.Email,
             Email = request.Email,
             FirstName = request.FirstName,
             LastName = request.LastName,
-            TenantId = request.TenantId,
+            TenantId = tenantId,
             JoinedAt = DateTime.UtcNow
         };
 
@@ -143,9 +173,7 @@ public sealed class IdentityService : IIdentityService
         string userId,
         CancellationToken cancellationToken = default)
     {
-        var user = await _userManager.FindByIdAsync(userId)
-            ?? throw new NotFoundException($"User '{userId}' was not found.");
-
+        var user = await FindUserInCurrentTenantAsync(userId);
         return await MapUserResponseAsync(user);
     }
 
@@ -154,8 +182,7 @@ public sealed class IdentityService : IIdentityService
         UpdateUserRequest request,
         CancellationToken cancellationToken = default)
     {
-        var user = await _userManager.FindByIdAsync(userId)
-            ?? throw new NotFoundException($"User '{userId}' was not found.");
+        var user = await FindUserInCurrentTenantAsync(userId);
 
         user.Email = request.Email.Trim();
         user.UserName = request.Email.Trim();
@@ -174,8 +201,7 @@ public sealed class IdentityService : IIdentityService
 
     public async Task DeactivateUserAsync(string userId, CancellationToken cancellationToken = default)
     {
-        var user = await _userManager.FindByIdAsync(userId)
-            ?? throw new NotFoundException($"User '{userId}' was not found.");
+        var user = await FindUserInCurrentTenantAsync(userId);
 
         user.IsActive = false;
         var result = await _userManager.UpdateAsync(user);
@@ -187,8 +213,7 @@ public sealed class IdentityService : IIdentityService
 
     public async Task ActivateUserAsync(string userId, CancellationToken cancellationToken = default)
     {
-        var user = await _userManager.FindByIdAsync(userId)
-            ?? throw new NotFoundException($"User '{userId}' was not found.");
+        var user = await FindUserInCurrentTenantAsync(userId);
 
         user.IsActive = true;
         var result = await _userManager.UpdateAsync(user);
@@ -203,8 +228,7 @@ public sealed class IdentityService : IIdentityService
         string newPassword,
         CancellationToken cancellationToken = default)
     {
-        var user = await _userManager.FindByIdAsync(userId)
-            ?? throw new NotFoundException($"User '{userId}' was not found.");
+        var user = await FindUserInCurrentTenantAsync(userId);
 
         var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
         var result = await _userManager.ResetPasswordAsync(user, resetToken, newPassword);
@@ -339,6 +363,21 @@ public sealed class IdentityService : IIdentityService
         return new IdentityOperationResult(
             result.Succeeded,
             result.Errors.Select(x => x.Description).ToList());
+    }
+
+    private async Task<ApplicationUser> FindUserInCurrentTenantAsync(string userId)
+    {
+        var user = await _userManager.FindByIdAsync(userId)
+            ?? throw new NotFoundException($"User '{userId}' was not found.");
+
+        if (_currentUser.TenantId is Guid tenantId &&
+            tenantId != Guid.Empty &&
+            user.TenantId != tenantId)
+        {
+            throw new NotFoundException($"User '{userId}' was not found.");
+        }
+
+        return user;
     }
 
     private async Task<UserResponse> MapUserResponseAsync(ApplicationUser user)

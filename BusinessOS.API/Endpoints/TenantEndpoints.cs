@@ -50,6 +50,7 @@ public static class TenantEndpoints
     {
         app.MapPost("/register-business", RegisterBusiness)
             .WithTags("Tenant")
+            .RequireRateLimiting("auth")
             .WithName("RegisterBusiness")
             .WithSummary("Register a new business tenant")
             .Produces<BusinessOS.Application.Features.Auth.DTOs.AuthResponse>(StatusCodes.Status201Created)

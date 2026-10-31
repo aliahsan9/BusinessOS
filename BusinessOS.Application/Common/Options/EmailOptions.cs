@@ -19,7 +19,7 @@ public sealed class EmailOptions
 
     public string Password { get; set; } = string.Empty;
 
-    public string FromAddress { get; set; } = "aliahsan8751@gmail.com";
+    public string FromAddress { get; set; } = string.Empty;
 
     public string FromName { get; set; } = "BusinessOS";
 }

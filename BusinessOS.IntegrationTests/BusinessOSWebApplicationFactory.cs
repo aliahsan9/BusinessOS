@@ -23,6 +23,9 @@ public class BusinessOSWebApplicationFactory : WebApplicationFactory<Program>
         builder.UseSetting("InMemoryDatabaseName", _databaseName);
         builder.UseSetting("Qdrant:Enabled", "false");
         builder.UseSetting("VectorSync:BackfillOnStartup", "false");
+        builder.UseSetting("Jwt:Issuer", IntegrationJwt.Issuer);
+        builder.UseSetting("Jwt:Audience", IntegrationJwt.Audience);
+        builder.UseSetting("Jwt:Key", IntegrationJwt.Key);
     }
 
     public void EnsureSeeded()
@@ -67,3 +70,10 @@ public abstract class IntegrationTestBase
 
 [CollectionDefinition("IntegrationTests")]
 public class IntegrationTestCollection : ICollectionFixture<BusinessOSWebApplicationFactory>;
+
+internal static class IntegrationJwt
+{
+    public const string Issuer = "BusinessOS";
+    public const string Audience = "BusinessOSUsers";
+    public const string Key = "integration-test-signing-key-must-be-32chars!";
+}

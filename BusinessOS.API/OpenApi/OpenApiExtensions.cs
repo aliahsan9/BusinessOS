@@ -38,8 +38,8 @@ public static class OpenApiExtensions
                     "## Authentication\n" +
                     "Most endpoints require a **Bearer JWT**. Obtain a token via `POST /api/v1/auth/login` or `POST /api/v1/auth/register`.\n\n" +
                     "## Multi-Tenancy\n" +
-                    "Protected tenant-scoped endpoints require the **`X-Tenant-ID`** header (GUID). " +
-                    "The value must match the `TenantId` claim embedded in the JWT. " +
+                    "Protected tenant-scoped endpoints accept an optional **`X-Tenant-ID`** header (GUID). " +
+                    "The server authorizes the caller against their stored tenant membership and rejects a header or JWT tenant claim that does not match. " +
                     "Data is isolated per tenant via EF Core global query filters.\n\n" +
                     "## Authorization\n" +
                     "Fine-grained permissions are enforced via policy codes (e.g. `Product.Create`, `Order.View`). " +
@@ -70,8 +70,8 @@ public static class OpenApiExtensions
                     In = ParameterLocation.Header,
                     Name = "X-Tenant-ID",
                     Description =
-                        "Active tenant GUID. Required for authenticated tenant-scoped requests. " +
-                        "Must match the TenantId claim in the JWT."
+                        "Active tenant GUID. When supplied, it must match the authenticated user's tenant membership. " +
+                        "The server does not trust a client-supplied tenant id on its own."
                 };
 
                 OrderTags(document);

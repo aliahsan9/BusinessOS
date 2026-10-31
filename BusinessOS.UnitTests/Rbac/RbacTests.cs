@@ -36,6 +36,7 @@ public class RoleServiceTests
             _roleRepository.Object,
             _permissionRepository.Object,
             _auditService.Object,
+            Mock.Of<ICurrentUserService>(),
             _userManager.Object,
             _roleManager.Object);
     }

@@ -91,22 +91,28 @@ public class BusinessOSDbContext
                 var tenantIdProp = entry.Properties
                     .FirstOrDefault(p => p.Metadata.Name == "TenantId");
 
-                if (tenantIdProp is not null)
+                if (tenantIdProp is not null && _tenantId != Guid.Empty)
                 {
                     // Guid? TenantId may be intentionally null (system-scoped rows such as AgentProfile).
                     if (tenantIdProp.Metadata.ClrType == typeof(Guid?))
                     {
                         var nullable = (Guid?)tenantIdProp.CurrentValue;
-                        if (nullable == Guid.Empty && _tenantId != Guid.Empty)
+                        if (nullable == Guid.Empty || (nullable.HasValue && nullable.Value != _tenantId))
                             tenantIdProp.CurrentValue = _tenantId;
                     }
-                    else
+                    else if (tenantIdProp.Metadata.ClrType == typeof(Guid))
                     {
-                        var currentValue = tenantIdProp.CurrentValue as Guid? ?? Guid.Empty;
-                        if (currentValue == Guid.Empty && _tenantId != Guid.Empty)
-                            tenantIdProp.CurrentValue = _tenantId;
+                        tenantIdProp.CurrentValue = _tenantId;
                     }
                 }
+            }
+            else if (entry.State == EntityState.Modified)
+            {
+                var tenantIdProp = entry.Properties
+                    .FirstOrDefault(p => p.Metadata.Name == "TenantId");
+
+                if (tenantIdProp is not null && tenantIdProp.IsModified)
+                    tenantIdProp.CurrentValue = tenantIdProp.OriginalValue;
             }
 
             // Soft delete handling (if entity has IsDeleted)

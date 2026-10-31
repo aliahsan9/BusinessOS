@@ -14,6 +14,7 @@ public sealed class RoleService : IRoleService
     private readonly IRoleRepository _roleRepository;
     private readonly IPermissionRepository _permissionRepository;
     private readonly IRbacAuditService _auditService;
+    private readonly ICurrentUserService _currentUser;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly RoleManager<ApplicationRole> _roleManager;
 
@@ -21,12 +22,14 @@ public sealed class RoleService : IRoleService
         IRoleRepository roleRepository,
         IPermissionRepository permissionRepository,
         IRbacAuditService auditService,
+        ICurrentUserService currentUser,
         UserManager<ApplicationUser> userManager,
         RoleManager<ApplicationRole> roleManager)
     {
         _roleRepository = roleRepository;
         _permissionRepository = permissionRepository;
         _auditService = auditService;
+        _currentUser = currentUser;
         _userManager = userManager;
         _roleManager = roleManager;
     }
@@ -187,6 +190,8 @@ public sealed class RoleService : IRoleService
         var user = await _userManager.FindByIdAsync(userId)
             ?? throw new NotFoundException($"User '{userId}' was not found.");
 
+        EnsureUserInCurrentTenant(user);
+
         await _roleRepository.AssignRoleToUserAsync(userId, roleId, cancellationToken);
         await EnsureIdentityRoleExistsAsync(role.Name);
         await _userManager.AddToRoleAsync(user, role.Name);
@@ -211,6 +216,8 @@ public sealed class RoleService : IRoleService
         var user = await _userManager.FindByIdAsync(userId)
             ?? throw new NotFoundException($"User '{userId}' was not found.");
 
+        EnsureUserInCurrentTenant(user);
+
         await _roleRepository.RemoveRoleFromUserAsync(userId, roleId, cancellationToken);
         await _userManager.RemoveFromRoleAsync(user, role.Name);
 
@@ -232,6 +239,16 @@ public sealed class RoleService : IRoleService
         string userId,
         CancellationToken cancellationToken = default) =>
         _roleRepository.GetUserRoleNamesAsync(userId, cancellationToken);
+
+    private void EnsureUserInCurrentTenant(ApplicationUser user)
+    {
+        if (_currentUser.TenantId is Guid tenantId &&
+            tenantId != Guid.Empty &&
+            user.TenantId != tenantId)
+        {
+            throw new NotFoundException($"User '{user.Id}' was not found.");
+        }
+    }
 
     private async Task EnsureIdentityRoleExistsAsync(string roleName)
     {

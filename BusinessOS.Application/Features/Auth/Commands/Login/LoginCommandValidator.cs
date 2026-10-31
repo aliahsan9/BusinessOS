@@ -8,9 +8,11 @@ public sealed class LoginCommandValidator : AbstractValidator<LoginCommand>
     {
         RuleFor(x => x.Email)
             .NotEmpty().WithMessage("Email is required")
-            .EmailAddress().WithMessage("Email must be valid");
+            .EmailAddress().WithMessage("Email must be valid")
+            .MaximumLength(256);
 
         RuleFor(x => x.Password)
-            .NotEmpty().WithMessage("Password is required");
+            .NotEmpty().WithMessage("Password is required")
+            .MaximumLength(128);
     }
 }

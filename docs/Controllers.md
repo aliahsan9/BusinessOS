@@ -54,7 +54,8 @@ graph TD
 * `POST /api/ai/chat`: Interactive natural language chat endpoint with context retrieval.
 * `POST /api/ai/agent/execute`: Autonomous agent workflow execution endpoint.
 * `GET /api/ai/conversations`: Returns conversation session history.
-* `POST /api/agents/tts`: Converts text string to MP3 audio via Edge Neural TTS.
+* `POST /api/v1/agents/tts`: Converts text to MP3 with the configured speech provider (OpenAI TTS by default). Identical replies are cached. The API key stays on the server.
+* `GET /api/v1/agents/tts/voices`: Lists voices for the active provider so the client can switch voice.
 
 ---
 

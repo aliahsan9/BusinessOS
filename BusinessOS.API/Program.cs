@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Threading.RateLimiting;
 using BusinessOS.API.Authorization;
 using BusinessOS.API.Hubs;
 using BusinessOS.API.Middleware;
@@ -58,6 +59,16 @@ try
             limiterOptions.Window = TimeSpan.FromMinutes(1);
             limiterOptions.QueueLimit = 0;
         });
+
+        options.AddPolicy("auth", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 10,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0
+                }));
     });
 
     builder.Services.AddSignalR();
@@ -69,8 +80,10 @@ try
         options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     });
 
-    var jwtKey = builder.Configuration["Jwt:Key"]
-        ?? throw new InvalidOperationException("Jwt:Key is missing.");
+    var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+    var jwtAudience = builder.Configuration["Jwt:Audience"];
+    var jwtKey = builder.Configuration["Jwt:Key"];
+    JwtConfigurationGuard.Ensure(jwtIssuer, jwtAudience, jwtKey);
 
     builder.Services
         .AddAuthentication(options =>
@@ -83,12 +96,15 @@ try
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuer = true,
-                ValidIssuer = builder.Configuration["Jwt:Issuer"],
+                ValidIssuer = jwtIssuer,
                 ValidateAudience = true,
-                ValidAudience = builder.Configuration["Jwt:Audience"],
+                ValidAudience = jwtAudience,
                 ValidateLifetime = true,
+                RequireExpirationTime = true,
+                RequireSignedTokens = true,
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+                ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey!)),
                 ClockSkew = TimeSpan.Zero
             };
 
@@ -122,9 +138,9 @@ try
                     else
                     {
                         logger.LogWarning(
-                            context.Exception,
-                            "JWT authentication failed for {Path} (RequestId={RequestId})",
+                            "JWT authentication failed for {Path}. Reason={Reason} (RequestId={RequestId})",
                             context.HttpContext.Request.Path,
+                            context.Exception.GetType().Name,
                             context.HttpContext.TraceIdentifier);
                     }
 
@@ -181,7 +197,8 @@ try
                 policy.WithOrigins(allowedOrigins)
                     .AllowAnyHeader()
                     .AllowAnyMethod()
-                    .AllowCredentials();
+                    .AllowCredentials()
+                    .WithExposedHeaders("X-Tts-Provider", "X-Tts-Voice", "X-Tts-Cache");
             }
         });
     });
@@ -262,8 +279,20 @@ try
 
     if (!app.Environment.IsDevelopment())
     {
+        app.UseHsts();
         app.UseHttpsRedirection();
     }
+
+    app.Use(async (context, next) =>
+    {
+        var headers = context.Response.Headers;
+        headers["X-Content-Type-Options"] = "nosniff";
+        headers["X-Frame-Options"] = "DENY";
+        headers["Referrer-Policy"] = "no-referrer";
+        headers["X-Permitted-Cross-Domain-Policies"] = "none";
+        headers["Content-Security-Policy"] = "frame-ancestors 'none'";
+        await next();
+    });
 
     app.UseCors(corsPolicyName);
 
@@ -307,3 +336,35 @@ finally
 }
 
 public partial class Program;
+
+file static class JwtConfigurationGuard
+{
+    private const int MinimumKeyBytes = 32;
+
+    private static readonly HashSet<string> ForbiddenKeys = new(StringComparer.Ordinal)
+    {
+        "THIS_IS_SUPER_SECRET_KEY_123456789",
+        "super-secret-development-key-1234567890",
+        "CHANGE_ME",
+        "changeme"
+    };
+
+    public static void Ensure(string? issuer, string? audience, string? key)
+    {
+        if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(audience))
+        {
+            throw new InvalidOperationException(
+                "Jwt:Issuer and Jwt:Audience are required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(key) ||
+            Encoding.UTF8.GetByteCount(key) < MinimumKeyBytes ||
+            ForbiddenKeys.Contains(key))
+        {
+            throw new InvalidOperationException(
+                "Jwt:Key is missing, too short, or a known insecure placeholder. " +
+                "Set a random key of at least 32 bytes via user secrets in Development " +
+                "(dotnet user-secrets set \"Jwt:Key\" \"<key>\") or the Jwt__Key environment variable.");
+        }
+    }
+}

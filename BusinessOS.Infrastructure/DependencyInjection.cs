@@ -113,6 +113,9 @@ public static class DependencyInjection
                 options.Password.RequireLowercase = true;
                 options.Password.RequireUppercase = true;
                 options.Password.RequireNonAlphanumeric = false;
+                options.Lockout.AllowedForNewUsers = true;
+                options.Lockout.MaxFailedAccessAttempts = 5;
+                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
                 options.User.RequireUniqueEmail = true;
             })
             .AddEntityFrameworkStores<BusinessOSDbContext>()
@@ -127,6 +130,7 @@ public static class DependencyInjection
         services.AddScoped<IPermissionRepository, PermissionRepository>();
 
         services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<ITenantMembershipLookup, TenantMembershipLookup>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<IIdentityService, IdentityService>();
         services.AddScoped<IAuthService, AuthService>();
@@ -169,10 +173,23 @@ public static class DependencyInjection
         services.AddScoped<IAgentPlanner, AgentPlanner>();
         services.AddScoped<IAgentWorkflowService, AgentWorkflowService>();
         services.AddScoped<IVoicePreferenceService, VoicePreferenceService>();
-        services.AddSingleton<ISophiaTtsService, EdgeNeuralTtsService>();
+        services.Configure<TtsOptions>(configuration.GetSection(TtsOptions.SectionName));
+        services.AddSingleton<TtsAudioCache>();
+        services.AddSingleton<ITtsProvider, OpenAiTtsProvider>();
+        services.AddSingleton<ITtsProvider, EdgeNeuralTtsService>();
+        services.AddSingleton<ISophiaTtsService, SophiaTtsService>();
         services.AddHttpClient("SophiaTts", client =>
         {
             client.Timeout = TimeSpan.FromSeconds(30);
+        });
+        services.AddHttpClient(OpenAiTtsProvider.HttpClientName, (sp, client) =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AiOptions>>().Value;
+            var baseUrl = string.IsNullOrWhiteSpace(options.OpenAiBaseUrl)
+                ? "https://api.openai.com/"
+                : options.OpenAiBaseUrl.TrimEnd('/') + "/";
+            client.BaseAddress = new Uri(baseUrl);
+            client.Timeout = TimeSpan.FromSeconds(45);
         });
         services.AddScoped<IAgentOnboardingOrchestrator, AgentOnboardingOrchestrator>();
         services.AddScoped<IAgentIntentParser, AgentIntentParser>();
