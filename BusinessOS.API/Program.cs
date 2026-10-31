@@ -1,7 +1,11 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+ main
 using System.Threading.RateLimiting;
+
+using Asp.Versioning;
+ master
 using BusinessOS.API.Authorization;
 using BusinessOS.API.Hubs;
 using BusinessOS.API.Middleware;
@@ -42,6 +46,21 @@ try
     builder.Services.Configure<CacheSettings>(
         builder.Configuration.GetSection(CacheSettings.SectionName));
 
+ main
+
+    builder.Services.AddControllers();
+
+    // Adding Versioning
+    builder.Services.AddApiVersioning(options =>
+    {
+        options.DefaultApiVersion = new ApiVersion(1, 0);
+
+        options.AssumeDefaultVersionWhenUnspecified = true;
+
+        options.ReportApiVersions = true;
+    });
+
+ master
     builder.Services.AddApplication();
     builder.Services.AddInfrastructure(builder.Configuration);
     builder.Services.Configure<BusinessOS.Application.Features.Dashboard.Services.DashboardCacheOptions>(
