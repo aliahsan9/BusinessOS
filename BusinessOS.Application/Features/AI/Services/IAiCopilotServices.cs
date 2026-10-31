@@ -89,7 +89,10 @@ public interface IAiMemoryService
         int? tokenUsage = null,
         string? clientRequestId = null,
         IReadOnlyList<AiToolResult>? toolResults = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        bool updatePendingAction = false,
+        string? pendingActionJson = null);
+    Task SetPendingActionAsync(Guid sessionId, string? pendingActionJson, CancellationToken cancellationToken = default);
     Task AppendMessageAsync(Guid conversationId, ChatMessageInput message, CancellationToken cancellationToken = default);
     Task UpdateSummaryAsync(Guid conversationId, string summary, int summarizedThroughSequence, CancellationToken cancellationToken = default);
     Task<AiConversationTurnLookupDto?> FindTurnByClientRequestIdAsync(Guid sessionId, string clientRequestId, CancellationToken cancellationToken = default);

@@ -198,6 +198,10 @@ public sealed class AiMemoryStateDto
     public string? OnboardingDataJson { get; init; }
     public string? TonePreference { get; init; }
     public string? LastClientRequestId { get; init; }
+    /// <summary>
+    /// JSON draft of a write action waiting for details or confirmation. Null when idle.
+    /// </summary>
+    public string? PendingActionJson { get; init; }
 }
 
 public sealed class AiMemoryTurnDto

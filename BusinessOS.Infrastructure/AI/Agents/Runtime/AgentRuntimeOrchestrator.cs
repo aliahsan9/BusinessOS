@@ -86,6 +86,28 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         yield return Status("Planning…");
 
         var intent = _intentParser.Parse(request.Message, page, memory, language);
+        var storedPending = AgentActionClarifier.Read(memory.PendingActionJson);
+        var abandonPending = false;
+        var pending = storedPending;
+        if (pending is not null && AgentActionClarifier.IsSmallTalk(request.Message))
+        {
+            pending = null;
+        }
+        else if (pending is not null && AgentActionClarifier.IsDifferentCommand(request.Message, pending.Tool))
+        {
+            pending = null;
+            abandonPending = true;
+        }
+        else if (pending is not null)
+        {
+            intent = new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.ActionCreate,
+                Confidence = 0.96,
+                SuggestedTools = [pending.Tool]
+            };
+        }
+
         var permission = _permissions.ValidateIntent(intent.Intent, intent.SuggestedTools);
         if (!permission.Allowed)
         {
@@ -104,6 +126,9 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         // Conversational / help / dashboard / document search → existing copilot (preserves /api/ai parity).
         if (!ShouldUseEmployeeRuntime(intent))
         {
+            if (abandonPending)
+                await _memory.SetPendingActionAsync(sessionId, null, cancellationToken);
+
             yield return Status("Consulting business data…");
             var copilotRequest = new AiCopilotChatRequest(
                 request.Message,
@@ -147,14 +172,65 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         AiActionResultDto? lastAction = null;
         var summaries = new List<string>();
         string? clarification = null;
+        var updatePending = abandonPending;
+        string? pendingJson = null;
+        var awaitingDetails = false;
+        JsonElement? injectedArgs = null;
+        AiToolName? injectedTool = null;
+        string? confirmedPendingJson = null;
 
-        var useWorkflow = _planner.RequiresWorkflow(intent.Intent, request.Message, memory)
-            || LooksLikeMultiStep(request.Message);
+        var planMessage = string.IsNullOrWhiteSpace(pending?.OriginalRequest)
+            ? request.Message
+            : pending!.OriginalRequest!;
+
+        var firstTool = pending?.Tool
+            ?? (intent.SuggestedTools.Count > 0 ? intent.SuggestedTools[0] : (AiToolName?)null);
+        if (firstTool is AiToolName briefTool && AgentActionClarifier.NeedsBrief(briefTool))
+        {
+            yield return Status("Checking the details…");
+            var decision = AgentActionClarifier.Decide(briefTool, request.Message, pending, state, page);
+            if (!decision.ShouldExecute)
+            {
+                await _memory.CompleteTurnAsync(
+                    sessionId,
+                    chatRequest,
+                    intent.Intent,
+                    request.Message,
+                    decision.Question,
+                    toolsUsed: null,
+                    citations: null,
+                    clientRequestId: request.ClientRequestId,
+                    cancellationToken: cancellationToken,
+                    updatePendingAction: true,
+                    pendingActionJson: decision.PendingJson);
+
+                var held = BuildResponse(
+                    persona,
+                    agentKey,
+                    language,
+                    intent.Intent,
+                    sessionId,
+                    decision.Question,
+                    suggestions: decision.Suggestions);
+                await foreach (var chunk in StreamText(decision.Question, held, cancellationToken))
+                    yield return chunk;
+                yield break;
+            }
+
+            injectedTool = briefTool;
+            injectedArgs = decision.Args;
+            confirmedPendingJson = decision.PendingJson;
+            updatePending = true;
+            pendingJson = null;
+        }
+
+        var useWorkflow = _planner.RequiresWorkflow(intent.Intent, planMessage, memory)
+            || LooksLikeMultiStep(planMessage);
 
         IReadOnlyList<(string StepKey, string Title, AiToolName? Tool)> steps;
         if (useWorkflow)
         {
-            var plan = _planner.Plan(agentKey, intent.Intent, request.Message, page, memory);
+            var plan = _planner.Plan(agentKey, intent.Intent, planMessage, page, memory);
             var userId = _currentUser.UserId
                 ?? throw new InvalidOperationException("User context is required.");
             workflow = await _workflows.CreateFromPlanAsync(plan, userId, sessionId, cancellationToken);
@@ -178,6 +254,9 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             if (primary == default && intent.SuggestedTools.Count == 0)
             {
                 // Fall back to copilot if we somehow got here without tools.
+                if (abandonPending)
+                    await _memory.SetPendingActionAsync(sessionId, null, cancellationToken);
+
                 var copilotResponse = await _copilot.ProcessAsync(
                     new AiCopilotChatRequest(
                         request.Message, request.CurrentPage, request.SearchQuery,
@@ -211,6 +290,25 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
                     };
                 }
                 continue;
+            }
+
+            if (AgentActionClarifier.NeedsBrief(toolName.Value) && toolName != injectedTool)
+            {
+                var decision = AgentActionClarifier.Decide(toolName.Value, request.Message, pending: null, state, page);
+                if (!decision.ShouldExecute)
+                {
+                    awaitingDetails = true;
+                    updatePending = true;
+                    pendingJson = decision.PendingJson;
+                    suggestions.AddRange(decision.Suggestions);
+                    var prefix = summaries.Count > 0 ? string.Join("\n", summaries) + "\n\n" : "";
+                    clarification = prefix + decision.Question;
+                    break;
+                }
+
+                injectedTool = toolName;
+                injectedArgs = decision.Args;
+                confirmedPendingJson = decision.PendingJson;
             }
 
             yield return Status(title);
@@ -254,7 +352,8 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
                     State = state,
                     WorkflowId = workflow?.Id,
                     StepKey = stepKey,
-                    StepTitle = title
+                    StepTitle = title,
+                    PreextractedArgs = toolName == injectedTool ? injectedArgs : null
                 }, cancellationToken);
             }
             catch (Exception ex)
@@ -302,6 +401,12 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
 
             if (!exec.ToolResult.Success)
             {
+                if (confirmedPendingJson is not null)
+                {
+                    updatePending = true;
+                    pendingJson = confirmedPendingJson;
+                }
+
                 if (exec.Correction?.Suggestions.Count > 0)
                     suggestions.AddRange(exec.Correction.Suggestions);
 
@@ -343,7 +448,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
 
         if (workflow is not null)
         {
-            if (clarification is null)
+            if (awaitingDetails || clarification is null)
                 await _workflows.CompleteAsync(workflow.Id, string.Join(" | ", summaries.Take(3)), cancellationToken);
             else
                 await _workflows.FailAsync(workflow.Id, clarification, cancellationToken);
@@ -351,27 +456,30 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             workflow = await _workflows.GetAsync(workflow.Id, cancellationToken);
         }
 
-        yield return Status("Completed");
+        yield return Status(awaitingDetails ? "Need a few details…" : "Completed");
 
         var reply = BuildReply(summaries, clarification, language, lastAction);
         var spoken = BuildSpoken(reply, language, lastAction);
 
-        try
+        if (!awaitingDetails)
         {
-            var proactive = await _insights.GetProactiveInsightsAsync(cancellationToken);
-            foreach (var insight in proactive.Where(i =>
-                         i.Severity.Equals("high", StringComparison.OrdinalIgnoreCase)).Take(2))
+            try
             {
-                suggestions.Add(new AiSuggestionDto
+                var proactive = await _insights.GetProactiveInsightsAsync(cancellationToken);
+                foreach (var insight in proactive.Where(i =>
+                             i.Severity.Equals("high", StringComparison.OrdinalIgnoreCase)).Take(2))
                 {
-                    Label = insight.Title,
-                    Message = insight.Message
-                });
+                    suggestions.Add(new AiSuggestionDto
+                    {
+                        Label = insight.Title,
+                        Message = insight.Message
+                    });
+                }
             }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Proactive insights skipped");
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Proactive insights skipped");
+            }
         }
 
         await _memory.CompleteTurnAsync(
@@ -383,7 +491,9 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             toolsUsed,
             citations: null,
             clientRequestId: request.ClientRequestId,
-            cancellationToken: cancellationToken);
+            cancellationToken: cancellationToken,
+            updatePendingAction: updatePending,
+            pendingActionJson: pendingJson);
 
         var response = new AgentChatResponse
         {
@@ -507,7 +617,8 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         AiCopilotIntent intent,
         Guid sessionId,
         string reply,
-        bool permissionDenied = false) =>
+        bool permissionDenied = false,
+        IReadOnlyList<AiSuggestionDto>? suggestions = null) =>
         new()
         {
             Reply = reply,
@@ -517,8 +628,28 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             AgentKey = agentKey,
             AgentDisplayName = persona.DisplayName,
             Intent = intent,
-            PermissionDenied = permissionDenied
+            PermissionDenied = permissionDenied,
+            Suggestions = suggestions ?? []
         };
+
+    private static async IAsyncEnumerable<AgentStreamChunkDto> StreamText(
+        string reply,
+        AgentChatResponse response,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        foreach (var word in reply.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            yield return new AgentStreamChunkDto { Type = "token", Content = word + " " };
+            await Task.Delay(8, cancellationToken);
+        }
+
+        yield return new AgentStreamChunkDto
+        {
+            Type = "final",
+            Content = reply,
+            FinalResponse = response
+        };
+    }
 
     private static AgentChatResponse MapCopilot(
         AiCopilotChatResponse c,

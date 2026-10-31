@@ -41,6 +41,41 @@ public class AiMemoryServiceTests
     }
 
     [Fact]
+    public async Task CompleteTurn_PreservesPendingActionUntilCleared()
+    {
+        var harness = CreateHarness();
+        var request = new AiChatRequest("Create a new customer");
+        var sessionId = await harness.Service.GetOrCreateSessionAsync(request);
+        const string draft = "{\"tool\":\"CreateCustomer\"}";
+
+        await harness.Service.CompleteTurnAsync(
+            sessionId,
+            request,
+            AiCopilotIntent.ActionCreate,
+            request.Message,
+            "I need a name, phone, and email.",
+            updatePendingAction: true,
+            pendingActionJson: draft);
+
+        var saved = await harness.Service.LoadAsync(sessionId);
+        saved.PendingActionJson.Should().Contain("CreateCustomer");
+
+        await harness.Service.CompleteTurnAsync(
+            sessionId,
+            new AiChatRequest("Thanks"),
+            AiCopilotIntent.Conversational,
+            "Thanks",
+            "Anytime.");
+
+        var kept = await harness.Service.LoadAsync(sessionId);
+        kept.PendingActionJson.Should().Contain("CreateCustomer");
+
+        await harness.Service.SetPendingActionAsync(sessionId, null);
+        var cleared = await harness.Service.LoadAsync(sessionId);
+        cleared.PendingActionJson.Should().BeNull();
+    }
+
+    [Fact]
     public async Task FollowUpLoad_IncludesPreviousTurns()
     {
         var harness = CreateHarness();

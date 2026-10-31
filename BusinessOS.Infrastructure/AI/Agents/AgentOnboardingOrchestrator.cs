@@ -406,7 +406,9 @@ public sealed class AgentOnboardingOrchestrator : IAgentOnboardingOrchestrator
             PreferredAgentKey = agentKey,
             OnboardingStep = step,
             OnboardingDataJson = JsonSerializer.Serialize(data, JsonOptions),
-            TonePreference = existing.TonePreference ?? "employee"
+            TonePreference = existing.TonePreference ?? "employee",
+            PendingActionJson = existing.PendingActionJson,
+            LastClientRequestId = existing.LastClientRequestId
         };
 
         session.MemoryJson = JsonSerializer.Serialize(memory, JsonOptions);

@@ -53,8 +53,8 @@ public sealed class AgentArgumentExtractor : IAgentArgumentExtractor
                 var system = """
                     You extract structured JSON arguments for a business ERP tool.
                     Return ONLY valid JSON matching the schema. No markdown. No commentary.
-                    Use null for unknown optional fields. Prefer values from the user message.
-                    Reuse known entity IDs from state when present.
+                    Use null for unknown fields. Never invent email addresses, phone numbers, prices, postal codes, or addresses.
+                    Omit any field the user did not actually state. Reuse known entity IDs from state when present.
                     """;
 
                 var user = $"""
@@ -137,7 +137,7 @@ public sealed class AgentArgumentExtractor : IAgentArgumentExtractor
         var phone = ParsePhone(message);
         var address = ParseLabeled(message, "address") ?? ParseAfter(message, "address");
         var city = ParseLabeled(message, "city") ?? InferCity(message);
-        var country = ParseLabeled(message, "country") ?? "Pakistan";
+        var country = ParseLabeled(message, "country");
 
         if (parsed is null)
         {
@@ -147,7 +147,7 @@ public sealed class AgentArgumentExtractor : IAgentArgumentExtractor
                 ("address", address),
                 ("city", city),
                 ("country", country),
-                ("postalCode", ParseLabeled(message, "postal", "zip") ?? "00000"));
+                ("postalCode", ParseLabeled(message, "postal", "zip")));
         }
 
         var (first, last) = parsed.Value;
@@ -160,7 +160,7 @@ public sealed class AgentArgumentExtractor : IAgentArgumentExtractor
             ("address", address),
             ("city", city),
             ("country", country),
-            ("postalCode", ParseLabeled(message, "postal", "zip") ?? "00000"));
+            ("postalCode", ParseLabeled(message, "postal", "zip")));
     }
 
     private static JsonElement HeuristicUpdateCustomer(string message, AgentExecutionState state, AiPageContextDto page)
@@ -190,7 +190,7 @@ public sealed class AgentArgumentExtractor : IAgentArgumentExtractor
             ("sku", sku),
             ("costPrice", cost),
             ("salePrice", sale),
-            ("reorderLevel", ParseInt(message, "reorder") ?? 10));
+            ("reorderLevel", ParseInt(message, "reorder")));
     }
 
     private static JsonElement HeuristicCreateSupplier(string message)

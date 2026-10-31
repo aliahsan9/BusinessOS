@@ -809,11 +809,28 @@ public sealed class CreateSupplierTool : AiToolBase
             if (string.IsNullOrWhiteSpace(name))
                 return new AiToolResult { ToolName = ToolName.ToString(), Success = false, Summary = "Supplier name is required." };
 
+            var email = AgentToolArgHelpers.Str(args, "email");
+            var phone = AgentToolArgHelpers.Str(args, "phone");
+            var address = AgentToolArgHelpers.Str(args, "address");
+            var missing = new List<string>();
+            if (string.IsNullOrWhiteSpace(email)) missing.Add("email");
+            if (string.IsNullOrWhiteSpace(phone)) missing.Add("phone");
+            if (string.IsNullOrWhiteSpace(address)) missing.Add("address");
+            if (missing.Count > 0)
+            {
+                return new AiToolResult
+                {
+                    ToolName = ToolName.ToString(),
+                    Success = false,
+                    Summary = "I still need the supplier's " + string.Join(", ", missing) + " before I can save them."
+                };
+            }
+
             var id = await _mediator.Send(new CreateSupplierCommand(
                 name,
-                AgentToolArgHelpers.Str(args, "email") ?? $"supplier-{Guid.NewGuid().ToString("N")[..6]}@businessos.local",
-                AgentToolArgHelpers.Str(args, "phone") ?? "+0000000000",
-                AgentToolArgHelpers.Str(args, "address") ?? "N/A",
+                email!,
+                phone!,
+                address!,
                 AgentToolArgHelpers.Str(args, "contactPerson"),
                 AgentToolArgHelpers.Str(args, "notes")), cancellationToken);
 
