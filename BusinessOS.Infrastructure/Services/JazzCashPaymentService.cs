@@ -4,6 +4,7 @@ using BusinessOS.Application.Common.Idempotency;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Billing.DTOs;
 using BusinessOS.Application.Features.Billing.Services;
+using BusinessOS.Domain.Billing;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.Payments;
 using Microsoft.Extensions.Logging;
@@ -57,7 +58,7 @@ public sealed class JazzCashPaymentService : IJazzCashPaymentService
             ["pp_BankID"] = "TBANK",
             ["pp_ProductID"] = "RETL",
             ["pp_TxnRefNo"] = txnRef,
-            ["pp_Amount"] = ((long)(amount * 100)).ToString(),
+            ["pp_Amount"] = CurrencyMath.ToMinorUnits(amount, "PKR").ToString(),
             ["pp_TxnCurrency"] = "PKR",
             ["pp_TxnDateTime"] = txnDateTime,
             ["pp_BillReference"] = plan.Slug,

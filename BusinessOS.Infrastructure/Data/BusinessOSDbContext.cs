@@ -76,6 +76,10 @@ public partial class BusinessOSDbContext
     public DbSet<AgentWorkflowStep> AgentWorkflowSteps => Set<AgentWorkflowStep>();
     public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
     public DbSet<ProcessedWebhookEvent> ProcessedWebhookEvents => Set<ProcessedWebhookEvent>();
+    public DbSet<RegionalPrice> RegionalPrices => Set<RegionalPrice>();
+    public DbSet<SubscriptionHistory> SubscriptionHistories => Set<SubscriptionHistory>();
+    public DbSet<BillingPaymentMethod> BillingPaymentMethods => Set<BillingPaymentMethod>();
+    public DbSet<AiUsageLedger> AiUsageLedgers => Set<AiUsageLedger>();
 
     public override int SaveChanges()
     {
@@ -247,6 +251,15 @@ public partial class BusinessOSDbContext
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<TenantUsage>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<SubscriptionHistory>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<BillingPaymentMethod>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<AiUsageLedger>()
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<TenantSubscription>()

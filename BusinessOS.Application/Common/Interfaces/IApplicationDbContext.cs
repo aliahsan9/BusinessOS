@@ -57,6 +57,10 @@ public interface IApplicationDbContext
     DbSet<AgentWorkflowStep> AgentWorkflowSteps { get; }
     DbSet<IdempotencyRecord> IdempotencyRecords { get; }
     DbSet<ProcessedWebhookEvent> ProcessedWebhookEvents { get; }
+    DbSet<RegionalPrice> RegionalPrices { get; }
+    DbSet<SubscriptionHistory> SubscriptionHistories { get; }
+    DbSet<BillingPaymentMethod> BillingPaymentMethods { get; }
+    DbSet<AiUsageLedger> AiUsageLedgers { get; }
 
     bool HasActiveTransaction { get; }
 

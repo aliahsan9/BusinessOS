@@ -93,6 +93,13 @@ public sealed class ExceptionHandlingMiddleware
                 null,
                 LogLevel.Warning),
 
+            PlanLimitExceededException planLimit => (
+                StatusCodes.Status402PaymentRequired,
+                planLimit.Message,
+                "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+                null,
+                LogLevel.Warning),
+
             BadRequestException badRequest => (
                 StatusCodes.Status400BadRequest,
                 badRequest.Message,
@@ -118,6 +125,7 @@ public sealed class ExceptionHandlingMiddleware
         var errorCode = exception switch
         {
             ConflictException conflict => conflict.ErrorCode,
+            PlanLimitExceededException planLimit => planLimit.ErrorCode,
             DbUpdateConcurrencyException => ErrorCodes.ConcurrencyConflict,
             _ => null
         };
@@ -155,6 +163,14 @@ public sealed class ExceptionHandlingMiddleware
         problem.Extensions["correlationId"] = correlationId;
         if (!string.IsNullOrWhiteSpace(errorCode))
             problem.Extensions["errorCode"] = errorCode;
+
+        if (exception is PlanLimitExceededException limit)
+        {
+            problem.Extensions["resource"] = limit.Resource;
+            problem.Extensions["currentUsage"] = limit.CurrentUsage;
+            problem.Extensions["maximum"] = limit.Maximum;
+            problem.Extensions["upgradeSuggestion"] = limit.UpgradeSuggestion;
+        }
 
         if (errors is not null)
         {

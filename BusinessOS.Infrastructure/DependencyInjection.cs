@@ -275,6 +275,8 @@ public static class DependencyInjection
         services.Configure<JazzCashOptions>(configuration.GetSection(JazzCashOptions.SectionName));
         services.Configure<EasyPaisaOptions>(configuration.GetSection(EasyPaisaOptions.SectionName));
         services.Configure<BillingOptions>(configuration.GetSection(BillingOptions.SectionName));
+        services.Configure<TapOptions>(configuration.GetSection(TapOptions.SectionName));
+        services.Configure<PayTabsOptions>(configuration.GetSection(PayTabsOptions.SectionName));
         services.Configure<AiOptions>(configuration.GetSection(AiOptions.SectionName));
         services.Configure<AiMemoryOptions>(configuration.GetSection(AiMemoryOptions.SectionName));
 
@@ -315,6 +317,24 @@ public static class DependencyInjection
         services.AddScoped<IStripePaymentService, StripePaymentService>();
         services.AddScoped<IJazzCashPaymentService, JazzCashPaymentService>();
         services.AddScoped<IEasyPaisaPaymentService, EasyPaisaPaymentService>();
+        services.AddHttpClient<TapPaymentsProvider>((sp, client) =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TapOptions>>().Value;
+            var baseUrl = options.ApiBaseUrl.EndsWith('/') ? options.ApiBaseUrl : options.ApiBaseUrl + "/";
+            client.BaseAddress = new Uri(baseUrl);
+        });
+        services.AddHttpClient<PayTabsPaymentProvider>((sp, client) =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PayTabsOptions>>().Value;
+            var baseUrl = PayTabsPaymentProvider.RegionBaseUrl(options.Region)
+                ?? throw new InvalidOperationException("PayTabs region is not supported.");
+            client.BaseAddress = new Uri(baseUrl);
+        });
+        services.AddScoped<IPaymentProvider>(sp => sp.GetRequiredService<TapPaymentsProvider>());
+        services.AddScoped<IPaymentProvider>(sp => sp.GetRequiredService<PayTabsPaymentProvider>());
+        services.AddScoped<IPaymentProvider, StripeBillingProvider>();
+        services.AddScoped<IPaymentProviderSelector, PaymentProviderSelector>();
+        services.AddHostedService<SubscriptionMaintenanceHostedService>();
 
         return services;
     }

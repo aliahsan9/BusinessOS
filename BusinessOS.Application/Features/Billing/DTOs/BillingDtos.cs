@@ -11,6 +11,7 @@ public class SubscriptionPlanDto
     public decimal AnnualSavingsPercent { get; set; }
     public int MaxUsers { get; set; }
     public int MaxCustomers { get; set; }
+    public int MaxProducts { get; set; }
     public int MaxProjects { get; set; }
     public int MaxTasks { get; set; }
     public long MaxStorageMb { get; set; }
@@ -20,6 +21,20 @@ public class SubscriptionPlanDto
     public bool HasPdfReports { get; set; }
     public bool HasAdvancedReports { get; set; }
     public bool HasPrioritySupport { get; set; }
+    public bool HasApiAccess { get; set; }
+    public bool HasMultiBranch { get; set; }
+    public string InventoryAccess { get; set; } = "Basic";
+    public string SalesAccess { get; set; } = "Limited";
+    public int TrialDays { get; set; }
+    public bool IsCustomPricing { get; set; }
+    public bool IsRecommended { get; set; }
+    public string Currency { get; set; } = "USD";
+    public string SettlementCurrency { get; set; } = "USD";
+    public string BaseCurrency { get; set; } = "USD";
+    public decimal BaseMonthlyPrice { get; set; }
+    public decimal BaseAnnualPrice { get; set; }
+    public int CurrencyScale { get; set; } = 2;
+    public string? PriceNote { get; set; }
     public IReadOnlyList<string> Features { get; set; } = [];
     public int SortOrder { get; set; }
 }
@@ -37,10 +52,16 @@ public class CurrentPlanDto
     public DateTime? CurrentPeriodEnd { get; set; }
     public DateTime? RenewalDate { get; set; }
     public bool CancelAtPeriodEnd { get; set; }
+    public DateTime? ScheduledCancellationDate { get; set; }
     public bool IsTrialActive { get; set; }
     public int TrialDaysRemaining { get; set; }
     public decimal CurrentPrice { get; set; }
     public string Currency { get; set; } = "USD";
+    public string SettlementCurrency { get; set; } = "USD";
+    public string? BillingCountry { get; set; }
+    public bool AutoRenew { get; set; }
+    public string? PaymentMethodSummary { get; set; }
+    public int CurrencyScale { get; set; } = 2;
     public PlanFeatureFlagsDto FeatureFlags { get; set; } = new();
 }
 
@@ -51,6 +72,8 @@ public class PlanFeatureFlagsDto
     public bool HasPdfReports { get; set; }
     public bool HasAdvancedReports { get; set; }
     public bool HasPrioritySupport { get; set; }
+    public bool HasApiAccess { get; set; }
+    public bool HasMultiBranch { get; set; }
 }
 
 public class BillingUsageDto
@@ -59,6 +82,8 @@ public class BillingUsageDto
     public int MaxUsers { get; set; }
     public int CustomerCount { get; set; }
     public int MaxCustomers { get; set; }
+    public int ProductCount { get; set; }
+    public int MaxProducts { get; set; }
     public int ProjectCount { get; set; }
     public int MaxProjects { get; set; }
     public int TaskCount { get; set; }
@@ -67,6 +92,10 @@ public class BillingUsageDto
     public long MaxStorageMb { get; set; }
     public int AiRequestsUsed { get; set; }
     public int MaxAiRequests { get; set; }
+    public int AiRequestsRemaining { get; set; }
+    public bool UsersAreCustom { get; set; }
+    public bool AiRequestsAreCustom { get; set; }
+    public DateTime? ResetDate { get; set; }
     public DateTime LastCalculatedAt { get; set; }
 }
 
@@ -96,6 +125,7 @@ public class BillingTransactionDto
     public string Currency { get; set; } = "USD";
     public string Status { get; set; } = default!;
     public string Provider { get; set; } = default!;
+    public string? PaymentMethod { get; set; }
     public string? Description { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
@@ -112,8 +142,64 @@ public class BillingDashboardDto
 public class CheckoutSessionDto
 {
     public string SessionId { get; set; } = default!;
+    public Guid PlanId { get; set; }
+    public string BillingInterval { get; set; } = "monthly";
     public string? CheckoutUrl { get; set; }
     public string Provider { get; set; } = default!;
+    public decimal Amount { get; set; }
+    public string Currency { get; set; } = "USD";
+    public bool RequiresServerConfirmation { get; set; }
+    public string? PriceNote { get; set; }
+}
+
+public class PlanChangePreviewDto
+{
+    public Guid PlanId { get; set; }
+    public string PlanName { get; set; } = default!;
+    public string BillingInterval { get; set; } = "monthly";
+    public decimal AmountDue { get; set; }
+    public string Currency { get; set; } = "USD";
+    public string SettlementCurrency { get; set; } = "USD";
+    public bool IsDowngrade { get; set; }
+    public bool RequiresCheckout { get; set; }
+    public bool IsTrial { get; set; }
+    public string ProrationNote { get; set; } = default!;
+    public string? PriceNote { get; set; }
+}
+
+public class PlanChangeResultDto
+{
+    public bool Applied { get; set; }
+    public bool CheckoutRequired { get; set; }
+    public PlanChangePreviewDto Preview { get; set; } = new();
+    public CheckoutSessionDto? Checkout { get; set; }
+    public CurrentPlanDto? Subscription { get; set; }
+}
+
+public class SubscriptionHistoryDto
+{
+    public Guid Id { get; set; }
+    public string Action { get; set; } = default!;
+    public string? FromStatus { get; set; }
+    public string? ToStatus { get; set; }
+    public decimal? Amount { get; set; }
+    public string? Currency { get; set; }
+    public string? Provider { get; set; }
+    public string? Notes { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public class PaymentMethodCapabilityDto
+{
+    public string Code { get; set; } = default!;
+    public string Name { get; set; } = default!;
+    public string Region { get; set; } = default!;
+    public bool OneTime { get; set; }
+    public bool Recurring { get; set; }
+    public bool CustomerInitiatedRenewal { get; set; }
+    public bool Refunds { get; set; }
+    public bool Tokenization { get; set; }
+    public IReadOnlyList<string> Providers { get; set; } = [];
 }
 
 public class BillingPortalDto
@@ -150,7 +236,42 @@ public record UpgradePlanRequest(Guid PlanId, string BillingInterval = "monthly"
 public record DowngradePlanRequest(Guid PlanId);
 public record CancelPlanRequest(bool CancelImmediately = false);
 public record RenewPlanRequest(string BillingInterval = "monthly", string Provider = "stripe");
-public record CheckoutRequest(Guid PlanId, string BillingInterval = "monthly", string Provider = "stripe", string? SuccessUrl = null, string? CancelUrl = null);
+public record CheckoutRequest(
+    Guid PlanId,
+    string BillingInterval = "monthly",
+    string Provider = "stripe",
+    string? SuccessUrl = null,
+    string? CancelUrl = null,
+    string? Country = null,
+    string? Currency = null);
+
+public record ChangePlanRequest(
+    Guid PlanId,
+    string BillingInterval = "monthly",
+    string? Provider = null,
+    string? Country = null,
+    string? Currency = null,
+    bool Confirm = false,
+    bool StartTrial = false,
+    string? SuccessUrl = null,
+    string? CancelUrl = null);
+
+public record ConfirmCheckoutRequest(string SessionId);
+
+public record SetEnterpriseContractRequest(
+    Guid TenantId,
+    decimal MonthlyPrice,
+    decimal AnnualPrice,
+    string Currency,
+    int? MaxUsers,
+    int? MaxCustomers,
+    int? MaxProducts,
+    int? MaxProjects,
+    int? MaxTasks,
+    int? MaxAiRequests,
+    bool HasApiAccess = true,
+    bool HasMultiBranch = true,
+    bool HasPrioritySupport = true);
 public record BillingRefundRequest(decimal Amount, string? Currency);
 public record JazzCashPaymentRequest(Guid PlanId, string BillingInterval = "monthly");
 public record EasyPaisaPaymentRequest(Guid PlanId, string BillingInterval = "monthly");

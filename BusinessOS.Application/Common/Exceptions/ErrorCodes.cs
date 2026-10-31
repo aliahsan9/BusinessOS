@@ -6,4 +6,6 @@ public static class ErrorCodes
     public const string IdempotencyKeyReused = "IDEMPOTENCY_KEY_REUSED";
     public const string IdempotencyInProgress = "IDEMPOTENCY_IN_PROGRESS";
     public const string InsufficientStock = "INSUFFICIENT_STOCK";
+    public const string PlanLimitExceeded = "PLAN_LIMIT_EXCEEDED";
+    public const string PaymentProviderUnavailable = "PAYMENT_PROVIDER_UNAVAILABLE";
 }

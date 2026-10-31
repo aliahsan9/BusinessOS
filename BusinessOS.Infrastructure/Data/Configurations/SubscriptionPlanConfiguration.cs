@@ -14,8 +14,11 @@ public class SubscriptionPlanConfiguration : IEntityTypeConfiguration<Subscripti
         builder.Property(x => x.Name).HasMaxLength(100).IsRequired();
         builder.Property(x => x.Slug).HasMaxLength(50).IsRequired();
         builder.Property(x => x.Description).HasMaxLength(500);
-        builder.Property(x => x.MonthlyPrice).AsMoney();
-        builder.Property(x => x.AnnualPrice).AsMoney();
+        builder.Property(x => x.MonthlyPrice).HasPrecision(18, 3);
+        builder.Property(x => x.AnnualPrice).HasPrecision(18, 3);
+        builder.Property(x => x.InventoryAccess).HasMaxLength(20).IsRequired();
+        builder.Property(x => x.SalesAccess).HasMaxLength(20).IsRequired();
+        builder.Property(x => x.BaseCurrency).HasMaxLength(3).IsRequired();
 
         builder.HasIndex(x => x.Slug).IsUnique();
     }

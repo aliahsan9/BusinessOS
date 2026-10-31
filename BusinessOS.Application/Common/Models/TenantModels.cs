@@ -6,7 +6,10 @@ public sealed record TenantLimits(
     int MaxProjects,
     int MaxTasks,
     long MaxStorageMb,
-    int MaxAiRequests);
+    int MaxAiRequests,
+    int MaxProducts = 50,
+    bool HasApiAccess = false,
+    bool HasMultiBranch = false);
 
 public sealed record TenantUsageSnapshot(
     int UserCount,

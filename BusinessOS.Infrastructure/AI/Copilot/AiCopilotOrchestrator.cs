@@ -99,7 +99,6 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
     {
         var sw = Stopwatch.StartNew();
         await _featureFlags.EnsureFeatureEnabledAsync(FeatureFlags.AiAssistant, cancellationToken);
-        await _limitService.EnsureWithinLimitAsync("ai", cancellationToken);
 
         var chatRequest = ToChatRequest(request);
         var message = request.Message.Trim();
@@ -125,6 +124,9 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
                 };
             }
         }
+
+        if (!string.IsNullOrWhiteSpace(request.Message))
+            await _limitService.TryConsumeAiRequestAsync(request.ClientRequestId, cancellationToken: cancellationToken);
 
         var memory = await _memoryService.LoadAsync(sessionId, cancellationToken);
 
@@ -469,7 +471,12 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
                 request.ClientRequestId,
                 toolResults,
                 cancellationToken);
-            await _limitService.IncrementAiUsageAsync(cancellationToken);
+            await _limitService.RecordAiProviderUsageAsync(
+                inputTokens: null,
+                outputTokens: null,
+                totalTokens: tokenUsage,
+                estimatedProviderCostUsd: null,
+                cancellationToken);
         }
 
         await _observability.LogAsync(sessionId, intent, message, toolsUsed, citations, (int)executionMs, tokenUsage, true, null, cancellationToken);
