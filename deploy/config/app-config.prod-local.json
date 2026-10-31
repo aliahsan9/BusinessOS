@@ -1,0 +1,5 @@
+{
+  "apiUrl": "/api/v1",
+  "googleClientId": "",
+  "environmentName": "prod-local"
+}

@@ -1,8 +1,10 @@
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Common.Idempotency;
 using BusinessOS.Application.Common.Options;
 using BusinessOS.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Identity;
 using BusinessOS.Application.Features.Audit.Services;
+using BusinessOS.Application.Features.Auth.Google;
 using BusinessOS.Application.Features.Auth.Services;
 using BusinessOS.Application.Features.Analytics.Services;
 using BusinessOS.Application.Features.Finance.Services;
@@ -40,6 +42,7 @@ using BusinessOS.Infrastructure.VectorSearch.Projectors;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Qdrant.Client;
 using BusinessOS.Application.Common.Caching;
 using BusinessOS.Infrastructure.Caching;
@@ -66,8 +69,10 @@ public static class DependencyInjection
             configuration.GetSection(LoggingPerformanceOptions.SectionName));
         services.Configure<AppOptions>(configuration.GetSection(AppOptions.SectionName));
         services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
+        services.Configure<GoogleAuthOptions>(configuration.GetSection(GoogleAuthOptions.SectionName));
+        var resetHours = Math.Clamp(configuration.GetValue("App:PasswordResetTokenHours", 24), 1, 168);
         services.Configure<DataProtectionTokenProviderOptions>(options =>
-            options.TokenLifespan = TimeSpan.FromHours(24));
+            options.TokenLifespan = TimeSpan.FromHours(resetHours));
 
         services.AddSingleton<IVectorEntityProjector, DocumentVectorProjector>();
         services.AddSingleton<IVectorEntityProjector, ProductVectorProjector>();
@@ -85,8 +90,12 @@ public static class DependencyInjection
             }
             else
             {
-                var connectionString = configuration.GetConnectionString("DefaultConnection")
-                    ?? throw new InvalidOperationException("DefaultConnection is not configured.");
+                var connectionString = configuration.GetConnectionString("DefaultConnection");
+                if (string.IsNullOrWhiteSpace(connectionString))
+                {
+                    throw new InvalidOperationException(
+                        "DefaultConnection is not configured. Set ConnectionStrings:DefaultConnection or the ConnectionStrings__DefaultConnection environment variable.");
+                }
 
                 options.UseSqlServer(connectionString);
             }
@@ -113,6 +122,9 @@ public static class DependencyInjection
                 options.Password.RequireLowercase = true;
                 options.Password.RequireUppercase = true;
                 options.Password.RequireNonAlphanumeric = false;
+                options.Lockout.AllowedForNewUsers = true;
+                options.Lockout.MaxFailedAccessAttempts = 5;
+                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
                 options.User.RequireUniqueEmail = true;
             })
             .AddEntityFrameworkStores<BusinessOSDbContext>()
@@ -127,9 +139,16 @@ public static class DependencyInjection
         services.AddScoped<IPermissionRepository, PermissionRepository>();
 
         services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<ITenantMembershipLookup, TenantMembershipLookup>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+        services.Configure<AuthSessionOptions>(configuration.GetSection(AuthSessionOptions.SectionName));
+        services.AddScoped<IAuthSessionService, AuthSessionService>();
+        services.AddScoped<IAuthorizationVersionService, AuthorizationVersionService>();
         services.AddScoped<IIdentityService, IdentityService>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddSingleton<IGoogleIdTokenValidator, GoogleIdTokenValidator>();
+        services.AddScoped<IGoogleAuthService, GoogleAuthService>();
+        services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<ITenantRegistrationService, TenantRegistrationService>();
         services.AddScoped<ITenantService, TenantService>();
         services.AddScoped<ITenantLimitService, TenantLimitService>();
@@ -169,10 +188,23 @@ public static class DependencyInjection
         services.AddScoped<IAgentPlanner, AgentPlanner>();
         services.AddScoped<IAgentWorkflowService, AgentWorkflowService>();
         services.AddScoped<IVoicePreferenceService, VoicePreferenceService>();
-        services.AddSingleton<ISophiaTtsService, EdgeNeuralTtsService>();
+        services.Configure<TtsOptions>(configuration.GetSection(TtsOptions.SectionName));
+        services.AddSingleton<TtsAudioCache>();
+        services.AddSingleton<ITtsProvider, OpenAiTtsProvider>();
+        services.AddSingleton<ITtsProvider, EdgeNeuralTtsService>();
+        services.AddSingleton<ISophiaTtsService, SophiaTtsService>();
         services.AddHttpClient("SophiaTts", client =>
         {
             client.Timeout = TimeSpan.FromSeconds(30);
+        });
+        services.AddHttpClient(OpenAiTtsProvider.HttpClientName, (sp, client) =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AiOptions>>().Value;
+            var baseUrl = string.IsNullOrWhiteSpace(options.OpenAiBaseUrl)
+                ? "https://api.openai.com/"
+                : options.OpenAiBaseUrl.TrimEnd('/') + "/";
+            client.BaseAddress = new Uri(baseUrl);
+            client.Timeout = TimeSpan.FromSeconds(45);
         });
         services.AddScoped<IAgentOnboardingOrchestrator, AgentOnboardingOrchestrator>();
         services.AddScoped<IAgentIntentParser, AgentIntentParser>();
@@ -277,6 +309,8 @@ public static class DependencyInjection
         services.AddScoped<Func<IBillingPlanSyncService>>(sp => () => sp.GetRequiredService<IBillingPlanSyncService>());
         services.AddScoped<IBillingWebhookService, BillingWebhookService>();
         services.AddScoped<IBillingMetricsService, BillingMetricsService>();
+        services.AddScoped<IWebhookEventStore, WebhookEventStore>();
+        services.AddScoped<IBillingPaymentReconciler, BillingPaymentReconciler>();
         services.AddScoped<IFeatureFlagService, FeatureFlagService>();
         services.AddScoped<IStripePaymentService, StripePaymentService>();
         services.AddScoped<IJazzCashPaymentService, JazzCashPaymentService>();
@@ -305,6 +339,7 @@ public static class DependencyInjection
         services.AddHostedService<VectorBackfillHostedService>();
 
         services.AddHealthChecks()
+            .AddCheck<DatabaseHealthCheck>("database")
             .AddCheck<QdrantHealthCheck>("qdrant");
     }
 }

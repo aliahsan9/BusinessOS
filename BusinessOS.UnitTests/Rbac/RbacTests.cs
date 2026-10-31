@@ -28,16 +28,26 @@ public class RoleServiceTests
     {
         _userManager = new Mock<UserManager<ApplicationUser>>(
             Mock.Of<IUserStore<ApplicationUser>>(), null!, null!, null!, null!, null!, null!, null!, null!);
+        _userManager.Setup(x => x.UpdateAsync(It.IsAny<ApplicationUser>()))
+            .ReturnsAsync(IdentityResult.Success);
 
         _roleManager = new Mock<RoleManager<ApplicationRole>>(
             Mock.Of<IRoleStore<ApplicationRole>>(), null!, null!, null!, null!);
+
+        var versions = new Mock<IAuthorizationVersionService>();
+        versions.Setup(x => x.BumpUserAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        versions.Setup(x => x.BumpUsersWithRoleAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
         _sut = new RoleService(
             _roleRepository.Object,
             _permissionRepository.Object,
             _auditService.Object,
+            Mock.Of<ICurrentUserService>(),
             _userManager.Object,
-            _roleManager.Object);
+            _roleManager.Object,
+            versions.Object);
     }
 
     [Fact]
@@ -164,7 +174,8 @@ public class JwtTokenGeneratorTests
             "admin@test.com",
             Guid.NewGuid(),
             [RoleNames.Admin],
-            [PermissionCodes.ProductView, PermissionCodes.OrderCreate]);
+            [PermissionCodes.ProductView, PermissionCodes.OrderCreate],
+            1);
 
         var handler = new JwtSecurityTokenHandler();
         var jwt = handler.ReadJwtToken(token);
@@ -174,6 +185,9 @@ public class JwtTokenGeneratorTests
         jwt.Claims.Should().Contain(x =>
             x.Type == ClaimTypesConstants.Permissions &&
             x.Value == "Order.Create,Product.View");
+        jwt.Claims.Should().Contain(x =>
+            x.Type == ClaimTypesConstants.SecurityVersion &&
+            x.Value == "1");
     }
 }
 

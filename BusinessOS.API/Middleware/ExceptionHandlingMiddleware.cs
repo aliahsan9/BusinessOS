@@ -4,6 +4,7 @@ using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace BusinessOS.API.Middleware;
 
@@ -16,16 +17,13 @@ public sealed class ExceptionHandlingMiddleware
 
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
-    private readonly IHostEnvironment _environment;
 
     public ExceptionHandlingMiddleware(
         RequestDelegate next,
-        ILogger<ExceptionHandlingMiddleware> logger,
-        IHostEnvironment environment)
+        ILogger<ExceptionHandlingMiddleware> logger)
     {
         _next = next;
         _logger = logger;
-        _environment = environment;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -88,6 +86,13 @@ public sealed class ExceptionHandlingMiddleware
                 null,
                 LogLevel.Warning),
 
+            DbUpdateConcurrencyException => (
+                StatusCodes.Status409Conflict,
+                "This record was changed by someone else. Refresh and try again.",
+                "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+                null,
+                LogLevel.Warning),
+
             BadRequestException badRequest => (
                 StatusCodes.Status400BadRequest,
                 badRequest.Message,
@@ -95,7 +100,7 @@ public sealed class ExceptionHandlingMiddleware
                 null,
                 LogLevel.Warning),
 
-            BadHttpRequestException badHttpRequest => (
+            BadHttpRequestException => (
                 StatusCodes.Status400BadRequest,
                 "Invalid request body",
                 "https://tools.ietf.org/html/rfc9110#section-15.5.1",
@@ -108,6 +113,13 @@ public sealed class ExceptionHandlingMiddleware
                 "https://tools.ietf.org/html/rfc9110#section-15.6.1",
                 null,
                 LogLevel.Error)
+        };
+
+        var errorCode = exception switch
+        {
+            ConflictException conflict => conflict.ErrorCode,
+            DbUpdateConcurrencyException => ErrorCodes.ConcurrencyConflict,
+            _ => null
         };
 
         _logger.Log(
@@ -131,14 +143,18 @@ public sealed class ExceptionHandlingMiddleware
             Type = type,
             Status = statusCode,
             Title = title,
-            Detail = statusCode == StatusCodes.Status500InternalServerError && !_environment.IsDevelopment()
-                ? title
-                : exception.Message,
+            Detail = exception is DbUpdateConcurrencyException
+                ? "This record was changed by someone else. Refresh and try again."
+                : statusCode >= StatusCodes.Status500InternalServerError
+                    ? "An unexpected error occurred."
+                    : exception.Message,
             Instance = context.Request.Path
         };
 
         problem.Extensions["traceId"] = traceId;
         problem.Extensions["correlationId"] = correlationId;
+        if (!string.IsNullOrWhiteSpace(errorCode))
+            problem.Extensions["errorCode"] = errorCode;
 
         if (errors is not null)
         {

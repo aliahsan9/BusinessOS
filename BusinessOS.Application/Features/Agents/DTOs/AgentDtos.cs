@@ -122,7 +122,24 @@ public sealed class SophiaTtsRequest
 {
     public string Text { get; init; } = "";
     public string? Language { get; init; }
+    public string? VoiceName { get; init; }
     public double? SpeechRate { get; init; }
+}
+
+/// <summary>A voice the active speech provider can synthesize.</summary>
+public sealed class TtsVoiceOption
+{
+    public required string Id { get; init; }
+    public required string Label { get; init; }
+    public string? Description { get; init; }
+}
+
+/// <summary>Voices exposed to the client for the active speech provider.</summary>
+public sealed class TtsVoiceCatalogDto
+{
+    public string Provider { get; init; } = "";
+    public string DefaultVoice { get; init; } = "";
+    public IReadOnlyList<TtsVoiceOption> Voices { get; init; } = [];
 }
 
 // ── Workflow progress ─────────────────────────────────────────────────────────

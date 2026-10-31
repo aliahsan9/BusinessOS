@@ -1,0 +1,139 @@
+# Shared BusinessOS services. Start an environment with one override file:
+#   docker compose -p businessos-dev -f compose.yaml -f compose.dev.yaml --env-file deploy/env/.env.dev up -d
+#
+# Do not run this file by itself. It has no host ports and expects an env file.
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: businessos-api:${IMAGE_TAG:-local}
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
+      ASPNETCORE_URLS: "http://+:8080"
+      ASPNETCORE_HTTP_PORTS: "8080"
+      DOTNET_EnableDiagnostics: "0"
+      DOTNET_gcServer: "0"
+      AllowedHosts: "${ALLOWED_HOSTS}"
+      Database__ApplyMigrationsOnStartup: "false"
+      ConnectionStrings__DefaultConnection: "Server=${SQL_SERVER};Database=${SQL_DATABASE};User Id=${SQL_USER};Password=${SQL_PASSWORD};Encrypt=True;TrustServerCertificate=True;Connect Timeout=60"
+      Jwt__Issuer: BusinessOS
+      Jwt__Audience: BusinessOSUsers
+      Jwt__Key: "${JWT_KEY}"
+      App__FrontendBaseUrl: "${FRONTEND_BASE_URL}"
+      Cors__AllowedOrigins__0: "${CORS_ORIGIN_0}"
+      Cors__AllowedOrigins__1: "${CORS_ORIGIN_1}"
+      ForwardedHeaders__KnownProxies__0: ${WEB_IP}
+      Qdrant__Enabled: "true"
+      Qdrant__Host: qdrant
+      Qdrant__Port: "6334"
+      Qdrant__Https: "false"
+      Qdrant__ApiKey: ${QDRANT_API_KEY:-}
+      Qdrant__CollectionName: ${QDRANT_COLLECTION}
+      VectorSync__BackfillOnStartup: ${VECTOR_BACKFILL_ON_STARTUP:-false}
+      Email__Enabled: "false"
+      Email__Password: ""
+      Stripe__SecretKey: ""
+      Stripe__PublishableKey: ""
+      Stripe__WebhookSecret: ""
+      Stripe__SuccessUrl: "${STRIPE_SUCCESS_URL}"
+      Stripe__CancelUrl: "${STRIPE_CANCEL_URL}"
+      Stripe__BillingPortalReturnUrl: "${STRIPE_PORTAL_URL}"
+      JazzCash__Enabled: "false"
+      JazzCash__Password: ""
+      JazzCash__IntegritySalt: ""
+      JazzCash__ReturnUrl: "${JAZZCASH_RETURN_URL}"
+      EasyPaisa__Enabled: "false"
+      EasyPaisa__HashKey: ""
+      EasyPaisa__ReturnUrl: "${EASYPAISA_RETURN_URL}"
+      Ai__ApiKey: ${AI_API_KEY:-}
+      Ai__OpenAiApiKey: ${OPENAI_API_KEY:-}
+      Google__ClientId: ${GOOGLE_CLIENT_ID:-}
+    volumes:
+      - api_logs:/app/Logs
+    networks:
+      businessos:
+        ipv4_address: ${API_IP}
+    depends_on:
+      qdrant:
+        condition: service_started
+    logging: *default-logging
+    mem_limit: 768m
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-H", "Host: localhost", "http://127.0.0.1:8080/api/health/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 50s
+
+  web:
+    build:
+      context: ../BusinessOS_UI
+      dockerfile: Dockerfile
+    image: businessos-web:${IMAGE_TAG:-local}
+    init: true
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      businessos:
+        ipv4_address: ${WEB_IP}
+    logging: *default-logging
+    mem_limit: 128m
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/nginx-health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  qdrant:
+    image: qdrant/qdrant:v1.15.4
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      businessos:
+        ipv4_address: ${QDRANT_IP}
+    logging: *default-logging
+    mem_limit: 512m
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/6333'"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+networks:
+  businessos:
+    name: ${COMPOSE_PROJECT_NAME}_net
+    ipam:
+      config:
+        - subnet: ${DOCKER_SUBNET}
+
+volumes:
+  api_logs:
+  qdrant_data:

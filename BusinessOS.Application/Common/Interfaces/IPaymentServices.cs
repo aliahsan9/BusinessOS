@@ -13,7 +13,8 @@ public interface IStripePaymentService
         string? successUrl,
         string? cancelUrl,
         string? existingCustomerId,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        string? operationKey = null);
 
     Task<BillingPortalDto> CreateBillingPortalSessionAsync(
         string customerId,
@@ -31,7 +32,8 @@ public interface IJazzCashPaymentService
         Guid tenantId,
         SubscriptionPlanDto plan,
         string billingInterval,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        string? operationKey = null);
 
     Task<bool> VerifyPaymentAsync(string transactionReference, CancellationToken cancellationToken = default);
 
@@ -46,7 +48,8 @@ public interface IEasyPaisaPaymentService
         Guid tenantId,
         SubscriptionPlanDto plan,
         string billingInterval,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        string? operationKey = null);
 
     Task<bool> VerifyPaymentAsync(string transactionReference, CancellationToken cancellationToken = default);
 

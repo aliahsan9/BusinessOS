@@ -52,8 +52,6 @@ public sealed class TenantContextService : ITenantContext
         var tenant = await dbContext.Tenants
             .IgnoreQueryFilters()
             .AsNoTracking()
-            .Include(x => x.Plan)
-            .Include(x => x.Usage)
             .FirstOrDefaultAsync(x => x.Id == _tenantId && !x.IsDeleted, cancellationToken);
 
         if (tenant is null)
@@ -62,33 +60,42 @@ public sealed class TenantContextService : ITenantContext
             return;
         }
 
+        var plan = await dbContext.SubscriptionPlans
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == tenant.SubscriptionPlanId, cancellationToken);
+
+        var usage = await dbContext.TenantUsages
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.TenantId == tenant.Id && !x.IsDeleted, cancellationToken);
+
         _tenantName = tenant.Name;
         _slug = tenant.Slug;
-        _subscriptionPlanName = tenant.Plan?.Name ?? tenant.SubscriptionPlan;
+        _subscriptionPlanName = plan?.Name ?? tenant.SubscriptionPlan;
         _subscriptionPlanId = tenant.SubscriptionPlanId;
         _isActive = tenant.IsActive && tenant.Status is Domain.Enums.TenantStatus.Active or Domain.Enums.TenantStatus.Trial;
 
-        if (tenant.Plan is not null)
+        if (plan is not null)
         {
             _limits = new TenantLimits(
-                tenant.Plan.MaxUsers,
-                tenant.Plan.MaxCustomers,
-                tenant.Plan.MaxProjects,
-                tenant.Plan.MaxTasks,
-                tenant.Plan.MaxStorageMb,
-                tenant.Plan.MaxAiRequests);
+                plan.MaxUsers,
+                plan.MaxCustomers,
+                plan.MaxProjects,
+                plan.MaxTasks,
+                plan.MaxStorageMb,
+                plan.MaxAiRequests);
         }
 
-        if (tenant.Usage is not null)
+        if (usage is not null)
         {
             _usage = new TenantUsageSnapshot(
-                tenant.Usage.UserCount,
-                tenant.Usage.CustomerCount,
-                tenant.Usage.ProjectCount,
-                tenant.Usage.TaskCount,
-                tenant.Usage.StorageUsedMb,
-                tenant.Usage.AiRequestsUsed,
-                tenant.Usage.LastCalculatedAt);
+                usage.UserCount,
+                usage.CustomerCount,
+                usage.ProjectCount,
+                usage.TaskCount,
+                usage.StorageUsedMb,
+                usage.AiRequestsUsed,
+                usage.LastCalculatedAt);
         }
 
         _isLoaded = true;

@@ -12,6 +12,7 @@ using BusinessOS.Infrastructure.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Query;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Moq;
 
@@ -55,7 +56,8 @@ public class AuthServiceTests
                 user.Email,
                 user.TenantId,
                 It.IsAny<IReadOnlyList<string>>(),
-                It.IsAny<IReadOnlyList<string>>()))
+                It.IsAny<IReadOnlyList<string>>(),
+                It.IsAny<int>()))
             .Returns("token");
         jwt.Setup(x => x.GetTokenExpiration()).Returns(DateTime.UtcNow.AddHours(1));
 
@@ -94,6 +96,7 @@ public class AuthServiceTests
             Mock.Of<IActivityService>(),
             Mock.Of<IEmailNotificationService>(),
             Options.Create(new AppOptions()),
+            new MemoryCache(new MemoryCacheOptions()),
             Mock.Of<Microsoft.Extensions.Logging.ILogger<AuthService>>());
     }
 }

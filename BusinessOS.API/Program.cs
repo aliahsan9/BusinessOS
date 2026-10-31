@@ -1,12 +1,16 @@
+using System.Net;
 using System.Text;
 using System.Text.Json;
+ main
+using System.Threading.RateLimiting;
+
 using Asp.Versioning;
+ master
 using BusinessOS.API.Authorization;
-using BusinessOS.API.Endpoints;
 using BusinessOS.API.Hubs;
 using BusinessOS.API.Middleware;
-using BusinessOS.API.OpenApi;
 using BusinessOS.API.Services;
+using BusinessOS.API.Versioning;
 using BusinessOS.Application;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Common.Options;
@@ -14,10 +18,10 @@ using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Infrastructure;
 using BusinessOS.Infrastructure.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
-using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Events;
 
@@ -42,6 +46,8 @@ try
     builder.Services.Configure<CacheSettings>(
         builder.Configuration.GetSection(CacheSettings.SectionName));
 
+ main
+
     builder.Services.AddControllers();
 
     // Adding Versioning
@@ -54,6 +60,7 @@ try
         options.ReportApiVersions = true;
     });
 
+ master
     builder.Services.AddApplication();
     builder.Services.AddInfrastructure(builder.Configuration);
     builder.Services.Configure<BusinessOS.Application.Features.Dashboard.Services.DashboardCacheOptions>(
@@ -62,6 +69,25 @@ try
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddProblemDetails();
     // Adding Rate Limiting services
+
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        options.KnownIPNetworks.Clear();
+        options.KnownProxies.Clear();
+        foreach (var proxy in builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [])
+        {
+            if (IPAddress.TryParse(proxy, out var address))
+            {
+                options.KnownProxies.Add(address);
+            }
+        }
+    });
+
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        options.Limits.MaxRequestBodySize = 5 * 1024 * 1024;
+    });
 
     builder.Services.AddRateLimiter(options =>
     {
@@ -73,19 +99,43 @@ try
             limiterOptions.Window = TimeSpan.FromMinutes(1);
             limiterOptions.QueueLimit = 0;
         });
+
+        options.AddPolicy("auth", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 10,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0
+                }));
+
+        options.AddPolicy("ai", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                    ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                    ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 30,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0
+                }));
     });
 
     builder.Services.AddSignalR();
     builder.Services.AddSingleton<IUserIdProvider, NameIdentifierUserIdProvider>();
     builder.Services.AddScoped<IRealtimeNotificationService, SignalRRealtimeNotificationService>();
-    builder.Services.AddBusinessOpenApi();
+    builder.Services.AddBusinessApiVersioning();
     builder.Services.ConfigureHttpJsonOptions(options =>
     {
         options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     });
 
-    var jwtKey = builder.Configuration["Jwt:Key"]
-        ?? throw new InvalidOperationException("Jwt:Key is missing.");
+    var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+    var jwtAudience = builder.Configuration["Jwt:Audience"];
+    var jwtKey = builder.Configuration["Jwt:Key"];
+    JwtConfigurationGuard.Ensure(jwtIssuer, jwtAudience, jwtKey);
 
     builder.Services
         .AddAuthentication(options =>
@@ -98,12 +148,15 @@ try
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuer = true,
-                ValidIssuer = builder.Configuration["Jwt:Issuer"],
+                ValidIssuer = jwtIssuer,
                 ValidateAudience = true,
-                ValidAudience = builder.Configuration["Jwt:Audience"],
+                ValidAudience = jwtAudience,
                 ValidateLifetime = true,
+                RequireExpirationTime = true,
+                RequireSignedTokens = true,
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+                ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey!)),
                 ClockSkew = TimeSpan.Zero
             };
 
@@ -114,7 +167,7 @@ try
                     var accessToken = context.Request.Query["access_token"];
                     var path = context.HttpContext.Request.Path;
                     if (!string.IsNullOrEmpty(accessToken) &&
-                        path.StartsWithSegments("/hubs"))
+                        path.StartsWithSegments("/hubs/notifications"))
                     {
                         context.Token = accessToken;
                     }
@@ -137,9 +190,9 @@ try
                     else
                     {
                         logger.LogWarning(
-                            context.Exception,
-                            "JWT authentication failed for {Path} (RequestId={RequestId})",
+                            "JWT authentication failed for {Path}. Reason={Reason} (RequestId={RequestId})",
                             context.HttpContext.Request.Path,
+                            context.Exception.GetType().Name,
                             context.HttpContext.TraceIdentifier);
                     }
 
@@ -196,31 +249,22 @@ try
                 policy.WithOrigins(allowedOrigins)
                     .AllowAnyHeader()
                     .AllowAnyMethod()
-                    .AllowCredentials();
+                    .AllowCredentials()
+                    .WithExposedHeaders("X-Tts-Provider", "X-Tts-Voice", "X-Tts-Cache", "X-CSRF-Token");
             }
         });
     });
 
     var app = builder.Build();
 
+    if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
+    {
+        ProductionSecurityGuard.Ensure(app.Configuration);
+    }
+
     await DbInitializer.SeedAsync(app.Services);
 
-    if (app.Environment.IsDevelopment())
-    {
-        app.MapOpenApi();
-
-        app.MapScalarApiReference(options =>
-        {
-            options.Title = "BusinessOS API";
-            options.Theme = ScalarTheme.BluePlanet;
-            options.DefaultHttpClient = new(ScalarTarget.CSharp, ScalarClient.HttpClient);
-            options.Authentication = new()
-            {
-                PreferredSecuritySchemes = ["Bearer", "TenantHeader"]
-            };
-            options.ShowSidebar = true;
-        });
-    }
+    app.UseForwardedHeaders();
 
     // Correlation ID must run first so all subsequent logs share it.
     app.UseMiddleware<CorrelationIdMiddleware>();
@@ -290,11 +334,24 @@ try
     });
 
     app.UseMiddleware<ExceptionHandlingMiddleware>();
+    app.UseMiddleware<UnversionedApiPathMiddleware>();
 
     if (!app.Environment.IsDevelopment())
     {
+        app.UseHsts();
         app.UseHttpsRedirection();
     }
+
+    app.Use(async (context, next) =>
+    {
+        var headers = context.Response.Headers;
+        headers["X-Content-Type-Options"] = "nosniff";
+        headers["X-Frame-Options"] = "DENY";
+        headers["Referrer-Policy"] = "no-referrer";
+        headers["X-Permitted-Cross-Domain-Policies"] = "none";
+        headers["Content-Security-Policy"] = "frame-ancestors 'none'";
+        await next();
+    });
 
     app.UseCors(corsPolicyName);
 
@@ -310,48 +367,21 @@ try
     app.UseMiddleware<SerilogEnrichmentMiddleware>();
     app.UseAuthorization();
 
-    app.MapControllers();
-    app.MapHealthChecks("/api/health/ready");
+    app.MapHealthChecks("/api/health/ready")
+        .WithTags("Health");
     app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", service = "BusinessOS.API" }))
         .WithTags("Health")
         .WithName("HealthCheck");
 
-    app.MapAuthEndpoints();
-    app.MapAccountEndpoints();
-    app.MapCategoryEndpoints();
-    app.MapProductEndpoints();
-    app.MapCustomerEndpoints();
-    app.MapOrderEndpoints();
-    app.MapSupplierEndpoints();
-    app.MapPurchaseOrderEndpoints();
-    app.MapPaymentEndpoints();
-    app.MapInvoiceEndpoints();
-    app.MapQuotationEndpoints();
-    app.MapInventoryEndpoints();
-    app.MapDashboardEndpoints();
-    app.MapAnalyticsEndpoints();
-    app.MapReportEndpoints();
-    app.MapRoleEndpoints();
-    app.MapExpenseEndpoints();
-    app.MapFinanceEndpoints();
-    app.MapUserEndpoints();
-    app.MapAuditEndpoints();
-    app.MapNotificationEndpoints();
-    app.MapActivityEndpoints();
-    app.MapSettingsEndpoints();
-    app.MapOnboardingEndpoints();
-    app.MapAiEndpoints();
-    app.MapAgentEndpoints();
-    app.MapHelpEndpoints();
-    app.MapTeamEndpoints();
-    app.MapOrganizationEndpoints();
-    app.MapTenantEndpoints();
-    app.MapBillingEndpoints();
-    app.MapBusinessRegistrationEndpoint();
-    app.MapSystemAdminEndpoints();
+    app.MapBusinessApi();
 
     app.MapHub<NotificationHub>("/hubs/notifications")
         .RequireAuthorization();
+
+    if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
+    {
+        app.MapBusinessApiReference();
+    }
 
     app.Run();
 }
@@ -365,3 +395,71 @@ finally
 }
 
 public partial class Program;
+
+file static class ProductionSecurityGuard
+{
+    public static void Ensure(IConfiguration configuration)
+    {
+        var origins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+        if (origins.Length == 0 || origins.Any(origin => origin is "*" or "null"))
+        {
+            throw new InvalidOperationException(
+                "Production requires Cors:AllowedOrigins to list explicit https origins.");
+        }
+
+        var allowedHosts = configuration["AllowedHosts"];
+        if (string.IsNullOrWhiteSpace(allowedHosts) || allowedHosts == "*")
+        {
+            throw new InvalidOperationException(
+                "Production requires an explicit AllowedHosts value.");
+        }
+
+        var connectionString = configuration.GetConnectionString("DefaultConnection") ?? string.Empty;
+        if (connectionString.Contains("Encrypt=False", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Production database connections must encrypt traffic. Remove Encrypt=False.");
+        }
+
+        var frontendBaseUrl = configuration["App:FrontendBaseUrl"];
+        if (string.IsNullOrWhiteSpace(frontendBaseUrl) ||
+            !frontendBaseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Production requires App:FrontendBaseUrl to be an absolute https URL. " +
+                "Password-reset links are built only from this value.");
+        }
+    }
+}
+
+file static class JwtConfigurationGuard
+{
+    private const int MinimumKeyBytes = 32;
+
+    private static readonly HashSet<string> ForbiddenKeys = new(StringComparer.Ordinal)
+    {
+        "THIS_IS_SUPER_SECRET_KEY_123456789",
+        "super-secret-development-key-1234567890",
+        "CHANGE_ME",
+        "changeme"
+    };
+
+    public static void Ensure(string? issuer, string? audience, string? key)
+    {
+        if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(audience))
+        {
+            throw new InvalidOperationException(
+                "Jwt:Issuer and Jwt:Audience are required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(key) ||
+            Encoding.UTF8.GetByteCount(key) < MinimumKeyBytes ||
+            ForbiddenKeys.Contains(key))
+        {
+            throw new InvalidOperationException(
+                "Jwt:Key is missing, too short, or a known insecure placeholder. " +
+                "Set a random key of at least 32 bytes via user secrets in Development " +
+                "(dotnet user-secrets set \"Jwt:Key\" \"<key>\") or the Jwt__Key environment variable.");
+        }
+    }
+}

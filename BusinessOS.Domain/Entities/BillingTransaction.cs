@@ -53,6 +53,15 @@ public class BillingTransaction : AuditableEntity
     public string? ProviderReference { get; set; }
 
     /// <summary>
+    /// Stable provider operation key derived from the local attempt. Reused on retry.
+    /// </summary>
+    public string? ProviderOperationKey { get; set; }
+
+    public Guid? IdempotencyRecordId { get; set; }
+
+    public byte[] RowVersion { get; set; } = default!;
+
+    /// <summary>
     /// Optional human-readable description of the transaction.
     /// </summary>
     public string? Description { get; set; }

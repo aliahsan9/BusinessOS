@@ -81,6 +81,7 @@ graph TD
 | 🔗 [Entity-Relationships.md](file:///d:/Business_OS/BusinessOS/docs/Entity-Relationships.md) | **Entity Catalog & ERD** | Domain entity definitions, keys, navigational properties, and Mermaid ERDs. |
 | 🛠 [Services.md](file:///d:/Business_OS/BusinessOS/docs/Services.md) | **Service Index** | Detailed documentation of all application & infrastructure services. |
 | 📡 [Controllers.md](file:///d:/Business_OS/BusinessOS/docs/Controllers.md) | **API Endpoints** | Minimal API route catalog, request/response models, and endpoint security. |
+| 🔢 [API-Versioning.md](file:///d:/Business_OS/BusinessOS/docs/API-Versioning.md) | **API Versioning** | URL-segment version 1.0, missing-version behavior, OpenAPI/Scalar, and how to add version 2.0. |
 | 🔀 [API-Flow.md](file:///d:/Business_OS/BusinessOS/docs/API-Flow.md) | **API Flowcharts** | End-to-end sequence diagrams for key API operations. |
 | ⚙️ [Configuration.md](file:///d:/Business_OS/BusinessOS/docs/Configuration.md) | **Settings & Options** | `appsettings.json`, environment variables, and typed options options binding. |
 | 📜 [Logging.md](file:///d:/Business_OS/BusinessOS/docs/Logging.md) | **Serilog & Audit** | Structured logging, correlation context, entity change tracking, and RBAC logs. |

@@ -5,6 +5,7 @@ using BusinessOS.Application.Common.Models;
 using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Application.Features.Roles.Services;
 using BusinessOS.Application.Features.Team.DTOs;
+using BusinessOS.Application.Features.Auth.Services;
 using BusinessOS.Application.Features.Team.Services;
 using BusinessOS.Application.Features.Tenant.Services;
 using BusinessOS.Domain.Entities;
@@ -28,6 +29,7 @@ public sealed class TeamService : ITeamService
     private readonly IRbacAuditService _auditService;
     private readonly IEmailNotificationService _emailService;
     private readonly ITenantLimitService _limitService;
+    private readonly IAuthSessionService _sessions;
     private readonly ILogger<TeamService> _logger;
 
     public TeamService(
@@ -40,6 +42,7 @@ public sealed class TeamService : ITeamService
         IRbacAuditService auditService,
         IEmailNotificationService emailService,
         ITenantLimitService limitService,
+        IAuthSessionService sessions,
         ILogger<TeamService> logger)
     {
         _context = context;
@@ -51,6 +54,7 @@ public sealed class TeamService : ITeamService
         _auditService = auditService;
         _emailService = emailService;
         _limitService = limitService;
+        _sessions = sessions;
         _logger = logger;
     }
 
@@ -505,6 +509,7 @@ public sealed class TeamService : ITeamService
             user.LastName = request.LastName.Trim();
             user.IsActive = true;
             user.JoinedAt = DateTime.UtcNow;
+            user.SecurityVersion++;
             await _userManager.UpdateAsync(user);
         }
         else
@@ -529,6 +534,10 @@ public sealed class TeamService : ITeamService
 
         await _userManager.AddToRoleAsync(user, invitation.Role.Name);
         await _roleRepository.AssignRoleToUserAsync(user.Id, invitation.RoleId, cancellationToken);
+        if (existingUser is not null)
+        {
+            await _sessions.RevokeAllAsync(user.Id, cancellationToken);
+        }
 
         invitation.Status = InvitationStatus.Accepted;
         invitation.AcceptedAt = DateTime.UtcNow;

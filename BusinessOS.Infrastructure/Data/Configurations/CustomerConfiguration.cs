@@ -33,5 +33,6 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.HasIndex(x => new { x.TenantId, x.Email }).IsUnique();
         builder.HasIndex(x => x.PhoneNumber);
         builder.HasIndex(x => new { x.TenantId, x.CreatedAt });
+        builder.HasIndex(x => new { x.TenantId, x.City });
     }
 }

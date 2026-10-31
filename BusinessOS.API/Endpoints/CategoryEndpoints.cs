@@ -17,11 +17,11 @@ namespace BusinessOS.API.Endpoints;
 public static class CategoryEndpoints
 {
     /// <summary>
-    /// Maps category CRUD and list endpoints under <c>/api/categories</c>.
+    /// Maps category CRUD and list endpoints under <c>/api/v1/categories</c>.
     /// </summary>
     public static void MapCategoryEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/categories")
+        var group = app.MapGroup("/categories")
             .WithTags("Categories")
             .RequireAuthorization()
             .RequireRateLimiting("api");
@@ -77,7 +77,7 @@ public static class CategoryEndpoints
         CancellationToken cancellationToken)
     {
         var id = await sender.Send(command, cancellationToken);
-        return Results.Created($"/api/categories/{id}", new { id });
+        return Results.Created($"/api/v1/categories/{id}", new { id });
     }
 
     private static async Task<IResult> GetAllCategories(

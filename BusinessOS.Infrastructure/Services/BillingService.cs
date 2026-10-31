@@ -1,4 +1,6 @@
+using System.Text.Json;
 using BusinessOS.Application.Common.Exceptions;
+using BusinessOS.Application.Common.Idempotency;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Common.Models;
 using BusinessOS.Application.Features.Billing.DTOs;
@@ -22,6 +24,7 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
     private readonly IJazzCashPaymentService _jazzCashService;
     private readonly IEasyPaisaPaymentService _easyPaisaService;
     private readonly IDbContextFactory<BusinessOSDbContext> _dbContextFactory;
+    private readonly IIdempotencyService _idempotency;
     private readonly ILogger<BillingService> _logger;
 
     public BillingService(
@@ -33,6 +36,7 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
         IJazzCashPaymentService jazzCashService,
         IEasyPaisaPaymentService easyPaisaService,
         IDbContextFactory<BusinessOSDbContext> dbContextFactory,
+        IIdempotencyService idempotency,
         ILogger<BillingService> logger)
     {
         _context = context;
@@ -43,6 +47,7 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
         _jazzCashService = jazzCashService;
         _easyPaisaService = easyPaisaService;
         _dbContextFactory = dbContextFactory;
+        _idempotency = idempotency;
         _logger = logger;
     }
 
@@ -287,8 +292,17 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
         return MapCurrentPlan(tenant, subscription);
     }
 
-    public async Task<CheckoutSessionDto> CreateCheckoutSessionAsync(CheckoutRequest request, CancellationToken cancellationToken = default)
+    public async Task<CheckoutSessionDto> CreateCheckoutSessionAsync(
+        CheckoutRequest request,
+        CancellationToken cancellationToken = default,
+        string? idempotencyKey = null)
     {
+        if (!IdempotencyKeyRules.IsValid(idempotencyKey))
+        {
+            throw new BadRequestException(
+                "Idempotency-Key header is required and must be 1-128 visible ASCII characters without spaces.");
+        }
+
         var tenantId = RequireTenantId();
         var (tenant, subscription) = await GetTenantWithSubscriptionAsync(cancellationToken);
 
@@ -297,24 +311,105 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
             .FirstOrDefaultAsync(x => x.Id == request.PlanId && x.IsActive, cancellationToken)
             ?? throw new NotFoundException("Plan not found.");
 
-        var planDto = MapPlan(plan);
-        var provider = request.Provider.ToLowerInvariant();
+        var providerName = request.Provider.ToLowerInvariant();
+        var yearly = request.BillingInterval.Equals("yearly", StringComparison.OrdinalIgnoreCase)
+            || request.BillingInterval.Equals("annual", StringComparison.OrdinalIgnoreCase);
+        var amount = yearly ? plan.AnnualPrice : plan.MonthlyPrice;
+        var currency = providerName is "jazzcash" or "easypaisa" ? "PKR" : "USD";
+        var hash = CanonicalRequestHasher.BillingCheckout(
+            tenantId,
+            plan.Id,
+            request.BillingInterval,
+            providerName,
+            amount,
+            currency);
 
-        return provider switch
+        var claim = await _idempotency.ClaimCommittedAsync(
+            IdempotencyOperations.BillingCheckout,
+            idempotencyKey!,
+            hash,
+            cancellationToken);
+
+        if (claim.Kind == IdempotencyOutcomeKind.Replay)
+            return ReadCheckoutSession(claim.ResponseBody);
+
+        if (claim.Kind == IdempotencyOutcomeKind.Conflict)
         {
-            "jazzcash" => await _jazzCashService.InitiatePaymentAsync(tenantId, planDto, request.BillingInterval, cancellationToken),
-            "easypaisa" => await _easyPaisaService.InitiatePaymentAsync(tenantId, planDto, request.BillingInterval, cancellationToken),
-            _ => await _stripeService.CreateCheckoutSessionAsync(
-                tenantId,
-                tenant.Name,
-                tenant.Email,
-                planDto,
-                request.BillingInterval,
-                request.SuccessUrl,
-                request.CancelUrl,
-                subscription.StripeCustomerId,
-                cancellationToken)
-        };
+            throw new ConflictException(
+                "This Idempotency-Key was already used for a different checkout request.",
+                ErrorCodes.IdempotencyKeyReused);
+        }
+
+        if (claim.Kind == IdempotencyOutcomeKind.InProgress && claim.ResourceId is null)
+        {
+            throw new ConflictException(
+                "This checkout is still processing. Retry the same request.",
+                ErrorCodes.IdempotencyInProgress);
+        }
+
+        var record = claim.Record
+            ?? throw new ConflictException(
+                "This checkout is still processing. Retry the same request.",
+                ErrorCodes.IdempotencyInProgress);
+
+        var transaction = await FindOrCreateCheckoutTransactionAsync(
+            claim,
+            record,
+            tenantId,
+            providerName,
+            amount,
+            currency,
+            plan.Name,
+            cancellationToken);
+
+        var stored = ReadStoredSession(transaction.Metadata);
+        if (stored is not null)
+            return stored;
+
+        var planDto = MapPlan(plan);
+        CheckoutSessionDto session;
+        try
+        {
+            session = providerName switch
+            {
+                "jazzcash" => await _jazzCashService.InitiatePaymentAsync(
+                    tenantId, planDto, request.BillingInterval, cancellationToken, transaction.TransactionId),
+                "easypaisa" => await _easyPaisaService.InitiatePaymentAsync(
+                    tenantId, planDto, request.BillingInterval, cancellationToken, transaction.TransactionId),
+                _ => await _stripeService.CreateCheckoutSessionAsync(
+                    tenantId,
+                    tenant.Name,
+                    tenant.Email,
+                    planDto,
+                    request.BillingInterval,
+                    request.SuccessUrl,
+                    request.CancelUrl,
+                    subscription.StripeCustomerId,
+                    cancellationToken,
+                    transaction.TransactionId)
+            };
+        }
+        catch (Exception ex) when (IsUnknownProviderOutcome(ex))
+        {
+            transaction.Status = BillingTransactionStatus.RequiresReconciliation;
+            transaction.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync(cancellationToken);
+            _logger.LogWarning(
+                ex,
+                "Unknown checkout outcome for transaction {TransactionId} in tenant {TenantId}",
+                transaction.TransactionId,
+                tenantId);
+            throw new ConflictException(
+                "The payment provider did not confirm the result. Retry this checkout with the same Idempotency-Key. Do not start a new payment.",
+                ErrorCodes.IdempotencyInProgress);
+        }
+
+        transaction.ProviderReference = session.SessionId;
+        transaction.Metadata = JsonSerializer.Serialize(session);
+        transaction.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+        await _idempotency.CompleteCommittedAsync(record.Id, 200, transaction.Metadata, transaction.Id, cancellationToken);
+        return session;
     }
 
     public async Task<BillingPortalDto> CreateBillingPortalSessionAsync(string returnUrl, CancellationToken cancellationToken = default)
@@ -418,6 +513,53 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
         Guid? invoiceId,
         CancellationToken cancellationToken)
     {
+        var existing = await _context.BillingTransactions
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(
+                x => !x.IsDeleted &&
+                    x.Provider == provider &&
+                    (x.TransactionId == transactionId ||
+                     x.ProviderOperationKey == transactionId ||
+                     x.ProviderReference == transactionId),
+                cancellationToken);
+
+        if (existing is not null)
+        {
+            if (existing.TenantId != tenantId)
+            {
+                _logger.LogWarning(
+                    "Ignored billing result {TransactionId} because it does not belong to tenant {TenantId}",
+                    transactionId,
+                    tenantId);
+                return;
+            }
+
+            if (amount > 0 && Math.Abs(existing.Amount - amount) > 0.01m &&
+                status == BillingTransactionStatus.Completed)
+            {
+                existing.Status = BillingTransactionStatus.RequiresReconciliation;
+                existing.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync(cancellationToken);
+                _logger.LogWarning(
+                    "Billing transaction {TransactionId} amount {StoredAmount} did not match provider amount {ProviderAmount}",
+                    existing.TransactionId,
+                    existing.Amount,
+                    amount);
+                return;
+            }
+
+            if (!BillingTransactionTransitions.CanApplyVerifiedProviderResult(existing.Status, status))
+                return;
+
+            existing.Status = status;
+            existing.ProviderReference ??= transactionId;
+            existing.UpdatedAt = DateTime.UtcNow;
+            if (status == BillingTransactionStatus.Completed)
+                existing.CompletedAt ??= DateTime.UtcNow;
+            await _context.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
         var transaction = new BillingTransaction
         {
             TenantId = tenantId,
@@ -433,7 +575,125 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
         };
 
         _context.BillingTransactions.Add(transaction);
-        await _context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (DbExceptionClassifier.IsUniqueViolation(ex))
+        {
+            _context.Detach(transaction);
+            _logger.LogInformation(
+                "Billing transaction {TransactionId} was already recorded for provider {Provider}",
+                transactionId,
+                provider);
+        }
+    }
+
+    public async Task<BillingTransactionDto> RefundTransactionAsync(
+        Guid transactionId,
+        decimal amount,
+        string? currency,
+        string idempotencyKey,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IdempotencyKeyRules.IsValid(idempotencyKey))
+            throw new BadRequestException("Idempotency-Key header is required and must be 1-128 visible ASCII characters without spaces.");
+
+        if (amount <= 0)
+            throw new BadRequestException("Refund amount must be greater than zero.");
+
+        var tenantId = RequireTenantId();
+        var transaction = await _context.BillingTransactions
+            .FirstOrDefaultAsync(x => x.Id == transactionId, cancellationToken)
+            ?? throw new NotFoundException("Billing transaction not found.");
+
+        var rounded = Math.Round(amount, 2, MidpointRounding.AwayFromZero);
+        var requestedCurrency = string.IsNullOrWhiteSpace(currency)
+            ? transaction.Currency
+            : currency.Trim().ToUpperInvariant();
+        var hash = CanonicalRequestHasher.BillingRefund(tenantId, transaction.Id, rounded, requestedCurrency);
+        var claim = await _idempotency.BeginLocalAsync(
+            IdempotencyOperations.BillingRefund,
+            idempotencyKey,
+            hash,
+            cancellationToken);
+
+        if (claim.Kind == IdempotencyOutcomeKind.Replay)
+            return MapTransaction(transaction);
+
+        if (claim.Kind == IdempotencyOutcomeKind.Conflict)
+        {
+            throw new ConflictException(
+                "This Idempotency-Key was already used for a different refund request.",
+                ErrorCodes.IdempotencyKeyReused);
+        }
+
+        if (claim.Kind == IdempotencyOutcomeKind.InProgress)
+        {
+            throw new ConflictException(
+                "This refund is still processing. Retry the same request.",
+                ErrorCodes.IdempotencyInProgress);
+        }
+
+        if (!string.Equals(requestedCurrency, transaction.Currency, StringComparison.OrdinalIgnoreCase))
+        {
+            if (claim.Record is not null)
+                _idempotency.Detach(claim.Record);
+            throw new BadRequestException("Refund currency does not match the transaction currency.");
+        }
+
+        if (rounded != transaction.Amount)
+        {
+            if (claim.Record is not null)
+                _idempotency.Detach(claim.Record);
+            throw new BadRequestException("Billing refunds must match the original transaction amount.");
+        }
+
+        if (!BillingTransactionTransitions.CanApply(transaction.Status, BillingTransactionStatus.Refunded))
+        {
+            if (claim.Record is not null)
+                _idempotency.Detach(claim.Record);
+            throw new ConflictException(
+                "This transaction cannot be refunded from its current state.",
+                ErrorCodes.ConcurrencyConflict);
+        }
+
+        transaction.Status = BillingTransactionStatus.Refunded;
+        transaction.UpdatedAt = DateTime.UtcNow;
+        if (claim.Record is not null)
+        {
+            _idempotency.CompleteLocal(
+                claim.Record,
+                200,
+                JsonSerializer.Serialize(new { id = transaction.Id }),
+                transaction.Id);
+        }
+
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            _logger.LogWarning(ex, "Concurrency conflict while refunding billing transaction {TransactionId}", transaction.Id);
+            throw new ConflictException(
+                "This transaction was changed by someone else. Refresh and try again.",
+                ErrorCodes.ConcurrencyConflict);
+        }
+        catch (DbUpdateException ex) when (DbExceptionClassifier.IsUniqueViolation(ex))
+        {
+            if (claim.Record is not null)
+                _idempotency.Detach(claim.Record);
+            throw new ConflictException(
+                "This refund request was already recorded.",
+                ErrorCodes.IdempotencyInProgress);
+        }
+
+        _logger.LogInformation(
+            "Refunded billing transaction {TransactionId} in tenant {TenantId}",
+            transaction.Id,
+            tenantId);
+        return MapTransaction(transaction);
     }
 
     internal async Task<BillingInvoice> CreateInvoiceAsync(
@@ -691,4 +951,85 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
             "stripe" => PaymentProviderType.Stripe,
             _ => PaymentProviderType.Manual
         };
+
+    private async Task<BillingTransaction> FindOrCreateCheckoutTransactionAsync(
+        IdempotencyOutcome claim,
+        IdempotencyRecord record,
+        Guid tenantId,
+        string providerName,
+        decimal amount,
+        string currency,
+        string planName,
+        CancellationToken cancellationToken)
+    {
+        if (claim.ResourceId is Guid existingId)
+        {
+            return await _context.BillingTransactions
+                .FirstAsync(x => x.Id == existingId, cancellationToken);
+        }
+
+        var operationKey = ProviderOperationKey.Create(record.Id, providerName);
+        var transaction = new BillingTransaction
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            TransactionId = operationKey,
+            ProviderOperationKey = operationKey,
+            IdempotencyRecordId = record.Id,
+            Amount = amount,
+            Currency = currency,
+            Status = BillingTransactionStatus.Pending,
+            Provider = ParseProvider(providerName),
+            Description = $"BusinessOS {planName} checkout",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.BillingTransactions.Add(transaction);
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (DbExceptionClassifier.IsUniqueViolation(ex))
+        {
+            _context.Detach(transaction);
+            transaction = await _context.BillingTransactions
+                .FirstAsync(x => x.IdempotencyRecordId == record.Id, cancellationToken);
+        }
+
+        await _idempotency.AttachResourceAsync(record.Id, transaction.Id, cancellationToken);
+        return transaction;
+    }
+
+    private static CheckoutSessionDto ReadCheckoutSession(string? body)
+    {
+        var session = ReadStoredSession(body);
+        if (session is null)
+        {
+            throw new ConflictException(
+                "The original checkout result could not be read. Retry this request.",
+                ErrorCodes.IdempotencyInProgress);
+        }
+
+        return session;
+    }
+
+    private static CheckoutSessionDto? ReadStoredSession(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+            return null;
+
+        try
+        {
+            var session = JsonSerializer.Deserialize<CheckoutSessionDto>(body);
+            return string.IsNullOrWhiteSpace(session?.SessionId) ? null : session;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static bool IsUnknownProviderOutcome(Exception exception) =>
+        exception is HttpRequestException or TimeoutException or TaskCanceledException ||
+        exception.GetType().Name == "StripeException";
 }

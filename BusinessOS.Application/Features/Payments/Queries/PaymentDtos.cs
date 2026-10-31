@@ -44,3 +44,5 @@ public record UpdatePaymentRequest(
     string PaymentMethod,
     DateTime PaymentDate,
     string? ReferenceNo);
+
+public record RefundPaymentRequest(decimal Amount, string? Currency);

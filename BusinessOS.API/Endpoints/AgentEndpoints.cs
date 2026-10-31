@@ -7,7 +7,7 @@ namespace BusinessOS.API.Endpoints;
 
 /// <summary>
 /// HTTP endpoints for AI employee agents (Sophia and future specialists).
-/// Extends the existing Copilot surface without replacing <c>/api/ai</c>.
+/// Extends the existing Copilot surface without replacing <c>/api/v1/ai</c>.
 /// </summary>
 public static class AgentEndpoints
 {
@@ -18,10 +18,10 @@ public static class AgentEndpoints
 
     public static void MapAgentEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/agents")
+        var group = app.MapGroup("/agents")
             .WithTags("AI Employees")
             .RequireAuthorization()
-            .RequireRateLimiting("api");
+            .RequireRateLimiting("ai");
 
         group.MapPost("/chat", Chat)
             .WithName("AgentChat")
@@ -42,10 +42,15 @@ public static class AgentEndpoints
             .WithName("AgentSaveVoicePreferences")
             .Produces<VoicePreferenceDto>(StatusCodes.Status200OK);
 
+        group.MapGet("/tts/voices", ListVoices)
+            .WithName("AgentListTtsVoices")
+            .Produces<TtsVoiceCatalogDto>(StatusCodes.Status200OK);
+
         group.MapPost("/tts", SynthesizeSpeech)
             .WithName("AgentSynthesizeSpeech")
             .Produces(StatusCodes.Status200OK, contentType: "audio/mpeg")
-            .Produces(StatusCodes.Status400BadRequest);
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status503ServiceUnavailable);
 
         group.MapPost("/onboarding/start", StartOnboarding)
             .WithName("AgentStartOnboarding")
@@ -132,10 +137,19 @@ public static class AgentEndpoints
         return Results.Ok(prefs);
     }
 
+    private static IResult ListVoices(ISophiaTtsService tts) =>
+        Results.Ok(new TtsVoiceCatalogDto
+        {
+            Provider = tts.ActiveProvider,
+            DefaultVoice = tts.DefaultVoice,
+            Voices = tts.ListVoices()
+        });
+
     private static async Task<IResult> SynthesizeSpeech(
         SophiaTtsRequest request,
         ISophiaTtsService tts,
         IVoicePreferenceService voicePrefs,
+        HttpContext httpContext,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Text))
@@ -145,16 +159,28 @@ public static class AgentEndpoints
         var language = string.IsNullOrWhiteSpace(request.Language)
             ? prefs.Language
             : request.Language;
+        var voice = string.IsNullOrWhiteSpace(request.VoiceName)
+            ? prefs.VoiceName
+            : request.VoiceName;
         var rate = request.SpeechRate ?? prefs.SpeechRate;
 
         try
         {
-            var result = await tts.SynthesizeAsync(request.Text, language, rate, cancellationToken);
+            var result = await tts.SynthesizeAsync(request.Text, language, rate, voice, cancellationToken);
+            httpContext.Response.Headers["X-Tts-Provider"] = result.Provider;
+            httpContext.Response.Headers["X-Tts-Voice"] = result.VoiceName;
+            httpContext.Response.Headers["X-Tts-Cache"] = result.ServedFromCache ? "hit" : "miss";
             return Results.File(result.AudioBytes, result.ContentType, fileDownloadName: null);
         }
-        catch (Exception ex)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return Results.BadRequest(new { error = "Speech synthesis failed.", detail = ex.Message });
+            throw;
+        }
+        catch (Exception)
+        {
+            return Results.Json(
+                new { error = "Speech synthesis is unavailable." },
+                statusCode: StatusCodes.Status503ServiceUnavailable);
         }
     }
 

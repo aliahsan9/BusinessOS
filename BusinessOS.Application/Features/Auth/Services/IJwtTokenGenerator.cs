@@ -7,7 +7,8 @@ public interface IJwtTokenGenerator
         string email,
         Guid tenantId,
         IReadOnlyList<string> roles,
-        IReadOnlyList<string> permissions);
+        IReadOnlyList<string> permissions,
+        int securityVersion);
 
     DateTime GetTokenExpiration();
 }

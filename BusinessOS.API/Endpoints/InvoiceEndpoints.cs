@@ -20,11 +20,11 @@ namespace BusinessOS.API.Endpoints;
 public static class InvoiceEndpoints
 {
     /// <summary>
-    /// Maps invoice endpoints under <c>/api/invoices</c>.
+    /// Maps invoice endpoints under <c>/api/v1/invoices</c>.
     /// </summary>
     public static void MapInvoiceEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/invoices")
+        var group = app.MapGroup("/invoices")
             .WithTags("Invoices")
             .RequireAuthorization()
             .RequireRateLimiting("api");
@@ -107,7 +107,7 @@ public static class InvoiceEndpoints
             new CreateInvoiceFromOrderCommand(orderId, request.DueDate, request.Notes),
             cancellationToken);
 
-        return Results.Created($"/api/invoices/{id}", new { id });
+        return Results.Created($"/api/v1/invoices/{id}", new { id });
     }
 
     private static async Task<IResult> GetAllInvoices(

@@ -19,12 +19,16 @@ namespace BusinessOS.API.Endpoints;
 public static class ProductEndpoints
 {
     /// <summary>
-    /// Maps product CRUD and list endpoints under <c>/api/products</c>.
+    /// Maps product CRUD and list endpoints under <c>/api/v1/products</c>.
     /// </summary>
     public static void MapProductEndpoints(this IEndpointRouteBuilder app)
     {
+ main
+        var group = app.MapGroup("/products")
+
         var group = app.MapGroup("/api/v{version:apiVersion}/products")
             .HasApiVersion(1.0)
+ master
             .WithTags("Products")
             .RequireAuthorization()
             .RequireRateLimiting("api");

@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BusinessOS.Infrastructure.Data;
 
-public class BusinessOSDbContext
+public partial class BusinessOSDbContext
     : IdentityDbContext<ApplicationUser, ApplicationRole, string>, IApplicationDbContext
 {
     private readonly Guid _tenantId;
@@ -54,6 +54,7 @@ public class BusinessOSDbContext
     public DbSet<UserRole> RbacUserRoles => Set<UserRole>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<RbacAuditLog> RbacAuditLogs => Set<RbacAuditLog>();
+    public DbSet<AuthSession> AuthSessions => Set<AuthSession>();
     public DbSet<EntityAuditLog> EntityAuditLogs => Set<EntityAuditLog>();
     public DbSet<AIConversation> AIConversations => Set<AIConversation>();
     public DbSet<AiConversationSession> AiConversationSessions => Set<AiConversationSession>();
@@ -73,6 +74,14 @@ public class BusinessOSDbContext
     public DbSet<VoicePreference> VoicePreferences => Set<VoicePreference>();
     public DbSet<AgentWorkflowRun> AgentWorkflowRuns => Set<AgentWorkflowRun>();
     public DbSet<AgentWorkflowStep> AgentWorkflowSteps => Set<AgentWorkflowStep>();
+    public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
+    public DbSet<ProcessedWebhookEvent> ProcessedWebhookEvents => Set<ProcessedWebhookEvent>();
+
+    public override int SaveChanges()
+    {
+        ApplyTenantAndAuditRules();
+        return base.SaveChanges();
+    }
 
     public override Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default)
@@ -81,8 +90,30 @@ public class BusinessOSDbContext
         return base.SaveChangesAsync(cancellationToken);
     }
 
+    private void AssignInMemoryRowVersions()
+    {
+        foreach (var entry in ChangeTracker.Entries())
+        {
+            if (entry.State is not (EntityState.Added or EntityState.Modified))
+                continue;
+
+            var rowVersion = entry.Properties.FirstOrDefault(property => property.Metadata.Name == "RowVersion");
+            if (rowVersion?.CurrentValue is byte[] { Length: > 0 })
+                continue;
+
+            if (rowVersion is not null)
+            {
+                rowVersion.CurrentValue = Guid.NewGuid().ToByteArray()[..8];
+                rowVersion.IsTemporary = false;
+            }
+        }
+    }
+
     private void ApplyTenantAndAuditRules()
     {
+        if (!Database.IsRelational())
+            AssignInMemoryRowVersions();
+
         foreach (var entry in ChangeTracker.Entries().ToList())
         {
             // Assign TenantId automatically
@@ -91,22 +122,28 @@ public class BusinessOSDbContext
                 var tenantIdProp = entry.Properties
                     .FirstOrDefault(p => p.Metadata.Name == "TenantId");
 
-                if (tenantIdProp is not null)
+                if (tenantIdProp is not null && _tenantId != Guid.Empty)
                 {
                     // Guid? TenantId may be intentionally null (system-scoped rows such as AgentProfile).
                     if (tenantIdProp.Metadata.ClrType == typeof(Guid?))
                     {
                         var nullable = (Guid?)tenantIdProp.CurrentValue;
-                        if (nullable == Guid.Empty && _tenantId != Guid.Empty)
+                        if (nullable == Guid.Empty || (nullable.HasValue && nullable.Value != _tenantId))
                             tenantIdProp.CurrentValue = _tenantId;
                     }
-                    else
+                    else if (tenantIdProp.Metadata.ClrType == typeof(Guid))
                     {
-                        var currentValue = tenantIdProp.CurrentValue as Guid? ?? Guid.Empty;
-                        if (currentValue == Guid.Empty && _tenantId != Guid.Empty)
-                            tenantIdProp.CurrentValue = _tenantId;
+                        tenantIdProp.CurrentValue = _tenantId;
                     }
                 }
+            }
+            else if (entry.State == EntityState.Modified)
+            {
+                var tenantIdProp = entry.Properties
+                    .FirstOrDefault(p => p.Metadata.Name == "TenantId");
+
+                if (tenantIdProp is not null && tenantIdProp.IsModified)
+                    tenantIdProp.CurrentValue = tenantIdProp.OriginalValue;
             }
 
             // Soft delete handling (if entity has IsDeleted)
@@ -221,11 +258,17 @@ public class BusinessOSDbContext
         builder.Entity<EntityAuditLog>()
             .HasQueryFilter(x => x.TenantId == _tenantId);
 
+        builder.Entity<RbacAuditLog>()
+            .HasQueryFilter(x => x.TenantId == _tenantId);
+
         builder.Entity<BillingInvoice>()
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<BillingTransaction>()
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<IdempotencyRecord>()
+            .HasQueryFilter(x => x.TenantId == _tenantId);
 
         builder.Entity<WorkTask>()
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);

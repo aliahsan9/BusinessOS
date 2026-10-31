@@ -13,5 +13,7 @@ public class Inventory : AuditableEntity
     public decimal ReorderLevel { get; set; }
     public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
 
+    public byte[] RowVersion { get; set; } = default!;
+
     public Product Product { get; set; } = default!;
 }

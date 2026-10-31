@@ -9,11 +9,16 @@ public sealed class RbacAuditService : IRbacAuditService
 {
     private readonly BusinessOSDbContext _context;
     private readonly ICurrentUserService _currentUserService;
+    private readonly ITenantProvider _tenantProvider;
 
-    public RbacAuditService(BusinessOSDbContext context, ICurrentUserService currentUserService)
+    public RbacAuditService(
+        BusinessOSDbContext context,
+        ICurrentUserService currentUserService,
+        ITenantProvider tenantProvider)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _tenantProvider = tenantProvider;
     }
 
     public async Task LogAsync(
@@ -28,6 +33,7 @@ public sealed class RbacAuditService : IRbacAuditService
 
         _context.RbacAuditLogs.Add(new RbacAuditLog
         {
+            TenantId = _tenantProvider.HasTenant() ? _tenantProvider.TenantId : null,
             ActorUserId = actorUserId,
             Action = action,
             EntityType = entityType,

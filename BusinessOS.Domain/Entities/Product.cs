@@ -20,6 +20,8 @@ public class Product : AuditableEntity
 
     public bool IsActive { get; set; } = true;
 
+    public byte[] RowVersion { get; set; } = default!;
+
     public Category Category { get; set; } = default!;
     public Inventory? Inventory { get; set; }
 }

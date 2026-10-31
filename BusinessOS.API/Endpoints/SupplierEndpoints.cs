@@ -20,11 +20,11 @@ namespace BusinessOS.API.Endpoints;
 public static class SupplierEndpoints
 {
     /// <summary>
-    /// Maps supplier CRUD and related endpoints under <c>/api/suppliers</c>.
+    /// Maps supplier CRUD and related endpoints under <c>/api/v1/suppliers</c>.
     /// </summary>
     public static void MapSupplierEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/suppliers")
+        var group = app.MapGroup("/suppliers")
             .WithTags("Suppliers")
             .RequireAuthorization()
             .RequireRateLimiting("api");
@@ -106,7 +106,7 @@ public static class SupplierEndpoints
                 request.Notes),
             cancellationToken);
 
-        return Results.Created($"/api/suppliers/{id}", new { id });
+        return Results.Created($"/api/v1/suppliers/{id}", new { id });
     }
 
     private static async Task<IResult> GetAllSuppliers(

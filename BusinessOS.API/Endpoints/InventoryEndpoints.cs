@@ -24,11 +24,11 @@ namespace BusinessOS.API.Endpoints;
 public static class InventoryEndpoints
 {
     /// <summary>
-    /// Maps inventory endpoints under <c>/api/inventory</c>.
+    /// Maps inventory endpoints under <c>/api/v1/inventory</c>.
     /// </summary>
     public static void MapInventoryEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/inventory")
+        var group = app.MapGroup("/inventory")
             .WithTags("Inventory")
             .RequireAuthorization()
             .RequireRateLimiting("api");

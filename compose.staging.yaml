@@ -1,0 +1,18 @@
+# Local staging. Optimized images, separate data, Development exception tools off.
+# Project name: businessos-staging
+# Frontend: https://127.0.0.1:4201
+# API:      http://127.0.0.1:5102
+# Scalar is not registered because ASPNETCORE_ENVIRONMENT is Staging.
+
+services:
+  api:
+    ports:
+      - "127.0.0.1:5102:8080"
+
+  web:
+    ports:
+      - "127.0.0.1:4201:8443"
+    volumes:
+      - ../BusinessOS_UI/nginx.https.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/config/app-config.staging.json:/usr/share/nginx/html/app-config.json:ro
+      - ./deploy/certs:/etc/nginx/certs:ro

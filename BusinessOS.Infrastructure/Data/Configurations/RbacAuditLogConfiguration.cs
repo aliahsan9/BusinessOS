@@ -12,6 +12,8 @@ public sealed class RbacAuditLogConfiguration : IEntityTypeConfiguration<RbacAud
 
         builder.HasKey(x => x.Id);
 
+        builder.Property(x => x.TenantId);
+
         builder.Property(x => x.ActorUserId)
             .HasMaxLength(450)
             .IsRequired();
@@ -34,6 +36,7 @@ public sealed class RbacAuditLogConfiguration : IEntityTypeConfiguration<RbacAud
         builder.Property(x => x.NewValue)
             .HasMaxLength(4000);
 
+        builder.HasIndex(x => x.TenantId);
         builder.HasIndex(x => x.CreatedAt);
         builder.HasIndex(x => new { x.EntityType, x.EntityId });
         builder.HasIndex(x => x.ActorUserId);

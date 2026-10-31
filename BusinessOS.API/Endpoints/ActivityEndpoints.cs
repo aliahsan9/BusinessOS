@@ -10,7 +10,7 @@ public static class ActivityEndpoints
 {
     public static void MapActivityEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/activity")
+        var group = app.MapGroup("/activity")
             .WithTags("Activity")
             .RequireAuthorization()
             .RequireRateLimiting("api");

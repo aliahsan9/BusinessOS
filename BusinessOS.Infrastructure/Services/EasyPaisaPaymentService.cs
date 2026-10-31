@@ -1,8 +1,12 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using BusinessOS.Application.Common.Exceptions;
+using BusinessOS.Application.Common.Idempotency;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Billing.DTOs;
+using BusinessOS.Application.Features.Billing.Services;
+using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.Payments;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -12,13 +16,19 @@ namespace BusinessOS.Infrastructure.Services;
 public sealed class EasyPaisaPaymentService : IEasyPaisaPaymentService
 {
     private readonly EasyPaisaOptions _options;
+    private readonly IWebhookEventStore _events;
+    private readonly IBillingPaymentReconciler _reconciler;
     private readonly ILogger<EasyPaisaPaymentService> _logger;
 
     public EasyPaisaPaymentService(
         IOptions<EasyPaisaOptions> options,
+        IWebhookEventStore events,
+        IBillingPaymentReconciler reconciler,
         ILogger<EasyPaisaPaymentService> logger)
     {
         _options = options.Value;
+        _events = events;
+        _reconciler = reconciler;
         _logger = logger;
     }
 
@@ -28,11 +38,14 @@ public sealed class EasyPaisaPaymentService : IEasyPaisaPaymentService
         Guid tenantId,
         SubscriptionPlanDto plan,
         string billingInterval,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? operationKey = null)
     {
         var isYearly = billingInterval.Equals("yearly", StringComparison.OrdinalIgnoreCase);
         var amount = isYearly ? plan.AnnualPrice : plan.MonthlyPrice;
-        var orderId = $"EP-{tenantId:N}-{DateTime.UtcNow:yyyyMMddHHmmss}";
+        var orderId = string.IsNullOrWhiteSpace(operationKey)
+            ? $"EP-{tenantId:N}-{DateTime.UtcNow:yyyyMMddHHmmss}"
+            : operationKey;
 
         var payload = new Dictionary<string, string>
         {
@@ -61,42 +74,119 @@ public sealed class EasyPaisaPaymentService : IEasyPaisaPaymentService
         });
     }
 
-    public async Task<bool> VerifyPaymentAsync(string transactionReference, CancellationToken cancellationToken = default)
+    public Task<bool> VerifyPaymentAsync(string transactionReference, CancellationToken cancellationToken = default)
     {
-        if (!IsConfigured)
-        {
-            _logger.LogWarning("EasyPaisa verification skipped - not configured.");
-            return false;
-        }
-
-        _logger.LogInformation("Verifying EasyPaisa transaction {Reference}", transactionReference);
-        return await Task.FromResult(true);
+        _logger.LogInformation(
+            "EasyPaisa server-side confirmation is not enabled for {Reference}. Payment state was not changed.",
+            transactionReference);
+        return Task.FromResult(false);
     }
 
-    public Task HandleWebhookAsync(string payload, CancellationToken cancellationToken = default)
+    public async Task HandleWebhookAsync(string payload, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("EasyPaisa webhook received: {Length} bytes", payload.Length);
+        _logger.LogInformation("EasyPaisa callback received: {Length} bytes", payload?.Length ?? 0);
+
+        if (!IsConfigured || string.IsNullOrWhiteSpace(_options.HashKey))
+        {
+            _logger.LogWarning("EasyPaisa callback rejected because hash verification is not configured.");
+            throw new UnauthorizedException("Payment callback was rejected.");
+        }
+
+        var data = ParseFields(payload);
+        if (!data.TryGetValue("orderId", out var orderId) ||
+            !data.TryGetValue("transactionAmount", out var amountText) ||
+            !data.TryGetValue("merchantHashedReq", out var presented) ||
+            !decimal.TryParse(amountText, out var amount))
+        {
+            throw new UnauthorizedException("Payment callback was rejected.");
+        }
+
+        var expected = ComputeHash(orderId, amount);
+        var expectedBytes = Encoding.UTF8.GetBytes(expected);
+        var presentedBytes = Encoding.UTF8.GetBytes(presented);
+        if (expectedBytes.Length != presentedBytes.Length ||
+            !CryptographicOperations.FixedTimeEquals(expectedBytes, presentedBytes))
+        {
+            _logger.LogWarning("EasyPaisa callback rejected because the hash did not match.");
+            throw new UnauthorizedException("Payment callback was rejected.");
+        }
+
+        var statusText = data.GetValueOrDefault("transactionStatus") ?? data.GetValueOrDefault("status");
+        var eventId = $"{orderId}|{statusText}";
+        var claim = await _events.TryBeginAsync(PaymentProviderType.EasyPaisa, eventId, cancellationToken);
+        if (claim is WebhookClaim.Duplicate)
+            return;
+
+        if (claim is WebhookClaim.Busy)
+        {
+            throw new ConflictException(
+                "Webhook event is already being processed.",
+                ErrorCodes.IdempotencyInProgress);
+        }
+
+        var started = (WebhookClaim.Started)claim;
+        var success = statusText is not null &&
+            (statusText.Equals("paid", StringComparison.OrdinalIgnoreCase) ||
+             statusText.Equals("success", StringComparison.OrdinalIgnoreCase) ||
+             statusText == "000");
 
         try
         {
-            var data = JsonSerializer.Deserialize<Dictionary<string, string>>(payload);
-            if (data is null)
+            var tenantId = await _reconciler.ApplyVerifiedResultAsync(
+                PaymentProviderType.EasyPaisa,
+                orderId,
+                success ? BillingTransactionStatus.Completed : BillingTransactionStatus.Failed,
+                data.GetValueOrDefault("transactionId"),
+                amount,
+                "PKR",
+                cancellationToken);
+
+            if (tenantId is null && success)
             {
-                return Task.CompletedTask;
+                await _events.AbandonAsync(started.EventRecordId, cancellationToken);
+                throw new ConflictException("Payment operation was not found for this callback.");
             }
 
-            var status = data.GetValueOrDefault("status", string.Empty);
-            if (status.Equals("success", StringComparison.OrdinalIgnoreCase))
-            {
-                _logger.LogInformation("EasyPaisa payment successful: {OrderId}", data.GetValueOrDefault("orderId"));
-            }
+            await _events.CompleteAsync(started.EventRecordId, tenantId, cancellationToken);
         }
-        catch (Exception ex)
+        catch (ConflictException)
         {
-            _logger.LogError(ex, "Failed to process EasyPaisa webhook.");
+            throw;
+        }
+        catch
+        {
+            await _events.AbandonAsync(started.EventRecordId, cancellationToken);
+            throw;
+        }
+    }
+
+    private static Dictionary<string, string> ParseFields(string? payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload))
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<Dictionary<string, string>>(payload);
+            if (parsed is not null)
+                return new Dictionary<string, string>(parsed, StringComparer.OrdinalIgnoreCase);
+        }
+        catch (JsonException)
+        {
+            // Form-encoded callbacks are parsed below.
         }
 
-        return Task.CompletedTask;
+        var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in payload.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var separator = pair.IndexOf('=');
+            if (separator <= 0)
+                continue;
+
+            fields[Uri.UnescapeDataString(pair[..separator])] = Uri.UnescapeDataString(pair[(separator + 1)..]);
+        }
+
+        return fields;
     }
 
     private string ComputeHash(string orderId, decimal amount)

@@ -2,18 +2,17 @@ using System.Globalization;
 using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using BusinessOS.Application.Features.Agents.DTOs;
 using BusinessOS.Application.Features.Agents.Services;
 using Microsoft.Extensions.Logging;
 
 namespace BusinessOS.Infrastructure.AI.Agents;
 
 /// <summary>
-/// Free Microsoft Edge Read Aloud neural TTS (same engine as Edge browser).
-/// Uses en-US-JennyNeural for natural English spoken replies.
+/// Microsoft Edge Read Aloud neural speech. Used when OpenAI speech is not configured or fails.
 /// </summary>
-public sealed class EdgeNeuralTtsService : ISophiaTtsService
+public sealed class EdgeNeuralTtsService : ITtsProvider
 {
     private const string TrustedClientToken = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
     private const string EdgeVersion = "1-130.0.2849.68";
@@ -30,21 +29,35 @@ public sealed class EdgeNeuralTtsService : ISophiaTtsService
         _logger = logger;
     }
 
+    public string Key => "edge";
+
+    public bool IsAvailable => true;
+
+    public string ModelId => "edge-neural";
+
+    public string DefaultVoice => "en-US-JennyNeural";
+
+    public IReadOnlyList<TtsVoiceOption> Voices { get; } =
+    [
+        new() { Id = "en-US-JennyNeural", Label = "Jenny", Description = "Warm" },
+        new() { Id = "en-US-AriaNeural", Label = "Aria", Description = "Clear" },
+        new() { Id = "en-US-GuyNeural", Label = "Guy", Description = "Steady" }
+    ];
+
     public async Task<SophiaTtsResult> SynthesizeAsync(
-        string text,
-        string language,
-        double speechRate = 1.0,
+        TtsSynthesisRequest request,
         CancellationToken cancellationToken = default)
     {
-        var cleaned = CleanForSpeech(text);
+        var cleaned = TtsTextNormalizer.Normalize(request.Text);
         if (string.IsNullOrWhiteSpace(cleaned))
             throw new InvalidOperationException("Nothing to speak.");
 
-        // Keep TTS snappy — long tool dumps should not be fully narrated.
+        // Keep the websocket payload short when this backup voice narrates a long reply.
         if (cleaned.Length > 900)
             cleaned = cleaned[..900].TrimEnd() + "…";
 
-        const string voice = "en-US-JennyNeural";
+        var voice = ResolveVoice(request.VoiceName);
+        var speechRate = request.SpeechRate;
         const string xmlLang = "en-US";
 
         try
@@ -56,7 +69,8 @@ public sealed class EdgeNeuralTtsService : ISophiaTtsService
                 {
                     AudioBytes = mp3,
                     ContentType = "audio/mpeg",
-                    VoiceName = voice
+                    VoiceName = voice,
+                    Provider = Key
                 };
             }
         }
@@ -230,6 +244,19 @@ public sealed class EdgeNeuralTtsService : ISophiaTtsService
         return 0;
     }
 
+    private string ResolveVoice(string? requested)
+    {
+        if (!string.IsNullOrWhiteSpace(requested) &&
+            !requested.Equals("default", StringComparison.OrdinalIgnoreCase))
+        {
+            var match = Voices.FirstOrDefault(v => v.Id.Equals(requested.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
+                return match.Id;
+        }
+
+        return DefaultVoice;
+    }
+
     private static string GenerateSecMsGec(double clockSkewSeconds = 0)
     {
         var ticks = (long)Math.Floor(DateTimeOffset.UtcNow.ToUnixTimeSeconds() + clockSkewSeconds + WinEpochSeconds);
@@ -250,19 +277,5 @@ public sealed class EdgeNeuralTtsService : ISophiaTtsService
 
         return -1;
     }
-
-    private static string CleanForSpeech(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            return "";
-
-        var s = text;
-        s = Regex.Replace(s, @"\*\*|__|`+|#+", " ");
-        s = Regex.Replace(s, @"\[([^\]]+)\]\([^)]+\)", "$1");
-        s = Regex.Replace(s, @"https?://\S+", " ");
-        s = Regex.Replace(s, @"\r\n?|\n", ". ");
-        s = Regex.Replace(s, @"\s{2,}", " ");
-        return s.Trim();
-    }
 }
-
+

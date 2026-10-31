@@ -1,4 +1,5 @@
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Auth.Services;
 using BusinessOS.Application.Common.Models;
 using BusinessOS.Application.Features.Account.DTOs;
 using BusinessOS.Application.Features.Users.DTOs;
@@ -13,13 +14,19 @@ namespace BusinessOS.Infrastructure.Services;
 public sealed class IdentityService : IIdentityService
 {
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly ICurrentUserService _currentUser;
+    private readonly IAuthSessionService _sessions;
     private readonly ILogger<IdentityService> _logger;
 
     public IdentityService(
         UserManager<ApplicationUser> userManager,
+        ICurrentUserService currentUser,
+        IAuthSessionService sessions,
         ILogger<IdentityService> logger)
     {
         _userManager = userManager;
+        _currentUser = currentUser;
+        _sessions = sessions;
         _logger = logger;
     }
 
@@ -40,7 +47,30 @@ public sealed class IdentityService : IIdentityService
     private async Task<bool> ValidatePasswordInternalAsync(string userId, string password)
     {
         var appUser = await _userManager.FindByIdAsync(userId);
-        return appUser is not null && await _userManager.CheckPasswordAsync(appUser, password);
+        if (appUser is null)
+        {
+            return false;
+        }
+
+        if (await _userManager.IsLockedOutAsync(appUser))
+        {
+            _logger.LogWarning("Login rejected because account {UserId} is locked out", appUser.Id);
+            return false;
+        }
+
+        if (await _userManager.CheckPasswordAsync(appUser, password))
+        {
+            if (appUser.AccessFailedCount > 0)
+            {
+                await _userManager.ResetAccessFailedCountAsync(appUser);
+            }
+
+            return true;
+        }
+
+        await _userManager.AccessFailedAsync(appUser);
+        _logger.LogWarning("Failed password validation for user {UserId}", appUser.Id);
+        return false;
     }
 
     public async Task<IReadOnlyList<string>> GetRolesAsync(
@@ -57,13 +87,17 @@ public sealed class IdentityService : IIdentityService
         CreateUserRequest request,
         CancellationToken cancellationToken)
     {
+        var tenantId = _currentUser.TenantId is Guid currentTenant && currentTenant != Guid.Empty
+            ? currentTenant
+            : request.TenantId;
+
         var user = new ApplicationUser
         {
             UserName = request.Email,
             Email = request.Email,
             FirstName = request.FirstName,
             LastName = request.LastName,
-            TenantId = request.TenantId,
+            TenantId = tenantId,
             JoinedAt = DateTime.UtcNow
         };
 
@@ -143,9 +177,7 @@ public sealed class IdentityService : IIdentityService
         string userId,
         CancellationToken cancellationToken = default)
     {
-        var user = await _userManager.FindByIdAsync(userId)
-            ?? throw new NotFoundException($"User '{userId}' was not found.");
-
+        var user = await FindUserInCurrentTenantAsync(userId);
         return await MapUserResponseAsync(user);
     }
 
@@ -154,16 +186,24 @@ public sealed class IdentityService : IIdentityService
         UpdateUserRequest request,
         CancellationToken cancellationToken = default)
     {
-        var user = await _userManager.FindByIdAsync(userId)
-            ?? throw new NotFoundException($"User '{userId}' was not found.");
+        var user = await FindUserInCurrentTenantAsync(userId);
 
+        var wasActive = user.IsActive;
         user.Email = request.Email.Trim();
         user.UserName = request.Email.Trim();
         user.FirstName = request.FirstName.Trim();
         user.LastName = request.LastName.Trim();
         user.IsActive = request.IsActive;
+        if (wasActive != request.IsActive)
+        {
+            user.SecurityVersion++;
+        }
 
         var result = await _userManager.UpdateAsync(user);
+        if (result.Succeeded && wasActive && !request.IsActive)
+        {
+            await _sessions.RevokeAllAsync(user.Id, cancellationToken);
+        }
         if (!result.Succeeded)
         {
             throw new BadRequestException(string.Join("; ", result.Errors.Select(x => x.Description)));
@@ -174,23 +214,25 @@ public sealed class IdentityService : IIdentityService
 
     public async Task DeactivateUserAsync(string userId, CancellationToken cancellationToken = default)
     {
-        var user = await _userManager.FindByIdAsync(userId)
-            ?? throw new NotFoundException($"User '{userId}' was not found.");
+        var user = await FindUserInCurrentTenantAsync(userId);
 
         user.IsActive = false;
+        user.SecurityVersion++;
         var result = await _userManager.UpdateAsync(user);
         if (!result.Succeeded)
         {
             throw new BadRequestException(string.Join("; ", result.Errors.Select(x => x.Description)));
         }
+
+        await _sessions.RevokeAllAsync(user.Id, cancellationToken);
     }
 
     public async Task ActivateUserAsync(string userId, CancellationToken cancellationToken = default)
     {
-        var user = await _userManager.FindByIdAsync(userId)
-            ?? throw new NotFoundException($"User '{userId}' was not found.");
+        var user = await FindUserInCurrentTenantAsync(userId);
 
         user.IsActive = true;
+        user.SecurityVersion++;
         var result = await _userManager.UpdateAsync(user);
         if (!result.Succeeded)
         {
@@ -203,14 +245,14 @@ public sealed class IdentityService : IIdentityService
         string newPassword,
         CancellationToken cancellationToken = default)
     {
-        var user = await _userManager.FindByIdAsync(userId)
-            ?? throw new NotFoundException($"User '{userId}' was not found.");
+        var user = await FindUserInCurrentTenantAsync(userId);
 
         var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
         var result = await _userManager.ResetPasswordAsync(user, resetToken, newPassword);
 
         if (result.Succeeded)
         {
+            await InvalidateCredentialsAsync(user, cancellationToken);
             _logger.LogInformation("Password reset completed for user {UserId}", userId);
         }
         else
@@ -236,6 +278,14 @@ public sealed class IdentityService : IIdentityService
             return null;
         }
 
+        if (!await _userManager.HasPasswordAsync(user))
+        {
+            _logger.LogInformation(
+                "Password reset skipped for account {UserId} because it has no local password.",
+                user.Id);
+            return null;
+        }
+
         return await _userManager.GeneratePasswordResetTokenAsync(user);
     }
 
@@ -246,28 +296,26 @@ public sealed class IdentityService : IIdentityService
         CancellationToken cancellationToken = default)
     {
         var user = await _userManager.FindByEmailAsync(email.Trim());
-        if (user is null)
+        if (user is null || !user.IsActive || !await _userManager.HasPasswordAsync(user))
         {
             return new IdentityOperationResult(false, ["Invalid or expired password reset link."]);
-        }
-
-        if (!user.IsActive)
-        {
-            return new IdentityOperationResult(false, ["Account is deactivated."]);
         }
 
         var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
 
         if (result.Succeeded)
         {
+            await _userManager.ResetAccessFailedCountAsync(user);
+            await _userManager.SetLockoutEndDateAsync(user, null);
+            await InvalidateCredentialsAsync(user, cancellationToken);
             _logger.LogInformation("Password reset via token completed for user {UserId}", user.Id);
         }
         else
         {
             _logger.LogWarning(
-                "Password reset via token failed for {Email}: {Errors}",
-                email,
-                string.Join("; ", result.Errors.Select(e => e.Description)));
+                "Password reset via token failed for user {UserId}. ErrorCount={ErrorCount}",
+                user.Id,
+                result.Errors.Count());
         }
 
         return new IdentityOperationResult(
@@ -336,9 +384,223 @@ public sealed class IdentityService : IIdentityService
             ?? throw new NotFoundException($"User '{userId}' was not found.");
 
         var result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
+        if (result.Succeeded)
+        {
+            await InvalidateCredentialsAsync(user, cancellationToken);
+        }
+
         return new IdentityOperationResult(
             result.Succeeded,
             result.Errors.Select(x => x.Description).ToList());
+    }
+
+    public async Task<UserAuthResult?> FindByLoginAsync(
+        string loginProvider,
+        string providerKey,
+        CancellationToken cancellationToken)
+    {
+        var user = await _userManager.FindByLoginAsync(loginProvider, providerKey);
+        return user is null ? null : MapUser(user);
+    }
+
+    public async Task<bool> HasPasswordAsync(string userId, CancellationToken cancellationToken)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        return user is not null && await _userManager.HasPasswordAsync(user);
+    }
+
+    public async Task<bool> IsLockedOutAsync(string userId, CancellationToken cancellationToken)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        return user is not null && await _userManager.IsLockedOutAsync(user);
+    }
+
+    public async Task<IdentityOperationResult> CreateExternalUserAsync(
+        CreateExternalUserRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.TenantId == Guid.Empty)
+        {
+            return new IdentityOperationResult(false, ["A tenant is required."]);
+        }
+
+        var email = request.Email.Trim();
+        var user = new ApplicationUser
+        {
+            UserName = email,
+            Email = email,
+            EmailConfirmed = true,
+            FirstName = request.FirstName.Trim(),
+            LastName = request.LastName.Trim(),
+            TenantId = request.TenantId,
+            JoinedAt = DateTime.UtcNow,
+            AvatarUrl = SafeAvatar(request.AvatarUrl)
+        };
+
+        var create = await _userManager.CreateAsync(user);
+        if (!create.Succeeded)
+        {
+            return new IdentityOperationResult(false, create.Errors.Select(x => x.Description).ToList());
+        }
+
+        var login = await _userManager.AddLoginAsync(
+            user,
+            new UserLoginInfo(request.LoginProvider, request.ProviderKey, request.LoginProvider));
+        if (!login.Succeeded)
+        {
+            await _userManager.DeleteAsync(user);
+            return new IdentityOperationResult(false, login.Errors.Select(x => x.Description).ToList());
+        }
+
+        return new IdentityOperationResult(true, []);
+    }
+
+    public async Task<IdentityOperationResult> LinkExternalLoginAsync(
+        string userId,
+        string loginProvider,
+        string providerKey,
+        CancellationToken cancellationToken)
+    {
+        var user = await _userManager.FindByIdAsync(userId)
+            ?? throw new NotFoundException($"User '{userId}' was not found.");
+
+        var existing = await _userManager.FindByLoginAsync(loginProvider, providerKey);
+        if (existing is not null)
+        {
+            if (existing.Id == user.Id)
+            {
+                return new IdentityOperationResult(true, []);
+            }
+
+            return new IdentityOperationResult(
+                false,
+                ["This Google account is already linked to another user."]);
+        }
+
+        var logins = await _userManager.GetLoginsAsync(user);
+        if (logins.Any(login => login.LoginProvider == loginProvider))
+        {
+            return new IdentityOperationResult(
+                false,
+                ["This account is already connected to a different Google identity."]);
+        }
+
+        var result = await _userManager.AddLoginAsync(
+            user,
+            new UserLoginInfo(loginProvider, providerKey, loginProvider));
+        return new IdentityOperationResult(
+            result.Succeeded,
+            result.Errors.Select(x => x.Description).ToList());
+    }
+
+    public async Task<IdentityOperationResult> RemoveExternalLoginAsync(
+        string userId,
+        string loginProvider,
+        CancellationToken cancellationToken)
+    {
+        var user = await _userManager.FindByIdAsync(userId)
+            ?? throw new NotFoundException($"User '{userId}' was not found.");
+
+        if (!await _userManager.HasPasswordAsync(user))
+        {
+            return new IdentityOperationResult(
+                false,
+                ["Set a password before disconnecting Google so you can still sign in."]);
+        }
+
+        var logins = await _userManager.GetLoginsAsync(user);
+        var login = logins.FirstOrDefault(item => item.LoginProvider == loginProvider);
+        if (login is null)
+        {
+            return new IdentityOperationResult(false, ["Google is not connected to this account."]);
+        }
+
+        var result = await _userManager.RemoveLoginAsync(user, login.LoginProvider, login.ProviderKey);
+        return new IdentityOperationResult(
+            result.Succeeded,
+            result.Errors.Select(x => x.Description).ToList());
+    }
+
+    public async Task<IdentityOperationResult> SetPasswordAsync(
+        string userId,
+        string newPassword,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId)
+            ?? throw new NotFoundException($"User '{userId}' was not found.");
+
+        if (await _userManager.HasPasswordAsync(user))
+        {
+            return new IdentityOperationResult(
+                false,
+                ["A password is already set. Use change password instead."]);
+        }
+
+        var result = await _userManager.AddPasswordAsync(user, newPassword);
+        if (result.Succeeded)
+        {
+            await InvalidateCredentialsAsync(user, cancellationToken);
+            _logger.LogInformation("Local password added for user {UserId}", user.Id);
+        }
+
+        return new IdentityOperationResult(
+            result.Succeeded,
+            result.Errors.Select(x => x.Description).ToList());
+    }
+
+    public async Task<ExternalLoginsResponse> GetExternalLoginsAsync(
+        string userId,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId)
+            ?? throw new NotFoundException($"User '{userId}' was not found.");
+        var logins = await _userManager.GetLoginsAsync(user);
+        return new ExternalLoginsResponse
+        {
+            HasPassword = await _userManager.HasPasswordAsync(user),
+            GoogleLinked = logins.Any(login =>
+                login.LoginProvider == BusinessOS.Application.Features.Auth.Google.GoogleAuthConstants.Provider)
+        };
+    }
+
+    private static string? SafeAvatar(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return null;
+        }
+
+        var trimmed = url.Trim();
+        if (trimmed.Length > 2048 ||
+            !Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) ||
+            uri.Scheme != Uri.UriSchemeHttps)
+        {
+            return null;
+        }
+
+        return trimmed;
+    }
+
+    private async Task InvalidateCredentialsAsync(ApplicationUser user, CancellationToken cancellationToken)
+    {
+        user.SecurityVersion++;
+        await _userManager.UpdateAsync(user);
+        await _sessions.RevokeAllAsync(user.Id, cancellationToken);
+    }
+
+    private async Task<ApplicationUser> FindUserInCurrentTenantAsync(string userId)
+    {
+        var user = await _userManager.FindByIdAsync(userId)
+            ?? throw new NotFoundException($"User '{userId}' was not found.");
+
+        if (_currentUser.TenantId is Guid tenantId &&
+            tenantId != Guid.Empty &&
+            user.TenantId != tenantId)
+        {
+            throw new NotFoundException($"User '{userId}' was not found.");
+        }
+
+        return user;
     }
 
     private async Task<UserResponse> MapUserResponseAsync(ApplicationUser user)

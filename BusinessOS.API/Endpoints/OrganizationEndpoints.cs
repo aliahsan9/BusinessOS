@@ -9,7 +9,7 @@ public static class OrganizationEndpoints
 {
     public static void MapOrganizationEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/organization")
+        var group = app.MapGroup("/organization")
             .WithTags("Organization")
             .RequireAuthorization()
             .RequireRateLimiting("api");

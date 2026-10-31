@@ -15,7 +15,7 @@ internal static class IntegrationInventoryHelper
         var response = await IntegrationHttp.SendAuthorizedAsync(
             client,
             HttpMethod.Post,
-            "/api/inventory/increase",
+            "/api/v1/inventory/increase",
             auth,
             new
             {
@@ -35,7 +35,7 @@ internal static class IntegrationInventoryHelper
         var categoryResponse = await IntegrationHttp.SendAuthorizedAsync(
             client,
             HttpMethod.Post,
-            "/api/categories",
+            "/api/v1/categories",
             auth,
             new { name = $"Cat {Guid.NewGuid():N}" });
 
@@ -46,7 +46,7 @@ internal static class IntegrationInventoryHelper
         var productResponse = await IntegrationHttp.SendAuthorizedAsync(
             client,
             HttpMethod.Post,
-            "/api/products",
+            "/api/v1/products",
             auth,
             new
             {

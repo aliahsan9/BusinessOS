@@ -34,7 +34,7 @@ graph TD
 | Section | Key | Default Value | Description |
 | :--- | :--- | :--- | :--- |
 | **`ConnectionStrings`** | `DefaultConnection` | `Server=localhost...` | PostgreSQL / SQL Server database connection string. |
-| **`Jwt`** | `Key` | `THIS_IS_SUPER_SECRET...` | HMAC-SHA256 signing key (Min 256-bit). |
+| **`Jwt`** | `Key` | *(user secrets or `Jwt__Key`)* | HMAC-SHA256 signing key. Required, at least 32 bytes, and never committed. |
 | | `Issuer` | `BusinessOS` | JWT token issuer string. |
 | | `Audience` | `BusinessOSUsers` | Target consumer audience. |
 | | `ExpiryMinutes` | `60` | Token expiration duration in minutes. |

@@ -151,5 +151,6 @@ public record DowngradePlanRequest(Guid PlanId);
 public record CancelPlanRequest(bool CancelImmediately = false);
 public record RenewPlanRequest(string BillingInterval = "monthly", string Provider = "stripe");
 public record CheckoutRequest(Guid PlanId, string BillingInterval = "monthly", string Provider = "stripe", string? SuccessUrl = null, string? CancelUrl = null);
+public record BillingRefundRequest(decimal Amount, string? Currency);
 public record JazzCashPaymentRequest(Guid PlanId, string BillingInterval = "monthly");
 public record EasyPaisaPaymentRequest(Guid PlanId, string BillingInterval = "monthly");

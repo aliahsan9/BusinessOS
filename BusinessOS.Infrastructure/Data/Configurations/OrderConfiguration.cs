@@ -18,6 +18,7 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(x => x.Discount).AsMoney();
         builder.Property(x => x.Tax).AsMoney();
         builder.Property(x => x.GrandTotal).AsMoney();
+        builder.Property(x => x.RowVersion).IsRowVersion();
 
         builder.HasOne(x => x.Customer)
             .WithMany(x => x.Orders)
@@ -26,7 +27,10 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
 
         builder.HasIndex(x => new { x.TenantId, x.OrderNumber }).IsUnique();
         builder.HasIndex(x => new { x.TenantId, x.CreatedAt });
-        builder.HasIndex(x => new { x.TenantId, x.Status });
+        builder.HasIndex(x => new { x.TenantId, x.Status, x.CreatedAt })
+            .IsDescending(false, false, true);
+        builder.HasIndex(x => new { x.TenantId, x.CustomerId, x.CreatedAt })
+            .IsDescending(false, false, true);
         builder.HasIndex(x => x.OrderNumber);
     }
 }

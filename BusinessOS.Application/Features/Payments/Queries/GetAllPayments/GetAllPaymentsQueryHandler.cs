@@ -94,6 +94,7 @@ public sealed class GetAllPaymentsQueryHandler
                         request.SortDirection,
                         SortFields,
                         x => x.PaymentDate)
+                    .ThenBy(x => x.Id)
                     .Skip((page - 1) * pageSize)
                     .Take(pageSize)
                     .ToListAsync(ct);

@@ -4,6 +4,11 @@ namespace BusinessOS.Domain.Entities;
 
 public class RbacAuditLog : BaseEntity
 {
+    /// <summary>
+    /// Owning tenant. Null is reserved for platform events that are not tenant data.
+    /// </summary>
+    public Guid? TenantId { get; set; }
+
     public string ActorUserId { get; set; } = default!;
 
     public string Action { get; set; } = default!;

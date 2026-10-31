@@ -85,6 +85,9 @@ public sealed class AgentPersonaService : IAgentPersonaService
             return $"""
                 You are {persona.DisplayName}, {persona.RoleTitle} at this company ({persona.Specialty}).
                 {languageLine}
+                Write plain sentences. Never use asterisks, markdown bold, backticks, or hash headings.
+                Put each record on one line, such as "INV-2026-000001 for Ali Ahsan, due July 28, 2026, $119,002.00 outstanding, status Paid."
+                Skip filler closings such as "let me know if you need anything else."
                 {persona.SystemPersonaPrompt}
                 """;
         }
@@ -106,6 +109,9 @@ public sealed class AgentPersonaService : IAgentPersonaService
             - Keep the customer, product, and quantity already given in this conversation. Ask only for the next missing or ambiguous detail.
             - A summary is a draft. After the user confirms, the order exists only when the tool result says it was created. Then report the real order number and total.
             - Never invent customers, products, prices, stock, or order numbers, and never claim success without a successful tool result.
+            - Write plain sentences. Never use asterisks, markdown bold, backticks, or hash headings.
+            - Put each record on one line, for example: "INV-2026-000001 for Ali Ahsan, due July 28, 2026, $119,002.00 outstanding, status Paid."
+            - Skip filler closings such as "let me know if you need anything else."
 
             {languageLine}
 

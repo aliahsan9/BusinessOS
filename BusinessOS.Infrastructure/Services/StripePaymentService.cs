@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using BusinessOS.Application.Common.Exceptions;
+using BusinessOS.Application.Common.Idempotency;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Billing.DTOs;
 using BusinessOS.Application.Features.Billing.Services;
@@ -46,14 +48,15 @@ public sealed class StripePaymentService : IStripePaymentService
         string? successUrl,
         string? cancelUrl,
         string? existingCustomerId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? operationKey = null)
     {
         if (!IsConfigured)
         {
             _logger.LogWarning("Stripe is not configured. Returning sandbox checkout placeholder.");
             return new CheckoutSessionDto
             {
-                SessionId = $"sandbox_{Guid.NewGuid():N}",
+                SessionId = string.IsNullOrWhiteSpace(operationKey) ? $"sandbox_{Guid.NewGuid():N}" : operationKey,
                 CheckoutUrl = null,
                 Provider = "stripe"
             };
@@ -74,7 +77,8 @@ public sealed class StripePaymentService : IStripePaymentService
             {
                 ["tenant_id"] = tenantId.ToString(),
                 ["plan_id"] = plan.Id.ToString(),
-                ["billing_interval"] = isYearly ? "yearly" : "monthly"
+                ["billing_interval"] = isYearly ? "yearly" : "monthly",
+                ["operation_key"] = operationKey ?? string.Empty
             },
             LineItems =
             [
@@ -100,7 +104,11 @@ public sealed class StripePaymentService : IStripePaymentService
         };
 
         var service = new SessionService();
-        var session = await service.CreateAsync(sessionOptions, cancellationToken: cancellationToken);
+        var requestOptions = new RequestOptions();
+        if (!string.IsNullOrWhiteSpace(operationKey))
+            requestOptions.IdempotencyKey = operationKey;
+
+        var session = await service.CreateAsync(sessionOptions, requestOptions, cancellationToken);
 
         return new CheckoutSessionDto
         {
@@ -149,24 +157,53 @@ public sealed class StripePaymentService : IStripePaymentService
             throw;
         }
 
-        switch (stripeEvent.Type)
+        if (string.IsNullOrWhiteSpace(stripeEvent.Id))
+            throw new BadRequestException("Stripe webhook event id is missing.");
+
+        var store = _serviceProvider.GetRequiredService<IWebhookEventStore>();
+        var claim = await store.TryBeginAsync(PaymentProviderType.Stripe, stripeEvent.Id, cancellationToken);
+        if (claim is WebhookClaim.Duplicate)
         {
-            case EventTypes.CheckoutSessionCompleted:
-                await HandleCheckoutCompletedAsync(stripeEvent, cancellationToken);
-                break;
-            case EventTypes.CustomerSubscriptionCreated:
-            case EventTypes.CustomerSubscriptionUpdated:
-                await HandleSubscriptionUpdatedAsync(stripeEvent, cancellationToken);
-                break;
-            case EventTypes.CustomerSubscriptionDeleted:
-                await HandleSubscriptionDeletedAsync(stripeEvent, cancellationToken);
-                break;
-            case EventTypes.InvoicePaid:
-                await HandleInvoicePaidAsync(stripeEvent, cancellationToken);
-                break;
-            case EventTypes.InvoicePaymentFailed:
-                await HandlePaymentFailedAsync(stripeEvent, cancellationToken);
-                break;
+            _logger.LogInformation("Ignored duplicate Stripe webhook {EventId}", stripeEvent.Id);
+            return;
+        }
+
+        if (claim is WebhookClaim.Busy)
+        {
+            throw new ConflictException(
+                "Webhook event is already being processed.",
+                ErrorCodes.IdempotencyInProgress);
+        }
+
+        var started = (WebhookClaim.Started)claim;
+        try
+        {
+            switch (stripeEvent.Type)
+            {
+                case EventTypes.CheckoutSessionCompleted:
+                    await HandleCheckoutCompletedAsync(stripeEvent, cancellationToken);
+                    break;
+                case EventTypes.CustomerSubscriptionCreated:
+                case EventTypes.CustomerSubscriptionUpdated:
+                    await HandleSubscriptionUpdatedAsync(stripeEvent, cancellationToken);
+                    break;
+                case EventTypes.CustomerSubscriptionDeleted:
+                    await HandleSubscriptionDeletedAsync(stripeEvent, cancellationToken);
+                    break;
+                case EventTypes.InvoicePaid:
+                    await HandleInvoicePaidAsync(stripeEvent, cancellationToken);
+                    break;
+                case EventTypes.InvoicePaymentFailed:
+                    await HandlePaymentFailedAsync(stripeEvent, cancellationToken);
+                    break;
+            }
+
+            await store.CompleteAsync(started.EventRecordId, null, cancellationToken);
+        }
+        catch
+        {
+            await store.AbandonAsync(started.EventRecordId, cancellationToken);
+            throw;
         }
     }
 
@@ -187,6 +224,32 @@ public sealed class StripePaymentService : IStripePaymentService
 
         var interval = session.Metadata.GetValueOrDefault("billing_interval", "monthly");
         var billingInterval = interval == "yearly" ? BillingInterval.Yearly : BillingInterval.Monthly;
+        var operationKey = session.Metadata.GetValueOrDefault("operation_key");
+        var amount = session.AmountTotal.HasValue ? session.AmountTotal.Value / 100m : 0;
+        var currency = session.Currency?.ToUpperInvariant() ?? "USD";
+
+        if (!string.IsNullOrWhiteSpace(operationKey))
+        {
+            var reconciler = _serviceProvider.GetRequiredService<IBillingPaymentReconciler>();
+            var operationTenantId = await reconciler.ApplyVerifiedResultAsync(
+                PaymentProviderType.Stripe,
+                operationKey,
+                BillingTransactionStatus.Completed,
+                session.Id,
+                amount,
+                currency,
+                cancellationToken);
+
+            if (operationTenantId is null || operationTenantId.Value != tenantId)
+            {
+                _logger.LogWarning(
+                    "Stripe checkout {SessionId} did not match tenant {TenantId} for operation {OperationKey}",
+                    session.Id,
+                    tenantId,
+                    operationKey);
+                return;
+            }
+        }
 
         var planSync = _serviceProvider.GetRequiredService<IBillingPlanSyncService>();
         await planSync.ApplyPlanFromWebhookAsync(
@@ -200,14 +263,13 @@ public sealed class StripePaymentService : IStripePaymentService
             DateTime.UtcNow.AddMonths(billingInterval == BillingInterval.Yearly ? 12 : 1),
             cancellationToken);
 
-        var amount = session.AmountTotal.HasValue ? session.AmountTotal.Value / 100m : 0;
         await planSync.RecordTransactionAsync(
             tenantId,
             amount,
-            session.Currency?.ToUpperInvariant() ?? "USD",
+            currency,
             BillingTransactionStatus.Completed,
             PaymentProviderType.Stripe,
-            session.Id,
+            string.IsNullOrWhiteSpace(operationKey) ? session.Id : operationKey,
             "Stripe checkout completed",
             null,
             cancellationToken);

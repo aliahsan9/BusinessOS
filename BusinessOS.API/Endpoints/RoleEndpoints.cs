@@ -15,7 +15,7 @@ public static class RoleEndpoints
     /// </summary>
     public static IEndpointRouteBuilder MapRoleEndpoints(this IEndpointRouteBuilder app)
     {
-        var roles = app.MapGroup("/api/roles")
+        var roles = app.MapGroup("/roles")
             .WithTags("Roles & Permissions")
             .RequireAuthorization()
             .RequireRateLimiting("api");
@@ -85,7 +85,7 @@ public static class RoleEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
-        var permissions = app.MapGroup("/api/permissions")
+        var permissions = app.MapGroup("/permissions")
             .WithTags("Roles & Permissions")
             .RequireAuthorization();
 
@@ -106,7 +106,7 @@ public static class RoleEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
-        var users = app.MapGroup("/api/users")
+        var users = app.MapGroup("/users")
             .WithTags("Roles & Permissions")
             .RequireAuthorization();
 
@@ -137,7 +137,7 @@ public static class RoleEndpoints
         CancellationToken cancellationToken)
     {
         var role = await roleService.CreateRoleAsync(request, cancellationToken);
-        return Results.Created($"/api/roles/{role.Id}", role);
+        return Results.Created($"/api/v1/roles/{role.Id}", role);
     }
 
     private static async Task<IResult> GetRoles(

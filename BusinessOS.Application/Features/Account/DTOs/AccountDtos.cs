@@ -26,3 +26,14 @@ public record UpdateAccountProfileRequest(
 public record ChangePasswordRequest(
     string CurrentPassword,
     string NewPassword);
+
+public sealed class ExternalLoginsResponse
+{
+    public bool HasPassword { get; init; }
+
+    public bool GoogleLinked { get; init; }
+}
+
+public sealed record LinkGoogleRequest(string IdToken);
+
+public sealed record SetPasswordRequest(string NewPassword);

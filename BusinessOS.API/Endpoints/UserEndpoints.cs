@@ -10,7 +10,7 @@ public static class UserEndpoints
 {
     public static void MapUserEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/users")
+        var group = app.MapGroup("/users")
             .WithTags("Users")
             .RequireAuthorization()
             .RequireRateLimiting("api");
@@ -86,15 +86,32 @@ public static class UserEndpoints
     private static async Task<IResult> CreateUser(
         CreateUserAdminRequest request,
         IIdentityService identityService,
+        ICurrentUserService currentUserService,
         CancellationToken cancellationToken)
     {
+        var tenantId = currentUserService.TenantId
+            ?? throw new Application.Common.Exceptions.BadRequestException("Tenant context is required.");
+
+        if (string.IsNullOrWhiteSpace(request.Email) ||
+            string.IsNullOrWhiteSpace(request.Password) ||
+            string.IsNullOrWhiteSpace(request.FirstName) ||
+            string.IsNullOrWhiteSpace(request.LastName))
+        {
+            return Results.BadRequest(new { errors = new[] { "Email, password, first name, and last name are required." } });
+        }
+
+        if (request.Password.Length > 128)
+        {
+            return Results.BadRequest(new { errors = new[] { "Password must not exceed 128 characters." } });
+        }
+
         var result = await identityService.CreateUserAsync(
             new CreateUserRequest(
                 request.Email,
                 request.Password,
                 request.FirstName,
                 request.LastName,
-                request.TenantId),
+                tenantId),
             cancellationToken);
 
         if (!result.Succeeded)
@@ -102,10 +119,10 @@ public static class UserEndpoints
 
         var user = await identityService.FindByEmailAsync(request.Email, cancellationToken);
         if (user is null)
-            return Results.Created($"/api/users/{request.Email}", new { email = request.Email });
+            return Results.Created($"/api/v1/users/{request.Email}", new { email = request.Email });
 
         var userDetails = await identityService.GetUserByIdAsync(user.Id, cancellationToken);
-        return Results.Created($"/api/users/{user.Id}", userDetails);
+        return Results.Created($"/api/v1/users/{user.Id}", userDetails);
     }
 
     private static async Task<IResult> UpdateUser(
@@ -142,6 +159,13 @@ public static class UserEndpoints
         IIdentityService identityService,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(request.NewPassword) ||
+            request.NewPassword.Length < 8 ||
+            request.NewPassword.Length > 128)
+        {
+            return Results.BadRequest(new { errors = new[] { "New password must be between 8 and 128 characters." } });
+        }
+
         var result = await identityService.ResetPasswordAsync(
             userId, request.NewPassword, cancellationToken);
 

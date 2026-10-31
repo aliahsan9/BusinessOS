@@ -24,7 +24,7 @@ public class AuthorizationIntegrationTests : IntegrationTestBase
     {
         var request = new HttpRequestMessage(
             HttpMethod.Get,
-            "/api/products");
+            "/api/v1/products");
 
         request.Headers.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue(
@@ -59,7 +59,7 @@ public class AuthorizationIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/categories",
+            "/api/v1/categories",
             viewerAuth,
             new
             {
@@ -91,7 +91,7 @@ public class AuthorizationIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Delete,
-            $"/api/orders/{Guid.NewGuid()}",
+            $"/api/v1/orders/{Guid.NewGuid()}",
             viewerAuth);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -113,30 +113,29 @@ public class AuthorizationIntegrationTests : IntegrationTestBase
             .Single(x => x.Name == RoleNames.Viewer)
             .Id;
 
-        // Remove Owner role.
-        var removeOwnerResponse = await IntegrationHttp.SendAuthorizedAsync(
-            Client,
-            HttpMethod.Delete,
-            $"/api/users/{ownerAuth.UserId}/roles/{ownerRoleId}",
-            ownerAuth);
-
-        removeOwnerResponse.IsSuccessStatusCode.Should().BeTrue();
-
-        // Assign Viewer role.
         var assignViewerResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            $"/api/users/{ownerAuth.UserId}/roles",
+            $"/api/v1/users/{ownerAuth.UserId}/roles",
             ownerAuth,
             new AssignUserRoleRequest(viewerRoleId));
 
         assignViewerResponse.IsSuccessStatusCode.Should().BeTrue();
+
+        var refreshedOwner = await LoginAsync(ownerAuth.Email);
+        var removeOwnerResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Delete,
+            $"/api/v1/users/{ownerAuth.UserId}/roles/{ownerRoleId}",
+            refreshedOwner);
+
+        removeOwnerResponse.IsSuccessStatusCode.Should().BeTrue();
     }
 
     private async Task<AuthResponse> LoginAsync(string email)
     {
         var response = await Client.PostAsJsonAsync(
-            "/api/auth/login",
+            "/api/v1/auth/login",
             new
             {
                 email,

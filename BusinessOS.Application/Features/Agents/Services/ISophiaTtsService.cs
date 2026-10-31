@@ -1,27 +1,34 @@
+using BusinessOS.Application.Features.Agents.DTOs;
+
 namespace BusinessOS.Application.Features.Agents.Services;
 
 /// <summary>
-/// Neural text-to-speech for Sophia English spoken replies.
+/// Selects a configured speech provider, caches identical audio, and falls back when a provider fails.
 /// </summary>
 public interface ISophiaTtsService
 {
+    /// <summary>Provider that will be tried first.</summary>
+    string ActiveProvider { get; }
+
+    /// <summary>Default voice of the active provider.</summary>
+    string DefaultVoice { get; }
+
+    /// <summary>Voices the client may choose for the active provider.</summary>
+    IReadOnlyList<TtsVoiceOption> ListVoices();
+
     /// <summary>
-    /// Synthesizes speech audio in MP3 format using a neural English voice.
+    /// Synthesizes speech audio, usually MP3.
     /// </summary>
-    /// <param name="text">Plain text to speak.</param>
-    /// <param name="language">BCP-47 language code (e.g. en-US).</param>
-    /// <param name="speechRate">Playback speed multiplier (1.0 = normal).</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>Audio bytes, content type, and voice name.</returns>
     Task<SophiaTtsResult> SynthesizeAsync(
         string text,
         string language,
         double speechRate = 1.0,
+        string? voiceName = null,
         CancellationToken cancellationToken = default);
 }
 
 /// <summary>
-/// Result of a Sophia TTS synthesis request.
+/// Result of a speech synthesis request.
 /// </summary>
 public sealed class SophiaTtsResult
 {
@@ -31,6 +38,12 @@ public sealed class SophiaTtsResult
     /// <summary>MIME content type of the audio (e.g. audio/mpeg).</summary>
     public required string ContentType { get; init; }
 
-    /// <summary>Neural voice identifier used for synthesis.</summary>
+    /// <summary>Voice identifier used for synthesis.</summary>
     public required string VoiceName { get; init; }
+
+    /// <summary>Provider that produced the audio.</summary>
+    public string Provider { get; init; } = "";
+
+    /// <summary>True when the audio was served from the response cache.</summary>
+    public bool ServedFromCache { get; init; }
 }

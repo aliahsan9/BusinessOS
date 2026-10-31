@@ -50,26 +50,22 @@ public sealed class GetInventoryAnalyticsQueryHandler
 
     private async Task<InventoryAnalyticsResponse> BuildAnalyticsAsync(CancellationToken cancellationToken)
     {
-        var inventories = await _inventoryRepository.Query()
-            .Select(x => new
-            {
-                x.ProductId,
-                ProductName = x.Product.Name,
-                x.CurrentStock,
-                x.ReorderLevel,
-                CostPrice = x.Product.CostPrice
-            })
-            .ToListAsync(cancellationToken);
-
-        var totalProducts = inventories.Count;
-        var totalStockQuantity = inventories.Sum(x => x.CurrentStock);
-        var lowStockCount = inventories.Count(x => x.CurrentStock > 0 && x.CurrentStock <= x.ReorderLevel);
-        var outOfStockCount = inventories.Count(x => x.CurrentStock <= 0);
-        var inventoryValue = inventories.Sum(x => x.CurrentStock * x.CostPrice);
+        var inventories = _inventoryRepository.Query();
+        var totalProducts = await inventories.CountAsync(cancellationToken);
+        var totalStockQuantity = totalProducts == 0
+            ? 0
+            : await inventories.SumAsync(x => x.CurrentStock, cancellationToken);
+        var lowStockCount = await inventories.CountAsync(
+            x => x.CurrentStock > 0 && x.CurrentStock <= x.ReorderLevel,
+            cancellationToken);
+        var outOfStockCount = await inventories.CountAsync(x => x.CurrentStock <= 0, cancellationToken);
+        var inventoryValue = totalProducts == 0
+            ? 0
+            : await inventories.SumAsync(x => x.CurrentStock * x.Product.CostPrice, cancellationToken);
 
         var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
 
-        var saleMovements = await _transactionRepository.Query()
+        var saleQuery = _transactionRepository.Query()
             .Where(x => x.TransactionType == StockTransactionTypeNames.Sale && x.CreatedAt >= thirtyDaysAgo)
             .GroupBy(x => new { x.ProductId, ProductName = x.Product!.Name })
             .Select(g => new ProductStockMovementDto
@@ -77,19 +73,20 @@ public sealed class GetInventoryAnalyticsQueryHandler
                 ProductId = g.Key.ProductId,
                 ProductName = g.Key.ProductName,
                 TotalQuantityMoved = g.Sum(x => x.Quantity)
-            })
+            });
+
+        var mostSold = await saleQuery
+            .OrderByDescending(x => x.TotalQuantityMoved)
+            .ThenBy(x => x.ProductId)
+            .Take(5)
             .ToListAsync(cancellationToken);
 
-        var mostSold = saleMovements
-            .OrderByDescending(x => x.TotalQuantityMoved)
-            .Take(5)
-            .ToList();
-
-        var leastSold = saleMovements
+        var leastSold = await saleQuery
             .Where(x => x.TotalQuantityMoved > 0)
             .OrderBy(x => x.TotalQuantityMoved)
+            .ThenBy(x => x.ProductId)
             .Take(5)
-            .ToList();
+            .ToListAsync(cancellationToken);
 
         var trends = await _transactionRepository.Query()
             .Where(x => x.CreatedAt >= thirtyDaysAgo)

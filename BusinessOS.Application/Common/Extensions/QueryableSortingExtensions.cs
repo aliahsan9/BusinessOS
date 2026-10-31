@@ -5,7 +5,7 @@ namespace BusinessOS.Application.Common.Extensions;
 
 public static class QueryableSortingExtensions
 {
-    public static IQueryable<T> ApplySort<T>(
+    public static IOrderedQueryable<T> ApplySort<T>(
         this IQueryable<T> query,
         string? sortBy,
         SortDirection direction,

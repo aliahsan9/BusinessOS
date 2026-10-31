@@ -19,7 +19,12 @@ public sealed class EmailOptions
 
     public string Password { get; set; } = string.Empty;
 
-    public string FromAddress { get; set; } = "aliahsan8751@gmail.com";
+    public string FromAddress { get; set; } = string.Empty;
 
     public string FromName { get; set; } = "BusinessOS";
+
+    /// <summary>
+    /// SMTP operation timeout. Values outside 5–60 are clamped.
+    /// </summary>
+    public int TimeoutSeconds { get; set; } = 15;
 }

@@ -1,4 +1,6 @@
 using BusinessOS.Application.Common.Authorization;
+using BusinessOS.Application.Common.Exceptions;
+using BusinessOS.Application.Common.Idempotency;
 using BusinessOS.Application.Features.Billing.DTOs;
 using BusinessOS.Application.Features.Billing.Services;
 using BusinessOS.API.Authorization;
@@ -9,14 +11,14 @@ public static class BillingEndpoints
 {
     public static void MapBillingEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/billing/plans", GetPlans)
+        app.MapGet("/billing/plans", GetPlans)
             .WithTags("Billing")
             .WithName("GetBillingPlansPublic")
             .AllowAnonymous()
             .Produces<IReadOnlyList<SubscriptionPlanDto>>(StatusCodes.Status200OK)
             .RequireRateLimiting("api");
 
-        var group = app.MapGroup("/api/billing")
+        var group = app.MapGroup("/billing")
             .WithTags("Billing")
             .RequireAuthorization();
 
@@ -73,7 +75,22 @@ public static class BillingEndpoints
         group.MapPost("/checkout", CreateCheckout)
             .RequirePermission(PermissionCodes.SubscriptionManage)
             .WithName("CreateCheckout")
-            .Produces<CheckoutSessionDto>(StatusCodes.Status200OK);
+            .WithDescription(
+                "Starts a provider checkout. Requires Idempotency-Key. " +
+                "Retries of the same plan, interval, provider, amount, and currency reuse the original session. " +
+                "A different payload returns 409 IDEMPOTENCY_KEY_REUSED. " +
+                "A provider timeout does not start a second charge; retry the same key.")
+            .Produces<CheckoutSessionDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+
+        group.MapPost("/transactions/{id:guid}/refund", RefundTransaction)
+            .RequirePermission(PermissionCodes.SubscriptionManage)
+            .WithName("RefundBillingTransaction")
+            .WithDescription(
+                "Refunds a completed billing transaction for its full amount. Requires Idempotency-Key. " +
+                "This updates the local ledger. A provider refund is not sent unless a later reconciliation confirms it.")
+            .Produces<BillingTransactionDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapPost("/portal", CreatePortal)
             .RequirePermission(PermissionCodes.SubscriptionManage)
@@ -88,21 +105,49 @@ public static class BillingEndpoints
         MapBillingWebhooks(app);
     }
 
-    private static void MapBillingWebhooks(IEndpointRouteBuilder app)
+    /// <summary>
+    /// Keeps the original payment-provider callback URLs. These are not a second API version.
+    /// They are excluded from OpenAPI so they do not duplicate the version 1.0 webhook operations.
+    /// </summary>
+    public static void MapLegacyBillingWebhooks(this IEndpointRouteBuilder app)
     {
         app.MapPost("/api/billing/webhook/stripe", HandleStripeWebhook)
+            .WithTags("Billing")
+            .WithName("StripeWebhookLegacy")
+            .DisableAntiforgery()
+            .AllowAnonymous()
+            .ExcludeFromDescription();
+
+        app.MapPost("/api/billing/webhook/jazzcash", HandleJazzCashWebhook)
+            .WithTags("Billing")
+            .WithName("JazzCashWebhookLegacy")
+            .DisableAntiforgery()
+            .AllowAnonymous()
+            .ExcludeFromDescription();
+
+        app.MapPost("/api/billing/webhook/easypaisa", HandleEasyPaisaWebhook)
+            .WithTags("Billing")
+            .WithName("EasyPaisaWebhookLegacy")
+            .DisableAntiforgery()
+            .AllowAnonymous()
+            .ExcludeFromDescription();
+    }
+
+    private static void MapBillingWebhooks(IEndpointRouteBuilder app)
+    {
+        app.MapPost("/billing/webhook/stripe", HandleStripeWebhook)
             .WithTags("Billing")
             .WithName("StripeWebhook")
             .DisableAntiforgery()
             .AllowAnonymous();
 
-        app.MapPost("/api/billing/webhook/jazzcash", HandleJazzCashWebhook)
+        app.MapPost("/billing/webhook/jazzcash", HandleJazzCashWebhook)
             .WithTags("Billing")
             .WithName("JazzCashWebhook")
             .DisableAntiforgery()
             .AllowAnonymous();
 
-        app.MapPost("/api/billing/webhook/easypaisa", HandleEasyPaisaWebhook)
+        app.MapPost("/billing/webhook/easypaisa", HandleEasyPaisaWebhook)
             .WithTags("Billing")
             .WithName("EasyPaisaWebhook")
             .DisableAntiforgery()
@@ -156,9 +201,36 @@ public static class BillingEndpoints
 
     private static async Task<IResult> CreateCheckout(
         CheckoutRequest request,
+        HttpContext httpContext,
         IBillingService billingService,
-        CancellationToken ct) =>
-        Results.Ok(await billingService.CreateCheckoutSessionAsync(request, ct));
+        CancellationToken ct)
+    {
+        var key = httpContext.Request.Headers["Idempotency-Key"].FirstOrDefault();
+        if (!IdempotencyKeyRules.IsValid(key))
+        {
+            throw new BadRequestException(
+                "Idempotency-Key header is required and must be 1-128 visible ASCII characters without spaces.");
+        }
+
+        return Results.Ok(await billingService.CreateCheckoutSessionAsync(request, ct, key));
+    }
+
+    private static async Task<IResult> RefundTransaction(
+        Guid id,
+        BillingRefundRequest request,
+        HttpContext httpContext,
+        IBillingService billingService,
+        CancellationToken ct)
+    {
+        var key = httpContext.Request.Headers["Idempotency-Key"].FirstOrDefault();
+        if (!IdempotencyKeyRules.IsValid(key))
+        {
+            throw new BadRequestException(
+                "Idempotency-Key header is required and must be 1-128 visible ASCII characters without spaces.");
+        }
+
+        return Results.Ok(await billingService.RefundTransactionAsync(id, request.Amount, request.Currency, key!, ct));
+    }
 
     private static async Task<IResult> CreatePortal(
         BillingPortalRequest request,

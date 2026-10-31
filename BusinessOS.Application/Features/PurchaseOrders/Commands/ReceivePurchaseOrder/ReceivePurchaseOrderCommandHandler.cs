@@ -50,22 +50,53 @@ public sealed class ReceivePurchaseOrderCommandHandler : IRequestHandler<Receive
         }
 
         var referenceNumber = purchase.ReferenceNumber ?? purchase.Id.ToString();
-
-        foreach (var item in purchase.PurchaseItems)
+        var transaction = await _context.BeginTransactionAsync(cancellationToken);
+        try
         {
-            await _inventoryService.IncreaseStockAsync(
-                new StockChangeRequest
-                {
-                    ProductId = item.ProductId,
-                    Quantity = item.Quantity,
-                    ReferenceNumber = referenceNumber,
-                    Notes = $"Purchase order {purchase.Id} received"
-                },
+            var transitioned = await _context.TryTransitionPurchaseStatusAsync(
+                purchase.Id,
+                purchase.Status,
+                PurchaseOrderStatusNames.Received,
                 cancellationToken);
-        }
 
-        purchase.Status = PurchaseOrderStatusNames.Received;
-        await _context.SaveChangesAsync(cancellationToken);
+            if (!transitioned)
+            {
+                throw new ConflictException(
+                    "This purchase order was changed by someone else. Refresh and try again.",
+                    ErrorCodes.ConcurrencyConflict);
+            }
+
+            if (!string.Equals(purchase.Status, PurchaseOrderStatusNames.Received, StringComparison.Ordinal))
+                purchase.Status = PurchaseOrderStatusNames.Received;
+
+            foreach (var item in purchase.PurchaseItems.OrderBy(item => item.ProductId))
+            {
+                await _inventoryService.IncreaseStockAsync(
+                    new StockChangeRequest
+                    {
+                        ProductId = item.ProductId,
+                        Quantity = item.Quantity,
+                        ReferenceNumber = referenceNumber,
+                        Notes = $"Purchase order {purchase.Id} received"
+                    },
+                    cancellationToken);
+            }
+
+            await _context.SaveChangesAsync(cancellationToken);
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            if (transaction is not null)
+                await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+        finally
+        {
+            if (transaction is not null)
+                await transaction.DisposeAsync();
+        }
 
         var tenantId = _tenantProvider.TenantId;
         await EntityCacheInvalidator.InvalidatePurchaseOrderAsync(_cache, tenantId, purchase.Id, cancellationToken);

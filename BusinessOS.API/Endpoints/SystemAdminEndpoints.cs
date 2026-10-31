@@ -11,7 +11,7 @@ public static class SystemAdminEndpoints
 {
     public static void MapSystemAdminEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/system")
+        var group = app.MapGroup("/system")
             .WithTags("System Admin")
             .RequireAuthorization()
             .RequireRateLimiting("api");

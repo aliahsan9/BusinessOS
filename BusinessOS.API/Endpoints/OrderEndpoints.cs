@@ -19,11 +19,11 @@ namespace BusinessOS.API.Endpoints;
 public static class OrderEndpoints
 {
     /// <summary>
-    /// Maps order CRUD, list, and status endpoints under <c>/api/orders</c>.
+    /// Maps order CRUD, list, and status endpoints under <c>/api/v1/orders</c>.
     /// </summary>
     public static void MapOrderEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/orders")
+        var group = app.MapGroup("/orders")
             .WithTags("Orders")
             .RequireAuthorization()
             .RequireRateLimiting("api");
@@ -98,7 +98,7 @@ public static class OrderEndpoints
         CancellationToken cancellationToken)
     {
         var id = await sender.Send(command, cancellationToken);
-        return Results.Created($"/api/orders/{id}", new { id });
+        return Results.Created($"/api/v1/orders/{id}", new { id });
     }
 
     private static async Task<IResult> GetAllOrders(

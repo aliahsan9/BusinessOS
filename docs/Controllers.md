@@ -3,6 +3,8 @@
 ## Purpose
 This document serves as the complete REST Minimal API Endpoint Catalog for BusinessOS, detailing endpoint routes, HTTP verbs, request/response DTOs, authorization policies, validation rules, and security scopes.
 
+Live business routes are version 1.0 URL segments: `/api/v1/...`. See [API-Versioning.md](API-Versioning.md). Diagrams below that still show `/api/{resource}` describe the resource; callers must include the version segment.
+
 ---
 
 ## Responsibilities
@@ -52,7 +54,8 @@ graph TD
 * `POST /api/ai/chat`: Interactive natural language chat endpoint with context retrieval.
 * `POST /api/ai/agent/execute`: Autonomous agent workflow execution endpoint.
 * `GET /api/ai/conversations`: Returns conversation session history.
-* `POST /api/agents/tts`: Converts text string to MP3 audio via Edge Neural TTS.
+* `POST /api/v1/agents/tts`: Converts text to MP3 with the configured speech provider (OpenAI TTS by default). Identical replies are cached. The API key stays on the server.
+* `GET /api/v1/agents/tts/voices`: Lists voices for the active provider so the client can switch voice.
 
 ---
 

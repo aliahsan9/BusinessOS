@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+using Asp.Versioning;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Infrastructure.Data;
@@ -14,32 +16,39 @@ public static class OpenApiExtensions
     /// <summary>
     /// Adds OpenAPI generation with JWT + tenant security schemes, tag ordering, and XML documentation support.
     /// </summary>
-    public static IServiceCollection AddBusinessOpenApi(this IServiceCollection services)
+    public static IApiVersioningBuilder AddBusinessOpenApi(this IApiVersioningBuilder builder)
     {
-        services.AddOpenApi(options =>
+        builder.AddOpenApi(options =>
         {
-            options.AddDocumentTransformer((document, _, _) =>
+            options.Document.AddDocumentTransformer((document, _, _) =>
             {
-                document.Info = new OpenApiInfo
+                document.Info ??= new OpenApiInfo();
+                document.Info.Title = "BusinessOS API";
+                if (string.IsNullOrWhiteSpace(document.Info.Version))
                 {
-                    Title = "BusinessOS API",
-                    Version = "v1",
-                    Description =
-                        "Multi-tenant business management API with enterprise RBAC.\n\n" +
-                        "## Authentication\n" +
-                        "Most endpoints require a **Bearer JWT**. Obtain a token via `POST /api/auth/login` or `POST /api/auth/register`.\n\n" +
-                        "## Multi-Tenancy\n" +
-                        "Protected tenant-scoped endpoints require the **`X-Tenant-ID`** header (GUID). " +
-                        "The value must match the `TenantId` claim embedded in the JWT. " +
-                        "Data is isolated per tenant via EF Core global query filters.\n\n" +
-                        "## Authorization\n" +
-                        "Fine-grained permissions are enforced via policy codes (e.g. `Product.Create`, `Order.View`). " +
-                        "Permissions are embedded in the JWT `perm` claim as comma-separated codes.\n\n" +
-                        "## Default Roles\n" +
-                        "Admin (all permissions), Manager, Sales, InventoryManager, Viewer (read-only).\n\n" +
-                        "## Documentation\n" +
-                        "Browse this reference at `/scalar`. Raw OpenAPI JSON is at `/openapi/v1.json`."
-                };
+                    document.Info.Version = "v1";
+                }
+
+                document.Info.Description =
+                    "Multi-tenant business management API with enterprise RBAC.\n\n" +
+                    "## Versioning\n" +
+                    "Business routes use a URL segment: `/api/v1/...`. Version 1.0 is the current contract. " +
+                    "A missing version returns **400** with code `API_VERSION_REQUIRED`. " +
+                    "An unknown version returns **400** and the `api-supported-versions` header.\n\n" +
+                    "## Authentication\n" +
+                    "Most endpoints require a **Bearer JWT**. Obtain a token via `POST /api/v1/auth/login` or `POST /api/v1/auth/register`.\n\n" +
+                    "## Multi-Tenancy\n" +
+                    "Protected tenant-scoped endpoints accept an optional **`X-Tenant-ID`** header (GUID). " +
+                    "The server authorizes the caller against their stored tenant membership and rejects a header or JWT tenant claim that does not match. " +
+                    "Data is isolated per tenant via EF Core global query filters.\n\n" +
+                    "## Authorization\n" +
+                    "Fine-grained permissions are enforced via policy codes (e.g. `Product.Create`, `Order.View`). " +
+                    "Permissions are embedded in the JWT `perm` claim as comma-separated codes.\n\n" +
+                    "## Default Roles\n" +
+                    "Admin (all permissions), Manager, Sales, InventoryManager, Viewer (read-only).\n\n" +
+                    "## Documentation\n" +
+                    "Browse this reference at `/scalar`. Raw OpenAPI JSON for version 1.0 is at `/openapi/v1.json`. " +
+                    "Each API version has its own document.";
 
                 document.Components ??= new OpenApiComponents();
                 document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
@@ -50,7 +59,7 @@ public static class OpenApiExtensions
                     Scheme = "bearer",
                     BearerFormat = "JWT",
                     Description =
-                        "JWT bearer token from `/api/auth/login` or `/api/auth/register`. " +
+                        "JWT bearer token from `/api/v1/auth/login` or `/api/v1/auth/register`. " +
                         "Claims include user id, email, tenant id, roles, and a compact `perm` claim " +
                         "with comma-separated permission codes."
                 };
@@ -61,8 +70,8 @@ public static class OpenApiExtensions
                     In = ParameterLocation.Header,
                     Name = "X-Tenant-ID",
                     Description =
-                        "Active tenant GUID. Required for authenticated tenant-scoped requests. " +
-                        "Must match the TenantId claim in the JWT."
+                        "Active tenant GUID. When supplied, it must match the authenticated user's tenant membership. " +
+                        "The server does not trust a client-supplied tenant id on its own."
                 };
 
                 OrderTags(document);
@@ -70,21 +79,19 @@ public static class OpenApiExtensions
                 return Task.CompletedTask;
             });
 
-            options.AddXmlDocumentationSupport(
+            options.Document.AddXmlDocumentationSupport(
                 typeof(Program).Assembly,
                 typeof(IApplicationDbContext).Assembly,
                 typeof(Product).Assembly,
                 typeof(BusinessOSDbContext).Assembly);
 
-            options.AddOperationTransformer((operation, context, _) =>
+            options.Document.AddOperationTransformer((operation, context, _) =>
             {
                 var requiresAuth = context.Description.ActionDescriptor.EndpointMetadata
                     .Any(m => m is Microsoft.AspNetCore.Authorization.IAuthorizeData);
 
                 var path = context.Description.RelativePath ?? string.Empty;
-                var isPublicAuth = path.StartsWith("api/auth", StringComparison.OrdinalIgnoreCase)
-                    || path.StartsWith("api/health", StringComparison.OrdinalIgnoreCase)
-                    || path.StartsWith("api/register-business", StringComparison.OrdinalIgnoreCase);
+                var isPublicAuth = IsPublicDocumentationPath(path);
 
                 if (requiresAuth && !isPublicAuth)
                 {
@@ -95,8 +102,20 @@ public static class OpenApiExtensions
             });
         });
 
-        return services;
+        return builder;
     }
+
+    private static bool IsPublicDocumentationPath(string path)
+    {
+        var normalized = VersionSegment.Replace(path, "api/");
+        return normalized.StartsWith("api/auth", StringComparison.OrdinalIgnoreCase)
+            || normalized.StartsWith("api/health", StringComparison.OrdinalIgnoreCase)
+            || normalized.StartsWith("api/register-business", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static readonly Regex VersionSegment = new(
+        @"api/v\d+(\.\d+)?/",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static void OrderTags(OpenApiDocument document)
     {

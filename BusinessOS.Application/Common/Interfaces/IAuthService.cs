@@ -24,4 +24,23 @@ public interface IAuthService
         string token,
         string newPassword,
         CancellationToken cancellationToken);
+
+    Task<AuthResponse> CreateSessionForUserAsync(
+        UserAuthResult user,
+        CancellationToken cancellationToken,
+        string auditAction = "UserLogin");
+
+    /// <summary>
+    /// Creates a new tenant and owner for a verified external identity.
+    /// The caller supplies the provider subject. Tenant id is generated here and is never taken from the client.
+    /// </summary>
+    Task<AuthResponse> RegisterExternalUserAsync(
+        string email,
+        string firstName,
+        string lastName,
+        string businessName,
+        string loginProvider,
+        string providerKey,
+        string? avatarUrl,
+        CancellationToken cancellationToken);
 }

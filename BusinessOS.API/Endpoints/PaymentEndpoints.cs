@@ -1,8 +1,11 @@
 using BusinessOS.Application.Common.Authorization;
+using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Extensions;
+using BusinessOS.Application.Common.Idempotency;
 using BusinessOS.Application.Common.Models;
 using BusinessOS.Application.Features.Payments.Commands.CreatePayment;
 using BusinessOS.Application.Features.Payments.Commands.DeletePayment;
+using BusinessOS.Application.Features.Payments.Commands.RefundPayment;
 using BusinessOS.Application.Features.Payments.Commands.UpdatePayment;
 using BusinessOS.Application.Features.Payments.Queries;
 using BusinessOS.Application.Features.Payments.Queries.GetAllPayments;
@@ -18,11 +21,11 @@ namespace BusinessOS.API.Endpoints;
 public static class PaymentEndpoints
 {
     /// <summary>
-    /// Maps payment CRUD endpoints under <c>/api/payments</c>.
+    /// Maps payment CRUD endpoints under <c>/api/v1/payments</c>.
     /// </summary>
     public static void MapPaymentEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/payments")
+        var group = app.MapGroup("/payments")
             .WithTags("Payments")
             .RequireAuthorization()
             .RequireRateLimiting("api");
@@ -31,10 +34,31 @@ public static class PaymentEndpoints
             .RequirePermission(PermissionCodes.PaymentCreate)
             .WithName("CreatePayment")
             .WithSummary("Create a payment")
-            .WithDescription("Creates a new payment for an existing order.")
+            .WithDescription(
+                "Creates a new payment for an existing order. " +
+                "Send an Idempotency-Key header (1-128 visible ASCII characters). " +
+                "Reuse the same key when retrying the same payment. " +
+                "A different amount, currency, order, or customer with the same key returns 409 IDEMPOTENCY_KEY_REUSED. " +
+                "A completed retry returns the original payment id and does not create another payment.")
             .Produces(StatusCodes.Status201Created)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .ProducesProblem(StatusCodes.Status404NotFound);
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+
+        group.MapPost("/{id:guid}/refund", RefundPayment)
+            .RequirePermission(PermissionCodes.PaymentUpdate)
+            .WithName("RefundPayment")
+            .WithSummary("Refund a payment")
+            .WithDescription(
+                "Refunds part or all of a completed payment. Requires Idempotency-Key. " +
+                "The same key and payload returns the original refund. " +
+                "A different amount or currency returns 409 IDEMPOTENCY_KEY_REUSED. " +
+                "Concurrent refunds cannot exceed the remaining refundable amount. " +
+                "This records a ledger refund. It does not call Stripe, JazzCash, or EasyPaisa.")
+            .Produces(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapGet("", GetAllPayments)
             .RequirePermission(PermissionCodes.PaymentView)
@@ -74,9 +98,11 @@ public static class PaymentEndpoints
 
     private static async Task<IResult> CreatePayment(
         CreatePaymentRequest request,
+        HttpContext httpContext,
         ISender sender,
         CancellationToken cancellationToken)
     {
+        var idempotencyKey = RequireIdempotencyKey(httpContext);
         var id = await sender.Send(
             new CreatePaymentCommand(
                 request.OrderId,
@@ -84,10 +110,35 @@ public static class PaymentEndpoints
                 request.Amount,
                 request.PaymentMethod,
                 request.PaymentDate,
-                request.ReferenceNo),
+                request.ReferenceNo,
+                idempotencyKey),
             cancellationToken);
 
-        return Results.Created($"/api/payments/{id}", new { id });
+        return Results.Created($"/api/v1/payments/{id}", new { id });
+    }
+
+    private static async Task<IResult> RefundPayment(
+        Guid id,
+        RefundPaymentRequest request,
+        HttpContext httpContext,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var idempotencyKey = RequireIdempotencyKey(httpContext);
+        var paymentId = await sender.Send(
+            new RefundPaymentCommand(id, request.Amount, request.Currency, idempotencyKey),
+            cancellationToken);
+
+        return Results.Ok(new { id = paymentId });
+    }
+
+    private static string RequireIdempotencyKey(HttpContext httpContext)
+    {
+        var key = httpContext.Request.Headers["Idempotency-Key"].FirstOrDefault();
+        if (!IdempotencyKeyRules.IsValid(key))
+            throw new BadRequestException("Idempotency-Key header is required and must be 1-128 visible ASCII characters without spaces.");
+
+        return key!;
     }
 
     private static async Task<IResult> GetAllPayments(

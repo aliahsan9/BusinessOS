@@ -171,17 +171,17 @@ public sealed class InventoryService : IInventoryService
         IEnumerable<OrderItem> items,
         CancellationToken cancellationToken = default)
     {
-        foreach (var item in items)
-        {
-            await ApplyStockChangeAsync(
-                item.ProductId,
-                -item.Quantity,
+        await ExecuteStockBatchAsync(
+            AggregateQuantities(items),
+            (productId, quantity, cancellationToken) => ApplyStockChangeAsync(
+                productId,
+                -quantity,
                 StockTransactionTypeNames.Sale,
                 order.OrderNumber,
                 order.Id,
                 $"Stock reserved for order {order.OrderNumber}",
-                cancellationToken);
-        }
+                cancellationToken),
+            cancellationToken);
     }
 
     public async Task RestoreForCancelledOrderAsync(
@@ -189,16 +189,47 @@ public sealed class InventoryService : IInventoryService
         IEnumerable<OrderItem> items,
         CancellationToken cancellationToken = default)
     {
-        foreach (var item in items)
-        {
-            await ApplyStockChangeAsync(
-                item.ProductId,
-                item.Quantity,
+        await ExecuteStockBatchAsync(
+            AggregateQuantities(items),
+            (productId, quantity, cancellationToken) => ApplyStockChangeAsync(
+                productId,
+                quantity,
                 StockTransactionTypeNames.Return,
                 order.OrderNumber,
                 order.Id,
                 $"Stock restored for cancelled order {order.OrderNumber}",
-                cancellationToken);
+                cancellationToken),
+            cancellationToken);
+    }
+
+    private async Task ExecuteStockBatchAsync(
+        IEnumerable<(Guid ProductId, decimal Quantity)> requirements,
+        Func<Guid, decimal, CancellationToken, Task> apply,
+        CancellationToken cancellationToken)
+    {
+        var ownsTransaction = !_context.HasActiveTransaction;
+        var transaction = ownsTransaction
+            ? await _context.BeginTransactionAsync(cancellationToken)
+            : null;
+
+        try
+        {
+            foreach (var requirement in requirements)
+                await apply(requirement.ProductId, requirement.Quantity, cancellationToken);
+
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            if (transaction is not null)
+                await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+        finally
+        {
+            if (transaction is not null)
+                await transaction.DisposeAsync();
         }
     }
 
@@ -253,60 +284,105 @@ public sealed class InventoryService : IInventoryService
         string? notes,
         CancellationToken cancellationToken)
     {
-        var inventory = await _inventoryRepository.GetByProductIdForUpdateAsync(productId, cancellationToken);
+        if (quantityChange == 0)
+            throw new BadRequestException("Quantity must be positive.");
 
-        if (inventory is null)
-            throw new NotFoundException("Inventory record not found for this product.");
+        var ownsTransaction = !_context.HasActiveTransaction;
+        var transaction = ownsTransaction
+            ? await _context.BeginTransactionAsync(cancellationToken)
+            : null;
 
-        var previousStock = inventory.CurrentStock;
-        var newStock = previousStock + quantityChange;
-
-        if (newStock < 0)
+        try
         {
-            throw new BadRequestException(
-                $"Insufficient stock. Available: {previousStock}, Requested change: {Math.Abs(quantityChange)}.");
-        }
+            var result = await _context.TryAdjustStockAsync(productId, quantityChange, cancellationToken);
+            if (!result.Applied)
+            {
+                if (result.ProductMissing)
+                    throw new NotFoundException("Inventory record not found for this product.");
 
-        inventory.CurrentStock = newStock;
-        inventory.LastUpdated = DateTime.UtcNow;
-        inventory.UpdatedAt = DateTime.UtcNow;
+                _logger.LogWarning(
+                    "Inventory reservation failed for product {ProductId}. Available {AvailableStock}, requested change {QuantityChange}",
+                    productId,
+                    result.AvailableStock,
+                    quantityChange);
 
-        SyncProductStockFields(inventory);
+                throw new BadRequestException(
+                    $"Insufficient stock. Available: {result.AvailableStock}, Requested change: {Math.Abs(quantityChange)}.");
+            }
 
-        var transaction = new StockTransaction
-        {
-            Id = Guid.NewGuid(),
-            ProductId = productId,
-            TransactionType = transactionType,
-            Quantity = Math.Abs(quantityChange),
-            PreviousStock = previousStock,
-            NewStock = newStock,
-            ReferenceNumber = referenceNumber,
-            ReferenceId = referenceId,
-            Notes = notes,
-            UserId = _currentUserService.UserId
-        };
+            _context.StockTransactions.Add(new StockTransaction
+            {
+                Id = Guid.NewGuid(),
+                ProductId = productId,
+                TransactionType = transactionType,
+                Quantity = Math.Abs(quantityChange),
+                PreviousStock = result.PreviousStock,
+                NewStock = result.NewStock,
+                ReferenceNumber = referenceNumber,
+                ReferenceId = referenceId,
+                Notes = notes,
+                UserId = _currentUserService.UserId
+            });
 
-        _context.StockTransactions.Add(transaction);
-        await _context.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Concurrency conflict while updating stock for product {ProductId}",
+                    productId);
+                throw new ConflictException(
+                    "Stock changed while this update was being saved. Refresh and try again.",
+                    ErrorCodes.ConcurrencyConflict);
+            }
 
-        _logger.LogInformation(
-            "Stock updated for Product {ProductId}: {PreviousStock} -> {NewStock} ({TransactionType})",
-            productId,
-            previousStock,
-            newStock,
-            transactionType);
+            var reorder = await _context.Inventories.AsNoTracking()
+                .Where(inventory => inventory.ProductId == productId)
+                .Select(inventory => new { inventory.ReorderLevel, Name = inventory.Product.Name })
+                .FirstOrDefaultAsync(cancellationToken);
 
-        if (newStock > 0 && newStock <= inventory.ReorderLevel)
-        {
-            _logger.LogWarning(
-                "Low stock warning for Product {ProductId} ({ProductName}): {CurrentStock} (reorder level {ReorderLevel})",
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Stock updated for product {ProductId}: {PreviousStock} -> {NewStock} ({TransactionType})",
                 productId,
-                inventory.Product?.Name ?? "unknown",
-                newStock,
-                inventory.ReorderLevel);
+                result.PreviousStock,
+                result.NewStock,
+                transactionType);
+
+            if (reorder is not null && result.NewStock > 0 && result.NewStock <= reorder.ReorderLevel)
+            {
+                _logger.LogWarning(
+                    "Low stock warning for product {ProductId} ({ProductName}): {CurrentStock} (reorder level {ReorderLevel})",
+                    productId,
+                    reorder.Name,
+                    result.NewStock,
+                    reorder.ReorderLevel);
+            }
+        }
+        catch
+        {
+            if (transaction is not null)
+                await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+        finally
+        {
+            if (transaction is not null)
+                await transaction.DisposeAsync();
         }
     }
+
+    private static IReadOnlyList<(Guid ProductId, decimal Quantity)> AggregateQuantities(IEnumerable<OrderItem> items) =>
+        items
+            .GroupBy(item => item.ProductId)
+            .Select(group => (ProductId: group.Key, Quantity: group.Sum(item => item.Quantity)))
+            .OrderBy(item => item.ProductId)
+            .ToList();
 
     private static void SyncProductStockFields(Domain.Entities.Inventory inventory)
     {

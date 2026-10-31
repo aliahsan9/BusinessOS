@@ -20,11 +20,11 @@ namespace BusinessOS.API.Endpoints;
 public static class PurchaseOrderEndpoints
 {
     /// <summary>
-    /// Maps purchase order CRUD, status, and receive endpoints under <c>/api/purchase-orders</c>.
+    /// Maps purchase order CRUD, status, and receive endpoints under <c>/api/v1/purchase-orders</c>.
     /// </summary>
     public static void MapPurchaseOrderEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/purchase-orders")
+        var group = app.MapGroup("/purchase-orders")
             .WithTags("Purchase Orders")
             .RequireAuthorization()
             .RequireRateLimiting("api");
@@ -114,7 +114,7 @@ public static class PurchaseOrderEndpoints
                 request.Items),
             cancellationToken);
 
-        return Results.Created($"/api/purchase-orders/{id}", new { id });
+        return Results.Created($"/api/v1/purchase-orders/{id}", new { id });
     }
 
     private static async Task<IResult> GetAllPurchaseOrders(

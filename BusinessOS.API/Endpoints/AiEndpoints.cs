@@ -8,10 +8,10 @@ public static class AiEndpoints
 {
     public static void MapAiEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/ai")
+        var group = app.MapGroup("/ai")
             .WithTags("AI Copilot")
             .RequireAuthorization()
-            .RequireRateLimiting("api");
+            .RequireRateLimiting("ai");
 
         group.MapPost("/chat", Chat)
             .WithName("AiChat")
@@ -106,7 +106,7 @@ public static class AiEndpoints
         CancellationToken cancellationToken)
     {
         var session = await aiService.CreateConversationAsync(cancellationToken);
-        return Results.Created($"/api/ai/conversations/{session.Id}", session);
+        return Results.Created($"/api/v1/ai/conversations/{session.Id}", session);
     }
 
     private static async Task<IResult> ListConversations(

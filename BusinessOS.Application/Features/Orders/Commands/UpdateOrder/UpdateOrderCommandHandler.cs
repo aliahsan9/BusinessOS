@@ -115,7 +115,17 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
         order.Tax = tax;
         order.GrandTotal = grandTotal;
 
-        await _context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            _logger.LogWarning(ex, "Concurrency conflict while updating order {OrderId}", order.Id);
+            throw new ConflictException(
+                "This order was changed by someone else. Refresh and try again.",
+                ErrorCodes.ConcurrencyConflict);
+        }
 
         await EntityCacheInvalidator.InvalidateOrderAsync(
             _cache,

@@ -1,0 +1,48 @@
+# Optional SQL Server for an environment that cannot use Windows SQL Server Express.
+# The named volume keeps data across restarts. Removing it is a separate, destructive step.
+# Loopback port ${SQL_HOST_PORT} is published only so the Windows EF tool can migrate.
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+      MSSQL_SA_PASSWORD: ${SQL_SA_PASSWORD}
+      MSSQL_MEMORY_LIMIT_MB: "1536"
+    ports:
+      - "127.0.0.1:${SQL_HOST_PORT}:1433"
+    volumes:
+      - sql_data:/var/opt/mssql
+    networks:
+      businessos:
+        ipv4_address: ${SQL_IP}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    mem_limit: 2g
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then SQLCMD=/opt/mssql-tools18/bin/sqlcmd; else SQLCMD=/opt/mssql-tools/bin/sqlcmd; fi; $$SQLCMD -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" -b || $$SQLCMD -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q \"SELECT 1\" -b"
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 40s
+
+  api:
+    depends_on:
+      qdrant:
+        condition: service_started
+      sqlserver:
+        condition: service_healthy
+
+volumes:
+  sql_data:

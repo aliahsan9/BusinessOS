@@ -13,7 +13,7 @@ public static class AnalyticsEndpoints
 {
     public static void MapAnalyticsEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/analytics")
+        var group = app.MapGroup("/analytics")
             .WithTags("Analytics")
             .RequireAuthorization()
             .RequireRateLimiting("api");

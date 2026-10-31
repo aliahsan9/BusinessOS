@@ -3,6 +3,7 @@ using BusinessOS.Domain.Entities;
 using BusinessOS.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace BusinessOS.Infrastructure.Data;
@@ -10,15 +11,23 @@ namespace BusinessOS.Infrastructure.Data;
 public static class DevSeeder
 {
     public const string DefaultEmail = "admin@businessos.local";
-    public const string DefaultPassword = "Admin123!";
     private const string DefaultBusinessName = "BusinessOS Demo";
 
     public static async Task SeedAsync(
         BusinessOSDbContext context,
         UserManager<ApplicationUser> userManager,
         ILogger logger,
+        IConfiguration configuration,
         CancellationToken cancellationToken = default)
     {
+        var password = configuration["DevAdmin:Password"];
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            logger.LogInformation(
+                "Development admin seed skipped. Set DevAdmin:Password with user secrets or an environment variable to create the local admin.");
+            return;
+        }
+
         if (await userManager.FindByEmailAsync(DefaultEmail) is not null)
         {
             return;
@@ -51,7 +60,7 @@ public static class DevSeeder
             IsActive = true
         };
 
-        var createResult = await userManager.CreateAsync(user, DefaultPassword);
+        var createResult = await userManager.CreateAsync(user, password);
         if (!createResult.Succeeded)
         {
             logger.LogWarning(
@@ -79,9 +88,6 @@ public static class DevSeeder
 
         await ExpenseCategorySeeder.SeedForTenantAsync(context, tenantId, logger, cancellationToken);
 
-        logger.LogInformation(
-            "Seeded development account. Email: {Email}, Password: {Password}",
-            DefaultEmail,
-            DefaultPassword);
+        logger.LogInformation("Seeded development account {Email}", DefaultEmail);
     }
 }
