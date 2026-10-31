@@ -1,9 +1,7 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
+using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Billing.DTOs;
-using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.Payments;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -54,11 +52,11 @@ public sealed class JazzCashPaymentService : IJazzCashPaymentService
             ["pp_Description"] = $"BusinessOS {plan.Name} Subscription",
             ["pp_TxnExpiryDateTime"] = DateTime.UtcNow.AddHours(1).ToString("yyyyMMddHHmmss"),
             ["pp_ReturnURL"] = _options.ReturnUrl,
-            ["pp_SecureHash"] = ComputeHash(txnRef, amount, txnDateTime),
             ["ppmpf_1"] = tenantId.ToString(),
             ["ppmpf_2"] = plan.Id.ToString(),
             ["ppmpf_3"] = billingInterval
         };
+        payload["pp_SecureHash"] = JazzCashSecureHash.Compute(payload, _options.IntegritySalt);
 
         _logger.LogInformation("JazzCash payment initiated: {TxnRef} for tenant {TenantId}", txnRef, tenantId);
 
@@ -70,58 +68,79 @@ public sealed class JazzCashPaymentService : IJazzCashPaymentService
         });
     }
 
-    public async Task<bool> VerifyPaymentAsync(string transactionReference, CancellationToken cancellationToken = default)
+    public Task<bool> VerifyPaymentAsync(string transactionReference, CancellationToken cancellationToken = default)
     {
-        if (!IsConfigured)
-        {
-            _logger.LogWarning("JazzCash verification skipped - not configured.");
-            return false;
-        }
-
-        _logger.LogInformation("Verifying JazzCash transaction {Reference}", transactionReference);
-        return await Task.FromResult(true);
+        _logger.LogInformation(
+            "JazzCash server-side confirmation is not enabled for {Reference}. Payment state was not changed.",
+            transactionReference);
+        return Task.FromResult(false);
     }
 
     public Task HandleWebhookAsync(string payload, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("JazzCash webhook received: {Length} bytes", payload.Length);
+        _logger.LogInformation("JazzCash callback received: {Length} bytes", payload?.Length ?? 0);
 
-        try
+        if (!IsConfigured || string.IsNullOrWhiteSpace(_options.IntegritySalt))
         {
-            var data = JsonSerializer.Deserialize<Dictionary<string, string>>(payload);
-            if (data is null)
-            {
-                return Task.CompletedTask;
-            }
-
-            var status = data.GetValueOrDefault("pp_ResponseCode", string.Empty);
-            if (status == "000")
-            {
-                _logger.LogInformation("JazzCash payment successful: {TxnRef}", data.GetValueOrDefault("pp_TxnRefNo"));
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to process JazzCash webhook.");
+            _logger.LogWarning("JazzCash callback rejected because integrity verification is not configured.");
+            throw new UnauthorizedException("Payment callback was rejected.");
         }
 
+        var data = ParseFields(payload);
+        if (!data.TryGetValue("pp_SecureHash", out var presented) ||
+            !JazzCashSecureHash.Matches(data, _options.IntegritySalt, presented))
+        {
+            _logger.LogWarning("JazzCash callback rejected because the secure hash did not match.");
+            throw new UnauthorizedException("Payment callback was rejected.");
+        }
+
+        if (!data.TryGetValue("pp_MerchantID", out var merchantId) ||
+            !string.Equals(merchantId, _options.MerchantId, StringComparison.Ordinal))
+        {
+            _logger.LogWarning("JazzCash callback rejected because the merchant id did not match.");
+            throw new UnauthorizedException("Payment callback was rejected.");
+        }
+
+        _logger.LogInformation(
+            "JazzCash callback signature accepted for {TxnRef}. Payment state was not changed.",
+            data.GetValueOrDefault("pp_TxnRefNo"));
         return Task.CompletedTask;
     }
 
-    private string ComputeHash(string txnRef, decimal amount, string txnDateTime)
+    private static Dictionary<string, string> ParseFields(string? payload)
     {
-        var values = new[]
+        if (string.IsNullOrWhiteSpace(payload))
         {
-            _options.IntegritySalt,
-            _options.MerchantId,
-            _options.Password,
-            txnRef,
-            ((long)(amount * 100)).ToString(),
-            txnDateTime
-        };
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
 
-        var input = string.Join("&", values);
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
-        return Convert.ToHexString(hash).ToLowerInvariant();
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<Dictionary<string, string>>(payload);
+            if (parsed is not null)
+            {
+                return new Dictionary<string, string>(parsed, StringComparer.OrdinalIgnoreCase);
+            }
+        }
+        catch (JsonException)
+        {
+            // Form-encoded callbacks are parsed below.
+        }
+
+        var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in payload.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var separator = pair.IndexOf('=');
+            if (separator <= 0)
+            {
+                continue;
+            }
+
+            var key = Uri.UnescapeDataString(pair[..separator]);
+            var value = Uri.UnescapeDataString(pair[(separator + 1)..]);
+            fields[key] = value;
+        }
+
+        return fields;
     }
 }

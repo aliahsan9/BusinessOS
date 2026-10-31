@@ -1,4 +1,5 @@
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Auth.Services;
 using BusinessOS.Application.Common.Models;
 using BusinessOS.Application.Features.Account.DTOs;
 using BusinessOS.Application.Features.Users.DTOs;
@@ -14,15 +15,18 @@ public sealed class IdentityService : IIdentityService
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ICurrentUserService _currentUser;
+    private readonly IAuthSessionService _sessions;
     private readonly ILogger<IdentityService> _logger;
 
     public IdentityService(
         UserManager<ApplicationUser> userManager,
         ICurrentUserService currentUser,
+        IAuthSessionService sessions,
         ILogger<IdentityService> logger)
     {
         _userManager = userManager;
         _currentUser = currentUser;
+        _sessions = sessions;
         _logger = logger;
     }
 
@@ -184,13 +188,22 @@ public sealed class IdentityService : IIdentityService
     {
         var user = await FindUserInCurrentTenantAsync(userId);
 
+        var wasActive = user.IsActive;
         user.Email = request.Email.Trim();
         user.UserName = request.Email.Trim();
         user.FirstName = request.FirstName.Trim();
         user.LastName = request.LastName.Trim();
         user.IsActive = request.IsActive;
+        if (wasActive != request.IsActive)
+        {
+            user.SecurityVersion++;
+        }
 
         var result = await _userManager.UpdateAsync(user);
+        if (result.Succeeded && wasActive && !request.IsActive)
+        {
+            await _sessions.RevokeAllAsync(user.Id, cancellationToken);
+        }
         if (!result.Succeeded)
         {
             throw new BadRequestException(string.Join("; ", result.Errors.Select(x => x.Description)));
@@ -204,11 +217,14 @@ public sealed class IdentityService : IIdentityService
         var user = await FindUserInCurrentTenantAsync(userId);
 
         user.IsActive = false;
+        user.SecurityVersion++;
         var result = await _userManager.UpdateAsync(user);
         if (!result.Succeeded)
         {
             throw new BadRequestException(string.Join("; ", result.Errors.Select(x => x.Description)));
         }
+
+        await _sessions.RevokeAllAsync(user.Id, cancellationToken);
     }
 
     public async Task ActivateUserAsync(string userId, CancellationToken cancellationToken = default)
@@ -216,6 +232,7 @@ public sealed class IdentityService : IIdentityService
         var user = await FindUserInCurrentTenantAsync(userId);
 
         user.IsActive = true;
+        user.SecurityVersion++;
         var result = await _userManager.UpdateAsync(user);
         if (!result.Succeeded)
         {
@@ -235,6 +252,7 @@ public sealed class IdentityService : IIdentityService
 
         if (result.Succeeded)
         {
+            await InvalidateCredentialsAsync(user, cancellationToken);
             _logger.LogInformation("Password reset completed for user {UserId}", userId);
         }
         else
@@ -284,6 +302,7 @@ public sealed class IdentityService : IIdentityService
 
         if (result.Succeeded)
         {
+            await InvalidateCredentialsAsync(user, cancellationToken);
             _logger.LogInformation("Password reset via token completed for user {UserId}", user.Id);
         }
         else
@@ -360,9 +379,21 @@ public sealed class IdentityService : IIdentityService
             ?? throw new NotFoundException($"User '{userId}' was not found.");
 
         var result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
+        if (result.Succeeded)
+        {
+            await InvalidateCredentialsAsync(user, cancellationToken);
+        }
+
         return new IdentityOperationResult(
             result.Succeeded,
             result.Errors.Select(x => x.Description).ToList());
+    }
+
+    private async Task InvalidateCredentialsAsync(ApplicationUser user, CancellationToken cancellationToken)
+    {
+        user.SecurityVersion++;
+        await _userManager.UpdateAsync(user);
+        await _sessions.RevokeAllAsync(user.Id, cancellationToken);
     }
 
     private async Task<ApplicationUser> FindUserInCurrentTenantAsync(string userId)

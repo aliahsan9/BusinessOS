@@ -288,7 +288,15 @@ public sealed class InventoryService : IInventoryService
         };
 
         _context.StockTransactions.Add(transaction);
-        await _context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new BadRequestException(
+                "Stock changed while this update was being saved. Please retry.");
+        }
 
         _logger.LogInformation(
             "Stock updated for Product {ProductId}: {PreviousStock} -> {NewStock} ({TransactionType})",

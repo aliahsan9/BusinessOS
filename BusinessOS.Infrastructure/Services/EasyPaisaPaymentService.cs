@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
+using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Billing.DTOs;
 using BusinessOS.Infrastructure.Payments;
@@ -61,42 +61,20 @@ public sealed class EasyPaisaPaymentService : IEasyPaisaPaymentService
         });
     }
 
-    public async Task<bool> VerifyPaymentAsync(string transactionReference, CancellationToken cancellationToken = default)
+    public Task<bool> VerifyPaymentAsync(string transactionReference, CancellationToken cancellationToken = default)
     {
-        if (!IsConfigured)
-        {
-            _logger.LogWarning("EasyPaisa verification skipped - not configured.");
-            return false;
-        }
-
-        _logger.LogInformation("Verifying EasyPaisa transaction {Reference}", transactionReference);
-        return await Task.FromResult(true);
+        _logger.LogInformation(
+            "EasyPaisa server-side confirmation is not enabled for {Reference}. Payment state was not changed.",
+            transactionReference);
+        return Task.FromResult(false);
     }
 
     public Task HandleWebhookAsync(string payload, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("EasyPaisa webhook received: {Length} bytes", payload.Length);
-
-        try
-        {
-            var data = JsonSerializer.Deserialize<Dictionary<string, string>>(payload);
-            if (data is null)
-            {
-                return Task.CompletedTask;
-            }
-
-            var status = data.GetValueOrDefault("status", string.Empty);
-            if (status.Equals("success", StringComparison.OrdinalIgnoreCase))
-            {
-                _logger.LogInformation("EasyPaisa payment successful: {OrderId}", data.GetValueOrDefault("orderId"));
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to process EasyPaisa webhook.");
-        }
-
-        return Task.CompletedTask;
+        _logger.LogInformation("EasyPaisa callback received: {Length} bytes", payload?.Length ?? 0);
+        _logger.LogWarning(
+            "EasyPaisa callback rejected. Payment-state changes stay disabled until an official hash verification is configured.");
+        throw new UnauthorizedException("Payment callback was rejected.");
     }
 
     private string ComputeHash(string orderId, decimal amount)

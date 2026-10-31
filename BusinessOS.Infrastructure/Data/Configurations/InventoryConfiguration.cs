@@ -12,7 +12,7 @@ public class InventoryConfiguration : IEntityTypeConfiguration<Inventory>
 
         builder.HasKey(x => x.Id);
 
-        builder.Property(x => x.CurrentStock).AsMoney();
+        builder.Property(x => x.CurrentStock).AsMoney().IsConcurrencyToken();
         builder.Property(x => x.MinimumStockLevel).AsMoney();
         builder.Property(x => x.MaximumStockLevel).AsMoney();
         builder.Property(x => x.ReorderLevel).AsMoney();

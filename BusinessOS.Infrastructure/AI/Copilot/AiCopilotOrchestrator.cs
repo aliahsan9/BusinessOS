@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Infrastructure.AI;
 using BusinessOS.Application.Features.Agents.Enums;
 using BusinessOS.Application.Features.Agents.Services;
 using BusinessOS.Application.Features.AI.DTOs;
@@ -154,6 +155,7 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
                 .ToList()
             : _toolRegistry.SelectTools(intentResult, message, page, memory).ToList();
 
+        var executedTools = 0;
         var toolResults = new List<AiToolResult>();
         var toolsUsed = new List<string>();
         var citations = new List<AiCitationDto>();
@@ -161,9 +163,21 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
 
         foreach (var tool in tools)
         {
+            if (++executedTools > 8)
+            {
+                _logger.LogWarning("AI tool budget exhausted for session {SessionId}", sessionId);
+                break;
+            }
+
             var toolPermission = _permissionValidator.ValidateTool(tool.ToolName);
             if (!toolPermission.Allowed)
                 continue;
+
+            if (AiToolSafetyGate.TryBlock(tool.ToolName, message, default, out _))
+            {
+                _logger.LogWarning("Blocked AI tool {Tool} for session {SessionId}", tool.ToolName, sessionId);
+                continue;
+            }
 
             var execContext = new AiCopilotExecutionContext
             {

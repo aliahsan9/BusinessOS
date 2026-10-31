@@ -57,16 +57,6 @@ public class RbacIntegrationTests : IntegrationTestBase
         // Get Admin role.
         var adminRoleId = await GetRoleIdAsync(RoleNames.Admin);
 
-        // Remove Owner role.
-        var removeOwnerResponse = await IntegrationHttp.SendAuthorizedAsync(
-            Client,
-            HttpMethod.Delete,
-            $"/api/v1/users/{ownerAuth.UserId}/roles/{await GetRoleIdAsync(RoleNames.Owner)}",
-            ownerAuth);
-
-        removeOwnerResponse.IsSuccessStatusCode.Should().BeTrue();
-
-        // Assign Admin role.
         var assignAdminResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
@@ -75,6 +65,15 @@ public class RbacIntegrationTests : IntegrationTestBase
             new AssignUserRoleRequest(adminRoleId));
 
         assignAdminResponse.IsSuccessStatusCode.Should().BeTrue();
+
+        var refreshedOwner = await LoginAsync(ownerAuth.Email);
+        var removeOwnerResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Delete,
+            $"/api/v1/users/{ownerAuth.UserId}/roles/{await GetRoleIdAsync(RoleNames.Owner)}",
+            refreshedOwner);
+
+        removeOwnerResponse.IsSuccessStatusCode.Should().BeTrue();
 
         // Login again so the JWT contains the new role/permissions.
         var adminAuth = await LoginAsync(ownerAuth.Email);
@@ -108,16 +107,6 @@ public class RbacIntegrationTests : IntegrationTestBase
         var ownerRoleId = await GetRoleIdAsync(RoleNames.Owner);
         var viewerRoleId = await GetRoleIdAsync(RoleNames.Viewer);
 
-        // Remove Owner role.
-        var removeOwnerResponse = await IntegrationHttp.SendAuthorizedAsync(
-            Client,
-            HttpMethod.Delete,
-            $"/api/v1/users/{ownerAuth.UserId}/roles/{ownerRoleId}",
-            ownerAuth);
-
-        removeOwnerResponse.IsSuccessStatusCode.Should().BeTrue();
-
-        // Assign Viewer role.
         var assignViewerResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
@@ -127,7 +116,15 @@ public class RbacIntegrationTests : IntegrationTestBase
 
         assignViewerResponse.IsSuccessStatusCode.Should().BeTrue();
 
-        // Login again so the JWT contains Viewer permissions.
+        var refreshedOwner = await LoginAsync(ownerAuth.Email);
+        var removeOwnerResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Delete,
+            $"/api/v1/users/{ownerAuth.UserId}/roles/{ownerRoleId}",
+            refreshedOwner);
+
+        removeOwnerResponse.IsSuccessStatusCode.Should().BeTrue();
+
         var viewerAuth = await LoginAsync(ownerAuth.Email);
 
         viewerAuth.Roles.Should().Contain(RoleNames.Viewer);
@@ -157,16 +154,6 @@ public class RbacIntegrationTests : IntegrationTestBase
         var ownerRoleId = await GetRoleIdAsync(RoleNames.Owner);
         var viewerRoleId = await GetRoleIdAsync(RoleNames.Viewer);
 
-        // Remove Owner role.
-        var removeOwnerResponse = await IntegrationHttp.SendAuthorizedAsync(
-            Client,
-            HttpMethod.Delete,
-            $"/api/v1/users/{ownerAuth.UserId}/roles/{ownerRoleId}",
-            ownerAuth);
-
-        removeOwnerResponse.IsSuccessStatusCode.Should().BeTrue();
-
-        // Assign Viewer role.
         var assignViewerResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
@@ -176,7 +163,15 @@ public class RbacIntegrationTests : IntegrationTestBase
 
         assignViewerResponse.IsSuccessStatusCode.Should().BeTrue();
 
-        // Login again so the JWT contains Viewer permissions.
+        var refreshedOwner = await LoginAsync(ownerAuth.Email);
+        var removeOwnerResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Delete,
+            $"/api/v1/users/{ownerAuth.UserId}/roles/{ownerRoleId}",
+            refreshedOwner);
+
+        removeOwnerResponse.IsSuccessStatusCode.Should().BeTrue();
+
         var viewerAuth = await LoginAsync(ownerAuth.Email);
 
         viewerAuth.Roles.Should().Contain(RoleNames.Viewer);

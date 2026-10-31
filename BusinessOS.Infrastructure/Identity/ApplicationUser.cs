@@ -11,6 +11,12 @@ public class ApplicationUser : IdentityUser
     public string LastName { get; set; } = default!;
 
     public bool IsActive { get; set; } = true;
+
+    /// <summary>
+    /// Incremented when roles, permissions, account status, or tenant membership change.
+    /// Access tokens carry this value and are rejected when it no longer matches.
+    /// </summary>
+    public int SecurityVersion { get; set; } = 1;
     public string? AvatarUrl { get; set; }
     public DateTime? LastActiveAt { get; set; }
     public DateTime JoinedAt { get; set; } = DateTime.UtcNow;

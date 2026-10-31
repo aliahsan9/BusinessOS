@@ -132,6 +132,9 @@ public static class DependencyInjection
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<ITenantMembershipLookup, TenantMembershipLookup>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+        services.Configure<AuthSessionOptions>(configuration.GetSection(AuthSessionOptions.SectionName));
+        services.AddScoped<IAuthSessionService, AuthSessionService>();
+        services.AddScoped<IAuthorizationVersionService, AuthorizationVersionService>();
         services.AddScoped<IIdentityService, IdentityService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<ITenantRegistrationService, TenantRegistrationService>();

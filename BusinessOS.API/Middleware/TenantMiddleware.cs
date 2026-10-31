@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using BusinessOS.API.Versioning;
+using BusinessOS.Application.Common.Authorization;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Infrastructure.MultiTenancy;
 using Microsoft.AspNetCore.Mvc;
@@ -68,6 +69,31 @@ public sealed class TenantMiddleware
                 StatusCodes.Status401Unauthorized,
                 "ACCOUNT_INACTIVE",
                 "Account is deactivated.");
+            return;
+        }
+
+        if (membership.LockoutEnd is DateTimeOffset lockoutEnd && lockoutEnd > DateTimeOffset.UtcNow)
+        {
+            await WriteProblemAsync(
+                context,
+                StatusCodes.Status401Unauthorized,
+                "ACCOUNT_LOCKED",
+                "Account is temporarily locked.");
+            return;
+        }
+
+        var versionClaim = context.User.FindFirst(ClaimTypesConstants.SecurityVersion)?.Value;
+        if (!int.TryParse(versionClaim, out var tokenVersion) || tokenVersion != membership.SecurityVersion)
+        {
+            _logger.LogWarning(
+                "Rejected stale authorization version for user {UserId}",
+                userId);
+
+            await WriteProblemAsync(
+                context,
+                StatusCodes.Status401Unauthorized,
+                "AUTH_REVOKED",
+                "Authorization has changed. Sign in again.");
             return;
         }
 

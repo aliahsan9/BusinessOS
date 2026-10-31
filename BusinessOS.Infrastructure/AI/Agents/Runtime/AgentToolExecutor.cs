@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using BusinessOS.Infrastructure.AI;
 using BusinessOS.Application.Features.Agents.DTOs;
 using BusinessOS.Application.Features.Agents.Services;
 using BusinessOS.Application.Features.AI.DTOs;
@@ -132,6 +133,22 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
             ToolArgs = args,
             ExecutionState = request.State
         };
+
+        if (AiToolSafetyGate.TryBlock(request.ToolName, request.Message, args, out var blocked))
+        {
+            sw.Stop();
+            return new AgentToolExecutionResult
+            {
+                DurationMs = sw.ElapsedMilliseconds,
+                State = request.State,
+                ToolResult = new AiToolResult
+                {
+                    ToolName = request.ToolName.ToString(),
+                    Success = false,
+                    Summary = blocked
+                }
+            };
+        }
 
         var (result, exception) = await RunToolAsync(tool, execContext, args, cancellationToken);
         ApplyStateFromResult(request.State, result);

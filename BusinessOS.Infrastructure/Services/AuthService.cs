@@ -73,6 +73,7 @@ public sealed class AuthService : IAuthService
         }
 
         _tenantProvider.SetTenantId(user.TenantId);
+        var securityVersion = 1;
 
         var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         if (dbContext is not null)
@@ -91,6 +92,7 @@ public sealed class AuthService : IAuthService
                         throw new UnauthorizedException("Account is deactivated.");
                     }
 
+                    securityVersion = appUser.SecurityVersion;
                     appUser.LastActiveAt = DateTime.UtcNow;
                     await dbContext.SaveChangesAsync(cancellationToken);
                 }
@@ -104,7 +106,8 @@ public sealed class AuthService : IAuthService
         }
 
         var permissions = await _roleRepository.GetUserPermissionCodesAsync(user.Id, cancellationToken);
-        var token = _jwtTokenGenerator.GenerateToken(user.Id, user.Email, user.TenantId, roles, permissions);
+        var token = _jwtTokenGenerator.GenerateToken(
+            user.Id, user.Email, user.TenantId, roles, permissions, securityVersion);
 
         _logger.LogInformation(
             "User {UserId} ({Email}) logged in successfully for Tenant {TenantId}. JWT generated.",
@@ -210,7 +213,20 @@ public sealed class AuthService : IAuthService
 
         var roles = await _roleRepository.GetUserRoleNamesAsync(user.Id, cancellationToken);
         var permissions = await _roleRepository.GetUserPermissionCodesAsync(user.Id, cancellationToken);
-        var token = _jwtTokenGenerator.GenerateToken(user.Id, user.Email, user.TenantId, roles, permissions);
+        var registeredVersion = 1;
+        var registeredUser = await dbContext.Users
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(x => x.Id == user.Id)
+            .Select(x => x.SecurityVersion)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (registeredUser > 0)
+        {
+            registeredVersion = registeredUser;
+        }
+
+        var token = _jwtTokenGenerator.GenerateToken(
+            user.Id, user.Email, user.TenantId, roles, permissions, registeredVersion);
 
         _logger.LogInformation(
             "User {UserId} ({Email}) registered successfully for Tenant {TenantId}. JWT generated.",

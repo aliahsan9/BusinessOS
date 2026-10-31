@@ -22,9 +22,11 @@ public sealed class TenantMembershipLookup : ITenantMembershipLookup
         var user = await dbContext.Users
             .AsNoTracking()
             .Where(x => x.Id == userId)
-            .Select(x => new { x.TenantId, x.IsActive })
+            .Select(x => new { x.TenantId, x.IsActive, x.SecurityVersion, x.LockoutEnd })
             .FirstOrDefaultAsync(cancellationToken);
 
-        return user is null ? null : new TenantMembership(user.TenantId, user.IsActive);
+        return user is null
+            ? null
+            : new TenantMembership(user.TenantId, user.IsActive, user.SecurityVersion, user.LockoutEnd);
     }
 }

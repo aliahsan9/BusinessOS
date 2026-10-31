@@ -43,13 +43,6 @@ public class SecurityHardeningIntegrationTests : IntegrationTestBase
         var ownerRoleId = await GetRoleIdAsync(RoleNames.Owner);
         var employeeRoleId = await GetRoleIdAsync(RoleNames.Employee);
 
-        var removeOwner = await IntegrationHttp.SendAuthorizedAsync(
-            Client,
-            HttpMethod.Delete,
-            $"/api/v1/users/{ownerAuth.UserId}/roles/{ownerRoleId}",
-            ownerAuth);
-        removeOwner.IsSuccessStatusCode.Should().BeTrue();
-
         var assignEmployee = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
@@ -57,6 +50,14 @@ public class SecurityHardeningIntegrationTests : IntegrationTestBase
             ownerAuth,
             new AssignUserRoleRequest(employeeRoleId));
         assignEmployee.IsSuccessStatusCode.Should().BeTrue();
+
+        var refreshedOwner = await LoginAsync(ownerAuth.Email);
+        var removeOwner = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Delete,
+            $"/api/v1/users/{ownerAuth.UserId}/roles/{ownerRoleId}",
+            refreshedOwner);
+        removeOwner.IsSuccessStatusCode.Should().BeTrue();
 
         var employeeAuth = await LoginAsync(ownerAuth.Email);
         employeeAuth.Roles.Should().Contain(RoleNames.Employee);

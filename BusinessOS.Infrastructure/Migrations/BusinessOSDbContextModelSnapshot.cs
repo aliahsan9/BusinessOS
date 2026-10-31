@@ -1203,6 +1203,64 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.ToTable("GeneratedReports", (string)null);
                 });
 
+            modelBuilder.Entity("BusinessOS.Domain.Entities.AuthSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeviceLabel")
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("LastUsedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ReplacedBySessionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("ReuseDetected")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("FamilyId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("AuthSessions", (string)null);
+                });
+
             modelBuilder.Entity("BusinessOS.Domain.Entities.Inventory", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1213,6 +1271,7 @@ namespace BusinessOS.Infrastructure.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<decimal>("CurrentStock")
+                        .IsConcurrencyToken()
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
@@ -2003,9 +2062,14 @@ namespace BusinessOS.Infrastructure.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("nvarchar(4000)");
 
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ActorUserId");
+
+                    b.HasIndex("TenantId");
 
                     b.HasIndex("CreatedAt");
 
@@ -2985,6 +3049,9 @@ namespace BusinessOS.Infrastructure.Migrations
 
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("SecurityVersion")
+                        .HasColumnType("int");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");

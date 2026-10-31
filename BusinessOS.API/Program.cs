@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Threading.RateLimiting;
@@ -13,6 +14,7 @@ using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Infrastructure;
 using BusinessOS.Infrastructure.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
@@ -49,6 +51,25 @@ try
     builder.Services.AddProblemDetails();
     // Adding Rate Limiting services
 
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        options.KnownIPNetworks.Clear();
+        options.KnownProxies.Clear();
+        foreach (var proxy in builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [])
+        {
+            if (IPAddress.TryParse(proxy, out var address))
+            {
+                options.KnownProxies.Add(address);
+            }
+        }
+    });
+
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        options.Limits.MaxRequestBodySize = 5 * 1024 * 1024;
+    });
+
     builder.Services.AddRateLimiter(options =>
     {
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -66,6 +87,18 @@ try
                 _ => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = 10,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0
+                }));
+
+        options.AddPolicy("ai", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                    ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                    ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 30,
                     Window = TimeSpan.FromMinutes(1),
                     QueueLimit = 0
                 }));
@@ -115,7 +148,7 @@ try
                     var accessToken = context.Request.Query["access_token"];
                     var path = context.HttpContext.Request.Path;
                     if (!string.IsNullOrEmpty(accessToken) &&
-                        path.StartsWithSegments("/hubs"))
+                        path.StartsWithSegments("/hubs/notifications"))
                     {
                         context.Token = accessToken;
                     }
@@ -198,14 +231,21 @@ try
                     .AllowAnyHeader()
                     .AllowAnyMethod()
                     .AllowCredentials()
-                    .WithExposedHeaders("X-Tts-Provider", "X-Tts-Voice", "X-Tts-Cache");
+                    .WithExposedHeaders("X-Tts-Provider", "X-Tts-Voice", "X-Tts-Cache", "X-CSRF-Token");
             }
         });
     });
 
     var app = builder.Build();
 
+    if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
+    {
+        ProductionSecurityGuard.Ensure(app.Configuration);
+    }
+
     await DbInitializer.SeedAsync(app.Services);
+
+    app.UseForwardedHeaders();
 
     // Correlation ID must run first so all subsequent logs share it.
     app.UseMiddleware<CorrelationIdMiddleware>();
@@ -336,6 +376,33 @@ finally
 }
 
 public partial class Program;
+
+file static class ProductionSecurityGuard
+{
+    public static void Ensure(IConfiguration configuration)
+    {
+        var origins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+        if (origins.Length == 0 || origins.Any(origin => origin is "*" or "null"))
+        {
+            throw new InvalidOperationException(
+                "Production requires Cors:AllowedOrigins to list explicit https origins.");
+        }
+
+        var allowedHosts = configuration["AllowedHosts"];
+        if (string.IsNullOrWhiteSpace(allowedHosts) || allowedHosts == "*")
+        {
+            throw new InvalidOperationException(
+                "Production requires an explicit AllowedHosts value.");
+        }
+
+        var connectionString = configuration.GetConnectionString("DefaultConnection") ?? string.Empty;
+        if (connectionString.Contains("Encrypt=False", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Production database connections must encrypt traffic. Remove Encrypt=False.");
+        }
+    }
+}
 
 file static class JwtConfigurationGuard
 {

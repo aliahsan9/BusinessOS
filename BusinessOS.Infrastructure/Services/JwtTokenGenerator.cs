@@ -22,7 +22,8 @@ public sealed class JwtTokenGenerator : IJwtTokenGenerator
         string email,
         Guid tenantId,
         IReadOnlyList<string> roles,
-        IReadOnlyList<string> permissions)
+        IReadOnlyList<string> permissions,
+        int securityVersion)
     {
         var username = email.Split('@')[0];
 
@@ -31,7 +32,8 @@ public sealed class JwtTokenGenerator : IJwtTokenGenerator
             new(ClaimTypes.NameIdentifier, userId),
             new(ClaimTypes.Email, email),
             new(ClaimTypesConstants.Username, username),
-            new("TenantId", tenantId.ToString())
+            new("TenantId", tenantId.ToString()),
+            new(ClaimTypesConstants.SecurityVersion, securityVersion.ToString())
         };
 
         claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
@@ -59,6 +61,16 @@ public sealed class JwtTokenGenerator : IJwtTokenGenerator
     }
 
     public DateTime GetTokenExpiration() =>
-        DateTime.UtcNow.AddMinutes(
-            Convert.ToDouble(_configuration["Jwt:ExpiryMinutes"] ?? "60"));
+        DateTime.UtcNow.AddMinutes(ResolveExpiryMinutes());
+
+    private double ResolveExpiryMinutes()
+    {
+        var configured = _configuration["Jwt:ExpiryMinutes"];
+        if (string.IsNullOrWhiteSpace(configured) || !double.TryParse(configured, out var minutes))
+        {
+            return 15;
+        }
+
+        return minutes is >= 5 and <= 60 ? minutes : 15;
+    }
 }

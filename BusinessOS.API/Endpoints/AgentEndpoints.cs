@@ -21,7 +21,7 @@ public static class AgentEndpoints
         var group = app.MapGroup("/agents")
             .WithTags("AI Employees")
             .RequireAuthorization()
-            .RequireRateLimiting("api");
+            .RequireRateLimiting("ai");
 
         group.MapPost("/chat", Chat)
             .WithName("AgentChat")

@@ -277,8 +277,15 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             ];
         }
 
+        var toolExecutions = 0;
         foreach (var (stepKey, title, toolName) in steps)
         {
+            if (toolName is not null && ++toolExecutions > 8)
+            {
+                clarification = "I can only run a limited number of actions in one request.";
+                break;
+            }
+
             if (toolName is null)
             {
                 if (workflow is not null)

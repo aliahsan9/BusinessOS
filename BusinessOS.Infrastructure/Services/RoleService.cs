@@ -17,6 +17,7 @@ public sealed class RoleService : IRoleService
     private readonly ICurrentUserService _currentUser;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly RoleManager<ApplicationRole> _roleManager;
+    private readonly IAuthorizationVersionService _authorizationVersions;
 
     public RoleService(
         IRoleRepository roleRepository,
@@ -24,7 +25,8 @@ public sealed class RoleService : IRoleService
         IRbacAuditService auditService,
         ICurrentUserService currentUser,
         UserManager<ApplicationUser> userManager,
-        RoleManager<ApplicationRole> roleManager)
+        RoleManager<ApplicationRole> roleManager,
+        IAuthorizationVersionService authorizationVersions)
     {
         _roleRepository = roleRepository;
         _permissionRepository = permissionRepository;
@@ -32,6 +34,7 @@ public sealed class RoleService : IRoleService
         _currentUser = currentUser;
         _userManager = userManager;
         _roleManager = roleManager;
+        _authorizationVersions = authorizationVersions;
     }
 
     public async Task<RoleDto> CreateRoleAsync(
@@ -110,6 +113,7 @@ public sealed class RoleService : IRoleService
         }
 
         var oldValue = RbacAuditService.Serialize(new { role.Name, role.Description, role.IsActive });
+        await _authorizationVersions.BumpUsersWithRoleAsync(role.Id, cancellationToken);
         await _roleRepository.DeleteRoleAsync(role, cancellationToken);
 
         await _auditService.LogAsync(
@@ -147,6 +151,7 @@ public sealed class RoleService : IRoleService
             ?? throw new NotFoundException($"Permission '{permissionId}' was not found.");
 
         await _roleRepository.AssignPermissionAsync(roleId, permissionId, cancellationToken);
+        await _authorizationVersions.BumpUsersWithRoleAsync(roleId, cancellationToken);
 
         await _auditService.LogAsync(
             "PermissionAssigned",
@@ -169,6 +174,7 @@ public sealed class RoleService : IRoleService
             ?? throw new NotFoundException($"Permission '{permissionId}' was not found.");
 
         await _roleRepository.RemovePermissionAsync(roleId, permissionId, cancellationToken);
+        await _authorizationVersions.BumpUsersWithRoleAsync(roleId, cancellationToken);
 
         await _auditService.LogAsync(
             "PermissionRemoved",
@@ -195,6 +201,8 @@ public sealed class RoleService : IRoleService
         await _roleRepository.AssignRoleToUserAsync(userId, roleId, cancellationToken);
         await EnsureIdentityRoleExistsAsync(role.Name);
         await _userManager.AddToRoleAsync(user, role.Name);
+        user.SecurityVersion++;
+        await _userManager.UpdateAsync(user);
 
         await _auditService.LogAsync(
             "UserRoleAssigned",
@@ -220,6 +228,8 @@ public sealed class RoleService : IRoleService
 
         await _roleRepository.RemoveRoleFromUserAsync(userId, roleId, cancellationToken);
         await _userManager.RemoveFromRoleAsync(user, role.Name);
+        user.SecurityVersion++;
+        await _userManager.UpdateAsync(user);
 
         await _auditService.LogAsync(
             "UserRoleRemoved",

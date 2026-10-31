@@ -55,7 +55,8 @@ public class AuthServiceTests
                 user.Email,
                 user.TenantId,
                 It.IsAny<IReadOnlyList<string>>(),
-                It.IsAny<IReadOnlyList<string>>()))
+                It.IsAny<IReadOnlyList<string>>(),
+                It.IsAny<int>()))
             .Returns("token");
         jwt.Setup(x => x.GetTokenExpiration()).Returns(DateTime.UtcNow.AddHours(1));
 

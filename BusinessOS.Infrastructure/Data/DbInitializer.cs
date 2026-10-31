@@ -44,7 +44,7 @@ public static class DbInitializer
 
         if (environment.IsDevelopment())
         {
-            await DevSeeder.SeedAsync(context, userManager, logger);
+            await DevSeeder.SeedAsync(context, userManager, logger, configuration);
         }
     }
 

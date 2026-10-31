@@ -113,16 +113,6 @@ public class AuthorizationIntegrationTests : IntegrationTestBase
             .Single(x => x.Name == RoleNames.Viewer)
             .Id;
 
-        // Remove Owner role.
-        var removeOwnerResponse = await IntegrationHttp.SendAuthorizedAsync(
-            Client,
-            HttpMethod.Delete,
-            $"/api/v1/users/{ownerAuth.UserId}/roles/{ownerRoleId}",
-            ownerAuth);
-
-        removeOwnerResponse.IsSuccessStatusCode.Should().BeTrue();
-
-        // Assign Viewer role.
         var assignViewerResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
@@ -131,6 +121,15 @@ public class AuthorizationIntegrationTests : IntegrationTestBase
             new AssignUserRoleRequest(viewerRoleId));
 
         assignViewerResponse.IsSuccessStatusCode.Should().BeTrue();
+
+        var refreshedOwner = await LoginAsync(ownerAuth.Email);
+        var removeOwnerResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Delete,
+            $"/api/v1/users/{ownerAuth.UserId}/roles/{ownerRoleId}",
+            refreshedOwner);
+
+        removeOwnerResponse.IsSuccessStatusCode.Should().BeTrue();
     }
 
     private async Task<AuthResponse> LoginAsync(string email)

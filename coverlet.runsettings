@@ -22,6 +22,8 @@
           <Exclude>[BusinessOS.Domain.Entities]*.[Supplier]*</Exclude>
           <Exclude>[BusinessOS.Domain.Entities]*.[InventoryTransaction]*</Exclude>
           <Exclude>[Microsoft.AspNetCore.OpenApi.Generated]*</Exclude>
+          <Exclude>[BusinessOS.API]Microsoft.AspNetCore.OpenApi.Generated*</Exclude>
+          <Exclude>[*]System.Text.RegularExpressions.Generated*</Exclude>
           <Exclude>[BusinessOS.API.OpenApi.OpenApiExtensions]*</Exclude>
           <ExcludeByFile>**/Migrations/**/*.cs</ExcludeByFile>
           <ExcludeByFile>**/obj/**/*.cs</ExcludeByFile>

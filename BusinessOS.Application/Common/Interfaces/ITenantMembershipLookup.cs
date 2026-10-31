@@ -9,4 +9,8 @@ public interface ITenantMembershipLookup
     Task<TenantMembership?> FindByUserIdAsync(string userId, CancellationToken cancellationToken = default);
 }
 
-public sealed record TenantMembership(Guid TenantId, bool IsActive);
+public sealed record TenantMembership(
+    Guid TenantId,
+    bool IsActive,
+    int SecurityVersion = 1,
+    DateTimeOffset? LockoutEnd = null);

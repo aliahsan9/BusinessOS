@@ -1,9 +1,14 @@
+using System.Security.Claims;
 using BusinessOS.API.OpenApi;
+using BusinessOS.API.Security;
+using BusinessOS.Application.Common.Authorization;
+using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Auth.Commands.ForgotPassword;
 using BusinessOS.Application.Features.Auth.Commands.Login;
 using BusinessOS.Application.Features.Auth.Commands.Register;
 using BusinessOS.Application.Features.Auth.Commands.ResetPassword;
 using BusinessOS.Application.Features.Auth.DTOs;
+using BusinessOS.Application.Features.Auth.Services;
 using BusinessOS.Application.Features.Team.DTOs;
 using BusinessOS.Application.Features.Team.Services;
 using MediatR;
@@ -200,34 +205,65 @@ public static class AuthEndpoints
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
+        group.MapPost("/refresh", Refresh)
+            .WithName("RefreshSession")
+            .WithSummary("Rotate the refresh cookie and issue a new access token")
+            .Produces<AuthResponse>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden);
+
+        group.MapPost("/logout", Logout)
+            .WithName("Logout")
+            .WithSummary("Revoke the current refresh session")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status403Forbidden);
+
+        group.MapPost("/logout-all", LogoutAll)
+            .WithName("LogoutAll")
+            .WithSummary("Revoke every session for the authenticated user")
+            .RequireAuthorization()
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden);
+
         return app;
     }
 
     /// <summary>Creates a new tenant and user; returns JWT on success.</summary>
     /// <param name="command">Registration payload with email, password, name, and business name.</param>
     /// <param name="sender">Mediator sender for handling the command.</param>
+    /// <param name="sessions">Session service that issues the refresh cookie.</param>
+    /// <param name="httpContext">Current HTTP context that receives the refresh cookie.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>201 Created with <see cref="AuthResponse"/> at login URL.</returns>
     private static async Task<IResult> Register(
         RegisterCommand command,
         ISender sender,
+        IAuthSessionService sessions,
+        HttpContext httpContext,
         CancellationToken cancellationToken)
     {
         var result = await sender.Send(command, cancellationToken);
+        await AuthCookieWriter.IssueAsync(httpContext, sessions, result.UserId, result.TenantId, cancellationToken);
         return Results.Created("/api/v1/auth/login", result);
     }
 
     /// <summary>Authenticates user credentials and returns a JWT.</summary>
     /// <param name="command">Login payload with email and password.</param>
     /// <param name="sender">Mediator sender for handling the command.</param>
+    /// <param name="sessions">Session service that issues the refresh cookie.</param>
+    /// <param name="httpContext">Current HTTP context that receives the refresh cookie.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>200 OK with <see cref="AuthResponse"/>.</returns>
     private static async Task<IResult> Login(
         LoginCommand command,
         ISender sender,
+        IAuthSessionService sessions,
+        HttpContext httpContext,
         CancellationToken cancellationToken)
     {
         var result = await sender.Send(command, cancellationToken);
+        await AuthCookieWriter.IssueAsync(httpContext, sessions, result.UserId, result.TenantId, cancellationToken);
         return Results.Ok(result);
     }
 
@@ -284,6 +320,92 @@ public static class AuthEndpoints
         CancellationToken cancellationToken)
     {
         await teamService.AcceptInvitationAsync(request, cancellationToken);
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> Refresh(
+        HttpContext httpContext,
+        IAuthSessionService sessions,
+        CancellationToken cancellationToken)
+    {
+        if (!AuthCookieWriter.CsrfMatches(httpContext.Request))
+        {
+            return Results.Problem(
+                title: "CSRF validation failed.",
+                statusCode: StatusCodes.Status403Forbidden);
+        }
+
+        if (!httpContext.Request.Cookies.TryGetValue(AuthCookieWriter.RefreshCookieName, out var refreshToken))
+        {
+            return Results.Unauthorized();
+        }
+
+        var rotation = await sessions.RotateAsync(refreshToken, cancellationToken);
+        if (!rotation.Succeeded || rotation.Access is null || rotation.Session is null)
+        {
+            AuthCookieWriter.Clear(httpContext);
+            return Results.Unauthorized();
+        }
+
+        AuthCookieWriter.Write(httpContext, rotation.Session);
+        return Results.Ok(rotation.Access);
+    }
+
+    private static async Task<IResult> Logout(
+        HttpContext httpContext,
+        IAuthSessionService sessions,
+        CancellationToken cancellationToken)
+    {
+        if (!AuthCookieWriter.CsrfMatches(httpContext.Request))
+        {
+            return Results.Problem(
+                title: "CSRF validation failed.",
+                statusCode: StatusCodes.Status403Forbidden);
+        }
+
+        if (httpContext.Request.Cookies.TryGetValue(AuthCookieWriter.RefreshCookieName, out var refreshToken))
+        {
+            await sessions.RevokeCurrentAsync(refreshToken, cancellationToken);
+        }
+
+        AuthCookieWriter.Clear(httpContext);
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> LogoutAll(
+        HttpContext httpContext,
+        ClaimsPrincipal user,
+        IAuthSessionService sessions,
+        IAuthorizationVersionService versions,
+        ITenantMembershipLookup membershipLookup,
+        CancellationToken cancellationToken)
+    {
+        if (!AuthCookieWriter.CsrfMatches(httpContext.Request))
+        {
+            return Results.Problem(
+                title: "CSRF validation failed.",
+                statusCode: StatusCodes.Status403Forbidden);
+        }
+
+        var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Results.Unauthorized();
+        }
+
+        var membership = await membershipLookup.FindByUserIdAsync(userId, cancellationToken);
+        var versionClaim = user.FindFirst(ClaimTypesConstants.SecurityVersion)?.Value;
+        if (membership is null ||
+            !membership.IsActive ||
+            !int.TryParse(versionClaim, out var tokenVersion) ||
+            tokenVersion != membership.SecurityVersion)
+        {
+            return Results.Unauthorized();
+        }
+
+        await sessions.RevokeAllAsync(userId, cancellationToken);
+        await versions.BumpUserAsync(userId, cancellationToken);
+        AuthCookieWriter.Clear(httpContext);
         return Results.NoContent();
     }
 }
