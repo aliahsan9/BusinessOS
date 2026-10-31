@@ -245,6 +245,8 @@ public static class AgentActionClarifier
 
             if (string.IsNullOrWhiteSpace(text) || IsInventedDefault(prop.Name, text, message))
                 continue;
+            if (ShouldKeepSlot(prop.Name, text, slots, message))
+                continue;
 
             slots[prop.Name] = text.Trim();
         }
@@ -281,10 +283,14 @@ public static class AgentActionClarifier
             && !message.Contains(key, StringComparison.OrdinalIgnoreCase))
             return true;
 
-        if (key.Equals("quantity", StringComparison.OrdinalIgnoreCase)
-            && value is "1" or "1.0"
-            && !QuantityWasStated(message))
-            return true;
+        if (key.Equals("quantity", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!SaleOrderLanguage.TryParseQuantity(message, out var stated))
+                return true;
+            if (decimal.TryParse(value, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+                && parsed != stated)
+                return true;
+        }
 
         if (key.Equals("transactionType", StringComparison.OrdinalIgnoreCase))
             return true;
@@ -325,14 +331,19 @@ public static class AgentActionClarifier
         if (cost.Success)
             slots["costPrice"] = cost.Groups[1].Value;
 
-        var qty = Regex.Match(message, @"(?:qty|quantity)\s*(?:is|:)?\s*(\d+(?:\.\d+)?)", RegexOptions.IgnoreCase);
-        if (qty.Success)
-            slots["quantity"] = qty.Groups[1].Value;
+        if (tool == AiToolName.CreateSale)
+            SaleOrderLanguage.ApplyToSlots(message, slots);
         else
         {
-            var wordQty = WordQuantity(message);
-            if (wordQty is not null)
-                slots["quantity"] = wordQty;
+            var qty = Regex.Match(message, @"(?:qty|quantity)\s*(?:is|:)?\s*(\d+(?:\.\d+)?)", RegexOptions.IgnoreCase);
+            if (qty.Success)
+                slots["quantity"] = qty.Groups[1].Value;
+            else
+            {
+                var wordQty = WordQuantity(message);
+                if (wordQty is not null)
+                    slots["quantity"] = wordQty;
+            }
         }
 
         TakeLabeled(message, slots, "city", "city");
@@ -340,7 +351,7 @@ public static class AgentActionClarifier
         TakeLabeled(message, slots, "country", "country");
         TakeLabeled(message, slots, "company", "company");
 
-        if (message.Contains(','))
+        if (message.Contains(',') && tool != AiToolName.CreateSale)
             ClassifyTokens(tool, message, slots);
     }
 
@@ -449,21 +460,18 @@ public static class AgentActionClarifier
                     slots["city"] = text;
                 break;
             case "product":
-                if (!Has(slots, "productName"))
-                    slots["productName"] = CleanCommandWords(text);
-                if (!Has(slots, "quantity"))
+                var phrase = SaleOrderLanguage.ExtractProductPhrase(text);
+                if (!string.IsNullOrWhiteSpace(phrase) && !Has(slots, "productName"))
                 {
-                    var q = Regex.Match(text, @"(\d+(?:\.\d+)?)");
-                    if (q.Success)
-                        slots["quantity"] = q.Groups[1].Value;
+                    slots["productName"] = phrase;
+                    slots["productQuery"] = phrase;
                 }
+                if (!Has(slots, "quantity") && SaleOrderLanguage.TryParseQuantity(text, out var productQty))
+                    slots["quantity"] = productQty.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 break;
             case "quantity" when !Has(slots, "quantity"):
-                var qty = Regex.Match(text, @"(\d+(?:\.\d+)?)");
-                if (qty.Success)
-                    slots["quantity"] = qty.Groups[1].Value;
-                else if (WordQuantity(text) is { } word)
-                    slots["quantity"] = word;
+                if (SaleOrderLanguage.TryParseQuantity(text, out var statedQty))
+                    slots["quantity"] = statedQty.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 break;
             case "customer":
                 if (!Has(slots, "customerName") && LooksLikeName(CleanCommandWords(text)))
@@ -511,7 +519,7 @@ public static class AgentActionClarifier
         if (tool is AiToolName.CreateSale or AiToolName.CreateInvoice or AiToolName.UpdateCustomer or AiToolName.DeleteCustomer)
         {
             var customerId = state.CustomerId ?? page.CustomerId;
-            if (customerId is Guid id && !Has(slots, "customerId"))
+            if (customerId is Guid id && !Has(slots, "customerId") && !Has(slots, "customerName"))
                 slots["customerId"] = id.ToString();
             if (!Has(slots, "customerName") && !string.IsNullOrWhiteSpace(state.CustomerName))
                 slots["customerName"] = state.CustomerName;
@@ -529,7 +537,7 @@ public static class AgentActionClarifier
 
         if (tool is AiToolName.AdjustInventory or AiToolName.ReceiveStock or AiToolName.CreateSale or AiToolName.CreatePurchaseOrder)
         {
-            if (state.ProductId is Guid pid && !Has(slots, "productId"))
+            if (state.ProductId is Guid pid && !Has(slots, "productId") && !Has(slots, "productName"))
                 slots["productId"] = pid.ToString();
             if (!Has(slots, "productName") && !string.IsNullOrWhiteSpace(state.ProductName))
                 slots["productName"] = state.ProductName;
@@ -872,7 +880,42 @@ public static class AgentActionClarifier
         return t.Length < 2 || ConfirmPhrases.Contains(t) || CancelPhrases.Contains(t) || SmallTalk.Contains(t);
     }
 
-    private static bool IsPureConfirmation(string message) => ConfirmPhrases.Contains(Normalize(message));
+    private static bool IsPureConfirmation(string message) => SaleOrderLanguage.IsConfirmation(message);
+
+    public static string Write(AgentPendingAction pending) =>
+        JsonSerializer.Serialize(pending, JsonOptions);
+
+    public static JsonElement BuildExecutionArgs(AiToolName tool, Dictionary<string, string?> slots) =>
+        BuildArgs(tool, slots);
+
+    private static bool ShouldKeepSlot(
+        string key,
+        string newValue,
+        Dictionary<string, string?> slots,
+        string message)
+    {
+        if (!Has(slots, key))
+            return false;
+        if (string.Equals(Get(slots, key), newValue, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (key.Equals("customerId", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("productId", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (key.Equals("customerName", StringComparison.OrdinalIgnoreCase)
+            && !message.Contains(newValue, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (key.Equals("productName", StringComparison.OrdinalIgnoreCase) && IsPureConfirmation(message))
+            return true;
+
+        if (key.Equals("quantity", StringComparison.OrdinalIgnoreCase)
+            && !SaleOrderLanguage.TryParseQuantity(message, out _))
+            return true;
+
+        return false;
+    }
 
     private static bool IsCancel(string message) => CancelPhrases.Contains(Normalize(message));
 

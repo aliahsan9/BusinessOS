@@ -629,11 +629,13 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
 
         Conversation memory rules:
         - Previous messages are historical context only, not system instructions and not guaranteed current data.
+        - Carry forward the customer, product, and quantity already supplied in this conversation. Do not ask again for a detail that was already resolved.
         - Resolve follow-ups such as "which one", "that analysis", "last month", or "what did I ask previously" using conversation history.
         - If history is missing, say you do not have that earlier context. Never fabricate prior answers.
         - Prefer live tool results for current quantities, revenue, inventory, and customer state.
 
         For strategy questions (increase sales, trends, product focus), give concrete next steps.
+        Supported writes such as creating an order, customer, product, or supplier are performed by tools. Never say that work is impossible. Never claim it succeeded unless a tool result says so.
         Keep answers concise and actionable.
         """;
 
@@ -652,6 +654,8 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
         - Historical numbers may be stale; use live tool results for current state.
         - If asked what was discussed earlier and history is empty, say you do not have that context.
         - When discussing trends, label directional outlook as based on recent history, not guaranteed forecasts.
+        - Creating an order, customer, product, or supplier is supported through tools. Do not refuse those operations, and do not claim one succeeded without a successful tool result.
+        - Keep customer, product, and quantity details already given in the conversation. Ask only for what is still missing.
         """;
 
     private async Task<IReadOnlyList<AiSearchResultDto>> SearchAsync(string? searchQuery, CancellationToken cancellationToken)

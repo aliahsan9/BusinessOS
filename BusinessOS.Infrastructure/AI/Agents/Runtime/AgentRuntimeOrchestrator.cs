@@ -30,6 +30,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
     private readonly IAiPermissionValidator _permissions;
     private readonly IAiInsightService _insights;
     private readonly ICurrentUserService _currentUser;
+    private readonly ISaleOrderDraftService _saleDrafts;
     private readonly ILogger<AgentRuntimeOrchestrator> _logger;
 
     public AgentRuntimeOrchestrator(
@@ -43,6 +44,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         IAiPermissionValidator permissions,
         IAiInsightService insights,
         ICurrentUserService currentUser,
+        ISaleOrderDraftService saleDrafts,
         ILogger<AgentRuntimeOrchestrator> logger)
     {
         _intentParser = intentParser;
@@ -55,6 +57,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         _permissions = permissions;
         _insights = insights;
         _currentUser = currentUser;
+        _saleDrafts = saleDrafts;
         _logger = logger;
     }
 
@@ -188,7 +191,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         if (firstTool is AiToolName briefTool && AgentActionClarifier.NeedsBrief(briefTool))
         {
             yield return Status("Checking the details…");
-            var decision = AgentActionClarifier.Decide(briefTool, request.Message, pending, state, page);
+            var decision = await ClarifyAsync(briefTool, request.Message, pending, state, page, sessionId, cancellationToken);
             if (!decision.ShouldExecute)
             {
                 await _memory.CompleteTurnAsync(
@@ -294,7 +297,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
 
             if (AgentActionClarifier.NeedsBrief(toolName.Value) && toolName != injectedTool)
             {
-                var decision = AgentActionClarifier.Decide(toolName.Value, request.Message, pending: null, state, page);
+                var decision = await ClarifyAsync(toolName.Value, request.Message, pending: null, state, page, sessionId, cancellationToken);
                 if (!decision.ShouldExecute)
                 {
                     awaitingDetails = true;
@@ -525,6 +528,21 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             FinalResponse = response,
             WorkflowId = workflow?.Id
         };
+    }
+
+    private Task<AgentClarificationDecision> ClarifyAsync(
+        AiToolName tool,
+        string message,
+        AgentPendingAction? pending,
+        AgentExecutionState state,
+        AiPageContextDto page,
+        Guid sessionId,
+        CancellationToken cancellationToken)
+    {
+        var decision = AgentActionClarifier.Decide(tool, message, pending, state, page);
+        if (tool != AiToolName.CreateSale)
+            return Task.FromResult(decision);
+        return _saleDrafts.ApplyAsync(decision, message, sessionId, cancellationToken);
     }
 
     private static bool ShouldUseEmployeeRuntime(AiIntentDetectionResult intent)

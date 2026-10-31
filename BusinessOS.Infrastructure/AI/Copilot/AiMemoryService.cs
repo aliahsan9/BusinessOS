@@ -219,7 +219,7 @@ public sealed class AiMemoryService : IAiMemoryService
         var memory = new AiMemoryStateDto
         {
             SelectedCustomerId = session.SelectedCustomerId,
-            SelectedCustomerName = customerName,
+            SelectedCustomerName = customerName ?? prior?.SelectedCustomerName,
             SelectedProjectId = session.SelectedProjectId,
             SelectedOrderId = session.SelectedOrderId,
             SelectedInvoiceId = session.SelectedInvoiceId,

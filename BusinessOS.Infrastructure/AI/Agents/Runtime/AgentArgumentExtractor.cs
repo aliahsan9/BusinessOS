@@ -237,36 +237,41 @@ public sealed class AgentArgumentExtractor : IAgentArgumentExtractor
     private static JsonElement HeuristicSale(string message, AgentExecutionState state, AiPageContextDto page)
     {
         var refersToThisCustomer = ContainsThisCustomer(message);
-        var customerId = state.CustomerId ?? page.CustomerId;
-        var customerName = state.CustomerName;
-        if (string.IsNullOrWhiteSpace(customerName) && !refersToThisCustomer)
-            customerName = ExtractCustomerNameForSale(message);
-
-        var productName = ParseLabeled(message, "product", "item")
-            ?? ExtractAfterKeywords(message, "product", "item");
-        var qty = ParseDecimal(message, "quantity", "qty", "units") ?? ParseFirstNumber(message);
-
-        var dict = new Dictionary<string, object?>
+        var namedCustomer = SaleOrderLanguage.ExtractCustomerName(message);
+        Guid? customerId = null;
+        string? customerName = namedCustomer;
+        if (refersToThisCustomer || string.IsNullOrWhiteSpace(namedCustomer))
         {
-            ["customerId"] = customerId?.ToString(),
-            ["customerName"] = string.IsNullOrWhiteSpace(customerName) ? null : customerName,
-            ["discount"] = ParseDecimal(message, "discount") ?? 0,
-            ["tax"] = ParseDecimal(message, "tax") ?? 0
-        };
-
-        if (!string.IsNullOrWhiteSpace(productName) || state.ProductId is not null)
-        {
-            var item = new Dictionary<string, object?>();
-            if (state.ProductId is Guid pid)
-                item["productId"] = pid.ToString();
-            if (!string.IsNullOrWhiteSpace(productName))
-                item["productName"] = productName;
-            if (state.ProductName is not null && string.IsNullOrWhiteSpace(productName))
-                item["productName"] = state.ProductName;
-            item["quantity"] = qty ?? 1m;
-            dict["items"] = new List<object> { item };
-            dict["productName"] = item.GetValueOrDefault("productName");
+            customerId = state.CustomerId ?? page.CustomerId;
+            customerName ??= state.CustomerName;
         }
+
+        var productName = SaleOrderLanguage.ExtractProductPhrase(message);
+        if (string.IsNullOrWhiteSpace(productName)
+            && (SaleOrderLanguage.IsConfirmation(message) || SaleOrderLanguage.TryParseQuantity(message, out _)))
+        {
+            productName = state.ProductName;
+        }
+
+        decimal? qty = SaleOrderLanguage.TryParseQuantity(message, out var parsedQty) ? parsedQty : null;
+        var discount = ParseDecimal(message, "discount");
+        var tax = ParseDecimal(message, "tax");
+
+        var dict = new Dictionary<string, object?>();
+        if (customerId is Guid id)
+            dict["customerId"] = id.ToString();
+        if (!string.IsNullOrWhiteSpace(customerName))
+            dict["customerName"] = customerName;
+        if (discount is not null)
+            dict["discount"] = discount;
+        if (tax is not null)
+            dict["tax"] = tax;
+        if (!string.IsNullOrWhiteSpace(productName))
+            dict["productName"] = productName;
+        if (qty is not null)
+            dict["quantity"] = qty;
+        if (state.ProductId is Guid pid && string.IsNullOrWhiteSpace(productName))
+            dict["productId"] = pid.ToString();
 
         var json = JsonSerializer.Serialize(dict, JsonOptions);
         return JsonDocument.Parse(json).RootElement.Clone();
