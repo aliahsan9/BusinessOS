@@ -23,8 +23,11 @@ public sealed class UnauthorizedException : AppException
 
 public sealed class ConflictException : AppException
 {
-    public ConflictException(string message) : base(message)
+    public string? ErrorCode { get; }
+
+    public ConflictException(string message, string? errorCode = null) : base(message)
     {
+        ErrorCode = errorCode;
     }
 }
 

@@ -7,6 +7,7 @@ using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Infrastructure.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Moq;
 
@@ -66,5 +67,6 @@ public class AuthServiceRegistrationTests
             Mock.Of<IActivityService>(),
             Mock.Of<IEmailNotificationService>(),
             Options.Create(new AppOptions()),
+            new MemoryCache(new MemoryCacheOptions()),
             Mock.Of<Microsoft.Extensions.Logging.ILogger<AuthService>>());
 }

@@ -10,6 +10,10 @@ public interface IEmailNotificationService
         string subject,
         string body,
         CancellationToken cancellationToken = default);
+
+    Task<EmailDeliveryResult> SendMessageAsync(
+        EmailMessage message,
+        CancellationToken cancellationToken = default);
 }
 
 public interface IRealtimeNotificationService

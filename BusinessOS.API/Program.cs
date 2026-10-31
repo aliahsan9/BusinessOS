@@ -401,6 +401,15 @@ file static class ProductionSecurityGuard
             throw new InvalidOperationException(
                 "Production database connections must encrypt traffic. Remove Encrypt=False.");
         }
+
+        var frontendBaseUrl = configuration["App:FrontendBaseUrl"];
+        if (string.IsNullOrWhiteSpace(frontendBaseUrl) ||
+            !frontendBaseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Production requires App:FrontendBaseUrl to be an absolute https URL. " +
+                "Password-reset links are built only from this value.");
+        }
     }
 }
 

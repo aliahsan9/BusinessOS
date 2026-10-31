@@ -71,7 +71,53 @@ public interface IIdentityService
         string currentPassword,
         string newPassword,
         CancellationToken cancellationToken = default);
+
+    Task<UserAuthResult?> FindByLoginAsync(
+        string loginProvider,
+        string providerKey,
+        CancellationToken cancellationToken);
+
+    Task<bool> HasPasswordAsync(string userId, CancellationToken cancellationToken);
+
+    Task<bool> IsLockedOutAsync(string userId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Creates a user with no local password and attaches one external login.
+    /// Always uses <see cref="CreateExternalUserRequest.TenantId"/> and ignores any ambient tenant.
+    /// </summary>
+    Task<IdentityOperationResult> CreateExternalUserAsync(
+        CreateExternalUserRequest request,
+        CancellationToken cancellationToken);
+
+    Task<IdentityOperationResult> LinkExternalLoginAsync(
+        string userId,
+        string loginProvider,
+        string providerKey,
+        CancellationToken cancellationToken);
+
+    Task<IdentityOperationResult> RemoveExternalLoginAsync(
+        string userId,
+        string loginProvider,
+        CancellationToken cancellationToken);
+
+    Task<IdentityOperationResult> SetPasswordAsync(
+        string userId,
+        string newPassword,
+        CancellationToken cancellationToken = default);
+
+    Task<ExternalLoginsResponse> GetExternalLoginsAsync(
+        string userId,
+        CancellationToken cancellationToken = default);
 }
+
+public sealed record CreateExternalUserRequest(
+    string Email,
+    string FirstName,
+    string LastName,
+    Guid TenantId,
+    string LoginProvider,
+    string ProviderKey,
+    string? AvatarUrl);
 
 public sealed record UserAuthResult(string Id, string Email, Guid TenantId);
 

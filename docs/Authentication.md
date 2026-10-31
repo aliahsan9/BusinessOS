@@ -126,7 +126,7 @@ JWT settings are configured via `appsettings.json` under the `Jwt` section:
 
 ## Future Improvements
 * Add Multi-Factor Authentication (MFA / TOTP) via Authenticator Apps.
-* Add OAuth2 / OpenID Connect Social Logins (Google, Microsoft 365).
+* Google sign-in and password reset are implemented. See [GoogleSignInAndPasswordReset.md](./GoogleSignInAndPasswordReset.md).
 
 ---
 

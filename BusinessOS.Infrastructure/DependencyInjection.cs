@@ -3,6 +3,7 @@ using BusinessOS.Application.Common.Options;
 using BusinessOS.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Identity;
 using BusinessOS.Application.Features.Audit.Services;
+using BusinessOS.Application.Features.Auth.Google;
 using BusinessOS.Application.Features.Auth.Services;
 using BusinessOS.Application.Features.Analytics.Services;
 using BusinessOS.Application.Features.Finance.Services;
@@ -40,6 +41,7 @@ using BusinessOS.Infrastructure.VectorSearch.Projectors;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Qdrant.Client;
 using BusinessOS.Application.Common.Caching;
 using BusinessOS.Infrastructure.Caching;
@@ -66,8 +68,10 @@ public static class DependencyInjection
             configuration.GetSection(LoggingPerformanceOptions.SectionName));
         services.Configure<AppOptions>(configuration.GetSection(AppOptions.SectionName));
         services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
+        services.Configure<GoogleAuthOptions>(configuration.GetSection(GoogleAuthOptions.SectionName));
+        var resetHours = Math.Clamp(configuration.GetValue("App:PasswordResetTokenHours", 24), 1, 168);
         services.Configure<DataProtectionTokenProviderOptions>(options =>
-            options.TokenLifespan = TimeSpan.FromHours(24));
+            options.TokenLifespan = TimeSpan.FromHours(resetHours));
 
         services.AddSingleton<IVectorEntityProjector, DocumentVectorProjector>();
         services.AddSingleton<IVectorEntityProjector, ProductVectorProjector>();
@@ -137,6 +141,9 @@ public static class DependencyInjection
         services.AddScoped<IAuthorizationVersionService, AuthorizationVersionService>();
         services.AddScoped<IIdentityService, IdentityService>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddSingleton<IGoogleIdTokenValidator, GoogleIdTokenValidator>();
+        services.AddScoped<IGoogleAuthService, GoogleAuthService>();
+        services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<ITenantRegistrationService, TenantRegistrationService>();
         services.AddScoped<ITenantService, TenantService>();
         services.AddScoped<ITenantLimitService, TenantLimitService>();

@@ -17,6 +17,8 @@ public class Order : AuditableEntity
     public decimal Tax { get; set; }
     public decimal GrandTotal { get; set; }
 
+    public byte[] RowVersion { get; set; } = default!;
+
     public Customer Customer { get; set; } = default!;
     public ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
 }

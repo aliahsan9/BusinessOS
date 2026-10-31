@@ -1,3 +1,4 @@
+using BusinessOS.Application.Common.Concurrency;
 using BusinessOS.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -54,6 +55,36 @@ public interface IApplicationDbContext
     DbSet<VoicePreference> VoicePreferences { get; }
     DbSet<AgentWorkflowRun> AgentWorkflowRuns { get; }
     DbSet<AgentWorkflowStep> AgentWorkflowSteps { get; }
+    DbSet<IdempotencyRecord> IdempotencyRecords { get; }
+    DbSet<ProcessedWebhookEvent> ProcessedWebhookEvents { get; }
+
+    bool HasActiveTransaction { get; }
+
+    Task<IApplicationTransaction?> BeginTransactionAsync(CancellationToken cancellationToken = default);
+
+    Task<StockAdjustmentResult> TryAdjustStockAsync(
+        Guid productId,
+        decimal quantityDelta,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> TryTransitionOrderStatusAsync(
+        Guid orderId,
+        string expectedStatus,
+        string newStatus,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> TryTransitionPurchaseStatusAsync(
+        Guid purchaseId,
+        string expectedStatus,
+        string newStatus,
+        CancellationToken cancellationToken = default);
+
+    Task<int> TryRefundPaymentAsync(
+        Guid paymentId,
+        decimal amount,
+        CancellationToken cancellationToken = default);
+
+    void Detach<TEntity>(TEntity entity) where TEntity : class;
 
     Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default);

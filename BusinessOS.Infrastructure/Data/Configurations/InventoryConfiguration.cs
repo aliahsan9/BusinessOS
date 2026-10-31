@@ -8,7 +8,8 @@ public class InventoryConfiguration : IEntityTypeConfiguration<Inventory>
 {
     public void Configure(EntityTypeBuilder<Inventory> builder)
     {
-        builder.ToTable("Inventories");
+        builder.ToTable("Inventories", table =>
+            table.HasCheckConstraint("CK_Inventories_CurrentStock_NonNegative", "[CurrentStock] >= 0"));
 
         builder.HasKey(x => x.Id);
 
@@ -17,6 +18,7 @@ public class InventoryConfiguration : IEntityTypeConfiguration<Inventory>
         builder.Property(x => x.MaximumStockLevel).AsMoney();
         builder.Property(x => x.ReorderLevel).AsMoney();
         builder.Property(x => x.LastUpdated).IsRequired();
+        builder.Property(x => x.RowVersion).IsRowVersion();
 
         builder.HasOne(x => x.Product)
             .WithOne(x => x.Inventory)

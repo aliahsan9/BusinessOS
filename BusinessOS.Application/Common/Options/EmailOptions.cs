@@ -22,4 +22,9 @@ public sealed class EmailOptions
     public string FromAddress { get; set; } = string.Empty;
 
     public string FromName { get; set; } = "BusinessOS";
+
+    /// <summary>
+    /// SMTP operation timeout. Values outside 5–60 are clamped.
+    /// </summary>
+    public int TimeoutSeconds { get; set; } = 15;
 }

@@ -1,15 +1,17 @@
-using System.Net;
-using System.Net.Mail;
 using BusinessOS.Application.Common.Options;
+using BusinessOS.Application.Features.Notifications.DTOs;
 using BusinessOS.Application.Features.Notifications.Services;
+using MailKit.Net.Smtp;
+using MailKit.Security;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using MimeKit;
 
 namespace BusinessOS.Infrastructure.Services;
 
 /// <summary>
-/// Sends email via SMTP when <see cref="EmailOptions.Enabled"/> is true; otherwise logs the message
-/// (including password-reset links) so local development still works.
+/// Sends transactional email through SMTP (MailKit). When delivery is disabled, the message is
+/// not sent and the body is not written to logs.
 /// </summary>
 public sealed class EmailNotificationService : IEmailNotificationService
 {
@@ -30,39 +32,84 @@ public sealed class EmailNotificationService : IEmailNotificationService
         string body,
         CancellationToken cancellationToken = default)
     {
+        var result = await SendMessageAsync(
+            new EmailMessage(toEmail, subject, body),
+            cancellationToken);
+
+        if (!result.Delivered && result.ProviderConfigured)
+        {
+            throw new InvalidOperationException("Email delivery failed.");
+        }
+    }
+
+    public async Task<EmailDeliveryResult> SendMessageAsync(
+        EmailMessage message,
+        CancellationToken cancellationToken = default)
+    {
         if (!_options.Enabled || string.IsNullOrWhiteSpace(_options.SmtpHost))
         {
+            _logger.LogWarning(
+                "Email delivery is disabled. Message was not sent. To={Email} Subject={Subject}",
+                message.ToEmail,
+                message.Subject);
+            return new EmailDeliveryResult(false, false);
+        }
+
+        if (string.IsNullOrWhiteSpace(_options.FromAddress))
+        {
+            _logger.LogError("Email delivery is enabled but Email:FromAddress is empty.");
+            throw new InvalidOperationException("Email sender address is not configured.");
+        }
+
+        try
+        {
+            var mime = new MimeMessage();
+            mime.From.Add(new MailboxAddress(_options.FromName, _options.FromAddress));
+            mime.To.Add(MailboxAddress.Parse(message.ToEmail));
+            mime.Subject = message.Subject;
+
+            var builder = new BodyBuilder { TextBody = message.TextBody };
+            if (!string.IsNullOrWhiteSpace(message.HtmlBody))
+            {
+                builder.HtmlBody = message.HtmlBody;
+            }
+
+            mime.Body = builder.ToMessageBody();
+
+            using var client = new SmtpClient
+            {
+                Timeout = Math.Clamp(_options.TimeoutSeconds, 5, 60) * 1000
+            };
+
+            var socket = !_options.UseSsl
+                ? SecureSocketOptions.None
+                : _options.SmtpPort == 465
+                    ? SecureSocketOptions.SslOnConnect
+                    : SecureSocketOptions.StartTls;
+
+            await client.ConnectAsync(_options.SmtpHost, _options.SmtpPort, socket, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(_options.Username))
+            {
+                await client.AuthenticateAsync(_options.Username, _options.Password, cancellationToken);
+            }
+
+            await client.SendAsync(mime, cancellationToken);
+            await client.DisconnectAsync(true, cancellationToken);
+
             _logger.LogInformation(
-                "Email delivery disabled. To={Email} Subject={Subject} Body={Body}",
-                toEmail,
-                subject,
-                body);
-            return;
+                "Email sent. To={Email} Subject={Subject}",
+                message.ToEmail,
+                message.Subject);
+            return new EmailDeliveryResult(true, true);
         }
-
-        using var message = new MailMessage
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            From = new MailAddress(_options.FromAddress, _options.FromName),
-            Subject = subject,
-            Body = body,
-            IsBodyHtml = false,
-        };
-        message.To.Add(toEmail);
-
-        using var client = new SmtpClient(_options.SmtpHost, _options.SmtpPort)
-        {
-            EnableSsl = _options.UseSsl,
-            DeliveryMethod = SmtpDeliveryMethod.Network,
-        };
-
-        if (!string.IsNullOrWhiteSpace(_options.Username))
-        {
-            client.Credentials = new NetworkCredential(_options.Username, _options.Password);
+            _logger.LogError(
+                "Email delivery failed. To={Email} Subject={Subject} ErrorType={ErrorType}",
+                message.ToEmail,
+                message.Subject,
+                ex.GetType().Name);
+            throw;
         }
-
-        cancellationToken.ThrowIfCancellationRequested();
-        await client.SendMailAsync(message, cancellationToken);
-
-        _logger.LogInformation("Email sent to {Email} with subject {Subject}", toEmail, subject);
     }
 }

@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BusinessOS.Infrastructure.Data;
 
-public class BusinessOSDbContext
+public partial class BusinessOSDbContext
     : IdentityDbContext<ApplicationUser, ApplicationRole, string>, IApplicationDbContext
 {
     private readonly Guid _tenantId;
@@ -74,6 +74,8 @@ public class BusinessOSDbContext
     public DbSet<VoicePreference> VoicePreferences => Set<VoicePreference>();
     public DbSet<AgentWorkflowRun> AgentWorkflowRuns => Set<AgentWorkflowRun>();
     public DbSet<AgentWorkflowStep> AgentWorkflowSteps => Set<AgentWorkflowStep>();
+    public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
+    public DbSet<ProcessedWebhookEvent> ProcessedWebhookEvents => Set<ProcessedWebhookEvent>();
 
     public override Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default)
@@ -236,6 +238,9 @@ public class BusinessOSDbContext
 
         builder.Entity<BillingTransaction>()
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<IdempotencyRecord>()
+            .HasQueryFilter(x => x.TenantId == _tenantId);
 
         builder.Entity<WorkTask>()
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);

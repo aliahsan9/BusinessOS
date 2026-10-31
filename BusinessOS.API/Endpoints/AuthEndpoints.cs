@@ -3,11 +3,14 @@ using BusinessOS.API.OpenApi;
 using BusinessOS.API.Security;
 using BusinessOS.Application.Common.Authorization;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Auth.Commands.CompleteGoogleRegistration;
 using BusinessOS.Application.Features.Auth.Commands.ForgotPassword;
+using BusinessOS.Application.Features.Auth.Commands.GoogleSignIn;
 using BusinessOS.Application.Features.Auth.Commands.Login;
 using BusinessOS.Application.Features.Auth.Commands.Register;
 using BusinessOS.Application.Features.Auth.Commands.ResetPassword;
 using BusinessOS.Application.Features.Auth.DTOs;
+using BusinessOS.Application.Features.Auth.Google;
 using BusinessOS.Application.Features.Auth.Services;
 using BusinessOS.Application.Features.Team.DTOs;
 using BusinessOS.Application.Features.Team.Services;
@@ -154,6 +157,26 @@ public static class AuthEndpoints
             .Produces<PasswordResetResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest);
 
+        group.MapPost("/google", GoogleSignIn)
+            .WithName("GoogleSignIn")
+            .WithSummary("Sign in or start sign-up with a Google ID token")
+            .WithDescription(
+                "Validates a Google ID token and either issues a BusinessOS session or returns a short-lived continuation token so a new workspace can be created. Does not link an existing password account automatically.")
+            .Produces<GoogleSignInResponse>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+
+        group.MapPost("/google/complete", CompleteGoogleRegistration)
+            .WithName("CompleteGoogleRegistration")
+            .WithSummary("Finish Google sign-up by creating a tenant")
+            .WithDescription(
+                "Creates a new tenant and owner from a server-issued Google continuation token. The Google subject and email come from that token, not from client-supplied identity fields.")
+            .Produces<AuthResponse>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+
         group.MapGet("/invitation/{token}", GetInvitationPreview)
             .WithName("GetInvitationPreview")
             .WithSummary("Preview a team invitation")
@@ -292,6 +315,44 @@ public static class AuthEndpoints
         CancellationToken cancellationToken)
     {
         var result = await sender.Send(command, cancellationToken);
+        return Results.Ok(result);
+    }
+
+    private static async Task<IResult> GoogleSignIn(
+        GoogleSignInCommand command,
+        ISender sender,
+        IAuthSessionService sessions,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(command, cancellationToken);
+        if (result.Status == GoogleSignInStatus.Authenticated && result.Auth is not null)
+        {
+            await AuthCookieWriter.IssueAsync(
+                httpContext,
+                sessions,
+                result.Auth.UserId,
+                result.Auth.TenantId,
+                cancellationToken);
+        }
+
+        return Results.Ok(result);
+    }
+
+    private static async Task<IResult> CompleteGoogleRegistration(
+        CompleteGoogleRegistrationCommand command,
+        ISender sender,
+        IAuthSessionService sessions,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(command, cancellationToken);
+        await AuthCookieWriter.IssueAsync(
+            httpContext,
+            sessions,
+            result.UserId,
+            result.TenantId,
+            cancellationToken);
         return Results.Ok(result);
     }
 

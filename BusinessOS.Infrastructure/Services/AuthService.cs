@@ -1,15 +1,20 @@
+using System.Security.Cryptography;
+using System.Text;
 using BusinessOS.Application.Common.Authorization;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Options;
 using BusinessOS.Application.Features.Activities.DTOs;
 using BusinessOS.Application.Features.Activities.Services;
+using BusinessOS.Application.Features.Auth;
 using BusinessOS.Application.Features.Auth.DTOs;
 using BusinessOS.Application.Features.Auth.Services;
+using BusinessOS.Application.Features.Notifications.DTOs;
 using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -17,9 +22,6 @@ namespace BusinessOS.Infrastructure.Services;
 
 public sealed class AuthService : IAuthService
 {
-    private const string ForgotPasswordSuccessMessage =
-        "If an account exists for that email, password reset instructions have been sent.";
-
     private readonly IIdentityService _identityService;
     private readonly ITenantRegistrationService _tenantRegistrationService;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
@@ -29,6 +31,7 @@ public sealed class AuthService : IAuthService
     private readonly IRbacAuditService _auditService;
     private readonly IActivityService _activityService;
     private readonly IEmailNotificationService _emailService;
+    private readonly IMemoryCache _resetAttempts;
     private readonly AppOptions _appOptions;
     private readonly ILogger<AuthService> _logger;
 
@@ -43,6 +46,7 @@ public sealed class AuthService : IAuthService
         IActivityService activityService,
         IEmailNotificationService emailService,
         IOptions<AppOptions> appOptions,
+        IMemoryCache resetAttempts,
         ILogger<AuthService> logger)
     {
         _identityService = identityService;
@@ -55,6 +59,7 @@ public sealed class AuthService : IAuthService
         _activityService = activityService;
         _emailService = emailService;
         _appOptions = appOptions.Value;
+        _resetAttempts = resetAttempts;
         _logger = logger;
     }
 
@@ -72,87 +77,7 @@ public sealed class AuthService : IAuthService
             throw new UnauthorizedException("Invalid credentials");
         }
 
-        _tenantProvider.SetTenantId(user.TenantId);
-        var securityVersion = 1;
-
-        var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        if (dbContext is not null)
-        {
-            await using (dbContext)
-            {
-                var appUser = await dbContext.Users.FirstOrDefaultAsync(x => x.Id == user.Id, cancellationToken);
-                if (appUser is not null)
-                {
-                    if (!appUser.IsActive)
-                    {
-                        _logger.LogWarning(
-                            "Login blocked for deactivated user {UserId} ({Email})",
-                            user.Id,
-                            email);
-                        throw new UnauthorizedException("Account is deactivated.");
-                    }
-
-                    securityVersion = appUser.SecurityVersion;
-                    appUser.LastActiveAt = DateTime.UtcNow;
-                    await dbContext.SaveChangesAsync(cancellationToken);
-                }
-            }
-        }
-
-        var roles = await _roleRepository.GetUserRoleNamesAsync(user.Id, cancellationToken);
-        if (roles.Count == 0)
-        {
-            roles = await _identityService.GetRolesAsync(user, cancellationToken);
-        }
-
-        var permissions = await _roleRepository.GetUserPermissionCodesAsync(user.Id, cancellationToken);
-        var token = _jwtTokenGenerator.GenerateToken(
-            user.Id, user.Email, user.TenantId, roles, permissions, securityVersion);
-
-        _logger.LogInformation(
-            "User {UserId} ({Email}) logged in successfully for Tenant {TenantId}. JWT generated.",
-            user.Id,
-            user.Email,
-            user.TenantId);
-
-        await _auditService.LogAsync(
-            "UserLogin",
-            "User",
-            user.Id,
-            null,
-            RbacAuditService.Serialize(new { user.Email }),
-            cancellationToken);
-
-        var userName = user.Email.Split('@')[0];
-        var entityId = Guid.TryParse(user.Id, out var parsedUserId) ? parsedUserId : Guid.Empty;
-        try
-        {
-            await _activityService.LogForUserAsync(
-                user.Id,
-                userName,
-                new LogActivityRequest(
-                    ActivityActions.Login,
-                    "User",
-                    entityId,
-                    userName,
-                    RbacAuditService.Serialize(new { user.Email })),
-                cancellationToken);
-        }
-        catch
-        {
-            // Activity logging should not block authentication.
-        }
-
-        return new AuthResponse
-        {
-            Token = token,
-            UserId = user.Id,
-            Email = user.Email,
-            TenantId = user.TenantId,
-            Roles = roles,
-            Permissions = permissions,
-            ExpiresAt = _jwtTokenGenerator.GetTokenExpiration()
-        };
+        return await CreateSessionForUserAsync(user, cancellationToken);
     }
 
     public async Task<AuthResponse> RegisterAsync(
@@ -201,6 +126,234 @@ public sealed class AuthService : IAuthService
         var user = await _identityService.FindByEmailAsync(email, cancellationToken)
             ?? throw new BadRequestException("User registration failed.");
 
+        return await FinalizeOwnerRegistrationAsync(user, tenantId, dbContext, cancellationToken);
+    }
+
+    public async Task<AuthResponse> RegisterExternalUserAsync(
+        string email,
+        string firstName,
+        string lastName,
+        string businessName,
+        string loginProvider,
+        string providerKey,
+        string? avatarUrl,
+        CancellationToken cancellationToken)
+    {
+        var existingUser = await _identityService.FindByEmailAsync(email, cancellationToken);
+        if (existingUser is not null)
+            throw new ConflictException("A user with this email already exists.");
+
+        var tenantId = Guid.NewGuid();
+        _tenantProvider.SetTenantId(tenantId);
+
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+        await _tenantRegistrationService.CreateTenantAsync(
+            new CreateTenantOptions(
+                tenantId,
+                businessName,
+                email,
+                "pending",
+                "UTC",
+                "PKR",
+                "General"),
+            cancellationToken);
+
+        var createResult = await _identityService.CreateExternalUserAsync(
+            new CreateExternalUserRequest(
+                email,
+                firstName,
+                lastName,
+                tenantId,
+                loginProvider,
+                providerKey,
+                avatarUrl),
+            cancellationToken);
+
+        if (!createResult.Succeeded)
+            throw new BadRequestException(string.Join(", ", createResult.Errors));
+
+        var user = await _identityService.FindByEmailAsync(email, cancellationToken)
+            ?? throw new BadRequestException("User registration failed.");
+
+        _logger.LogInformation(
+            "External registration created tenant {TenantId} for provider {Provider}",
+            tenantId,
+            loginProvider);
+
+        return await FinalizeOwnerRegistrationAsync(user, tenantId, dbContext, cancellationToken);
+    }
+
+    public async Task<AuthResponse> CreateSessionForUserAsync(
+        UserAuthResult user,
+        CancellationToken cancellationToken,
+        string auditAction = "UserLogin")
+    {
+        if (await _identityService.IsLockedOutAsync(user.Id, cancellationToken))
+        {
+            _logger.LogWarning("Login blocked for locked out user {UserId}", user.Id);
+            throw new UnauthorizedException("Account is temporarily locked.");
+        }
+
+        _tenantProvider.SetTenantId(user.TenantId);
+        var securityVersion = 1;
+
+        var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        if (dbContext is not null)
+        {
+            await using (dbContext)
+            {
+                var appUser = await dbContext.Users.FirstOrDefaultAsync(x => x.Id == user.Id, cancellationToken);
+                if (appUser is not null)
+                {
+                    if (!appUser.IsActive)
+                    {
+                        _logger.LogWarning(
+                            "Login blocked for deactivated user {UserId}",
+                            user.Id);
+                        throw new UnauthorizedException("Account is deactivated.");
+                    }
+
+                    securityVersion = appUser.SecurityVersion;
+                    appUser.LastActiveAt = DateTime.UtcNow;
+                    await dbContext.SaveChangesAsync(cancellationToken);
+                }
+            }
+        }
+
+        var roles = await _roleRepository.GetUserRoleNamesAsync(user.Id, cancellationToken);
+        if (roles.Count == 0)
+        {
+            roles = await _identityService.GetRolesAsync(user, cancellationToken);
+        }
+
+        var permissions = await _roleRepository.GetUserPermissionCodesAsync(user.Id, cancellationToken);
+        var token = _jwtTokenGenerator.GenerateToken(
+            user.Id, user.Email, user.TenantId, roles, permissions, securityVersion);
+
+        _logger.LogInformation(
+            "User {UserId} signed in for Tenant {TenantId}. AuditAction={AuditAction}",
+            user.Id,
+            user.TenantId,
+            auditAction);
+
+        await _auditService.LogAsync(
+            auditAction,
+            "User",
+            user.Id,
+            null,
+            RbacAuditService.Serialize(new { user.Email }),
+            cancellationToken);
+
+        var userName = user.Email.Split('@')[0];
+        var entityId = Guid.TryParse(user.Id, out var parsedUserId) ? parsedUserId : Guid.Empty;
+        try
+        {
+            await _activityService.LogForUserAsync(
+                user.Id,
+                userName,
+                new LogActivityRequest(
+                    ActivityActions.Login,
+                    "User",
+                    entityId,
+                    userName,
+                    RbacAuditService.Serialize(new { user.Email })),
+                cancellationToken);
+        }
+        catch
+        {
+            // Activity logging should not block authentication.
+        }
+
+        return new AuthResponse
+        {
+            Token = token,
+            UserId = user.Id,
+            Email = user.Email,
+            TenantId = user.TenantId,
+            Roles = roles,
+            Permissions = permissions,
+            ExpiresAt = _jwtTokenGenerator.GetTokenExpiration()
+        };
+    }
+
+    public async Task<PasswordResetResponse> ForgotPasswordAsync(
+        string email,
+        CancellationToken cancellationToken)
+    {
+        var normalizedEmail = email.Trim();
+        if (!TryConsumeResetRequest(normalizedEmail))
+        {
+            _logger.LogWarning("Password reset request throttled for an email hash.");
+            return new PasswordResetResponse { Message = PasswordResetMessages.PublicSuccessMessage };
+        }
+
+        var token = await _identityService.GeneratePasswordResetTokenAsync(normalizedEmail, cancellationToken);
+        if (token is null)
+        {
+            _logger.LogInformation(
+                "Password reset request did not produce a token for {Email}",
+                normalizedEmail);
+            return new PasswordResetResponse { Message = PasswordResetMessages.PublicSuccessMessage };
+        }
+
+        try
+        {
+            var resetUrl = PasswordResetLink.Build(_appOptions.FrontendBaseUrl, normalizedEmail, token);
+            var hours = Math.Clamp(_appOptions.PasswordResetTokenHours, 1, 168);
+            var delivery = await _emailService.SendMessageAsync(
+                PasswordResetEmail.Compose(normalizedEmail, resetUrl, hours),
+                cancellationToken);
+
+            if (!delivery.Delivered)
+            {
+                _logger.LogError(
+                    "Password reset email was not delivered. ProviderConfigured={ProviderConfigured}",
+                    delivery.ProviderConfigured);
+            }
+            else
+            {
+                _logger.LogInformation("Password reset email accepted by the provider.");
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(
+                "Password reset email delivery failed. ErrorType={ErrorType} Detail={Detail}",
+                ex.GetType().Name,
+                SafeEmailError(ex));
+        }
+
+        return new PasswordResetResponse { Message = PasswordResetMessages.PublicSuccessMessage };
+    }
+
+    public async Task<PasswordResetResponse> ResetPasswordAsync(
+        string email,
+        string token,
+        string newPassword,
+        CancellationToken cancellationToken)
+    {
+        var result = await _identityService.ResetPasswordWithTokenAsync(
+            email.Trim(),
+            token,
+            newPassword,
+            cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            throw new BadRequestException(string.Join("; ", PasswordResetMessages.PublicErrors(result.Errors)));
+        }
+
+        _logger.LogInformation("Password reset completed.");
+        return new PasswordResetResponse { Message = PasswordResetMessages.ResetSucceededMessage };
+    }
+
+    private async Task<AuthResponse> FinalizeOwnerRegistrationAsync(
+        UserAuthResult user,
+        Guid tenantId,
+        BusinessOSDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
         await _identityService.AddToRoleAsync(user, RoleNames.Owner, cancellationToken);
         await AssignRbacRoleAsync(user.Id, RoleNames.Owner, cancellationToken);
 
@@ -229,9 +382,8 @@ public sealed class AuthService : IAuthService
             user.Id, user.Email, user.TenantId, roles, permissions, registeredVersion);
 
         _logger.LogInformation(
-            "User {UserId} ({Email}) registered successfully for Tenant {TenantId}. JWT generated.",
+            "User {UserId} registered for Tenant {TenantId}.",
             user.Id,
-            user.Email,
             tenantId);
 
         return new AuthResponse
@@ -246,71 +398,36 @@ public sealed class AuthService : IAuthService
         };
     }
 
-    public async Task<PasswordResetResponse> ForgotPasswordAsync(
-        string email,
-        CancellationToken cancellationToken)
+    private bool TryConsumeResetRequest(string normalizedEmail)
     {
-        var normalizedEmail = email.Trim();
-        var token = await _identityService.GeneratePasswordResetTokenAsync(normalizedEmail, cancellationToken);
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalizedEmail.ToLowerInvariant())));
+        var counter = _resetAttempts.GetOrCreate(
+            "auth:password-reset:" + hash,
+            entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1);
+                return new ResetAttemptCounter();
+            });
 
-        if (token is not null)
+        if (counter is null)
         {
-            var baseUrl = _appOptions.FrontendBaseUrl.TrimEnd('/');
-            var resetUrl =
-                $"{baseUrl}/auth/reset-password" +
-                $"?email={Uri.EscapeDataString(normalizedEmail)}" +
-                $"&token={Uri.EscapeDataString(token)}";
-
-            await _emailService.SendAsync(
-                normalizedEmail,
-                "Reset your BusinessOS password",
-                BuildResetEmailBody(resetUrl),
-                cancellationToken);
-
-            _logger.LogInformation("Password reset email queued for {Email}", normalizedEmail);
-        }
-        else
-        {
-            _logger.LogInformation(
-                "Password reset requested for unknown or inactive email {Email}",
-                normalizedEmail);
+            return true;
         }
 
-        return new PasswordResetResponse { Message = ForgotPasswordSuccessMessage };
+        return Interlocked.Increment(ref counter.Count) <= 5;
     }
 
-    public async Task<PasswordResetResponse> ResetPasswordAsync(
-        string email,
-        string token,
-        string newPassword,
-        CancellationToken cancellationToken)
+    private static string SafeEmailError(Exception exception)
     {
-        var result = await _identityService.ResetPasswordWithTokenAsync(
-            email.Trim(),
-            token,
-            newPassword,
-            cancellationToken);
-
-        if (!result.Succeeded)
+        var message = exception.Message ?? exception.GetType().Name;
+        var tokenIndex = message.IndexOf("token=", StringComparison.OrdinalIgnoreCase);
+        if (tokenIndex >= 0)
         {
-            throw new BadRequestException(
-                result.Errors.Count > 0
-                    ? string.Join("; ", result.Errors)
-                    : "Unable to reset password. The link may be invalid or expired.");
+            message = message[..tokenIndex] + "token=[redacted]";
         }
 
-        return new PasswordResetResponse { Message = "Your password has been reset successfully." };
+        return message.Length > 300 ? message[..300] : message;
     }
-
-    private static string BuildResetEmailBody(string resetUrl) =>
-        $"""
-        You requested a password reset for your BusinessOS account.
-
-        Open this link to choose a new password (valid for a limited time):
-        {resetUrl}
-
-        If you did not request this, you can ignore this email.
-        """;
 
     private async Task AssignRbacRoleAsync(string userId, string roleName, CancellationToken cancellationToken)
     {
@@ -319,5 +436,10 @@ public sealed class AuthService : IAuthService
         {
             await _roleRepository.AssignRoleToUserAsync(userId, role.Id, cancellationToken);
         }
+    }
+
+    private sealed class ResetAttemptCounter
+    {
+        public int Count;
     }
 }
