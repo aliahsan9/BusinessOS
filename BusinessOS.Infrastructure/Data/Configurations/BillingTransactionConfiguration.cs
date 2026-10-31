@@ -12,7 +12,8 @@ public class BillingTransactionConfiguration : IEntityTypeConfiguration<BillingT
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.TransactionId).HasMaxLength(200).IsRequired();
-        builder.Property(x => x.Amount).AsMoney();
+        builder.Property(x => x.Amount).HasPrecision(18, 3);
+        builder.Property(x => x.PaymentMethod).HasMaxLength(80);
         builder.Property(x => x.Currency).HasMaxLength(10).IsRequired();
         builder.Property(x => x.Status).HasConversion<int>();
         builder.Property(x => x.Provider).HasConversion<int>();

@@ -59,7 +59,8 @@ public sealed class AiChatService : IAiChatService
         try
         {
             await _featureFlags.EnsureFeatureEnabledAsync(FeatureFlags.AiAssistant, cancellationToken);
-            await _limitService.EnsureWithinLimitAsync("ai", cancellationToken);
+            if (!string.IsNullOrWhiteSpace(request.Message))
+                await _limitService.TryConsumeAiRequestAsync(null, cancellationToken: cancellationToken);
 
             var message = request.Message.Trim();
             var page = _contextService.BuildPageContext(request);
@@ -136,7 +137,6 @@ public sealed class AiChatService : IAiChatService
             if (!string.IsNullOrWhiteSpace(message))
             {
                 await SaveConversationAsync(message, reply, cancellationToken);
-                await _limitService.IncrementAiUsageAsync(cancellationToken);
             }
 
             stopwatch.Stop();

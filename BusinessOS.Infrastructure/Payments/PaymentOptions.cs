@@ -43,4 +43,34 @@ public class BillingOptions
 
     public decimal TaxRate { get; set; } = 0m;
     public int TrialDays { get; set; } = 14;
+    public string SalesEmail { get; set; } = "sales@businessos.app";
+    public string[] AllowedReturnOrigins { get; set; } = ["http://localhost:4200"];
+    public string WebhookBaseUrl { get; set; } = "http://localhost:5162";
+}
+
+public class TapOptions
+{
+    public const string SectionName = "Tap";
+
+    public bool Enabled { get; set; }
+    public bool Sandbox { get; set; } = true;
+    public bool RecurringEnabled { get; set; }
+    public string SecretKey { get; set; } = string.Empty;
+    public string WebhookSecret { get; set; } = string.Empty;
+    public string MerchantCountry { get; set; } = string.Empty;
+    public string ApiBaseUrl { get; set; } = "https://api.tap.company/v2/";
+}
+
+public class PayTabsOptions
+{
+    public const string SectionName = "PayTabs";
+
+    public bool Enabled { get; set; }
+    public bool Sandbox { get; set; } = true;
+    public bool RecurringEnabled { get; set; }
+    public string ServerKey { get; set; } = string.Empty;
+    public string ProfileId { get; set; } = string.Empty;
+    public string Region { get; set; } = "sa";
+    public string MerchantCountry { get; set; } = string.Empty;
+    public string ClientKey { get; set; } = string.Empty;
 }

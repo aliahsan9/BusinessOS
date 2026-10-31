@@ -11,6 +11,7 @@ public class TenantUsageConfiguration : IEntityTypeConfiguration<TenantUsage>
         builder.ToTable("TenantUsage");
         builder.HasKey(x => x.Id);
 
+        builder.Property(x => x.EstimatedProviderCostUsd).HasPrecision(18, 6);
         builder.HasIndex(x => x.TenantId).IsUnique();
 
         builder.HasOne(x => x.Tenant)

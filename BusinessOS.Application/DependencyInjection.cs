@@ -50,6 +50,10 @@ public static class DependencyInjection
             typeof(IPipelineBehavior<,>),
             typeof(ValidationBehavior<,>));
 
+        services.AddTransient(
+            typeof(IPipelineBehavior<,>),
+            typeof(PlanLimitBehavior<,>));
+
         return services;
     }
 }

@@ -4,7 +4,10 @@ namespace BusinessOS.Application.Features.Billing.Services;
 
 public interface IBillingService
 {
-    Task<IReadOnlyList<SubscriptionPlanDto>> GetPlansAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<SubscriptionPlanDto>> GetPlansAsync(
+        string? currency = null,
+        string? country = null,
+        CancellationToken cancellationToken = default);
     Task<CurrentPlanDto> GetCurrentPlanAsync(CancellationToken cancellationToken = default);
     Task<BillingUsageDto> GetUsageAsync(CancellationToken cancellationToken = default);
     Task<BillingDashboardDto> GetDashboardAsync(CancellationToken cancellationToken = default);
@@ -27,6 +30,21 @@ public interface IBillingService
         string? currency,
         string idempotencyKey,
         CancellationToken cancellationToken = default);
+    Task<PlanChangeResultDto> ChangePlanAsync(
+        ChangePlanRequest request,
+        CancellationToken cancellationToken = default,
+        string? idempotencyKey = null);
+    Task<CurrentPlanDto> ReactivateAsync(CancellationToken cancellationToken = default);
+    Task<CurrentPlanDto> ConfirmSandboxCheckoutAsync(string sessionId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<SubscriptionHistoryDto>> GetHistoryAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<PaymentMethodCapabilityDto>> GetPaymentMethodsAsync(
+        string? currency,
+        string? country,
+        CancellationToken cancellationToken = default);
+    Task<byte[]> DownloadInvoiceAsync(Guid invoiceId, CancellationToken cancellationToken = default);
+    Task<CurrentPlanDto> SetEnterpriseContractAsync(
+        SetEnterpriseContractRequest request,
+        CancellationToken cancellationToken = default);
 }
 
 public interface IBillingWebhookService
@@ -34,6 +52,8 @@ public interface IBillingWebhookService
     Task HandleStripeWebhookAsync(string payload, string signature, CancellationToken cancellationToken = default);
     Task HandleJazzCashWebhookAsync(string payload, CancellationToken cancellationToken = default);
     Task HandleEasyPaisaWebhookAsync(string payload, CancellationToken cancellationToken = default);
+    Task HandleTapWebhookAsync(string payload, string? signature, CancellationToken cancellationToken = default);
+    Task HandlePayTabsWebhookAsync(string payload, string? signature, CancellationToken cancellationToken = default);
 }
 
 public interface IBillingMetricsService
@@ -54,4 +74,6 @@ public static class FeatureFlags
     public const string PdfReports = "pdf_reports";
     public const string AdvancedReports = "advanced_reports";
     public const string PrioritySupport = "priority_support";
+    public const string ApiAccess = "api_access";
+    public const string MultiBranch = "multi_branch";
 }

@@ -14,7 +14,8 @@ public interface IStripePaymentService
         string? cancelUrl,
         string? existingCustomerId,
         CancellationToken cancellationToken = default,
-        string? operationKey = null);
+        string? operationKey = null,
+        string? currency = null);
 
     Task<BillingPortalDto> CreateBillingPortalSessionAsync(
         string customerId,
@@ -23,8 +24,36 @@ public interface IStripePaymentService
 
     Task HandleWebhookAsync(string payload, string signature, CancellationToken cancellationToken = default);
 
+    Task SetCancelAtPeriodEndAsync(
+        string stripeSubscriptionId,
+        bool cancelAtPeriodEnd,
+        CancellationToken cancellationToken = default);
+
+    Task CancelSubscriptionNowAsync(
+        string stripeSubscriptionId,
+        CancellationToken cancellationToken = default);
+
+    Task<StripeSubscriptionChange> ChangeSubscriptionPriceAsync(
+        string stripeSubscriptionId,
+        Guid tenantId,
+        Guid planId,
+        string planName,
+        string billingInterval,
+        decimal recurringAmount,
+        string currency,
+        string? idempotencyKey,
+        CancellationToken cancellationToken = default);
+
     bool IsConfigured { get; }
 }
+
+public sealed record StripeSubscriptionChange(
+    bool Confirmed,
+    string Status,
+    DateTime? PeriodEnd,
+    decimal AmountDue,
+    string Currency,
+    string? InvoiceId);
 
 public interface IJazzCashPaymentService
 {

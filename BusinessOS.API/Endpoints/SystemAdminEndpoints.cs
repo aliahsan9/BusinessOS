@@ -31,6 +31,11 @@ public static class SystemAdminEndpoints
             .WithName("GetEnvironmentInfo")
             .Produces<EnvironmentInfoResponse>(StatusCodes.Status200OK);
 
+        group.MapPost("/enterprise-contracts", SetEnterpriseContract)
+            .RequirePermission(PermissionCodes.SystemAdminView)
+            .WithName("SetEnterpriseContract")
+            .Produces<CurrentPlanDto>(StatusCodes.Status200OK);
+
         group.MapGet("/billing-metrics", GetBillingMetrics)
             .RequirePermission(PermissionCodes.SystemAdminView)
             .WithName("GetBillingMetrics")
@@ -60,6 +65,12 @@ public static class SystemAdminEndpoints
         var result = await systemAdminService.GetEnvironmentInfoAsync(cancellationToken);
         return Results.Ok(result);
     }
+
+    private static async Task<IResult> SetEnterpriseContract(
+        SetEnterpriseContractRequest request,
+        IBillingService billingService,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await billingService.SetEnterpriseContractAsync(request, cancellationToken));
 
     private static async Task<IResult> GetBillingMetrics(
         IBillingMetricsService billingMetricsService,

@@ -22,6 +22,11 @@ public static class BillingEndpoints
             .WithTags("Billing")
             .RequireAuthorization();
 
+        group.MapGet("/subscription", GetCurrentPlan)
+            .RequirePermission(PermissionCodes.SubscriptionView)
+            .WithName("GetBillingSubscription")
+            .Produces<CurrentPlanDto>(StatusCodes.Status200OK);
+
         group.MapGet("/current-plan", GetCurrentPlan)
             .RequirePermission(PermissionCodes.SubscriptionView)
             .WithName("GetCurrentPlan")
@@ -51,6 +56,35 @@ public static class BillingEndpoints
             .RequirePermission(PermissionCodes.SubscriptionView)
             .WithName("GetPaymentProviders")
             .Produces<IReadOnlyList<PaymentProviderDto>>(StatusCodes.Status200OK);
+
+        group.MapPost("/change-plan", ChangePlan)
+            .RequirePermission(PermissionCodes.SubscriptionManage)
+            .WithName("ChangeBillingPlan")
+            .Produces<PlanChangeResultDto>(StatusCodes.Status200OK);
+
+        group.MapPost("/reactivate", Reactivate)
+            .RequirePermission(PermissionCodes.SubscriptionManage)
+            .WithName("ReactivateSubscription")
+            .Produces<CurrentPlanDto>(StatusCodes.Status200OK);
+
+        group.MapPost("/checkout/confirm", ConfirmCheckout)
+            .RequirePermission(PermissionCodes.SubscriptionManage)
+            .WithName("ConfirmSandboxCheckout")
+            .Produces<CurrentPlanDto>(StatusCodes.Status200OK);
+
+        group.MapGet("/subscription/history", GetHistory)
+            .RequirePermission(PermissionCodes.SubscriptionView)
+            .WithName("GetSubscriptionHistory")
+            .Produces<IReadOnlyList<SubscriptionHistoryDto>>(StatusCodes.Status200OK);
+
+        group.MapGet("/payment-methods", GetPaymentMethods)
+            .RequirePermission(PermissionCodes.SubscriptionView)
+            .WithName("GetBillingPaymentMethods")
+            .Produces<IReadOnlyList<PaymentMethodCapabilityDto>>(StatusCodes.Status200OK);
+
+        group.MapGet("/invoices/{id:guid}/download", DownloadInvoice)
+            .RequirePermission(PermissionCodes.SubscriptionView)
+            .WithName("DownloadBillingInvoice");
 
         group.MapPost("/upgrade", UpgradePlan)
             .RequirePermission(PermissionCodes.SubscriptionManage)
@@ -91,6 +125,11 @@ public static class BillingEndpoints
                 "This updates the local ledger. A provider refund is not sent unless a later reconciliation confirms it.")
             .Produces<BillingTransactionDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status409Conflict);
+
+        group.MapPost("/payment-portal", CreatePortal)
+            .RequirePermission(PermissionCodes.SubscriptionManage)
+            .WithName("CreatePaymentPortal")
+            .Produces<BillingPortalDto>(StatusCodes.Status200OK);
 
         group.MapPost("/portal", CreatePortal)
             .RequirePermission(PermissionCodes.SubscriptionManage)
@@ -152,10 +191,26 @@ public static class BillingEndpoints
             .WithName("EasyPaisaWebhook")
             .DisableAntiforgery()
             .AllowAnonymous();
+
+        app.MapPost("/billing/webhook/tap", HandleTapWebhook)
+            .WithTags("Billing")
+            .WithName("TapWebhook")
+            .DisableAntiforgery()
+            .AllowAnonymous();
+
+        app.MapPost("/billing/webhook/paytabs", HandlePayTabsWebhook)
+            .WithTags("Billing")
+            .WithName("PayTabsWebhook")
+            .DisableAntiforgery()
+            .AllowAnonymous();
     }
 
-    private static async Task<IResult> GetPlans(IBillingService billingService, CancellationToken ct) =>
-        Results.Ok(await billingService.GetPlansAsync(ct));
+    private static async Task<IResult> GetPlans(
+        IBillingService billingService,
+        string? currency,
+        string? country,
+        CancellationToken ct) =>
+        Results.Ok(await billingService.GetPlansAsync(currency, country, ct));
 
     private static async Task<IResult> GetCurrentPlan(IBillingService billingService, CancellationToken ct) =>
         Results.Ok(await billingService.GetCurrentPlanAsync(ct));
@@ -267,6 +322,44 @@ public static class BillingEndpoints
         return Results.Ok();
     }
 
+    private static async Task<IResult> ChangePlan(
+        ChangePlanRequest request,
+        HttpContext httpContext,
+        IBillingService billingService,
+        CancellationToken ct)
+    {
+        var key = httpContext.Request.Headers["Idempotency-Key"].FirstOrDefault();
+        return Results.Ok(await billingService.ChangePlanAsync(request, ct, key));
+    }
+
+    private static async Task<IResult> Reactivate(IBillingService billingService, CancellationToken ct) =>
+        Results.Ok(await billingService.ReactivateAsync(ct));
+
+    private static async Task<IResult> ConfirmCheckout(
+        ConfirmCheckoutRequest request,
+        IBillingService billingService,
+        CancellationToken ct) =>
+        Results.Ok(await billingService.ConfirmSandboxCheckoutAsync(request.SessionId, ct));
+
+    private static async Task<IResult> GetHistory(IBillingService billingService, CancellationToken ct) =>
+        Results.Ok(await billingService.GetHistoryAsync(ct));
+
+    private static async Task<IResult> GetPaymentMethods(
+        IBillingService billingService,
+        string? currency,
+        string? country,
+        CancellationToken ct) =>
+        Results.Ok(await billingService.GetPaymentMethodsAsync(currency, country, ct));
+
+    private static async Task<IResult> DownloadInvoice(
+        Guid id,
+        IBillingService billingService,
+        CancellationToken ct)
+    {
+        var bytes = await billingService.DownloadInvoiceAsync(id, ct);
+        return Results.File(bytes, "application/pdf", $"invoice-{id:N}.pdf");
+    }
+
     private static async Task<IResult> HandleEasyPaisaWebhook(
         HttpRequest request,
         IBillingWebhookService webhookService,
@@ -275,6 +368,30 @@ public static class BillingEndpoints
         using var reader = new StreamReader(request.Body);
         var payload = await reader.ReadToEndAsync(ct);
         await webhookService.HandleEasyPaisaWebhookAsync(payload, ct);
+        return Results.Ok();
+    }
+
+    private static async Task<IResult> HandleTapWebhook(
+        HttpRequest request,
+        IBillingWebhookService webhookService,
+        CancellationToken ct)
+    {
+        using var reader = new StreamReader(request.Body);
+        var payload = await reader.ReadToEndAsync(ct);
+        var signature = request.Headers["hashstring"].ToString();
+        await webhookService.HandleTapWebhookAsync(payload, signature, ct);
+        return Results.Ok();
+    }
+
+    private static async Task<IResult> HandlePayTabsWebhook(
+        HttpRequest request,
+        IBillingWebhookService webhookService,
+        CancellationToken ct)
+    {
+        using var reader = new StreamReader(request.Body);
+        var payload = await reader.ReadToEndAsync(ct);
+        var signature = request.Headers["Signature"].ToString();
+        await webhookService.HandlePayTabsWebhookAsync(payload, signature, ct);
         return Results.Ok();
     }
 }

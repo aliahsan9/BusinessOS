@@ -8,13 +8,17 @@ using BusinessOS.Application.Features.Tenant.Services;
 using BusinessOS.Application.Features.Billing.Services;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
+using BusinessOS.Domain.Billing;
 using BusinessOS.Infrastructure.Data;
+using BusinessOS.Infrastructure.Payments;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace BusinessOS.Infrastructure.Services;
 
-public sealed class BillingService : IBillingService, IBillingPlanSyncService
+public sealed partial class BillingService : IBillingService, IBillingPlanSyncService
 {
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
@@ -26,6 +30,9 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
     private readonly IDbContextFactory<BusinessOSDbContext> _dbContextFactory;
     private readonly IIdempotencyService _idempotency;
     private readonly ILogger<BillingService> _logger;
+    private readonly BillingOptions _billingOptions;
+    private readonly IHostEnvironment _environment;
+    private readonly IPaymentProviderSelector _paymentProviders;
 
     public BillingService(
         IApplicationDbContext context,
@@ -37,7 +44,10 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
         IEasyPaisaPaymentService easyPaisaService,
         IDbContextFactory<BusinessOSDbContext> dbContextFactory,
         IIdempotencyService idempotency,
-        ILogger<BillingService> logger)
+        ILogger<BillingService> logger,
+        IOptions<BillingOptions> billingOptions,
+        IHostEnvironment environment,
+        IPaymentProviderSelector paymentProviders)
     {
         _context = context;
         _currentUserService = currentUserService;
@@ -49,18 +59,29 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
         _dbContextFactory = dbContextFactory;
         _idempotency = idempotency;
         _logger = logger;
+        _billingOptions = billingOptions.Value;
+        _environment = environment;
+        _paymentProviders = paymentProviders;
     }
 
-    public async Task<IReadOnlyList<SubscriptionPlanDto>> GetPlansAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<SubscriptionPlanDto>> GetPlansAsync(
+        string? currency = null,
+        string? country = null,
+        CancellationToken cancellationToken = default)
     {
         var plans = await _context.SubscriptionPlans
             .AsNoTracking()
-            .Where(x => x.IsActive)
+            .Where(x => x.IsActive && x.IsPublic)
             .OrderBy(x => x.SortOrder)
             .ThenBy(x => x.MonthlyPrice)
             .ToListAsync(cancellationToken);
 
-        return plans.Select(MapPlan).ToList();
+        var regional = await _context.RegionalPrices
+            .AsNoTracking()
+            .Where(x => x.IsActive)
+            .ToListAsync(cancellationToken);
+
+        return plans.Select(plan => MapPlan(plan, ResolveRegional(plan, regional, currency, country), currency)).ToList();
     }
 
     public async Task<CurrentPlanDto> GetCurrentPlanAsync(CancellationToken cancellationToken = default)
@@ -84,21 +105,31 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
             .FirstOrDefaultAsync(x => x.TenantId == tenantId, cancellationToken)
             ?? new TenantUsage();
 
-        var plan = tenant.Plan;
+        var subscription = await _context.TenantSubscriptions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.TenantId == tenantId, cancellationToken);
+        var limits = EntitlementResolver.Resolve(tenant.Plan, subscription);
+        var unlimitedAi = PlanLimitHelper.IsUnlimited(limits.MaxAiRequests);
         return new BillingUsageDto
         {
             UserCount = usage.UserCount,
-            MaxUsers = plan.MaxUsers,
+            MaxUsers = limits.MaxUsers,
             CustomerCount = usage.CustomerCount,
-            MaxCustomers = plan.MaxCustomers,
+            MaxCustomers = limits.MaxCustomers,
+            ProductCount = usage.ProductCount,
+            MaxProducts = limits.MaxProducts,
             ProjectCount = usage.ProjectCount,
-            MaxProjects = plan.MaxProjects,
+            MaxProjects = limits.MaxProjects,
             TaskCount = usage.TaskCount,
-            MaxTasks = plan.MaxTasks,
+            MaxTasks = limits.MaxTasks,
             StorageUsedMb = usage.StorageUsedMb,
-            MaxStorageMb = plan.MaxStorageMb,
+            MaxStorageMb = limits.MaxStorageMb,
             AiRequestsUsed = usage.AiRequestsUsed,
-            MaxAiRequests = plan.MaxAiRequests,
+            MaxAiRequests = limits.MaxAiRequests,
+            AiRequestsRemaining = unlimitedAi ? SubscriptionPlan.Unlimited : Math.Max(0, limits.MaxAiRequests - usage.AiRequestsUsed),
+            UsersAreCustom = tenant.Plan.IsCustomPricing && PlanLimitHelper.IsUnlimited(limits.MaxUsers),
+            AiRequestsAreCustom = tenant.Plan.IsCustomPricing && unlimitedAi,
+            ResetDate = subscription?.CurrentPeriodEnd ?? usage.AiPeriodStart?.AddMonths(1),
             LastCalculatedAt = usage.LastCalculatedAt
         };
     }
@@ -172,6 +203,9 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
         if (!PlanLimitHelper.IsWithinLimit(usage.TaskCount, targetPlan.MaxTasks))
             violations.Add($"You have {usage.TaskCount} tasks but the {targetPlan.Name} plan allows {PlanLimitHelper.FormatLimit(targetPlan.MaxTasks)}.");
 
+        if (!PlanLimitHelper.IsWithinLimit(usage.ProductCount, targetPlan.MaxProducts))
+            violations.Add($"You have {usage.ProductCount} products but the {targetPlan.Name} plan allows {PlanLimitHelper.FormatLimit(targetPlan.MaxProducts)}.");
+
         if (targetPlan.MaxStorageMb != SubscriptionPlan.Unlimited && usage.StorageUsedMb > targetPlan.MaxStorageMb)
             violations.Add($"You are using {usage.StorageUsedMb} MB but the {targetPlan.Name} plan allows {targetPlan.MaxStorageMb} MB.");
 
@@ -187,25 +221,16 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
 
     public async Task<CurrentPlanDto> UpgradePlanAsync(UpgradePlanRequest request, CancellationToken cancellationToken = default)
     {
-        var (tenant, subscription) = await GetTenantWithSubscriptionAsync(cancellationToken, tracked: true);
+        var result = await ChangePlanAsync(
+            new ChangePlanRequest(request.PlanId, request.BillingInterval, request.Provider, Confirm: true),
+            cancellationToken);
+        if (result.CheckoutRequired)
+        {
+            throw new BadRequestException(
+                "This plan requires a verified checkout. The subscription was not activated.");
+        }
 
-        var plan = await _context.SubscriptionPlans
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == request.PlanId && x.IsActive, cancellationToken)
-            ?? throw new NotFoundException("Plan not found.");
-
-        var oldPlanName = tenant.Plan?.Name ?? tenant.SubscriptionPlan;
-        await ApplyPlanChangeAsync(tenant, subscription, plan, request.BillingInterval, request.Provider, cancellationToken);
-
-        await _auditService.LogAsync(
-            tenant.Id,
-            "SubscriptionUpgraded",
-            "TenantSubscription",
-            RbacAuditService.Serialize(new { OldPlan = oldPlanName }),
-            RbacAuditService.Serialize(new { NewPlan = plan.Name, request.BillingInterval }),
-            cancellationToken: cancellationToken);
-
-        return MapCurrentPlan(tenant, subscription);
+        return result.Subscription ?? await GetCurrentPlanAsync(cancellationToken);
     }
 
     public async Task<CurrentPlanDto> DowngradePlanAsync(DowngradePlanRequest request, CancellationToken cancellationToken = default)
@@ -219,12 +244,17 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
         var (tenant, subscription) = await GetTenantWithSubscriptionAsync(cancellationToken, tracked: true);
 
         var plan = await _context.SubscriptionPlans
-            .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == request.PlanId && x.IsActive, cancellationToken)
             ?? throw new NotFoundException("Plan not found.");
 
+        if (!string.IsNullOrWhiteSpace(subscription.StripeSubscriptionId))
+        {
+            throw new BadRequestException(
+                "This subscription is billed by Stripe. Change the plan through checkout so Stripe can prorate the invoice.");
+        }
+
         var oldPlanName = tenant.Plan?.Name ?? tenant.SubscriptionPlan;
-        await ApplyPlanChangeAsync(tenant, subscription, plan, subscription.BillingInterval.ToString(), subscription.PaymentProvider.ToString(), cancellationToken);
+        await ApplyPlanChangeAsync(tenant, subscription, plan, subscription.BillingInterval.ToString(), subscription.PaymentProvider.ToString(), cancellationToken, verified: true);
 
         await _auditService.LogAsync(
             tenant.Id,
@@ -241,6 +271,14 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
     {
         var (tenant, subscription) = await GetTenantWithSubscriptionAsync(cancellationToken, tracked: true);
 
+        if (_stripeService.IsConfigured && !string.IsNullOrWhiteSpace(subscription.StripeSubscriptionId))
+        {
+            if (request.CancelImmediately)
+                await _stripeService.CancelSubscriptionNowAsync(subscription.StripeSubscriptionId, cancellationToken);
+            else
+                await _stripeService.SetCancelAtPeriodEndAsync(subscription.StripeSubscriptionId, true, cancellationToken);
+        }
+
         if (request.CancelImmediately)
         {
             subscription.Status = SubscriptionStatus.Cancelled;
@@ -250,6 +288,8 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
         else
         {
             subscription.CancelAtPeriodEnd = true;
+            subscription.CancelEffectiveAt = subscription.CurrentPeriodEnd;
+            subscription.AutoRenewEnabled = false;
         }
 
         subscription.UpdatedAt = DateTime.UtcNow;
@@ -314,8 +354,10 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
         var providerName = request.Provider.ToLowerInvariant();
         var yearly = request.BillingInterval.Equals("yearly", StringComparison.OrdinalIgnoreCase)
             || request.BillingInterval.Equals("annual", StringComparison.OrdinalIgnoreCase);
-        var amount = yearly ? plan.AnnualPrice : plan.MonthlyPrice;
-        var currency = providerName is "jazzcash" or "easypaisa" ? "PKR" : "USD";
+        var (amount, currency, priceNote) = await ResolveCheckoutAmountAsync(
+            plan, subscription, yearly, providerName, request.Currency, request.Country, cancellationToken);
+        BillingReturnUrls.Validate(request.SuccessUrl, _billingOptions.AllowedReturnOrigins, _environment.IsDevelopment());
+        BillingReturnUrls.Validate(request.CancelUrl, _billingOptions.AllowedReturnOrigins, _environment.IsDevelopment());
         var hash = CanonicalRequestHasher.BillingCheckout(
             tenantId,
             plan.Id,
@@ -367,6 +409,10 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
             return stored;
 
         var planDto = MapPlan(plan);
+        planDto.MonthlyPrice = yearly ? planDto.MonthlyPrice : amount;
+        planDto.AnnualPrice = yearly ? amount : planDto.AnnualPrice;
+        planDto.Currency = currency;
+        planDto.SettlementCurrency = currency;
         CheckoutSessionDto session;
         try
         {
@@ -376,6 +422,19 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
                     tenantId, planDto, request.BillingInterval, cancellationToken, transaction.TransactionId),
                 "easypaisa" => await _easyPaisaService.InitiatePaymentAsync(
                     tenantId, planDto, request.BillingInterval, cancellationToken, transaction.TransactionId),
+                "tap" or "paytabs" => await _paymentProviders.Require(providerName, currency)
+                    .CreateSubscriptionCheckoutAsync(new ProviderCheckoutCommand(
+                        tenantId,
+                        tenant.Name,
+                        tenant.Email,
+                        planDto,
+                        request.BillingInterval,
+                        amount,
+                        currency,
+                        request.SuccessUrl,
+                        request.CancelUrl,
+                        subscription.StripeCustomerId,
+                        transaction.TransactionId), cancellationToken),
                 _ => await _stripeService.CreateCheckoutSessionAsync(
                     tenantId,
                     tenant.Name,
@@ -386,7 +445,8 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
                     request.CancelUrl,
                     subscription.StripeCustomerId,
                     cancellationToken,
-                    transaction.TransactionId)
+                    transaction.TransactionId,
+                    currency)
             };
         }
         catch (Exception ex) when (IsUnknownProviderOutcome(ex))
@@ -403,6 +463,14 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
                 "The payment provider did not confirm the result. Retry this checkout with the same Idempotency-Key. Do not start a new payment.",
                 ErrorCodes.IdempotencyInProgress);
         }
+
+        session.Amount = amount;
+        session.Currency = currency;
+        session.PlanId = plan.Id;
+        session.BillingInterval = request.BillingInterval;
+        session.PriceNote = priceNote;
+        if (string.IsNullOrWhiteSpace(session.CheckoutUrl) && providerName is "stripe" or "tap" or "paytabs")
+            session.RequiresServerConfirmation = _environment.IsDevelopment() && providerName == "stripe" && !_stripeService.IsConfigured;
 
         transaction.ProviderReference = session.SessionId;
         transaction.Metadata = JsonSerializer.Serialize(session);
@@ -479,20 +547,51 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
             db.TenantSubscriptions.Add(subscription);
         }
 
+        var planChanged = subscription.SubscriptionPlanId != planId;
         tenant.SubscriptionPlanId = planId;
         tenant.SubscriptionPlan = plan.Name;
         tenant.Status = status is SubscriptionStatus.Cancelled or SubscriptionStatus.Expired
             ? TenantStatus.Cancelled
             : TenantStatus.Active;
 
+        var fromStatus = SubscriptionStatusNames.ToApi(subscription.Status);
+        if (planChanged)
+        {
+            subscription.PreserveContract = false;
+            subscription.ContractedLimitsJson = null;
+            subscription.ContractedMonthlyPrice = null;
+            subscription.ContractedAnnualPrice = null;
+            subscription.ContractedCurrency = null;
+        }
+
         subscription.SubscriptionPlanId = planId;
-        subscription.Status = status;
+        subscription.Status = plan.MonthlyPrice == 0 && status == SubscriptionStatus.Active
+            ? SubscriptionStatus.Free
+            : status;
         subscription.BillingInterval = interval;
         subscription.PaymentProvider = provider;
         subscription.StripeCustomerId = stripeCustomerId ?? subscription.StripeCustomerId;
         subscription.StripeSubscriptionId = stripeSubscriptionId ?? subscription.StripeSubscriptionId;
         subscription.CurrentPeriodEnd = periodEnd;
+        subscription.SettlementCurrency ??= string.IsNullOrWhiteSpace(plan.BaseCurrency) ? "USD" : plan.BaseCurrency;
+        subscription.AutoRenewEnabled = subscription.Status is SubscriptionStatus.Active or SubscriptionStatus.Trial &&
+            !subscription.CancelAtPeriodEnd &&
+            provider == PaymentProviderType.Stripe;
+        if (string.IsNullOrWhiteSpace(subscription.PaymentMethodSummary) && provider == PaymentProviderType.Stripe)
+            subscription.PaymentMethodSummary = "Managed in Stripe";
         subscription.UpdatedAt = DateTime.UtcNow;
+        db.SubscriptionHistories.Add(new SubscriptionHistory
+        {
+            TenantId = tenantId,
+            SubscriptionPlanId = planId,
+            Action = "ProviderConfirmed",
+            FromStatus = fromStatus,
+            ToStatus = SubscriptionStatusNames.ToApi(subscription.Status),
+            Currency = subscription.SettlementCurrency,
+            Provider = provider.ToString(),
+            Notes = "Subscription updated from a verified provider event.",
+            CreatedAt = DateTime.UtcNow
+        });
 
         if (status == SubscriptionStatus.Active && subscription.TrialEndDate.HasValue && subscription.TrialEndDate > DateTime.UtcNow)
         {
@@ -740,21 +839,54 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
         SubscriptionPlan plan,
         string billingInterval,
         string provider,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool verified = false,
+        bool startTrial = false)
     {
+        var interval = ParseBillingInterval(billingInterval);
+        var price = interval == BillingInterval.Yearly ? plan.AnnualPrice : plan.MonthlyPrice;
+        if (!verified && price > 0 && !startTrial)
+            throw new BadRequestException("Paid plans are activated only after the payment provider confirms the charge.");
+
+        var fromStatus = SubscriptionStatusNames.ToApi(subscription.Status);
         tenant.SubscriptionPlanId = plan.Id;
         tenant.SubscriptionPlan = plan.Name;
-        subscription.SubscriptionPlanId = plan.Id;
-        subscription.BillingInterval = ParseBillingInterval(billingInterval);
-        subscription.PaymentProvider = ParseProvider(provider);
-        subscription.Status = SubscriptionStatus.Active;
-        subscription.CancelAtPeriodEnd = false;
-        subscription.CurrentPeriodEnd = subscription.BillingInterval == BillingInterval.Yearly
-            ? DateTime.UtcNow.AddYears(1)
-            : DateTime.UtcNow.AddMonths(1);
-        subscription.UpdatedAt = DateTime.UtcNow;
+        tenant.Plan = plan;
         tenant.Status = TenantStatus.Active;
+        subscription.SubscriptionPlanId = plan.Id;
+        subscription.BillingInterval = interval;
+        subscription.PaymentProvider = ParseProvider(provider);
+        subscription.Status = price == 0
+            ? SubscriptionStatus.Free
+            : startTrial ? SubscriptionStatus.Trial : SubscriptionStatus.Active;
+        subscription.CancelAtPeriodEnd = false;
+        subscription.CancelEffectiveAt = null;
+        subscription.ScheduledPlanId = null;
+        subscription.PreserveContract = false;
+        subscription.ContractedMonthlyPrice = null;
+        subscription.ContractedAnnualPrice = null;
+        subscription.ContractedCurrency = null;
+        subscription.ContractedLimitsJson = null;
+        subscription.SettlementCurrency = string.IsNullOrWhiteSpace(plan.BaseCurrency) ? "USD" : plan.BaseCurrency;
+        subscription.AutoRenewEnabled = subscription.Status == SubscriptionStatus.Active &&
+            subscription.PaymentProvider == PaymentProviderType.Stripe &&
+            !string.IsNullOrWhiteSpace(subscription.StripeSubscriptionId);
+        if (startTrial)
+        {
+            subscription.TrialConsumed = true;
+            subscription.TrialEndDate = DateTime.UtcNow.AddDays(plan.TrialDays > 0 ? plan.TrialDays : _billingOptions.TrialDays);
+            subscription.CurrentPeriodEnd = subscription.TrialEndDate;
+        }
+        else
+        {
+            subscription.CurrentPeriodEnd = interval == BillingInterval.Yearly
+                ? DateTime.UtcNow.AddYears(1)
+                : DateTime.UtcNow.AddMonths(1);
+        }
 
+        subscription.UpdatedAt = DateTime.UtcNow;
+        AddHistory(tenant.Id, plan.Id, startTrial ? "TrialStarted" : "PlanChanged", fromStatus,
+            SubscriptionStatusNames.ToApi(subscription.Status), price, subscription.SettlementCurrency, provider, null);
         await _context.SaveChangesAsync(cancellationToken);
         await _limitService.RefreshUsageAsync(tenant.Id, cancellationToken);
     }
@@ -808,14 +940,26 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
     private Guid RequireTenantId() =>
         _currentUserService.TenantId ?? throw new BadRequestException("Tenant context is required.");
 
-    private static SubscriptionPlanDto MapPlan(SubscriptionPlan plan)
+    private static SubscriptionPlanDto MapPlan(
+        SubscriptionPlan plan,
+        RegionalPrice? regional = null,
+        string? requestedCurrency = null)
     {
-        var annualMonthly = plan.AnnualPrice / 12m;
-        var savings = plan.MonthlyPrice > 0
-            ? Math.Round((1 - annualMonthly / plan.MonthlyPrice) * 100, 0)
+        var monthly = regional?.MonthlyAmount ?? plan.MonthlyPrice;
+        var annual = regional?.AnnualAmount ?? plan.AnnualPrice;
+        var currency = regional?.CurrencyCode
+            ?? (string.IsNullOrWhiteSpace(plan.BaseCurrency) ? "USD" : plan.BaseCurrency);
+        var annualMonthly = annual / 12m;
+        var savings = monthly > 0
+            ? decimal.Round((1 - annualMonthly / monthly) * 100m, 0, MidpointRounding.AwayFromZero)
             : 0;
-
-        var features = BuildFeatureList(plan);
+        string? note = regional?.ExchangeRateNote;
+        if (regional is null &&
+            CurrencyMath.TryNormalize(requestedCurrency, out var requested) &&
+            !requested.Equals(currency, StringComparison.OrdinalIgnoreCase))
+        {
+            note = $"No regional price is configured for {requested}. The amount due is in {currency}.";
+        }
 
         return new SubscriptionPlanDto
         {
@@ -823,11 +967,12 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
             Name = plan.Name,
             Slug = plan.Slug,
             Description = plan.Description,
-            MonthlyPrice = plan.MonthlyPrice,
-            AnnualPrice = plan.AnnualPrice,
+            MonthlyPrice = monthly,
+            AnnualPrice = annual,
             AnnualSavingsPercent = savings,
             MaxUsers = plan.MaxUsers,
             MaxCustomers = plan.MaxCustomers,
+            MaxProducts = plan.MaxProducts,
             MaxProjects = plan.MaxProjects,
             MaxTasks = plan.MaxTasks,
             MaxStorageMb = plan.MaxStorageMb,
@@ -837,30 +982,23 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
             HasPdfReports = plan.HasPdfReports,
             HasAdvancedReports = plan.HasAdvancedReports,
             HasPrioritySupport = plan.HasPrioritySupport,
-            Features = features,
+            HasApiAccess = plan.HasApiAccess,
+            HasMultiBranch = plan.HasMultiBranch,
+            InventoryAccess = plan.InventoryAccess,
+            SalesAccess = plan.SalesAccess,
+            TrialDays = plan.TrialDays,
+            IsCustomPricing = plan.IsCustomPricing,
+            IsRecommended = plan.Slug == "professional",
+            Currency = currency,
+            SettlementCurrency = currency,
+            BaseCurrency = string.IsNullOrWhiteSpace(plan.BaseCurrency) ? "USD" : plan.BaseCurrency,
+            BaseMonthlyPrice = plan.MonthlyPrice,
+            BaseAnnualPrice = plan.AnnualPrice,
+            CurrencyScale = CurrencyMath.Scale(currency),
+            PriceNote = note,
+            Features = SubscriptionCatalog.BuildFeatures(plan),
             SortOrder = plan.SortOrder
         };
-    }
-
-    private static List<string> BuildFeatureList(SubscriptionPlan plan)
-    {
-        var features = new List<string>
-        {
-            $"{PlanLimitHelper.FormatLimit(plan.MaxUsers)} Users",
-            $"{PlanLimitHelper.FormatLimit(plan.MaxCustomers)} Customers",
-            $"{PlanLimitHelper.FormatLimit(plan.MaxProjects)} Projects",
-            $"{PlanLimitHelper.FormatLimit(plan.MaxTasks)} Tasks"
-        };
-
-        if (plan.HasAdvancedAnalytics) features.Add("Advanced Analytics");
-        else features.Add("Basic Analytics");
-
-        if (plan.HasPdfReports) features.Add("PDF Reports");
-        if (plan.HasAdvancedReports) features.Add("Advanced Reports");
-        if (plan.HasAiAssistant) features.Add("AI Assistant");
-        if (plan.HasPrioritySupport) features.Add("Priority Support");
-
-        return features;
     }
 
     private static CurrentPlanDto MapCurrentPlan(Tenant tenant, TenantSubscription subscription)
@@ -874,34 +1012,51 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
             trialDaysRemaining = Math.Max(0, (int)Math.Ceiling((subscription.TrialEndDate.Value - DateTime.UtcNow).TotalDays));
         }
 
-        var price = subscription.BillingInterval == BillingInterval.Yearly
-            ? plan?.AnnualPrice ?? 0
-            : plan?.MonthlyPrice ?? 0;
+        var (monthly, annual, contractedCurrency) = plan is null
+            ? (0m, 0m, "USD")
+            : EntitlementResolver.ResolvePrice(plan, subscription);
+        var price = subscription.BillingInterval == BillingInterval.Yearly ? annual : monthly;
+        var currency = subscription.SettlementCurrency
+            ?? contractedCurrency;
+        if (plan?.MonthlyPrice == 0 && subscription.Status == SubscriptionStatus.Trial)
+            subscription.Status = SubscriptionStatus.Free;
 
         return new CurrentPlanDto
         {
             PlanId = plan?.Id ?? tenant.SubscriptionPlanId,
             PlanName = plan?.Name ?? tenant.SubscriptionPlan,
             PlanSlug = plan?.Slug ?? "free",
-            Status = subscription.Status.ToString(),
-            BillingInterval = subscription.BillingInterval.ToString(),
+            Status = plan?.MonthlyPrice == 0 && subscription.Status is SubscriptionStatus.Trial or SubscriptionStatus.Active
+                ? SubscriptionStatusNames.Free
+                : SubscriptionStatusNames.ToApi(subscription.Status),
+            BillingInterval = subscription.BillingInterval == BillingInterval.Yearly ? "Annual" : "Monthly",
             PaymentProvider = subscription.PaymentProvider.ToString(),
             StartDate = subscription.StartDate,
             TrialEndDate = subscription.TrialEndDate,
             CurrentPeriodEnd = subscription.CurrentPeriodEnd,
-            RenewalDate = subscription.CurrentPeriodEnd ?? subscription.TrialEndDate,
+            RenewalDate = subscription.CancelAtPeriodEnd ? null : subscription.CurrentPeriodEnd ?? subscription.TrialEndDate,
             CancelAtPeriodEnd = subscription.CancelAtPeriodEnd,
+            ScheduledCancellationDate = subscription.CancelAtPeriodEnd
+                ? subscription.CancelEffectiveAt ?? subscription.CurrentPeriodEnd
+                : null,
             IsTrialActive = isTrial && trialDaysRemaining > 0,
             TrialDaysRemaining = trialDaysRemaining,
             CurrentPrice = price,
-            Currency = tenant.Currency,
+            Currency = currency,
+            SettlementCurrency = currency,
+            BillingCountry = subscription.BillingCountry,
+            AutoRenew = subscription.AutoRenewEnabled && !subscription.CancelAtPeriodEnd,
+            PaymentMethodSummary = subscription.PaymentMethodSummary,
+            CurrencyScale = CurrencyMath.Scale(currency),
             FeatureFlags = new PlanFeatureFlagsDto
             {
                 HasAiAssistant = plan?.HasAiAssistant ?? false,
                 HasAdvancedAnalytics = plan?.HasAdvancedAnalytics ?? false,
                 HasPdfReports = plan?.HasPdfReports ?? false,
                 HasAdvancedReports = plan?.HasAdvancedReports ?? false,
-                HasPrioritySupport = plan?.HasPrioritySupport ?? false
+                HasPrioritySupport = plan?.HasPrioritySupport ?? false,
+                HasApiAccess = plan?.HasApiAccess ?? false,
+                HasMultiBranch = plan?.HasMultiBranch ?? false
             }
         };
     }
@@ -932,6 +1087,7 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
         Currency = tx.Currency,
         Status = tx.Status.ToString(),
         Provider = tx.Provider.ToString(),
+        PaymentMethod = tx.PaymentMethod,
         Description = tx.Description,
         CreatedAt = tx.CreatedAt,
         CompletedAt = tx.CompletedAt
@@ -949,6 +1105,8 @@ public sealed class BillingService : IBillingService, IBillingPlanSyncService
             "jazzcash" => PaymentProviderType.JazzCash,
             "easypaisa" => PaymentProviderType.EasyPaisa,
             "stripe" => PaymentProviderType.Stripe,
+            "tap" => PaymentProviderType.Tap,
+            "paytabs" => PaymentProviderType.PayTabs,
             _ => PaymentProviderType.Manual
         };
 

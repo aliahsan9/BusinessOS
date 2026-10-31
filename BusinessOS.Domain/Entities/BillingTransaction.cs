@@ -64,6 +64,8 @@ public class BillingTransaction : AuditableEntity
     /// <summary>
     /// Optional human-readable description of the transaction.
     /// </summary>
+    public string? PaymentMethod { get; set; }
+
     public string? Description { get; set; }
 
     /// <summary>

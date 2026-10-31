@@ -635,6 +635,56 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.ToTable("AiMessages", (string)null);
                 });
 
+            modelBuilder.Entity("BusinessOS.Domain.Entities.AiUsageLedger", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("EstimatedProviderCostUsd")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<int>("InputTokens")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("OperationKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<int>("OutputTokens")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("PeriodStart")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("ProviderFailed")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("TotalTokens")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "OperationKey")
+                        .IsUnique();
+
+                    b.ToTable("AiUsageLedgers", (string)null);
+                });
+
             modelBuilder.Entity("BusinessOS.Domain.Entities.AuthSession", b =>
                 {
                     b.Property<Guid>("Id")
@@ -754,19 +804,19 @@ namespace BusinessOS.Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("Subtotal")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
 
                     b.Property<decimal>("TaxAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("TotalAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -781,6 +831,60 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.ToTable("BillingInvoices", (string)null);
                 });
 
+            modelBuilder.Entity("BusinessOS.Domain.Entities.BillingPaymentMethod", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Brand")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ExpMonth")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ExpYear")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Last4")
+                        .IsRequired()
+                        .HasMaxLength(4)
+                        .HasColumnType("nvarchar(4)");
+
+                    b.Property<int>("Provider")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("SupportsRecurring")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "Provider", "ExternalId");
+
+                    b.ToTable("BillingPaymentMethods", (string)null);
+                });
+
             modelBuilder.Entity("BusinessOS.Domain.Entities.BillingTransaction", b =>
                 {
                     b.Property<Guid>("Id")
@@ -788,8 +892,8 @@ namespace BusinessOS.Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("Amount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
 
                     b.Property<Guid?>("BillingInvoiceId")
                         .HasColumnType("uniqueidentifier");
@@ -818,6 +922,10 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.Property<string>("Metadata")
                         .HasMaxLength(4000)
                         .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("PaymentMethod")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
 
                     b.Property<int>("Provider")
                         .HasColumnType("int");
@@ -1787,6 +1895,9 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.Property<bool>("IsSandbox")
                         .HasColumnType("bit");
 
+                    b.Property<string>("MerchantCountry")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -1797,6 +1908,21 @@ namespace BusinessOS.Infrastructure.Migrations
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
+
+                    b.Property<string>("SupportedCurrencies")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("SupportsOneTime")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("SupportsRecurring")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("SupportsRefunds")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("SupportsTokenization")
+                        .HasColumnType("bit");
 
                     b.HasKey("Id");
 
@@ -2267,6 +2393,59 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.ToTable("RbacAuditLogs", (string)null);
                 });
 
+            modelBuilder.Entity("BusinessOS.Domain.Entities.RegionalPrice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("AnnualAmount")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<string>("CountryCode")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<string>("ExchangeRateNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("MonthlyAmount")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<string>("ProviderPriceIdAnnual")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ProviderPriceIdMonthly")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("SubscriptionPlanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubscriptionPlanId", "CountryCode", "CurrencyCode")
+                        .IsUnique();
+
+                    b.ToTable("RegionalPrices", (string)null);
+                });
+
             modelBuilder.Entity("BusinessOS.Domain.Entities.Role", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2379,6 +2558,63 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.ToTable("StockTransactions", (string)null);
                 });
 
+            modelBuilder.Entity("BusinessOS.Domain.Entities.SubscriptionHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<decimal?>("Amount")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Currency")
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<string>("FromStatus")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Provider")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<Guid?>("SubscriptionPlanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ToStatus")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "CreatedAt");
+
+                    b.ToTable("SubscriptionHistory", (string)null);
+                });
+
             modelBuilder.Entity("BusinessOS.Domain.Entities.SubscriptionPlan", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2386,8 +2622,16 @@ namespace BusinessOS.Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("AnnualPrice")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<string>("BaseCurrency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<int>("CatalogRevision")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -2405,19 +2649,39 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.Property<bool>("HasAiAssistant")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("HasApiAccess")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HasMultiBranch")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("HasPdfReports")
                         .HasColumnType("bit");
 
                     b.Property<bool>("HasPrioritySupport")
                         .HasColumnType("bit");
 
+                    b.Property<string>("InventoryAccess")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsCustomPricing")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPublic")
                         .HasColumnType("bit");
 
                     b.Property<int>("MaxAiRequests")
                         .HasColumnType("int");
 
                     b.Property<int>("MaxCustomers")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MaxProducts")
                         .HasColumnType("int");
 
                     b.Property<int>("MaxProjects")
@@ -2433,13 +2697,18 @@ namespace BusinessOS.Infrastructure.Migrations
                         .HasColumnType("int");
 
                     b.Property<decimal>("MonthlyPrice")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("SalesAccess")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("Slug")
                         .IsRequired()
@@ -2454,6 +2723,9 @@ namespace BusinessOS.Infrastructure.Migrations
 
                     b.Property<string>("StripePriceIdYearly")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("TrialDays")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -2821,17 +3093,50 @@ namespace BusinessOS.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int?>("AiRequestAllowance")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("AutoRenewEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("BillingCountry")
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
+
                     b.Property<int>("BillingInterval")
                         .HasColumnType("int");
 
                     b.Property<bool>("CancelAtPeriodEnd")
                         .HasColumnType("bit");
 
+                    b.Property<DateTime?>("CancelEffectiveAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("ContractedAnnualPrice")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<string>("ContractedCurrency")
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<string>("ContractedLimitsJson")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<decimal?>("ContractedMonthlyPrice")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("CurrentPeriodEnd")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("DisplayCurrency")
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
 
                     b.Property<DateTime?>("EndDate")
                         .HasColumnType("datetime2");
@@ -2843,8 +3148,22 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<string>("PaymentMethodSummary")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
                     b.Property<int>("PaymentProvider")
                         .HasColumnType("int");
+
+                    b.Property<bool>("PreserveContract")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid?>("ScheduledPlanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SettlementCurrency")
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
 
                     b.Property<DateTime>("StartDate")
                         .HasColumnType("datetime2");
@@ -2865,6 +3184,9 @@ namespace BusinessOS.Infrastructure.Migrations
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("TrialConsumed")
+                        .HasColumnType("bit");
 
                     b.Property<DateTime?>("TrialEndDate")
                         .HasColumnType("datetime2");
@@ -2888,8 +3210,20 @@ namespace BusinessOS.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<long>("AiInputTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("AiOutputTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("AiPeriodStart")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("AiRequestsUsed")
                         .HasColumnType("int");
+
+                    b.Property<long>("AiTotalTokens")
+                        .HasColumnType("bigint");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -2897,11 +3231,18 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.Property<int>("CustomerCount")
                         .HasColumnType("int");
 
+                    b.Property<decimal>("EstimatedProviderCostUsd")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
                     b.Property<DateTime>("LastCalculatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<int>("ProductCount")
+                        .HasColumnType("int");
 
                     b.Property<int>("ProjectCount")
                         .HasColumnType("int");
@@ -3416,7 +3757,29 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.Navigation("Conversation");
                 });
 
+            modelBuilder.Entity("BusinessOS.Domain.Entities.AiUsageLedger", b =>
+                {
+                    b.HasOne("BusinessOS.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
+                });
+
             modelBuilder.Entity("BusinessOS.Domain.Entities.BillingInvoice", b =>
+                {
+                    b.HasOne("BusinessOS.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("BusinessOS.Domain.Entities.BillingPaymentMethod", b =>
                 {
                     b.HasOne("BusinessOS.Domain.Entities.Tenant", "Tenant")
                         .WithMany()
@@ -3613,6 +3976,17 @@ namespace BusinessOS.Infrastructure.Migrations
                     b.Navigation("Quotation");
                 });
 
+            modelBuilder.Entity("BusinessOS.Domain.Entities.RegionalPrice", b =>
+                {
+                    b.HasOne("BusinessOS.Domain.Entities.SubscriptionPlan", "Plan")
+                        .WithMany()
+                        .HasForeignKey("SubscriptionPlanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Plan");
+                });
+
             modelBuilder.Entity("BusinessOS.Domain.Entities.RolePermission", b =>
                 {
                     b.HasOne("BusinessOS.Domain.Entities.Permission", "Permission")
@@ -3641,6 +4015,17 @@ namespace BusinessOS.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("BusinessOS.Domain.Entities.SubscriptionHistory", b =>
+                {
+                    b.HasOne("BusinessOS.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("BusinessOS.Domain.Entities.TeamInvitation", b =>

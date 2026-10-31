@@ -35,6 +35,8 @@ public sealed class FeatureFlagService : IFeatureFlagService
             FeatureFlags.PdfReports => flags.HasPdfReports,
             FeatureFlags.AdvancedReports => flags.HasAdvancedReports,
             FeatureFlags.PrioritySupport => flags.HasPrioritySupport,
+            FeatureFlags.ApiAccess => flags.HasApiAccess,
+            FeatureFlags.MultiBranch => flags.HasMultiBranch,
             _ => false
         };
 
@@ -66,6 +68,8 @@ public sealed class FeatureFlagService : IFeatureFlagService
         HasAdvancedAnalytics = plan.HasAdvancedAnalytics,
         HasPdfReports = plan.HasPdfReports,
         HasAdvancedReports = plan.HasAdvancedReports,
-        HasPrioritySupport = plan.HasPrioritySupport
+        HasPrioritySupport = plan.HasPrioritySupport,
+        HasApiAccess = plan.HasApiAccess,
+        HasMultiBranch = plan.HasMultiBranch
     };
 }

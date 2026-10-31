@@ -17,6 +17,14 @@ public class TenantSubscriptionConfiguration : IEntityTypeConfiguration<TenantSu
         builder.Property(x => x.StripeCustomerId).HasMaxLength(200);
         builder.Property(x => x.StripeSubscriptionId).HasMaxLength(200);
         builder.Property(x => x.ExternalReference).HasMaxLength(200);
+        builder.Property(x => x.ContractedMonthlyPrice).HasPrecision(18, 3);
+        builder.Property(x => x.ContractedAnnualPrice).HasPrecision(18, 3);
+        builder.Property(x => x.ContractedCurrency).HasMaxLength(3);
+        builder.Property(x => x.ContractedLimitsJson).HasMaxLength(4000);
+        builder.Property(x => x.BillingCountry).HasMaxLength(2);
+        builder.Property(x => x.DisplayCurrency).HasMaxLength(3);
+        builder.Property(x => x.SettlementCurrency).HasMaxLength(3);
+        builder.Property(x => x.PaymentMethodSummary).HasMaxLength(120);
 
         builder.HasIndex(x => x.TenantId).IsUnique();
 

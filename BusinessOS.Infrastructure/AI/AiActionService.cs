@@ -6,6 +6,7 @@ using BusinessOS.Application.Features.Customers.Commands.CreateCustomer;
 using BusinessOS.Application.Features.Invoices.Commands.CreateInvoiceFromOrder;
 using BusinessOS.Application.Features.Orders.Commands.CreateOrder;
 using BusinessOS.Application.Features.Orders.Queries;
+using BusinessOS.Application.Features.Tenant.Services;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using MediatR;
@@ -18,15 +19,18 @@ public sealed class AiActionService : IAiActionService
 {
     private readonly IMediator _mediator;
     private readonly IApplicationDbContext _context;
+    private readonly ITenantLimitService _limits;
     private readonly ILogger<AiActionService> _logger;
 
     public AiActionService(
         IMediator mediator,
         IApplicationDbContext context,
+        ITenantLimitService limits,
         ILogger<AiActionService> logger)
     {
         _mediator = mediator;
         _context = context;
+        _limits = limits;
         _logger = logger;
     }
 
@@ -205,6 +209,7 @@ public sealed class AiActionService : IAiActionService
                         Priority = 2
                     };
 
+                    await _limits.EnsureWithinLimitAsync("tasks", cancellationToken);
                     _context.WorkTasks.Add(task);
                     await _context.SaveChangesAsync(cancellationToken);
 
@@ -246,6 +251,7 @@ public sealed class AiActionService : IAiActionService
                     Priority = 2
                 };
 
+                await _limits.EnsureWithinLimitAsync("tasks", cancellationToken);
                 _context.WorkTasks.Add(task);
                 await _context.SaveChangesAsync(cancellationToken);
 
