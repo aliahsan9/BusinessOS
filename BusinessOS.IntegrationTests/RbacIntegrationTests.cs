@@ -28,7 +28,7 @@ public class RbacIntegrationTests : IntegrationTestBase
         var rolesResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            "/api/roles",
+            "/api/v1/roles",
             auth);
 
         rolesResponse.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -36,7 +36,7 @@ public class RbacIntegrationTests : IntegrationTestBase
         var permissionsResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            "/api/permissions",
+            "/api/v1/permissions",
             auth);
 
         permissionsResponse.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -61,7 +61,7 @@ public class RbacIntegrationTests : IntegrationTestBase
         var removeOwnerResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Delete,
-            $"/api/users/{ownerAuth.UserId}/roles/{await GetRoleIdAsync(RoleNames.Owner)}",
+            $"/api/v1/users/{ownerAuth.UserId}/roles/{await GetRoleIdAsync(RoleNames.Owner)}",
             ownerAuth);
 
         removeOwnerResponse.IsSuccessStatusCode.Should().BeTrue();
@@ -70,7 +70,7 @@ public class RbacIntegrationTests : IntegrationTestBase
         var assignAdminResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            $"/api/users/{ownerAuth.UserId}/roles",
+            $"/api/v1/users/{ownerAuth.UserId}/roles",
             ownerAuth,
             new AssignUserRoleRequest(adminRoleId));
 
@@ -85,7 +85,7 @@ public class RbacIntegrationTests : IntegrationTestBase
         var rolesResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            "/api/roles",
+            "/api/v1/roles",
             adminAuth);
 
         rolesResponse.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -93,7 +93,7 @@ public class RbacIntegrationTests : IntegrationTestBase
         var permissionsResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            "/api/permissions",
+            "/api/v1/permissions",
             adminAuth);
 
         permissionsResponse.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -112,7 +112,7 @@ public class RbacIntegrationTests : IntegrationTestBase
         var removeOwnerResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Delete,
-            $"/api/users/{ownerAuth.UserId}/roles/{ownerRoleId}",
+            $"/api/v1/users/{ownerAuth.UserId}/roles/{ownerRoleId}",
             ownerAuth);
 
         removeOwnerResponse.IsSuccessStatusCode.Should().BeTrue();
@@ -121,7 +121,7 @@ public class RbacIntegrationTests : IntegrationTestBase
         var assignViewerResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            $"/api/users/{ownerAuth.UserId}/roles",
+            $"/api/v1/users/{ownerAuth.UserId}/roles",
             ownerAuth,
             new AssignUserRoleRequest(viewerRoleId));
 
@@ -135,7 +135,7 @@ public class RbacIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/products",
+            "/api/v1/products",
             viewerAuth,
             new
             {
@@ -161,7 +161,7 @@ public class RbacIntegrationTests : IntegrationTestBase
         var removeOwnerResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Delete,
-            $"/api/users/{ownerAuth.UserId}/roles/{ownerRoleId}",
+            $"/api/v1/users/{ownerAuth.UserId}/roles/{ownerRoleId}",
             ownerAuth);
 
         removeOwnerResponse.IsSuccessStatusCode.Should().BeTrue();
@@ -170,7 +170,7 @@ public class RbacIntegrationTests : IntegrationTestBase
         var assignViewerResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            $"/api/users/{ownerAuth.UserId}/roles",
+            $"/api/v1/users/{ownerAuth.UserId}/roles",
             ownerAuth,
             new AssignUserRoleRequest(viewerRoleId));
 
@@ -184,7 +184,7 @@ public class RbacIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            "/api/products?page=1&pageSize=10",
+            "/api/v1/products?page=1&pageSize=10",
             viewerAuth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -214,7 +214,7 @@ public class RbacIntegrationTests : IntegrationTestBase
     private async Task<AuthResponse> LoginAsync(string email)
     {
         var response = await Client.PostAsJsonAsync(
-            "/api/auth/login",
+            "/api/v1/auth/login",
             new
             {
                 email,

@@ -18,11 +18,11 @@ namespace BusinessOS.API.Endpoints;
 public static class PaymentEndpoints
 {
     /// <summary>
-    /// Maps payment CRUD endpoints under <c>/api/payments</c>.
+    /// Maps payment CRUD endpoints under <c>/api/v1/payments</c>.
     /// </summary>
     public static void MapPaymentEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/payments")
+        var group = app.MapGroup("/payments")
             .WithTags("Payments")
             .RequireAuthorization()
             .RequireRateLimiting("api");
@@ -87,7 +87,7 @@ public static class PaymentEndpoints
                 request.ReferenceNo),
             cancellationToken);
 
-        return Results.Created($"/api/payments/{id}", new { id });
+        return Results.Created($"/api/v1/payments/{id}", new { id });
     }
 
     private static async Task<IResult> GetAllPayments(

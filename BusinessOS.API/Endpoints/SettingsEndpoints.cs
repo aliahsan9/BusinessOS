@@ -9,7 +9,7 @@ public static class SettingsEndpoints
 {
     public static void MapSettingsEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/settings")
+        var group = app.MapGroup("/settings")
             .WithTags("Settings")
             .RequireAuthorization()
             .RequireRateLimiting("api");

@@ -14,18 +14,18 @@ namespace BusinessOS.API.Endpoints;
 /// Authentication endpoints for registration, login, password reset, and team invitation acceptance.
 /// </summary>
 /// <remarks>
-/// Public endpoints under <c>/api/auth</c>. No JWT is required except where noted.
+/// Public endpoints under <c>/api/v1/auth</c>. No JWT is required except where noted.
 /// Registration creates a new tenant and owner user; the response includes a JWT for immediate API access.
 /// Team invitation preview and acceptance are unauthenticated flows using emailed tokens.
 /// </remarks>
 public static class AuthEndpoints
 {
     /// <summary>
-    /// Maps authentication endpoints under <c>/api/auth</c>.
+    /// Maps authentication endpoints under <c>/api/v1/auth</c>.
     /// </summary>
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/auth")
+        var group = app.MapGroup("/auth")
             .WithTags("Authentication")
             .RequireRateLimiting("api");
 
@@ -46,7 +46,7 @@ public static class AuthEndpoints
                             "Email must be unique across the platform.",
                             "Password must meet Identity password policy requirements.",
                             "Business name becomes the new tenant display name."),
-                        "POST", "/api/auth/register",
+                        "POST", "/api/v1/auth/register",
                         """
                         {
                           "email": "owner@acme.com",
@@ -85,7 +85,7 @@ public static class AuthEndpoints
                                 (500, "Internal server error.")),
                             "Use the returned token in the Authorization header as Bearer {token}.",
                             "Include X-Tenant-ID header on subsequent tenant-scoped requests."),
-                        "POST", "/api/auth/login",
+                        "POST", "/api/v1/auth/login",
                         """
                         {
                           "email": "owner@acme.com",
@@ -119,7 +119,7 @@ public static class AuthEndpoints
                             (500, "Internal server error.")),
                         "Response is identical whether or not the email exists (anti-enumeration).",
                         "Reset link expires per Identity token lifetime settings."),
-                    "POST", "/api/auth/forgot-password",
+                    "POST", "/api/v1/auth/forgot-password",
                     """{ "email": "owner@acme.com" }"""))
             .Produces<PasswordResetResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest);
@@ -138,7 +138,7 @@ public static class AuthEndpoints
                             (500, "Internal server error.")),
                         "Token is obtained from the password reset email link.",
                         "New password must meet Identity password policy."),
-                    "POST", "/api/auth/reset-password",
+                    "POST", "/api/v1/auth/reset-password",
                     """
                     {
                       "email": "owner@acme.com",
@@ -187,7 +187,7 @@ public static class AuthEndpoints
                             (500, "Internal server error.")),
                         "Invitation must not be expired or already accepted.",
                         "New users must provide password and name; existing users link by token only."),
-                    "POST", "/api/auth/accept-invitation",
+                    "POST", "/api/v1/auth/accept-invitation",
                     """
                     {
                       "token": "inv_abc123...",
@@ -214,7 +214,7 @@ public static class AuthEndpoints
         CancellationToken cancellationToken)
     {
         var result = await sender.Send(command, cancellationToken);
-        return Results.Created("/api/auth/login", result);
+        return Results.Created("/api/v1/auth/login", result);
     }
 
     /// <summary>Authenticates user credentials and returns a JWT.</summary>

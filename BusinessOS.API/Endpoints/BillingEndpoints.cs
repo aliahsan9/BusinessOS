@@ -9,14 +9,14 @@ public static class BillingEndpoints
 {
     public static void MapBillingEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/billing/plans", GetPlans)
+        app.MapGet("/billing/plans", GetPlans)
             .WithTags("Billing")
             .WithName("GetBillingPlansPublic")
             .AllowAnonymous()
             .Produces<IReadOnlyList<SubscriptionPlanDto>>(StatusCodes.Status200OK)
             .RequireRateLimiting("api");
 
-        var group = app.MapGroup("/api/billing")
+        var group = app.MapGroup("/billing")
             .WithTags("Billing")
             .RequireAuthorization();
 
@@ -88,21 +88,49 @@ public static class BillingEndpoints
         MapBillingWebhooks(app);
     }
 
-    private static void MapBillingWebhooks(IEndpointRouteBuilder app)
+    /// <summary>
+    /// Keeps the original payment-provider callback URLs. These are not a second API version.
+    /// They are excluded from OpenAPI so they do not duplicate the version 1.0 webhook operations.
+    /// </summary>
+    public static void MapLegacyBillingWebhooks(this IEndpointRouteBuilder app)
     {
         app.MapPost("/api/billing/webhook/stripe", HandleStripeWebhook)
+            .WithTags("Billing")
+            .WithName("StripeWebhookLegacy")
+            .DisableAntiforgery()
+            .AllowAnonymous()
+            .ExcludeFromDescription();
+
+        app.MapPost("/api/billing/webhook/jazzcash", HandleJazzCashWebhook)
+            .WithTags("Billing")
+            .WithName("JazzCashWebhookLegacy")
+            .DisableAntiforgery()
+            .AllowAnonymous()
+            .ExcludeFromDescription();
+
+        app.MapPost("/api/billing/webhook/easypaisa", HandleEasyPaisaWebhook)
+            .WithTags("Billing")
+            .WithName("EasyPaisaWebhookLegacy")
+            .DisableAntiforgery()
+            .AllowAnonymous()
+            .ExcludeFromDescription();
+    }
+
+    private static void MapBillingWebhooks(IEndpointRouteBuilder app)
+    {
+        app.MapPost("/billing/webhook/stripe", HandleStripeWebhook)
             .WithTags("Billing")
             .WithName("StripeWebhook")
             .DisableAntiforgery()
             .AllowAnonymous();
 
-        app.MapPost("/api/billing/webhook/jazzcash", HandleJazzCashWebhook)
+        app.MapPost("/billing/webhook/jazzcash", HandleJazzCashWebhook)
             .WithTags("Billing")
             .WithName("JazzCashWebhook")
             .DisableAntiforgery()
             .AllowAnonymous();
 
-        app.MapPost("/api/billing/webhook/easypaisa", HandleEasyPaisaWebhook)
+        app.MapPost("/billing/webhook/easypaisa", HandleEasyPaisaWebhook)
             .WithTags("Billing")
             .WithName("EasyPaisaWebhook")
             .DisableAntiforgery()

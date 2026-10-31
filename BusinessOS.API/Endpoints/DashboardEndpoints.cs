@@ -18,11 +18,11 @@ namespace BusinessOS.API.Endpoints;
 public static class DashboardEndpoints
 {
     /// <summary>
-    /// Maps dashboard endpoints under <c>/api/dashboard</c>.
+    /// Maps dashboard endpoints under <c>/api/v1/dashboard</c>.
     /// </summary>
     public static void MapDashboardEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/dashboard")
+        var group = app.MapGroup("/dashboard")
             .WithTags("Dashboard")
             .RequireAuthorization()
             .RequireRateLimiting("api");

@@ -9,7 +9,7 @@ public static class FinanceEndpoints
 {
     public static void MapFinanceEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/finance")
+        var group = app.MapGroup("/finance")
             .WithTags("Finance")
             .RequireAuthorization()
             .RequireRateLimiting("api");

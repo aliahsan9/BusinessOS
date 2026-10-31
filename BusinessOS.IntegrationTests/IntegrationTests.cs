@@ -24,7 +24,7 @@ public class AuthIntegrationTests : IntegrationTestBase
     {
         var email = $"user_{Guid.NewGuid():N}@test.com";
 
-        var response = await Client.PostAsJsonAsync("/api/auth/register", new
+        var response = await Client.PostAsJsonAsync("/api/v1/auth/register", new
         {
             email,
             password = "Password1!",
@@ -48,7 +48,7 @@ public class AuthIntegrationTests : IntegrationTestBase
         var email = $"login_{Guid.NewGuid():N}@test.com";
         await RegisterUserAsync(email);
 
-        var response = await Client.PostAsJsonAsync("/api/auth/login", new
+        var response = await Client.PostAsJsonAsync("/api/v1/auth/login", new
         {
             email,
             password = "Password1!"
@@ -63,7 +63,7 @@ public class AuthIntegrationTests : IntegrationTestBase
     [Fact]
     public async Task Login_WithInvalidCredentials_ReturnsUnauthorizedProblemDetails()
     {
-        var response = await Client.PostAsJsonAsync("/api/auth/login", new
+        var response = await Client.PostAsJsonAsync("/api/v1/auth/login", new
         {
             email = "missing@test.com",
             password = "WrongPass1!"
@@ -76,7 +76,7 @@ public class AuthIntegrationTests : IntegrationTestBase
     [Fact]
     public async Task Register_WithInvalidEmail_ReturnsValidationProblemDetails()
     {
-        var response = await Client.PostAsJsonAsync("/api/auth/register", new
+        var response = await Client.PostAsJsonAsync("/api/v1/auth/register", new
         {
             email = "not-an-email",
             password = "Password1!",
@@ -92,7 +92,7 @@ public class AuthIntegrationTests : IntegrationTestBase
     [Fact]
     public async Task ProtectedEndpoint_WithoutToken_ReturnsUnauthorized()
     {
-        var response = await Client.GetAsync("/api/categories");
+        var response = await Client.GetAsync("/api/v1/categories");
 
         response.StatusCode.Should().BeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.NotFound);
     }
@@ -105,7 +105,7 @@ public class AuthIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/categories",
+            "/api/v1/categories",
             auth,
             new { name = "Authorized Category" });
 
@@ -114,7 +114,7 @@ public class AuthIntegrationTests : IntegrationTestBase
 
     private async Task<AuthResponse> RegisterUserAsync(string email)
     {
-        var response = await Client.PostAsJsonAsync("/api/auth/register", new
+        var response = await Client.PostAsJsonAsync("/api/v1/auth/register", new
         {
             email,
             password = "Password1!",
@@ -144,7 +144,7 @@ public class CategoryIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/categories",
+            "/api/v1/categories",
             auth,
             new { name = "Electronics", description = "Electronic items" });
 
@@ -161,7 +161,7 @@ public class CategoryIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            "/api/categories?page=1&pageSize=1&sortBy=name",
+            "/api/v1/categories?page=1&pageSize=1&sortBy=name",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -182,7 +182,7 @@ public class CategoryIntegrationTests : IntegrationTestBase
         var createResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/categories",
+            "/api/v1/categories",
             auth,
             new { name = "Books", description = "Reading materials" });
 
@@ -192,7 +192,7 @@ public class CategoryIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            $"/api/categories/{id}",
+            $"/api/v1/categories/{id}",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -209,7 +209,7 @@ public class CategoryIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            $"/api/categories/{Guid.NewGuid()}",
+            $"/api/v1/categories/{Guid.NewGuid()}",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -225,7 +225,7 @@ public class CategoryIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Put,
-            $"/api/categories/{id}",
+            $"/api/v1/categories/{id}",
             auth,
             new { name = "Updated Name", description = "Updated" });
 
@@ -241,7 +241,7 @@ public class CategoryIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Delete,
-            $"/api/categories/{id}",
+            $"/api/v1/categories/{id}",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -255,7 +255,7 @@ public class CategoryIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/categories",
+            "/api/v1/categories",
             auth,
             new { name = "", description = "Invalid" });
 
@@ -271,7 +271,7 @@ public class CategoryIntegrationTests : IntegrationTestBase
         await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/products",
+            "/api/v1/products",
             auth,
             new
             {
@@ -286,7 +286,7 @@ public class CategoryIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Delete,
-            $"/api/categories/{categoryId}",
+            $"/api/v1/categories/{categoryId}",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
@@ -297,7 +297,7 @@ public class CategoryIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/categories",
+            "/api/v1/categories",
             auth,
             new { name });
 
@@ -324,7 +324,7 @@ public class ProductIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/products",
+            "/api/v1/products",
             auth,
             new
             {
@@ -351,7 +351,7 @@ public class ProductIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            $"/api/products?categoryId={categoryId}&search=Alpha&page=1&pageSize=10&sortBy=name",
+            $"/api/v1/products?categoryId={categoryId}&search=Alpha&page=1&pageSize=10&sortBy=name",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -371,7 +371,7 @@ public class ProductIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            $"/api/products/{productId}",
+            $"/api/v1/products/{productId}",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -385,7 +385,7 @@ public class ProductIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            $"/api/products/{Guid.NewGuid()}",
+            $"/api/v1/products/{Guid.NewGuid()}",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -401,7 +401,7 @@ public class ProductIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            $"/api/products/by-category/{categoryId}?page=1&pageSize=10",
+            $"/api/v1/products/by-category/{categoryId}?page=1&pageSize=10",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -420,7 +420,7 @@ public class ProductIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Put,
-            $"/api/products/{productId}",
+            $"/api/v1/products/{productId}",
             auth,
             new
             {
@@ -447,7 +447,7 @@ public class ProductIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Delete,
-            $"/api/products/{productId}",
+            $"/api/v1/products/{productId}",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -461,7 +461,7 @@ public class ProductIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/products",
+            "/api/v1/products",
             auth,
             new
             {
@@ -485,7 +485,7 @@ public class ProductIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/products",
+            "/api/v1/products",
             auth,
             new
             {
@@ -505,7 +505,7 @@ public class ProductIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/categories",
+            "/api/v1/categories",
             auth,
             new { name });
 
@@ -523,7 +523,7 @@ public class ProductIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/products",
+            "/api/v1/products",
             auth,
             new
             {
@@ -557,7 +557,7 @@ public class CustomerIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/customers",
+            "/api/v1/customers",
             auth,
             new
             {
@@ -584,7 +584,7 @@ public class CustomerIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/customers",
+            "/api/v1/customers",
             auth,
             new
             {
@@ -611,7 +611,7 @@ public class CustomerIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            "/api/customers?page=1&pageSize=10&sortBy=createdAt&sortOrder=desc",
+            "/api/v1/customers?page=1&pageSize=10&sortBy=createdAt&sortOrder=desc",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -629,7 +629,7 @@ public class CustomerIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            $"/api/customers/{customerId}",
+            $"/api/v1/customers/{customerId}",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -647,7 +647,7 @@ public class CustomerIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Put,
-            $"/api/customers/{customerId}",
+            $"/api/v1/customers/{customerId}",
             auth,
             new
             {
@@ -674,7 +674,7 @@ public class CustomerIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Delete,
-            $"/api/customers/{customerId}",
+            $"/api/v1/customers/{customerId}",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -690,7 +690,7 @@ public class CustomerIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            $"/api/customers/{customerId}/orders?page=1&pageSize=10",
+            $"/api/v1/customers/{customerId}/orders?page=1&pageSize=10",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -709,7 +709,7 @@ public class CustomerIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            $"/api/customers/{customerId}/analytics",
+            $"/api/v1/customers/{customerId}/analytics",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -726,7 +726,7 @@ public class CustomerIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/customers",
+            "/api/v1/customers",
             auth,
             new
             {
@@ -746,7 +746,7 @@ public class CustomerIntegrationTests : IntegrationTestBase
     [Fact]
     public async Task ProtectedCustomersEndpoint_WithoutToken_ReturnsUnauthorized()
     {
-        var response = await Client.GetAsync("/api/customers");
+        var response = await Client.GetAsync("/api/v1/customers");
         response.StatusCode.Should().BeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.NotFound);
     }
 
@@ -758,7 +758,7 @@ public class CustomerIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/customers",
+            "/api/v1/customers",
             auth,
             new
             {
@@ -784,7 +784,7 @@ public class CustomerIntegrationTests : IntegrationTestBase
         var productResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/products",
+            "/api/v1/products",
             auth,
             new
             {
@@ -805,7 +805,7 @@ public class CustomerIntegrationTests : IntegrationTestBase
         var orderResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/orders",
+            "/api/v1/orders",
             auth,
             new
             {
@@ -823,7 +823,7 @@ public class CustomerIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/categories",
+            "/api/v1/categories",
             auth,
             new { name });
 
@@ -851,7 +851,7 @@ public class OrderIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/orders",
+            "/api/v1/orders",
             auth,
             new
             {
@@ -873,7 +873,7 @@ public class OrderIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            "/api/orders?page=1&pageSize=10&sortBy=createdAt&sortOrder=desc",
+            "/api/v1/orders?page=1&pageSize=10&sortBy=createdAt&sortOrder=desc",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -892,7 +892,7 @@ public class OrderIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            $"/api/orders/{orderId}",
+            $"/api/v1/orders/{orderId}",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -910,7 +910,7 @@ public class OrderIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            $"/api/orders/{Guid.NewGuid()}",
+            $"/api/v1/orders/{Guid.NewGuid()}",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -925,7 +925,7 @@ public class OrderIntegrationTests : IntegrationTestBase
         var getResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            $"/api/orders/{orderId}",
+            $"/api/v1/orders/{orderId}",
             auth);
 
         var order = await getResponse.Content.ReadFromJsonAsync<OrderDto>();
@@ -934,7 +934,7 @@ public class OrderIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Put,
-            $"/api/orders/{orderId}",
+            $"/api/v1/orders/{orderId}",
             auth,
             new
             {
@@ -955,7 +955,7 @@ public class OrderIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Delete,
-            $"/api/orders/{orderId}",
+            $"/api/v1/orders/{orderId}",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -970,7 +970,7 @@ public class OrderIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Patch,
-            $"/api/orders/{orderId}/status",
+            $"/api/v1/orders/{orderId}/status",
             auth,
             new { status = "Confirmed" });
 
@@ -986,28 +986,28 @@ public class OrderIntegrationTests : IntegrationTestBase
         await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Patch,
-            $"/api/orders/{orderId}/status",
+            $"/api/v1/orders/{orderId}/status",
             auth,
             new { status = "Confirmed" });
 
         await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Patch,
-            $"/api/orders/{orderId}/status",
+            $"/api/v1/orders/{orderId}/status",
             auth,
             new { status = "Processing" });
 
         await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Patch,
-            $"/api/orders/{orderId}/status",
+            $"/api/v1/orders/{orderId}/status",
             auth,
             new { status = "Completed" });
 
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Patch,
-            $"/api/orders/{orderId}/status",
+            $"/api/v1/orders/{orderId}/status",
             auth,
             new { status = "Pending" });
 
@@ -1023,7 +1023,7 @@ public class OrderIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/orders",
+            "/api/v1/orders",
             auth,
             new
             {
@@ -1046,7 +1046,7 @@ public class OrderIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/orders",
+            "/api/v1/orders",
             auth,
             new
             {
@@ -1062,7 +1062,7 @@ public class OrderIntegrationTests : IntegrationTestBase
     [Fact]
     public async Task ProtectedOrdersEndpoint_WithoutToken_ReturnsUnauthorized()
     {
-        var response = await Client.GetAsync("/api/orders");
+        var response = await Client.GetAsync("/api/v1/orders");
 
         response.StatusCode.Should().BeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.NotFound);
     }
@@ -1072,7 +1072,7 @@ public class OrderIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/categories",
+            "/api/v1/categories",
             auth,
             new { name });
 
@@ -1088,7 +1088,7 @@ public class OrderIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/products",
+            "/api/v1/products",
             auth,
             new
             {
@@ -1114,7 +1114,7 @@ public class OrderIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/customers",
+            "/api/v1/customers",
             auth,
             new
             {
@@ -1141,7 +1141,7 @@ public class OrderIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/orders",
+            "/api/v1/orders",
             auth,
             new
             {
@@ -1174,7 +1174,7 @@ public class InventoryIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            "/api/inventory?page=1&pageSize=10&sortBy=currentStock&sortOrder=asc",
+            "/api/v1/inventory?page=1&pageSize=10&sortBy=currentStock&sortOrder=asc",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -1189,7 +1189,7 @@ public class InventoryIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            $"/api/inventory/{productId}",
+            $"/api/v1/inventory/{productId}",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -1204,7 +1204,7 @@ public class InventoryIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/inventory/increase",
+            "/api/v1/inventory/increase",
             auth,
             new { productId, quantity = 15m, notes = "Purchase receipt" });
 
@@ -1220,7 +1220,7 @@ public class InventoryIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/inventory/decrease",
+            "/api/v1/inventory/decrease",
             auth,
             new { productId, quantity = 10m });
 
@@ -1236,14 +1236,14 @@ public class InventoryIntegrationTests : IntegrationTestBase
         await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Put,
-            $"/api/inventory/{productId}",
+            $"/api/v1/inventory/{productId}",
             auth,
             new { minimumStockLevel = 0, maximumStockLevel = 100, reorderLevel = 10 });
 
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            "/api/inventory/low-stock",
+            "/api/v1/inventory/low-stock",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -1258,7 +1258,7 @@ public class InventoryIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            "/api/inventory/analytics",
+            "/api/v1/inventory/analytics",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -1273,7 +1273,7 @@ public class InventoryIntegrationTests : IntegrationTestBase
         var customerResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/customers",
+            "/api/v1/customers",
             auth,
             new
             {
@@ -1294,7 +1294,7 @@ public class InventoryIntegrationTests : IntegrationTestBase
         var orderResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/orders",
+            "/api/v1/orders",
             auth,
             new
             {
@@ -1310,7 +1310,7 @@ public class InventoryIntegrationTests : IntegrationTestBase
     [Fact]
     public async Task ProtectedInventoryEndpoint_WithoutToken_ReturnsUnauthorized()
     {
-        var response = await Client.GetAsync("/api/inventory");
+        var response = await Client.GetAsync("/api/v1/inventory");
 
         response.StatusCode.Should().BeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.NotFound);
     }

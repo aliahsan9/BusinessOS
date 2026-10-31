@@ -20,11 +20,11 @@ namespace BusinessOS.API.Endpoints;
 public static class QuotationEndpoints
 {
     /// <summary>
-    /// Maps quotation CRUD, status, and convert endpoints under <c>/api/quotations</c>.
+    /// Maps quotation CRUD, status, and convert endpoints under <c>/api/v1/quotations</c>.
     /// </summary>
     public static void MapQuotationEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/quotations")
+        var group = app.MapGroup("/quotations")
             .WithTags("Quotations")
             .RequireAuthorization()
             .RequireRateLimiting("api");
@@ -115,7 +115,7 @@ public static class QuotationEndpoints
                 request.Items),
             cancellationToken);
 
-        return Results.Created($"/api/quotations/{id}", new { id });
+        return Results.Created($"/api/v1/quotations/{id}", new { id });
     }
 
     private static async Task<IResult> GetAllQuotations(
@@ -199,6 +199,6 @@ public static class QuotationEndpoints
         CancellationToken cancellationToken)
     {
         var orderId = await sender.Send(new ConvertQuotationToOrderCommand(id), cancellationToken);
-        return Results.Created($"/api/orders/{orderId}", new { id = orderId });
+        return Results.Created($"/api/v1/orders/{orderId}", new { id = orderId });
     }
 }

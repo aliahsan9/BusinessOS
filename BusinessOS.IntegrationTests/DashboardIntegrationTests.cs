@@ -22,7 +22,7 @@ public class DashboardIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            "/api/dashboard/overview?period=all",
+            "/api/v1/dashboard/overview?period=all",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -42,7 +42,7 @@ public class DashboardIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            "/api/dashboard/sales?period=month",
+            "/api/v1/dashboard/sales?period=month",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -61,7 +61,7 @@ public class DashboardIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            "/api/dashboard/products?period=all&top=20",
+            "/api/v1/dashboard/products?period=all&top=20",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -80,7 +80,7 @@ public class DashboardIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            "/api/dashboard/inventory?period=month",
+            "/api/v1/dashboard/inventory?period=month",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -98,7 +98,7 @@ public class DashboardIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            "/api/dashboard/charts/revenue?period=year",
+            "/api/v1/dashboard/charts/revenue?period=year",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -112,7 +112,7 @@ public class DashboardIntegrationTests : IntegrationTestBase
     [Fact]
     public async Task GetDashboardOverview_WithoutToken_ReturnsUnauthorized()
     {
-        var response = await Client.GetAsync("/api/dashboard/overview");
+        var response = await Client.GetAsync("/api/v1/dashboard/overview");
 
         response.StatusCode.Should().BeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.NotFound);
     }
@@ -125,7 +125,7 @@ public class DashboardIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            "/api/dashboard/overview?period=invalid",
+            "/api/v1/dashboard/overview?period=invalid",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);

@@ -7,7 +7,7 @@ namespace BusinessOS.API.Endpoints;
 
 /// <summary>
 /// HTTP endpoints for AI employee agents (Sophia and future specialists).
-/// Extends the existing Copilot surface without replacing <c>/api/ai</c>.
+/// Extends the existing Copilot surface without replacing <c>/api/v1/ai</c>.
 /// </summary>
 public static class AgentEndpoints
 {
@@ -18,7 +18,7 @@ public static class AgentEndpoints
 
     public static void MapAgentEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/agents")
+        var group = app.MapGroup("/agents")
             .WithTags("AI Employees")
             .RequireAuthorization()
             .RequireRateLimiting("api");

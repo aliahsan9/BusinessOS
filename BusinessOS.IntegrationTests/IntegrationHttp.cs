@@ -9,7 +9,7 @@ internal static class IntegrationHttp
     public static async Task<AuthResponse> RegisterAndAuthenticateAsync(HttpClient client)
     {
         var email = $"user_{Guid.NewGuid():N}@test.com";
-        var response = await client.PostAsJsonAsync("/api/auth/register", new
+        var response = await client.PostAsJsonAsync("/api/v1/auth/register", new
         {
             email,
             password = "Password1!",

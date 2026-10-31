@@ -19,11 +19,11 @@ namespace BusinessOS.API.Endpoints;
 public static class ProductEndpoints
 {
     /// <summary>
-    /// Maps product CRUD and list endpoints under <c>/api/products</c>.
+    /// Maps product CRUD and list endpoints under <c>/api/v1/products</c>.
     /// </summary>
     public static void MapProductEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/products")
+        var group = app.MapGroup("/products")
             .WithTags("Products")
             .RequireAuthorization()
             .RequireRateLimiting("api");
@@ -85,7 +85,7 @@ public static class ProductEndpoints
         CancellationToken cancellationToken)
     {
         var id = await sender.Send(command, cancellationToken);
-        return Results.Created($"/api/products/{id}", new { id });
+        return Results.Created($"/api/v1/products/{id}", new { id });
     }
 
     private static async Task<IResult> GetAllProducts(

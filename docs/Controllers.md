@@ -3,6 +3,8 @@
 ## Purpose
 This document serves as the complete REST Minimal API Endpoint Catalog for BusinessOS, detailing endpoint routes, HTTP verbs, request/response DTOs, authorization policies, validation rules, and security scopes.
 
+Live business routes are version 1.0 URL segments: `/api/v1/...`. See [API-Versioning.md](API-Versioning.md). Diagrams below that still show `/api/{resource}` describe the resource; callers must include the version segment.
+
 ---
 
 ## Responsibilities

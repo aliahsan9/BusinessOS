@@ -7,7 +7,7 @@ public static class HelpEndpoints
 {
     public static void MapHelpEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/help")
+        var group = app.MapGroup("/help")
             .WithTags("Help Center")
             .RequireAuthorization()
             .RequireRateLimiting("api");

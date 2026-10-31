@@ -11,7 +11,7 @@ public static class AccountEndpoints
 {
     public static IEndpointRouteBuilder MapAccountEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/account")
+        var group = app.MapGroup("/account")
             .WithTags("Account")
             .RequireAuthorization()
             .RequireRateLimiting("api");

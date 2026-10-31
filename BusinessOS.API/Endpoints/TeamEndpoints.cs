@@ -10,7 +10,7 @@ public static class TeamEndpoints
 {
     public static void MapTeamEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/team")
+        var group = app.MapGroup("/team")
             .WithTags("Team")
             .RequireAuthorization()
             .RequireRateLimiting("api");
@@ -97,7 +97,7 @@ public static class TeamEndpoints
         CancellationToken cancellationToken)
     {
         var result = await teamService.InviteMemberAsync(request, cancellationToken);
-        return Results.Created($"/api/team/invitations/{result.Id}", result);
+        return Results.Created($"/api/v1/team/invitations/{result.Id}", result);
     }
 
     private static async Task<IResult> UpdateTeamMember(

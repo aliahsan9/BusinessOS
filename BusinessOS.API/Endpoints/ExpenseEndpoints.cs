@@ -23,7 +23,7 @@ public static class ExpenseEndpoints
 {
     public static void MapExpenseEndpoints(this IEndpointRouteBuilder app)
     {
-        var expenses = app.MapGroup("/api/expenses")
+        var expenses = app.MapGroup("/expenses")
             .WithTags("Expenses")
             .RequireAuthorization()
             .RequireRateLimiting("api");
@@ -62,7 +62,7 @@ public static class ExpenseEndpoints
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
-        var categories = app.MapGroup("/api/expense-categories")
+        var categories = app.MapGroup("/expense-categories")
             .WithTags("Expense Categories")
             .RequireAuthorization();
 
@@ -116,7 +116,7 @@ public static class ExpenseEndpoints
                 request.RecurrencePattern),
             cancellationToken);
 
-        return Results.Created($"/api/expenses/{id}", new { id });
+        return Results.Created($"/api/v1/expenses/{id}", new { id });
     }
 
     private static async Task<IResult> GetAllExpenses(
@@ -214,7 +214,7 @@ public static class ExpenseEndpoints
             new CreateExpenseCategoryCommand(request.Name, request.Description),
             cancellationToken);
 
-        return Results.Created($"/api/expense-categories/{id}", new { id });
+        return Results.Created($"/api/v1/expense-categories/{id}", new { id });
     }
 
     private static async Task<IResult> GetAllExpenseCategories(

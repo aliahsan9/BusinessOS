@@ -10,7 +10,7 @@ public static class UserEndpoints
 {
     public static void MapUserEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/users")
+        var group = app.MapGroup("/users")
             .WithTags("Users")
             .RequireAuthorization()
             .RequireRateLimiting("api");
@@ -102,10 +102,10 @@ public static class UserEndpoints
 
         var user = await identityService.FindByEmailAsync(request.Email, cancellationToken);
         if (user is null)
-            return Results.Created($"/api/users/{request.Email}", new { email = request.Email });
+            return Results.Created($"/api/v1/users/{request.Email}", new { email = request.Email });
 
         var userDetails = await identityService.GetUserByIdAsync(user.Id, cancellationToken);
-        return Results.Created($"/api/users/{user.Id}", userDetails);
+        return Results.Created($"/api/v1/users/{user.Id}", userDetails);
     }
 
     private static async Task<IResult> UpdateUser(

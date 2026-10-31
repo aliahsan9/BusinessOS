@@ -8,7 +8,7 @@ public static class OnboardingEndpoints
 {
     public static void MapOnboardingEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/onboarding")
+        var group = app.MapGroup("/onboarding")
             .WithTags("Onboarding")
             .RequireAuthorization()
             .RequireRateLimiting("api");

@@ -1,11 +1,10 @@
 using System.Text;
 using System.Text.Json;
 using BusinessOS.API.Authorization;
-using BusinessOS.API.Endpoints;
 using BusinessOS.API.Hubs;
 using BusinessOS.API.Middleware;
-using BusinessOS.API.OpenApi;
 using BusinessOS.API.Services;
+using BusinessOS.API.Versioning;
 using BusinessOS.Application;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Common.Options;
@@ -16,7 +15,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
-using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Events;
 
@@ -41,7 +39,6 @@ try
     builder.Services.Configure<CacheSettings>(
         builder.Configuration.GetSection(CacheSettings.SectionName));
 
-    builder.Services.AddControllers();
     builder.Services.AddApplication();
     builder.Services.AddInfrastructure(builder.Configuration);
     builder.Services.Configure<BusinessOS.Application.Features.Dashboard.Services.DashboardCacheOptions>(
@@ -66,7 +63,7 @@ try
     builder.Services.AddSignalR();
     builder.Services.AddSingleton<IUserIdProvider, NameIdentifierUserIdProvider>();
     builder.Services.AddScoped<IRealtimeNotificationService, SignalRRealtimeNotificationService>();
-    builder.Services.AddBusinessOpenApi();
+    builder.Services.AddBusinessApiVersioning();
     builder.Services.ConfigureHttpJsonOptions(options =>
     {
         options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
@@ -193,23 +190,6 @@ try
 
     await DbInitializer.SeedAsync(app.Services);
 
-    if (app.Environment.IsDevelopment())
-    {
-        app.MapOpenApi();
-
-        app.MapScalarApiReference(options =>
-        {
-            options.Title = "BusinessOS API";
-            options.Theme = ScalarTheme.BluePlanet;
-            options.DefaultHttpClient = new(ScalarTarget.CSharp, ScalarClient.HttpClient);
-            options.Authentication = new()
-            {
-                PreferredSecuritySchemes = ["Bearer", "TenantHeader"]
-            };
-            options.ShowSidebar = true;
-        });
-    }
-
     // Correlation ID must run first so all subsequent logs share it.
     app.UseMiddleware<CorrelationIdMiddleware>();
 
@@ -278,6 +258,7 @@ try
     });
 
     app.UseMiddleware<ExceptionHandlingMiddleware>();
+    app.UseMiddleware<UnversionedApiPathMiddleware>();
 
     if (!app.Environment.IsDevelopment())
     {
@@ -298,48 +279,21 @@ try
     app.UseMiddleware<SerilogEnrichmentMiddleware>();
     app.UseAuthorization();
 
-    app.MapControllers();
-    app.MapHealthChecks("/api/health/ready");
+    app.MapHealthChecks("/api/health/ready")
+        .WithTags("Health");
     app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", service = "BusinessOS.API" }))
         .WithTags("Health")
         .WithName("HealthCheck");
 
-    app.MapAuthEndpoints();
-    app.MapAccountEndpoints();
-    app.MapCategoryEndpoints();
-    app.MapProductEndpoints();
-    app.MapCustomerEndpoints();
-    app.MapOrderEndpoints();
-    app.MapSupplierEndpoints();
-    app.MapPurchaseOrderEndpoints();
-    app.MapPaymentEndpoints();
-    app.MapInvoiceEndpoints();
-    app.MapQuotationEndpoints();
-    app.MapInventoryEndpoints();
-    app.MapDashboardEndpoints();
-    app.MapAnalyticsEndpoints();
-    app.MapReportEndpoints();
-    app.MapRoleEndpoints();
-    app.MapExpenseEndpoints();
-    app.MapFinanceEndpoints();
-    app.MapUserEndpoints();
-    app.MapAuditEndpoints();
-    app.MapNotificationEndpoints();
-    app.MapActivityEndpoints();
-    app.MapSettingsEndpoints();
-    app.MapOnboardingEndpoints();
-    app.MapAiEndpoints();
-    app.MapAgentEndpoints();
-    app.MapHelpEndpoints();
-    app.MapTeamEndpoints();
-    app.MapOrganizationEndpoints();
-    app.MapTenantEndpoints();
-    app.MapBillingEndpoints();
-    app.MapBusinessRegistrationEndpoint();
-    app.MapSystemAdminEndpoints();
+    app.MapBusinessApi();
 
     app.MapHub<NotificationHub>("/hubs/notifications")
         .RequireAuthorization();
+
+    if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
+    {
+        app.MapBusinessApiReference();
+    }
 
     app.Run();
 }

@@ -20,11 +20,11 @@ namespace BusinessOS.API.Endpoints;
 public static class CustomerEndpoints
 {
     /// <summary>
-    /// Maps customer CRUD, search, orders, and analytics endpoints under <c>/api/customers</c>.
+    /// Maps customer CRUD, search, orders, and analytics endpoints under <c>/api/v1/customers</c>.
     /// </summary>
     public static void MapCustomerEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/customers")
+        var group = app.MapGroup("/customers")
             .WithTags("Customers")
             .RequireAuthorization()
             .RequireRateLimiting("api");
@@ -116,7 +116,7 @@ public static class CustomerEndpoints
                 request.Notes),
             cancellationToken);
 
-        return Results.Created($"/api/customers/{id}", new { id });
+        return Results.Created($"/api/v1/customers/{id}", new { id });
     }
 
     private static async Task<IResult> GetAllCustomers(

@@ -1,3 +1,4 @@
+using BusinessOS.API.Versioning;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Infrastructure.MultiTenancy;
 using Microsoft.AspNetCore.Mvc;
@@ -122,13 +123,20 @@ public sealed class TenantMiddleware
         TenantContext.Clear();
     }
 
-    private static bool IsExcludedPath(string path) =>
-        path.StartsWith("/swagger") ||
-        path.StartsWith("/scalar") ||
-        path.StartsWith("/openapi") ||
-        path.StartsWith("/api/health") ||
-        path.StartsWith("/api/auth") ||
-        path.StartsWith("/api/register-business");
+    private static bool IsExcludedPath(string path)
+    {
+        if (path.StartsWith("/swagger") ||
+            path.StartsWith("/scalar") ||
+            path.StartsWith("/openapi") ||
+            path.StartsWith("/api/health"))
+        {
+            return true;
+        }
+
+        var resourcePath = ApiVersioningPaths.StripVersion(path);
+        return resourcePath.StartsWith("/api/auth") ||
+               resourcePath.StartsWith("/api/register-business");
+    }
 
     private static async Task WriteProblemAsync(
         HttpContext context,

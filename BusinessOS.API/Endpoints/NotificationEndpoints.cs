@@ -11,7 +11,7 @@ public static class NotificationEndpoints
 {
     public static void MapNotificationEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/notifications")
+        var group = app.MapGroup("/notifications")
             .WithTags("Notifications")
             .RequireAuthorization()
             .RequireRateLimiting("api");
@@ -197,7 +197,7 @@ public static class NotificationEndpoints
         CancellationToken cancellationToken)
     {
         var result = await notificationService.CreateNotificationAsync(request, cancellationToken);
-        return Results.Created($"/api/notifications/{result.Id}", result);
+        return Results.Created($"/api/v1/notifications/{result.Id}", result);
     }
 
     private sealed record UnreadCountResponse(int Count);

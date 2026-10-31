@@ -10,7 +10,7 @@ public static class TenantEndpoints
 {
     public static void MapTenantEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/tenant")
+        var group = app.MapGroup("/tenant")
             .WithTags("Tenant")
             .RequireAuthorization()
             .RequireRateLimiting("api");
@@ -48,7 +48,7 @@ public static class TenantEndpoints
 
     public static void MapBusinessRegistrationEndpoint(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/api/register-business", RegisterBusiness)
+        app.MapPost("/register-business", RegisterBusiness)
             .WithTags("Tenant")
             .WithName("RegisterBusiness")
             .WithSummary("Register a new business tenant")
@@ -123,6 +123,6 @@ public static class TenantEndpoints
             request.Currency,
             request.Industry);
 
-        return Results.Created("/api/auth/login", result);
+        return Results.Created("/api/v1/auth/login", result);
     }
 }

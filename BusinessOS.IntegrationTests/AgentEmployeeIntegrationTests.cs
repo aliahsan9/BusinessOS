@@ -37,7 +37,7 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/agents/chat",
+            "/api/v1/agents/chat",
             auth,
             request);
 
@@ -77,7 +77,7 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
             CurrentPage = "/inventory"
         });
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/agents/chat/stream")
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/agents/chat/stream")
         {
             Content = new StringContent(payload, Encoding.UTF8, "application/json")
         };
@@ -100,7 +100,7 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Get,
-            "/api/agents/employees",
+            "/api/v1/agents/employees",
             auth);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -116,7 +116,7 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
         var response = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
-            "/api/agents/onboarding/start",
+            "/api/v1/agents/onboarding/start",
             auth,
             new AgentOnboardingStartRequest { Language = "en" });
 
