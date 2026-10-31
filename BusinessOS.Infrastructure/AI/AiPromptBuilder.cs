@@ -25,6 +25,9 @@ public sealed class AiPromptBuilder : IAiPromptBuilder
         - For business questions, give clear, confident summaries in plain language with bullet points when helpful.
         - Use currency formatting for money values.
         - Never output raw JSON unless the user explicitly asks for JSON.
+        - Write plain sentences. Never use asterisks, markdown bold, backticks, or hash headings.
+        - Put each record on one line, such as "INV-2026-000001 for Ali Ahsan, due July 28, 2026, $119,002.00 outstanding, status Paid."
+        - Skip filler closings such as "let me know if you need anything else."
         """;
 
     public string BuildUserPrompt(string message, AiContextDto context)

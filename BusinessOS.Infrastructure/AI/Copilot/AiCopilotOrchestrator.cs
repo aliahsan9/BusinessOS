@@ -637,6 +637,9 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
         For strategy questions (increase sales, trends, product focus), give concrete next steps.
         Supported writes such as creating an order, customer, product, or supplier are performed by tools. Never say that work is impossible. Never claim it succeeded unless a tool result says so.
         Keep answers concise and actionable.
+        Write plain sentences. Never use asterisks, markdown bold, backticks, or hash headings.
+        Put each record on one line, for example: "INV-2026-000001 for Ali Ahsan, due July 28, 2026, $119,002.00 outstanding, status Paid."
+        Skip filler closings such as "let me know if you need anything else."
         """;
 
     private static string BuildCopilotSystemPrompt() =>
@@ -656,6 +659,9 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
         - When discussing trends, label directional outlook as based on recent history, not guaranteed forecasts.
         - Creating an order, customer, product, or supplier is supported through tools. Do not refuse those operations, and do not claim one succeeded without a successful tool result.
         - Keep customer, product, and quantity details already given in the conversation. Ask only for what is still missing.
+        - Write plain sentences. Never use asterisks, markdown bold, backticks, or hash headings.
+        - Put each record on one line, such as "INV-2026-000001 for Ali Ahsan, due July 28, 2026, $119,002.00 outstanding, status Paid."
+        - Skip filler closings such as "let me know if you need anything else."
         """;
 
     private async Task<IReadOnlyList<AiSearchResultDto>> SearchAsync(string? searchQuery, CancellationToken cancellationToken)
