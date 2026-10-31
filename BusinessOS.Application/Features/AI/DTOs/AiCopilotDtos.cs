@@ -15,12 +15,16 @@ public record AiCopilotChatRequest(
     string? AgentKey = null,
     string? Language = null,
     bool PreferEmployeeTone = true,
-    Guid? WorkflowId = null);
+    Guid? WorkflowId = null,
+    Guid? ConversationId = null,
+    string? ClientRequestId = null);
 
 public sealed class AiCopilotChatResponse
 {
     public string Reply { get; init; } = default!;
     public Guid? SessionId { get; init; }
+    /// <summary>Alias of <see cref="SessionId"/> for conversation-oriented clients.</summary>
+    public Guid? ConversationId { get; init; }
     public AiCopilotIntent Intent { get; init; }
     public IReadOnlyList<string> ToolsUsed { get; init; } = [];
     public IReadOnlyList<AiCitationDto> Citations { get; init; } = [];
@@ -79,6 +83,7 @@ public sealed class AiConversationSessionDto
     public string Title { get; init; } = default!;
     public DateTime LastActivityAt { get; init; }
     public int MessageCount { get; init; }
+    public string? Summary { get; init; }
 }
 
 public sealed class AiConversationMessageDto
@@ -185,17 +190,36 @@ public sealed class AiMemoryStateDto
     public string? LastIntent { get; init; }
     public string? LastAnalyticsQuery { get; init; }
     public IReadOnlyList<AiMemoryTurnDto> RecentTurns { get; init; } = [];
+    public string? ConversationSummary { get; init; }
+    public int HistoryTokenEstimate { get; init; }
     public string? PreferredLanguage { get; init; }
     public string? PreferredAgentKey { get; init; }
     public int? OnboardingStep { get; init; }
     public string? OnboardingDataJson { get; init; }
     public string? TonePreference { get; init; }
+    public string? LastClientRequestId { get; init; }
 }
 
 public sealed class AiMemoryTurnDto
 {
     public string Role { get; init; } = default!;
     public string Content { get; init; } = default!;
+    public int SequenceNumber { get; init; }
+}
+
+public sealed class ConversationContext
+{
+    public string? Summary { get; init; }
+    public IReadOnlyList<AiMemoryTurnDto> RecentTurns { get; init; } = [];
+    public int HistoryTokenEstimate { get; init; }
+}
+
+public sealed class ChatMessageInput
+{
+    public string Role { get; init; } = default!;
+    public string Content { get; init; } = default!;
+    public string? MetadataJson { get; init; }
+    public string? ClientRequestId { get; init; }
 }
 
 public sealed class AiToolResult

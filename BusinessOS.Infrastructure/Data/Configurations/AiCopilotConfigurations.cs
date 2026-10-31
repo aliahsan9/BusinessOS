@@ -14,7 +14,29 @@ public class AiConversationSessionConfiguration : IEntityTypeConfiguration<AiCon
         builder.Property(x => x.UserId).HasMaxLength(450).IsRequired();
         builder.Property(x => x.CurrentPage).HasMaxLength(500);
         builder.Property(x => x.MemoryJson).HasColumnType("nvarchar(max)");
+        builder.Property(x => x.Summary).HasColumnType("nvarchar(max)");
         builder.HasIndex(x => new { x.TenantId, x.UserId, x.LastActivityAt });
+        builder.HasIndex(x => new { x.TenantId, x.UserId, x.IsActive, x.LastActivityAt });
+    }
+}
+
+public class AiMessageConfiguration : IEntityTypeConfiguration<AiMessage>
+{
+    public void Configure(EntityTypeBuilder<AiMessage> builder)
+    {
+        builder.ToTable("AiMessages");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.UserId).HasMaxLength(450).IsRequired();
+        builder.Property(x => x.Role).HasMaxLength(32).IsRequired();
+        builder.Property(x => x.Content).HasColumnType("nvarchar(max)").IsRequired();
+        builder.Property(x => x.MetadataJson).HasColumnType("nvarchar(max)");
+        builder.HasIndex(x => new { x.ConversationId, x.SequenceNumber }).IsUnique();
+        builder.HasIndex(x => new { x.TenantId, x.UserId, x.CreatedAt });
+        builder.HasIndex(x => new { x.ConversationId, x.CreatedAt });
+        builder.HasOne(x => x.Conversation)
+            .WithMany(x => x.ConversationMessages)
+            .HasForeignKey(x => x.ConversationId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }
 

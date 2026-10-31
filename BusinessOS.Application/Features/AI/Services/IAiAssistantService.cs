@@ -14,12 +14,30 @@ public interface IAiAssistantService
         AiCopilotChatRequest request,
         CancellationToken cancellationToken = default);
 
+    Task<AiConversationSessionDto> CreateConversationAsync(
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<AiConversationSessionDto>> ListConversationsAsync(
         int limit = 20,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<AiConversationSessionDto>> ListConversationsAsync(
+        int skip,
+        int limit,
+        CancellationToken cancellationToken = default);
+
+    Task<AiConversationSessionDto?> GetConversationSessionAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<AiConversationMessageDto>> GetConversationAsync(
         Guid sessionId,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<AiConversationMessageDto>> GetConversationAsync(
+        Guid sessionId,
+        int skip,
+        int take,
         CancellationToken cancellationToken = default);
 
     Task<bool> DeleteConversationAsync(

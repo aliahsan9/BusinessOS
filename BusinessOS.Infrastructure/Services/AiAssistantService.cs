@@ -37,11 +37,27 @@ public sealed class AiAssistantService : IAiAssistantService
     public IAsyncEnumerable<AiStreamChunkDto> CopilotStreamAsync(AiCopilotChatRequest request, CancellationToken cancellationToken = default) =>
         _copilot.ProcessStreamAsync(request, cancellationToken);
 
+    public async Task<AiConversationSessionDto> CreateConversationAsync(CancellationToken cancellationToken = default)
+    {
+        var id = await _memory.CreateSessionAsync(cancellationToken: cancellationToken);
+        return await _memory.GetSessionAsync(id, cancellationToken)
+            ?? new AiConversationSessionDto { Id = id, Title = "New conversation", LastActivityAt = DateTime.UtcNow };
+    }
+
     public Task<IReadOnlyList<AiConversationSessionDto>> ListConversationsAsync(int limit = 20, CancellationToken cancellationToken = default) =>
         _memory.ListSessionsAsync(limit, cancellationToken);
 
+    public Task<IReadOnlyList<AiConversationSessionDto>> ListConversationsAsync(int skip, int limit, CancellationToken cancellationToken = default) =>
+        _memory.ListSessionsAsync(skip, limit, cancellationToken);
+
+    public Task<AiConversationSessionDto?> GetConversationSessionAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+        _memory.GetSessionAsync(sessionId, cancellationToken);
+
     public Task<IReadOnlyList<AiConversationMessageDto>> GetConversationAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
         _memory.GetSessionMessagesAsync(sessionId, cancellationToken);
+
+    public Task<IReadOnlyList<AiConversationMessageDto>> GetConversationAsync(Guid sessionId, int skip, int take, CancellationToken cancellationToken = default) =>
+        _memory.GetSessionMessagesAsync(sessionId, skip, take, cancellationToken);
 
     public Task<bool> DeleteConversationAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
         _memory.DeleteSessionAsync(sessionId, cancellationToken);

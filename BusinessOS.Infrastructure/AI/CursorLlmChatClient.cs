@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
+using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Services;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -34,15 +35,19 @@ public sealed class CursorLlmChatClient : ILlmChatClient
         string userId,
         string systemPrompt,
         string userPrompt,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<AiMemoryTurnDto>? conversationHistory = null)
     {
         if (!IsConfigured)
         {
             return null;
         }
 
+        var historyBlock = LlmHistoryFormatter.ToPromptBlock(conversationHistory);
         var prompt = $"""
             {systemPrompt}
+
+            {historyBlock}
 
             {userPrompt}
             """;
@@ -215,9 +220,10 @@ public sealed class CursorLlmChatClient : ILlmChatClient
         string userId,
         string systemPrompt,
         string userPrompt,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default,
+        IReadOnlyList<AiMemoryTurnDto>? conversationHistory = null)
     {
-        var reply = await GenerateReplyAsync(tenantId, userId, systemPrompt, userPrompt, cancellationToken);
+        var reply = await GenerateReplyAsync(tenantId, userId, systemPrompt, userPrompt, cancellationToken, conversationHistory);
         if (string.IsNullOrWhiteSpace(reply))
             yield break;
 
@@ -233,10 +239,11 @@ public sealed class CursorLlmChatClient : ILlmChatClient
         string systemPrompt,
         string userPrompt,
         IReadOnlyList<object> toolResults,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<AiMemoryTurnDto>? conversationHistory = null)
     {
-        var enriched = userPrompt + "\n\nTool results:\n" + System.Text.Json.JsonSerializer.Serialize(toolResults);
-        var reply = await GenerateReplyAsync(tenantId, userId, systemPrompt, enriched, cancellationToken);
+        var enriched = userPrompt + "\n\nLive tool results (current business data):\n" + System.Text.Json.JsonSerializer.Serialize(toolResults);
+        var reply = await GenerateReplyAsync(tenantId, userId, systemPrompt, enriched, cancellationToken, conversationHistory);
         return (reply, null);
     }
 

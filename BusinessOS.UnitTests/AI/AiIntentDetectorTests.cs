@@ -82,4 +82,33 @@ public class AiIntentDetectorTests
         result.Intent.Should().Be(AiCopilotIntent.DocumentSearch);
         result.SuggestedTools.Should().Contain(AiToolName.SearchDocuments);
     }
+
+    [Theory]
+    [InlineData("Which one generated the highest revenue?")]
+    [InlineData("What about last month?")]
+    [InlineData("Continue your previous analysis.")]
+    public void Detect_FollowUpPhrases_UsesConversationMemory(string message)
+    {
+        var memory = new AiMemoryStateDto
+        {
+            LastIntent = nameof(AiCopilotIntent.Analytics),
+            RecentTurns =
+            [
+                new AiMemoryTurnDto { Role = "user", Content = "Show me my top 5 selling products this month.", SequenceNumber = 1 },
+                new AiMemoryTurnDto { Role = "assistant", Content = "Laptop, Mouse, Keyboard, Monitor, Headphones.", SequenceNumber = 2 }
+            ]
+        };
+
+        var result = _detector.Detect(message, Page, memory);
+
+        result.Intent.Should().Be(AiCopilotIntent.FollowUp);
+    }
+
+    [Fact]
+    public void Detect_FollowUp_WithoutHistory_DoesNotForceFollowUp()
+    {
+        var result = _detector.Detect("Which one generated the highest revenue?", Page, Memory);
+
+        result.Intent.Should().NotBe(AiCopilotIntent.FollowUp);
+    }
 }

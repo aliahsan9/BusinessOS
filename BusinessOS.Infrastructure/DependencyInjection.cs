@@ -159,6 +159,7 @@ public static class DependencyInjection
         services.AddScoped<IAiChatService, AiChatService>();
         services.AddScoped<IAiIntentDetector, AiIntentDetector>();
         services.AddScoped<IAiPermissionValidator, AiPermissionValidator>();
+        services.AddScoped<IAiConversationSummarizer, AiConversationSummarizer>();
         services.AddScoped<IAiMemoryService, AiMemoryService>();
         services.AddScoped<IAiAnalyticsQueryService, AiAnalyticsQueryService>();
         services.AddScoped<IAiVectorRagService, AiVectorRagService>();
@@ -240,6 +241,7 @@ public static class DependencyInjection
         services.Configure<EasyPaisaOptions>(configuration.GetSection(EasyPaisaOptions.SectionName));
         services.Configure<BillingOptions>(configuration.GetSection(BillingOptions.SectionName));
         services.Configure<AiOptions>(configuration.GetSection(AiOptions.SectionName));
+        services.Configure<AiMemoryOptions>(configuration.GetSection(AiMemoryOptions.SectionName));
 
         services.AddHttpClient<OpenAiChatClient>((sp, client) =>
         {

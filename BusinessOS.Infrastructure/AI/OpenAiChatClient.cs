@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
+using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -33,7 +34,8 @@ public sealed class OpenAiChatClient : ILlmChatClient
         string userId,
         string systemPrompt,
         string userPrompt,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<AiMemoryTurnDto>? conversationHistory = null)
     {
         if (!IsConfigured)
             return null;
@@ -46,11 +48,7 @@ public sealed class OpenAiChatClient : ILlmChatClient
             {
                 model = _options.OpenAiModel,
                 temperature = 0.3,
-                messages = new object[]
-                {
-                    new { role = "system", content = systemPrompt },
-                    new { role = "user", content = userPrompt }
-                }
+                messages = LlmHistoryFormatter.ToOpenAiMessages(systemPrompt, conversationHistory, userPrompt)
             });
 
             using var response = await _httpClient.SendAsync(request, cancellationToken);
@@ -78,7 +76,8 @@ public sealed class OpenAiChatClient : ILlmChatClient
         string userId,
         string systemPrompt,
         string userPrompt,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default,
+        IReadOnlyList<AiMemoryTurnDto>? conversationHistory = null)
     {
         if (!IsConfigured)
             yield break;
@@ -90,11 +89,7 @@ public sealed class OpenAiChatClient : ILlmChatClient
             model = _options.OpenAiModel,
             temperature = 0.3,
             stream = true,
-            messages = new object[]
-            {
-                new { role = "system", content = systemPrompt },
-                new { role = "user", content = userPrompt }
-            }
+            messages = LlmHistoryFormatter.ToOpenAiMessages(systemPrompt, conversationHistory, userPrompt)
         });
 
         using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
@@ -128,10 +123,11 @@ public sealed class OpenAiChatClient : ILlmChatClient
         string systemPrompt,
         string userPrompt,
         IReadOnlyList<object> toolResults,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<AiMemoryTurnDto>? conversationHistory = null)
     {
-        var enrichedPrompt = userPrompt + "\n\nTool results:\n" + System.Text.Json.JsonSerializer.Serialize(toolResults);
-        var reply = await GenerateReplyAsync(tenantId, userId, systemPrompt, enrichedPrompt, cancellationToken);
+        var enrichedPrompt = userPrompt + "\n\nLive tool results (current business data):\n" + System.Text.Json.JsonSerializer.Serialize(toolResults);
+        var reply = await GenerateReplyAsync(tenantId, userId, systemPrompt, enrichedPrompt, cancellationToken, conversationHistory);
         return (reply, null);
     }
 

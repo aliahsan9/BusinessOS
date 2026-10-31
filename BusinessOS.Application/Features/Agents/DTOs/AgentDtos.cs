@@ -43,6 +43,8 @@ public sealed class AgentChatRequest
     public Guid? InvoiceId { get; init; }
     public Guid? ProjectId { get; init; }
     public Guid? SessionId { get; init; }
+    public Guid? ConversationId { get; init; }
+    public string? ClientRequestId { get; init; }
     public Guid? WorkflowId { get; init; }
     public bool PreferEmployeeTone { get; init; } = true;
     public bool Stream { get; init; }
@@ -53,6 +55,7 @@ public sealed class AgentChatResponse
     public string Reply { get; init; } = default!;
     public string? SpokenReply { get; init; }
     public Guid? SessionId { get; init; }
+    public Guid? ConversationId { get; init; }
     public string AgentKey { get; init; } = default!;
     public string AgentDisplayName { get; init; } = default!;
     public AiCopilotIntent Intent { get; init; }

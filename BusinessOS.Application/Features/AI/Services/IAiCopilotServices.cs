@@ -73,11 +73,43 @@ public interface IAiAnalyticsQueryService
 public interface IAiMemoryService
 {
     Task<AiMemoryStateDto> LoadAsync(Guid sessionId, CancellationToken cancellationToken = default);
+    Task<ConversationContext> GetContextAsync(Guid conversationId, CancellationToken cancellationToken = default);
     Task<Guid> GetOrCreateSessionAsync(AiChatRequest request, Guid? sessionId = null, CancellationToken cancellationToken = default);
+    Task<Guid> CreateSessionAsync(string? title = null, CancellationToken cancellationToken = default);
     Task UpdateAsync(Guid sessionId, AiChatRequest request, AiCopilotIntent intent, string userMessage, string assistantReply, CancellationToken cancellationToken = default);
+    Task CompleteTurnAsync(
+        Guid sessionId,
+        AiChatRequest request,
+        AiCopilotIntent intent,
+        string userMessage,
+        string assistantReply,
+        IReadOnlyList<string>? toolsUsed = null,
+        IReadOnlyList<AiCitationDto>? citations = null,
+        int? executionMs = null,
+        int? tokenUsage = null,
+        string? clientRequestId = null,
+        IReadOnlyList<AiToolResult>? toolResults = null,
+        CancellationToken cancellationToken = default);
+    Task AppendMessageAsync(Guid conversationId, ChatMessageInput message, CancellationToken cancellationToken = default);
+    Task UpdateSummaryAsync(Guid conversationId, string summary, int summarizedThroughSequence, CancellationToken cancellationToken = default);
+    Task<AiConversationTurnLookupDto?> FindTurnByClientRequestIdAsync(Guid sessionId, string clientRequestId, CancellationToken cancellationToken = default);
+    Task<AiConversationSessionDto?> GetSessionAsync(Guid sessionId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<AiConversationSessionDto>> ListSessionsAsync(int limit, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<AiConversationSessionDto>> ListSessionsAsync(int skip, int limit, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<AiConversationMessageDto>> GetSessionMessagesAsync(Guid sessionId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<AiConversationMessageDto>> GetSessionMessagesAsync(Guid sessionId, int skip, int take, CancellationToken cancellationToken = default);
     Task<bool> DeleteSessionAsync(Guid sessionId, CancellationToken cancellationToken = default);
+}
+
+public sealed class AiConversationTurnLookupDto
+{
+    public string UserMessage { get; init; } = default!;
+    public string AssistantReply { get; init; } = default!;
+}
+
+public interface IAiConversationSummarizer
+{
+    Task TrySummarizeAsync(Guid conversationId, CancellationToken cancellationToken = default);
 }
 
 public interface IAiVectorRagService

@@ -57,6 +57,7 @@ public class BusinessOSDbContext
     public DbSet<EntityAuditLog> EntityAuditLogs => Set<EntityAuditLog>();
     public DbSet<AIConversation> AIConversations => Set<AIConversation>();
     public DbSet<AiConversationSession> AiConversationSessions => Set<AiConversationSession>();
+    public DbSet<AiMessage> AiMessages => Set<AiMessage>();
     public DbSet<AiDocument> AiDocuments => Set<AiDocument>();
     public DbSet<AiDocumentChunk> AiDocumentChunks => Set<AiDocumentChunk>();
     public DbSet<AiCopilotAuditLog> AiCopilotAuditLogs => Set<AiCopilotAuditLog>();
@@ -233,6 +234,9 @@ public class BusinessOSDbContext
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<AiConversationSession>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        builder.Entity<AiMessage>()
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
 
         builder.Entity<AiDocument>()
