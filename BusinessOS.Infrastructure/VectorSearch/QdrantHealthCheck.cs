@@ -21,11 +21,11 @@ public sealed class QdrantHealthCheck : IHealthCheck
             var healthy = await _vectorStore.IsHealthyAsync(cancellationToken);
             return healthy
                 ? HealthCheckResult.Healthy("Qdrant is reachable.")
-                : HealthCheckResult.Unhealthy("Qdrant is unreachable.");
+                : HealthCheckResult.Degraded("Qdrant is unreachable. Semantic search is unavailable.");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return HealthCheckResult.Unhealthy("Qdrant health check failed.", ex);
+            return HealthCheckResult.Degraded("Qdrant is unreachable. Semantic search is unavailable.");
         }
     }
 }

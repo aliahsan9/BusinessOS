@@ -1,0 +1,18 @@
+# Local production simulation. This is not a public production deployment.
+# Project name: businessos-prodlocal
+# Frontend: https://127.0.0.1:4202
+# API:      http://127.0.0.1:5103
+# Scalar, OpenAPI, and the development seeder are disabled by Production.
+
+services:
+  api:
+    ports:
+      - "127.0.0.1:5103:8080"
+
+  web:
+    ports:
+      - "127.0.0.1:4202:8443"
+    volumes:
+      - ../BusinessOS_UI/nginx.https.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/config/app-config.prod-local.json:/usr/share/nginx/html/app-config.json:ro
+      - ./deploy/certs:/etc/nginx/certs:ro

@@ -1,12 +1,32 @@
+# Workflow A only: Qdrant for the API and Angular processes running on Windows.
+# The API on the host reaches this service at localhost:6334.
+# Full application environments live in compose.yaml plus an override file.
+# See deploy/README.md.
+#
+#   docker compose -f docker-compose.yml up -d
+#   docker compose -f docker-compose.yml stop
+
 services:
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.15.4
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
     volumes:
       - qdrant_storage:/qdrant/storage
     restart: unless-stopped
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/6333'"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
 
 volumes:
   qdrant_storage:

@@ -90,8 +90,12 @@ public static class DependencyInjection
             }
             else
             {
-                var connectionString = configuration.GetConnectionString("DefaultConnection")
-                    ?? throw new InvalidOperationException("DefaultConnection is not configured.");
+                var connectionString = configuration.GetConnectionString("DefaultConnection");
+                if (string.IsNullOrWhiteSpace(connectionString))
+                {
+                    throw new InvalidOperationException(
+                        "DefaultConnection is not configured. Set ConnectionStrings:DefaultConnection or the ConnectionStrings__DefaultConnection environment variable.");
+                }
 
                 options.UseSqlServer(connectionString);
             }
@@ -335,6 +339,7 @@ public static class DependencyInjection
         services.AddHostedService<VectorBackfillHostedService>();
 
         services.AddHealthChecks()
+            .AddCheck<DatabaseHealthCheck>("database")
             .AddCheck<QdrantHealthCheck>("qdrant");
     }
 }

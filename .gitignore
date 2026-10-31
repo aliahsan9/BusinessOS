@@ -361,3 +361,14 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Local Docker environment files and certificates. Examples stay in source control.
+.env
+.env.*
+!.env.example
+deploy/env/.env.*
+deploy/certs/*
+!deploy/certs/.gitkeep
+*.pfx
+.publish-check/
+deploy/migrations/
