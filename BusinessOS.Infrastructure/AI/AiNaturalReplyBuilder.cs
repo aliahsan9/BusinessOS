@@ -28,7 +28,13 @@ internal static class AiNaturalReplyBuilder
                 return localized;
         }
 
-        if (lower.Contains("accent") || lower.Contains("change your voice"))
+        if (IsChatbotDifference(lower))
+            return $"The difference is that I am {name}, tied to this BusinessOS workspace. I can look up your stock, sales, customers, and invoices, and I only create a record after you confirm it. A normal chatbot answers from general text and cannot see your books.";
+
+        if (lower.Contains("business intelligence"))
+            return "Business intelligence means reading what already happened in the business — sales, stock, invoices, and customers — and saying what deserves attention. I use your workspace numbers when you ask for them, and I say so when there is nothing to report.";
+
+        if (lower.Contains("accent") || lower.Contains("change your voice") || lower.Contains("your voice"))
             return "I speak with the voice selected in this chat. Change it from the voice list, or under Settings → Sophia Voice.";
 
         if (lower.Contains("thank") || lower.Contains("shukriya") || lower.Contains("shukria"))
@@ -88,7 +94,13 @@ internal static class AiNaturalReplyBuilder
         var goodbye = lower.Contains("bye") || lower.Contains("goodbye") || original.Contains("خدا حافظ", StringComparison.Ordinal);
         var greeting = IsGreeting(lower, original);
         if (!thanks && !goodbye && !greeting)
+        {
+            if (language == AgentLanguages.Arabic && (original.Contains("العرب", StringComparison.Ordinal) || lower.Contains("arabic")))
+                return $"حسنًا، سأتحدث معك بالعربية. أنا {name}، ويمكنني مراجعة المبيعات والمخزون والعملاء.";
+            if (language == AgentLanguages.Urdu && (original.Contains("اردو", StringComparison.Ordinal) || lower.Contains("urdu")))
+                return $"ٹھیک ہے، اب میں اردو میں جواب دوں گی۔ میں {name} ہوں۔";
             return null;
+        }
 
         if (language == AgentLanguages.RomanUrdu)
         {
@@ -127,6 +139,9 @@ internal static class AiNaturalReplyBuilder
         var text = lower.Trim().TrimEnd('!', '.', '?');
         return text is "cancel" or "stop" or "never mind" or "nevermind" or "nahi" or "nai" or "mat karo" or "rehne do";
     }
+
+    private static bool IsChatbotDifference(string lower) =>
+        lower.Contains("difference") && (lower.Contains("chatbot") || lower.Contains("chat bot"));
 
     private static bool IsOpenQuestion(string lower)
     {
@@ -224,7 +239,7 @@ internal static class AiNaturalReplyBuilder
         var lower = message.ToLowerInvariant();
 
         if (lower.Contains("urdu"))
-            return "Theek hai — ab main Urdu mein jawab dun gi. Roman Urdu bhi theek hai.";
+            return "ٹھیک ہے، اب میں اردو رسم الخط میں جواب دوں گی۔ رومن اردو بھی ٹھیک ہے۔";
 
         if (lower.Contains("arabic") || lower.Contains("عربي"))
             return "حسناً، سأجيب بالعربية.";

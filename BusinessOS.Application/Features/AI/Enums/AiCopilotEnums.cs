@@ -68,5 +68,6 @@ public enum AiToolName
     DeleteSupplier,
     ShowProfit,
     UpdateCompanyProfile,
-    UpdateTaxDefaults
+    UpdateTaxDefaults,
+    GetOutOfStock
 }

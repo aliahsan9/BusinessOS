@@ -43,7 +43,14 @@ public sealed class GetInventorySummaryTool : AiToolBase
 
         var totalUnits = inventoryRows.Sum(i => i.CurrentStock);
         var lowStock = inventoryRows.Count(i => i.CurrentStock > 0 && i.CurrentStock <= i.ReorderLevel);
-        var outOfStock = inventoryRows.Count(i => i.CurrentStock <= 0);
+        var outOfStock = inventoryRows.Count(i => i.CurrentStock == 0);
+        var highest = inventoryRows
+            .Where(i => i.Product != null)
+            .OrderByDescending(i => i.CurrentStock)
+            .ThenBy(i => i.Product!.Name)
+            .Take(5)
+            .Select(i => $"{i.Product!.Name} ({i.CurrentStock:N0})")
+            .ToList();
         var stockValue = inventoryRows.Sum(i => i.CurrentStock * (i.Product?.CostPrice ?? 0m));
 
         var data = new
@@ -62,7 +69,8 @@ public sealed class GetInventorySummaryTool : AiToolBase
             Data = data,
             Summary =
                 $"Inventory: {inventoryRows.Count:N0} SKU(s), {totalUnits:N0} units on hand, " +
-                $"estimated value {stockValue:C}. Low stock: {lowStock}, out of stock: {outOfStock}."
+                $"estimated value {stockValue:C}. Low stock: {lowStock}, out of stock: {outOfStock}." +
+                (highest.Count == 0 ? "" : $" Highest on-hand: {string.Join(", ", highest)}.")
         };
     }
 }
@@ -77,7 +85,7 @@ public sealed class GetLowStockTool : AiToolBase
     public override string Description => "List products at or below reorder level.";
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
-        ContainsAny(message, "low stock", "low in stock", "reorder", "running low", "out of stock", "stock alert",
+        ContainsAny(message, "low stock", "low in stock", "reorder", "running low", "stock alert",
             "product km", "km stock", "kam stock", "kon sa product km")
         || (intent is AiCopilotIntent.ReportGeneration && ContainsAny(message, "inventory", "stock"));
 
@@ -96,6 +104,38 @@ public sealed class GetLowStockTool : AiToolBase
             Summary = items.Count == 0
                 ? "No low-stock products right now."
                 : $"Low stock ({items.Count}):\n{string.Join("\n", lines)}"
+        };
+    }
+}
+
+public sealed class GetOutOfStockTool : AiToolBase
+{
+    private readonly IInventoryService _inventoryService;
+
+    public GetOutOfStockTool(IInventoryService inventoryService) => _inventoryService = inventoryService;
+
+    public override AiToolName ToolName => AiToolName.GetOutOfStock;
+    public override string Description => "List products whose current stock is exactly zero. Does not include low-stock products that still have units.";
+
+    public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
+        ContainsAny(message, "out of stock", "out-of-stock", "zero stock", "stockout")
+        && !ContainsAny(message, "low stock", "running low", "reorder");
+
+    public override async Task<AiToolResult> ExecuteAsync(
+        AiCopilotExecutionContext context,
+        CancellationToken cancellationToken = default)
+    {
+        var items = await _inventoryService.GetOutOfStockProductsAsync(cancellationToken);
+        var lines = items.Take(15)
+            .Select(i => $"{i.ProductName} ({i.ProductSku}): {i.CurrentStock:N0}");
+
+        return new AiToolResult
+        {
+            ToolName = ToolName.ToString(),
+            Data = items,
+            Summary = items.Count == 0
+                ? "No products are completely out of stock."
+                : $"Out of stock ({items.Count}), current stock is 0:\n{string.Join("\n", lines)}"
         };
     }
 }

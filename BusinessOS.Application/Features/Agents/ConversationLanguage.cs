@@ -86,14 +86,18 @@ public static partial class ConversationLanguage
         else if (MentionsThisMonth(text))
             cues.Add("this month");
 
-        if (ContainsAny(text, "سیلز", "سيلز", "فروخت", "مبيعات", "مبیع"))
+        if (ContainsAny(text, "سیلز", "سيلز", "فروخت", "مبيعات", "مبیع", "سیل"))
             cues.Add("sales");
         if (ContainsAny(text, "آمدنی", "إيراد", "ایراد"))
             cues.Add("revenue");
         if (ContainsAny(text, "منافع", "ربح", "profit"))
             cues.Add("profit");
-        if (ContainsAny(text, "کم اسٹاک", "لو اسٹاک", "low stock", "out of stock"))
+        if (ContainsAny(text, "کم اسٹاک", "لو اسٹاک", "low stock", "اسٹاک ختم"))
             cues.Add("low stock");
+        if (ContainsAny(text, "ٹاپ کسٹمر", "top customer"))
+            cues.Add("top customer");
+        if (ContainsAny(text, "آج", "اليوم"))
+            cues.Add("today");
         if (ContainsAny(text, "انوائس", "فاتورة", "فواتير"))
             cues.Add("invoice");
         if (ContainsAny(text, "متأخر", "اوورڈیو", "overdue", "unpaid"))

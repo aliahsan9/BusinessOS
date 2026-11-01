@@ -476,8 +476,14 @@ public sealed class AgentArgumentExtractor : IAgentArgumentExtractor
 
     private static (string First, string Last)? ParseName(string message)
     {
-        var labeled = ParseLabeled(message, "name", "his name", "her name", "customer name");
-        var raw = labeled ?? ExtractAfterKeywords(message, "customer", "client", "named", "called");
+        var named = Regex.Match(
+            message,
+            @"\b(?:named|called|name\s+is)\s+([A-Za-z][A-Za-z'.-]{0,40}(?:\s+[A-Za-z][A-Za-z'.-]{0,40}){0,3})",
+            RegexOptions.IgnoreCase);
+        var labeled = named.Success
+            ? named.Groups[1].Value
+            : ParseLabeled(message, "customer name", "his name", "her name", "name");
+        var raw = labeled ?? ExtractAfterKeywords(message, "named", "called", "customer", "client");
         if (string.IsNullOrWhiteSpace(raw))
         {
             // "create customer Ahmed Ali"
@@ -491,7 +497,8 @@ public sealed class AgentArgumentExtractor : IAgentArgumentExtractor
             return null;
 
         var lower = raw.ToLowerInvariant();
-        if (lower is "this" or "the" or "that" or "unknown" or "this customer" or "the customer" or "with name")
+        if (lower is "this" or "the" or "that" or "unknown" or "this customer" or "the customer" or "with name"
+            or "details" or "detail" or "complete details")
             return null;
 
         var parts = raw.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -533,10 +540,15 @@ public sealed class AgentArgumentExtractor : IAgentArgumentExtractor
         {
             var m = Regex.Match(
                 message,
-                $@"(?:{Regex.Escape(label)})\s*(?:is|:|=)?\s*([^\.\n,;]+)",
+                $@"(?<![\p{{L}}\p{{N}}]){Regex.Escape(label)}(?![\p{{L}}\p{{N}}])\s*(?:is|:|=)?\s*([^\.\n,;]+)",
                 RegexOptions.IgnoreCase);
-            if (m.Success)
-                return m.Groups[1].Value.Trim();
+            if (!m.Success)
+                continue;
+            var value = m.Groups[1].Value.Trim();
+            if (value.StartsWith("to ", StringComparison.OrdinalIgnoreCase))
+                value = value[3..].Trim();
+            if (value.Length > 0)
+                return value;
         }
         return null;
     }

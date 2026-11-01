@@ -19,7 +19,9 @@ public static partial class SaleOrderLanguage
         "yes do it", "yes go ahead", "yes proceed", "yes please proceed",
         "haan", "han", "ji", "jee", "theek hai", "theek", "kar do",
         "yes delete it", "yes update it", "yes create the order", "yes create the product",
-        "yes create the supplier", "yes save it", "do that", "make it"
+        "yes create the supplier", "yes save it", "do that", "make it",
+        "create it now", "actually create it now", "create this customer", "create the customer",
+        "create this order", "create the order now"
     };
 
     private static readonly HashSet<string> ConfirmationFiller = new(StringComparer.OrdinalIgnoreCase)
@@ -112,6 +114,16 @@ public static partial class SaleOrderLanguage
 
         if (TryParseQuantity(message, out var quantity))
             slots["quantity"] = quantity.ToString(CultureInfo.InvariantCulture);
+
+        if (TryGetRequestedUnitPrice(message, out var unitPrice))
+            slots["unitPrice"] = unitPrice.ToString(CultureInfo.InvariantCulture);
+
+        if (string.IsNullOrWhiteSpace(Get(slots, "productName"))
+            && Regex.IsMatch(message, @"\b(available product|my product|this product)\b", RegexOptions.IgnoreCase))
+        {
+            slots["productName"] = "available product";
+            slots["productQuery"] = "available product";
+        }
     }
 
     public static bool TryParseQuantity(string message, out decimal quantity)
@@ -422,7 +434,7 @@ public static partial class SaleOrderLanguage
     [GeneratedRegex(@"\b(one|two|three|four|five|six|seven|eight|nine|ten)\b", RegexOptions.IgnoreCase)]
     private static partial Regex NumberWordRegex();
 
-    [GeneratedRegex(@"\b\d{1,5}(?:\.\d+)?\b")]
+    [GeneratedRegex(@"\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b|\b\d{1,5}(?:\.\d+)?\b")]
     private static partial Regex BareNumberRegex();
 
     [GeneratedRegex(@"(?<!generation\s)(?<!gen\s)(?<!model\s)(?<!version\s)\b\d{1,5}(?:\.\d+)?\s+(?=[A-Za-z])", RegexOptions.IgnoreCase)]

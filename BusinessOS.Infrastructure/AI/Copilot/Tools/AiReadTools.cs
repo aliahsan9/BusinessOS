@@ -42,6 +42,37 @@ public abstract class AiToolBase : IAiTool
     {
         message = ConversationLanguage.ExpandForRouting(message);
         var now = DateTime.UtcNow;
+        if (ContainsAny(message, "today"))
+        {
+            var start = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Utc);
+            return (start, now, "today");
+        }
+
+        if (ContainsAny(message, "yesterday"))
+        {
+            var start = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Utc).AddDays(-1);
+            return (start, start.AddDays(1).AddTicks(-1), "yesterday");
+        }
+
+        if (ContainsAny(message, "last week", "previous week"))
+        {
+            var weekStart = StartOfWeek(now);
+            var start = weekStart.AddDays(-7);
+            return (start, weekStart.AddTicks(-1), "last week");
+        }
+
+        if (ContainsAny(message, "this week"))
+        {
+            var start = StartOfWeek(now);
+            return (start, now, "this week");
+        }
+
+        if (ContainsAny(message, "last 3 months", "last three months", "past 3 months"))
+        {
+            var start = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(-2);
+            return (start, now, "last 3 months");
+        }
+
         if (ContainsAny(message, "last year", "previous year"))
         {
             var start = new DateTime(now.Year - 1, 1, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -69,6 +100,13 @@ public abstract class AiToolBase : IAiTool
 
         var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
         return (monthStart, now, "this month");
+    }
+
+    private static DateTime StartOfWeek(DateTime now)
+    {
+        var day = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Utc);
+        var delta = ((int)day.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+        return day.AddDays(-delta);
     }
 }
 

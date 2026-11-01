@@ -21,7 +21,11 @@ public sealed class AiInsightService : IAiInsightService
         var now = DateTime.UtcNow;
 
         var overdueInvoices = await _context.Invoices
-            .CountAsync(i => i.OutstandingAmount > 0 && i.DueDate < now, cancellationToken);
+            .CountAsync(i => i.OutstandingAmount > 0
+                && i.DueDate < now
+                && i.Status != "Paid"
+                && i.Status != "Cancelled"
+                && i.Status != "Draft", cancellationToken);
         if (overdueInvoices > 0)
         {
             insights.Add(new AiProactiveInsightDto
@@ -119,7 +123,11 @@ public sealed class AiInsightService : IAiInsightService
         var pendingTasks = await _context.WorkTasks
             .CountAsync(t => t.Status == WorkTaskStatus.Todo || t.Status == WorkTaskStatus.InProgress, cancellationToken);
         var overdueInvoices = await _context.Invoices
-            .CountAsync(i => i.OutstandingAmount > 0 && i.DueDate < now, cancellationToken);
+            .CountAsync(i => i.OutstandingAmount > 0
+                && i.DueDate < now
+                && i.Status != "Paid"
+                && i.Status != "Cancelled"
+                && i.Status != "Draft", cancellationToken);
 
         var summary = insights.Count == 0
             ? "Your business looks healthy today. Review pending tasks and recent sales activity."

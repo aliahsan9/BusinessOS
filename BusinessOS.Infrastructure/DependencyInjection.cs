@@ -241,6 +241,7 @@ public static class DependencyInjection
         services.AddScoped<IAiTool, SearchDocumentsTool>();
         services.AddScoped<IAiTool, GetInventorySummaryTool>();
         services.AddScoped<IAiTool, GetLowStockTool>();
+        services.AddScoped<IAiTool, GetOutOfStockTool>();
         services.AddScoped<IAiTool, GetDeadStockTool>();
         services.AddScoped<IAiTool, CreatePurchaseOrderDraftTool>();
         services.AddScoped<IAiTool, CreatePurchaseOrderTool>();
@@ -302,6 +303,7 @@ public static class DependencyInjection
         });
 
         services.AddScoped<ILlmChatClient, LlmChatClientRouter>();
+        services.AddScoped<SophiaModelToolLoop>();
 
         RegisterVectorSearch(services);
 

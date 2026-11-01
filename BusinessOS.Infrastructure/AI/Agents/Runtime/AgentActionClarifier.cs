@@ -121,6 +121,8 @@ public static class AgentActionClarifier
             return false;
         if (CancelPhrases.Contains(normalized))
             return true;
+        if (IsDeferral(message))
+            return false;
 
         // "Don't create", "please cancel that", "stop it".
         if (normalized.Length > 48)
@@ -138,6 +140,8 @@ public static class AgentActionClarifier
     {
         if (IsCancel(message) || IsSmallTalk(message))
             return true;
+        if (IsDraftReview(message) || IsDeferral(message))
+            return false;
 
         var normalized = Normalize(message);
         if (normalized.Length == 0)
@@ -165,7 +169,9 @@ public static class AgentActionClarifier
 
     public static bool IsDifferentCommand(string message, AiToolName pendingTool)
     {
-        if (IsPureConfirmation(message) || IsCancel(message) || IsSmallTalk(message))
+        if (IsPureConfirmation(message) || IsCancel(message) || IsSmallTalk(message) || IsDraftReview(message) || IsDeferral(message))
+            return false;
+        if (pendingTool == AiToolName.CreateSale && IsSaleLineDetail(message))
             return false;
 
         var lower = message.ToLowerInvariant();
@@ -209,6 +215,27 @@ public static class AgentActionClarifier
         ApplyContext(tool, slots, state, page);
         if (!string.IsNullOrWhiteSpace(pending?.NextField))
             AssignBare(pending.NextField, message, slots);
+
+        if (IsDraftReview(message))
+        {
+            var review = new AgentPendingAction
+            {
+                Tool = tool,
+                Slots = slots,
+                OriginalRequest = original,
+                NextField = pending?.NextField,
+                UpdatedAtUtc = DateTime.UtcNow
+            };
+            var stillMissing = Missing(tool, slots, state);
+            review.NextField = stillMissing.Count > 0 ? stillMissing[0] : null;
+            review.AwaitingConfirmation = stillMissing.Count == 0;
+            var reviewText = DescribeDraft(tool, slots);
+            if (stillMissing.Count > 0)
+                reviewText += "\n" + QuestionForMissing(tool, stillMissing, slots);
+            else
+                reviewText += "\nSay create it when you want me to save this.";
+            return Ask(tool, review, reviewText, includeCancelOnly: stillMissing.Count > 0);
+        }
 
         var draft = new AgentPendingAction
         {
@@ -798,7 +825,7 @@ public static class AgentActionClarifier
                     : "Country: Pakistan, unless you want a different one");
                 return "Here's the customer I'll create:\n" + Bullet(lines) + "\nShould I create this customer?";
             case AiToolName.CreateSale:
-                return $"I'll create an order for {DisplayCustomer(slots)}: {Get(slots, "productName") ?? "the selected product"} × {Get(slots, "quantity")}.\nShould I go ahead?";
+                return $"I'll create an order for {DisplayCustomer(slots)}: {Get(slots, "productName") ?? "the selected product"} × {Get(slots, "quantity")}.{SaleTotalClause(slots)}\nShould I go ahead?";
             case AiToolName.CreateProduct:
                 var costNote = Has(slots, "costPrice")
                     ? Get(slots, "costPrice")
@@ -878,6 +905,60 @@ public static class AgentActionClarifier
 
     private static string ConfirmMessage(AiToolName tool) => ConfirmLabel(tool);
 
+    private static bool IsDeferral(string message)
+    {
+        var normalized = Normalize(message);
+        return normalized.Contains("yet", StringComparison.Ordinal)
+            || normalized.Contains("not now", StringComparison.Ordinal)
+            || normalized.Contains("hold on", StringComparison.Ordinal);
+    }
+
+    private static bool IsDraftReview(string message)
+    {
+        var lower = message.ToLowerInvariant();
+        if (Regex.IsMatch(lower, @"\b(total|subtotal|amount|details|draft|summary)\b"))
+            return true;
+        return Regex.IsMatch(lower, @"\b(show|see|review|display)\b")
+            && Regex.IsMatch(lower, @"\b(detail|details|draft|customer|order|this)\b");
+    }
+
+    private static bool IsSaleLineDetail(string message)
+    {
+        var lower = message.ToLowerInvariant();
+        if (Regex.IsMatch(lower, @"\b(new product|create product|add product)\b"))
+            return false;
+        return Regex.IsMatch(lower, @"\b(unit|units|qty|quantity|each)\b")
+            || Regex.IsMatch(lower, @"\badd\b.+\bproduct\b");
+    }
+
+    private static string SaleTotalClause(Dictionary<string, string?> slots)
+    {
+        if (!SaleOrderLanguage.TryGetSlotQuantity(slots, out var quantity))
+            return "";
+        var raw = Get(slots, "unitPrice") ?? Get(slots, "price");
+        if (!decimal.TryParse(raw, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var price))
+            return "";
+        var total = quantity * price;
+        return $" Unit price {price.ToString("#,##0", System.Globalization.CultureInfo.InvariantCulture)}, total {total.ToString("#,##0", System.Globalization.CultureInfo.InvariantCulture)}.";
+    }
+
+    private static string DescribeDraft(AiToolName tool, Dictionary<string, string?> slots)
+    {
+        if (tool == AiToolName.CreateCustomer)
+        {
+            return "Here are the customer details so far:\n"
+                + $"Name: {DisplayPerson(slots)}\n"
+                + $"Phone: {Get(slots, "phone") ?? "(not set)"}\n"
+                + $"Email: {Get(slots, "email") ?? "(not set)"}\n"
+                + $"Address: {Get(slots, "address") ?? Get(slots, "city") ?? "(not set)"}";
+        }
+
+        if (tool == AiToolName.CreateSale)
+            return $"Order draft for {DisplayCustomer(slots)}: {Get(slots, "productName") ?? "(product not set)"} × {Get(slots, "quantity") ?? "(quantity not set)"}.{SaleTotalClause(slots)}";
+
+        return "Here is what I have so far.";
+    }
+
     private static AiToolName? GuessCommandTool(string lower)
     {
         var delete = lower.Contains("delete") || lower.Contains("remove");
@@ -916,7 +997,7 @@ public static class AgentActionClarifier
     {
         var match = Regex.Match(
             message,
-            @"(?:change|update|correct|actually|instead)\s+(?:the\s+)?(phone|mobile|email|address|city|name)\s+(?:to|is|:)\s*([^\n.]+)",
+            @"(?:change|update|correct|actually|instead)\s+(?:his|her|their|the|my)?\s*(phone|mobile|email|address|city|name)\s+(?:to|is|:)\s*([^\n.]+)",
             RegexOptions.IgnoreCase);
         if (!match.Success)
             return;
@@ -936,6 +1017,8 @@ public static class AgentActionClarifier
                 break;
             case "address":
                 slots["address"] = value;
+                if (IsKnownCity(value))
+                    slots["city"] = value;
                 break;
             case "city":
                 slots["city"] = value;
@@ -949,9 +1032,17 @@ public static class AgentActionClarifier
 
     private static void TakeLabeled(string message, Dictionary<string, string?> slots, string slot, string label)
     {
-        var match = Regex.Match(message, $@"(?:{label})\s*(?:is|:)?\s*([^,\n.]+)", RegexOptions.IgnoreCase);
-        if (match.Success)
-            slots[slot] = match.Groups[1].Value.Trim();
+        var match = Regex.Match(
+            message,
+            $@"(?<![\p{{L}}\p{{N}}]){label}(?![\p{{L}}\p{{N}}])\s*(?:is|:)?\s*([^,\n.]+)",
+            RegexOptions.IgnoreCase);
+        if (!match.Success)
+            return;
+        var value = match.Groups[1].Value.Trim();
+        if (value.StartsWith("to ", StringComparison.OrdinalIgnoreCase))
+            value = value[3..].Trim();
+        if (value.Length > 0)
+            slots[slot] = value;
     }
 
     private static bool LooksLikeName(string? text)
@@ -1017,6 +1108,15 @@ public static class AgentActionClarifier
         if (key.Equals("customerName", StringComparison.OrdinalIgnoreCase)
             && !message.Contains(newValue, StringComparison.OrdinalIgnoreCase))
             return true;
+
+        if (key.Equals("firstName", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("lastName", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("fullName", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("name", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!Regex.IsMatch(message, @"\b(named|called|name\s+is)\b", RegexOptions.IgnoreCase))
+                return true;
+        }
 
         if (key.Equals("productName", StringComparison.OrdinalIgnoreCase) && IsPureConfirmation(message))
             return true;

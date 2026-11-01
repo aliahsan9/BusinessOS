@@ -30,6 +30,7 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
     private readonly IAiInsightService _insightService;
     private readonly IAiPromptBuilder _promptBuilder;
     private readonly ILlmChatClient _llmChat;
+    private readonly SophiaModelToolLoop _modelLoop;
     private readonly IAgentPersonaService? _personaService;
     private readonly ILogger<AiCopilotOrchestrator> _logger;
 
@@ -48,6 +49,7 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
         IAiInsightService insightService,
         IAiPromptBuilder promptBuilder,
         ILlmChatClient llmChat,
+        SophiaModelToolLoop modelLoop,
         ILogger<AiCopilotOrchestrator> logger,
         IAgentPersonaService? personaService = null)
     {
@@ -65,6 +67,7 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
         _insightService = insightService;
         _promptBuilder = promptBuilder;
         _llmChat = llmChat;
+        _modelLoop = modelLoop;
         _logger = logger;
         _personaService = personaService;
     }
@@ -139,6 +142,38 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
             var denied = BuildDeniedResponse(intentResult.Intent, sessionId, permission, sw.ElapsedMilliseconds);
             await _observability.LogAsync(sessionId, intentResult.Intent, message, [], [], (int)sw.ElapsedMilliseconds, null, false, permission.DenialReason, cancellationToken);
             return new PipelineResult { Response = denied };
+        }
+
+        if (_modelLoop.IsAvailable
+            && intentResult.Intent is not (AiCopilotIntent.ActionCreate or AiCopilotIntent.Onboarding or AiCopilotIntent.DashboardInsight))
+        {
+            var model = await _modelLoop.TryAnswerAsync(
+                message,
+                request.Language,
+                page,
+                memory,
+                sessionId,
+                cancellationToken);
+            var keywordNeedsData = intentResult.SuggestedTools.Count > 0
+                && intentResult.Intent is not (AiCopilotIntent.Conversational or AiCopilotIntent.Help);
+            if (model is not null && (model.ToolCalls > 0 || !keywordNeedsData))
+            {
+                sw.Stop();
+                return await FinalizeAsync(
+                    request,
+                    chatRequest,
+                    sessionId,
+                    intentResult.Intent,
+                    message,
+                    model.Reply,
+                    model.ToolsUsed,
+                    [],
+                    null,
+                    sw.ElapsedMilliseconds,
+                    model.TokenUsage,
+                    stream,
+                    cancellationToken);
+            }
         }
 
         if (intentResult.Intent is AiCopilotIntent.DashboardInsight)

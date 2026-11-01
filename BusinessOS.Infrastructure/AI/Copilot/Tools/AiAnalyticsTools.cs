@@ -13,7 +13,7 @@ public sealed class GetRevenueTool : AiToolBase
     public GetRevenueTool(IApplicationDbContext context) => _context = context;
 
     public override AiToolName ToolName => AiToolName.GetRevenue;
-    public override string Description => "Calculate revenue totals by period (month, quarter, year).";
+    public override string Description => "Calculate invoiced revenue for a period. This is invoice grand total, not profit and not uninvoiced orders.";
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
         intent is AiCopilotIntent.Analytics or AiCopilotIntent.FollowUp
@@ -35,7 +35,7 @@ public sealed class GetRevenueTool : AiToolBase
         {
             ToolName = ToolName.ToString(),
             Data = new { revenue, paid, period = label, start, end },
-            Summary = $"Total revenue {label}: {revenue:C} ({paid:C} collected)."
+            Summary = $"Invoiced revenue {label}: {revenue:C} ({paid:C} collected). This is invoice grand total, not profit and not orders that were never invoiced."
         };
     }
 }

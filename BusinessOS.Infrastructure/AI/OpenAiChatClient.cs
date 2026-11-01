@@ -11,7 +11,7 @@ namespace BusinessOS.Infrastructure.AI;
 /// <summary>
 /// OpenAI Chat Completions API — primary LLM for RAG when OpenAiApiKey is configured.
 /// </summary>
-public sealed class OpenAiChatClient : ILlmChatClient
+public sealed partial class OpenAiChatClient : ILlmChatClient
 {
     private readonly HttpClient _httpClient;
     private readonly AiOptions _options;
@@ -40,6 +40,7 @@ public sealed class OpenAiChatClient : ILlmChatClient
         if (!IsConfigured)
             return null;
 
+        LastTotalTokens = null;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, "v1/chat/completions");
@@ -62,6 +63,7 @@ public sealed class OpenAiChatClient : ILlmChatClient
 
             var parsed = System.Text.Json.JsonSerializer.Deserialize<ChatCompletionResponse>(body);
             var content = parsed?.Choices?.FirstOrDefault()?.Message?.Content;
+            LastTotalTokens = parsed?.Usage?.TotalTokens;
             return string.IsNullOrWhiteSpace(content) ? null : content.Trim();
         }
         catch (Exception ex)
@@ -128,7 +130,7 @@ public sealed class OpenAiChatClient : ILlmChatClient
     {
         var enrichedPrompt = userPrompt + "\n\nLive tool results (current business data):\n" + System.Text.Json.JsonSerializer.Serialize(toolResults);
         var reply = await GenerateReplyAsync(tenantId, userId, systemPrompt, enrichedPrompt, cancellationToken, conversationHistory);
-        return (reply, null);
+        return (reply, LastTotalTokens);
     }
 
     private static string? ParseStreamDelta(string json)
@@ -152,10 +154,21 @@ public sealed class OpenAiChatClient : ILlmChatClient
     private static string Truncate(string text, int max) =>
         text.Length <= max ? text : text[..max] + "…";
 
+    private int? LastTotalTokens { get; set; }
+
     private sealed class ChatCompletionResponse
     {
         [JsonPropertyName("choices")]
         public List<Choice>? Choices { get; init; }
+
+        [JsonPropertyName("usage")]
+        public UsageBody? Usage { get; init; }
+    }
+
+    private sealed class UsageBody
+    {
+        [JsonPropertyName("total_tokens")]
+        public int? TotalTokens { get; init; }
     }
 
     private sealed class Choice

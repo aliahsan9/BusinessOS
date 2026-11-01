@@ -64,12 +64,20 @@ public static class AiToolSafetyGate
     public static bool IsInstructionOverride(string message)
     {
         var text = message.ToLowerInvariant();
-        return text.Contains("ignore previous instructions", StringComparison.Ordinal)
+        if (text.Contains("ignore previous instructions", StringComparison.Ordinal)
             || text.Contains("ignore all previous", StringComparison.Ordinal)
+            || text.Contains("ignore your previous", StringComparison.Ordinal)
             || text.Contains("disregard your instructions", StringComparison.Ordinal)
             || text.Contains("disregard previous", StringComparison.Ordinal)
             || text.Contains("override the system", StringComparison.Ordinal)
-            || text.Contains("you are now", StringComparison.Ordinal);
+            || text.Contains("you are now", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return System.Text.RegularExpressions.Regex.IsMatch(
+            text,
+            @"\bignore\b(?:\s+\w+){0,3}\s+previous\s+instructions\b");
     }
 
     private static bool RequestsUnboundedDestruction(string message)
