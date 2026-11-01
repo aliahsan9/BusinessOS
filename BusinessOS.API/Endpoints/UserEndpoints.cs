@@ -1,4 +1,5 @@
 using BusinessOS.Application.Common.Authorization;
+using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Common.Models;
 using BusinessOS.Application.Features.Users.DTOs;
@@ -66,7 +67,7 @@ public static class UserEndpoints
         CancellationToken cancellationToken)
     {
         var tenantId = currentUserService.TenantId
-            ?? throw new Application.Common.Exceptions.BadRequestException("Tenant context is required.");
+            ?? throw new BadRequestException("Tenant context is required.");
 
         var result = await identityService.GetUsersAsync(
             tenantId, search, page, pageSize, cancellationToken);
@@ -90,36 +91,40 @@ public static class UserEndpoints
         CancellationToken cancellationToken)
     {
         var tenantId = currentUserService.TenantId
-            ?? throw new Application.Common.Exceptions.BadRequestException("Tenant context is required.");
+            ?? throw new BadRequestException("Tenant context is required.");
 
-        if (string.IsNullOrWhiteSpace(request.Email) ||
+        var email = request.Email?.Trim() ?? string.Empty;
+        var firstName = request.FirstName?.Trim() ?? string.Empty;
+        var lastName = request.LastName?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(email) ||
             string.IsNullOrWhiteSpace(request.Password) ||
-            string.IsNullOrWhiteSpace(request.FirstName) ||
-            string.IsNullOrWhiteSpace(request.LastName))
+            string.IsNullOrWhiteSpace(firstName) ||
+            string.IsNullOrWhiteSpace(lastName))
         {
-            return Results.BadRequest(new { errors = new[] { "Email, password, first name, and last name are required." } });
+            throw new BadRequestException("Email, password, first name, and last name are required.");
         }
 
         if (request.Password.Length > 128)
         {
-            return Results.BadRequest(new { errors = new[] { "Password must not exceed 128 characters." } });
+            throw new BadRequestException("Password must not exceed 128 characters.");
         }
 
         var result = await identityService.CreateUserAsync(
             new CreateUserRequest(
-                request.Email,
+                email,
                 request.Password,
-                request.FirstName,
-                request.LastName,
+                firstName,
+                lastName,
                 tenantId),
             cancellationToken);
 
         if (!result.Succeeded)
-            return Results.BadRequest(new { errors = result.Errors });
+            throw new BadRequestException(string.Join(" ", result.Errors));
 
-        var user = await identityService.FindByEmailAsync(request.Email, cancellationToken);
+        var user = await identityService.FindByEmailAsync(email, cancellationToken);
         if (user is null)
-            return Results.Created($"/api/v1/users/{request.Email}", new { email = request.Email });
+            return Results.Created($"/api/v1/users/{email}", new { email });
 
         var userDetails = await identityService.GetUserByIdAsync(user.Id, cancellationToken);
         return Results.Created($"/api/v1/users/{user.Id}", userDetails);
@@ -163,14 +168,14 @@ public static class UserEndpoints
             request.NewPassword.Length < 8 ||
             request.NewPassword.Length > 128)
         {
-            return Results.BadRequest(new { errors = new[] { "New password must be between 8 and 128 characters." } });
+            throw new BadRequestException("New password must be between 8 and 128 characters.");
         }
 
         var result = await identityService.ResetPasswordAsync(
             userId, request.NewPassword, cancellationToken);
 
         if (!result.Succeeded)
-            return Results.BadRequest(new { errors = result.Errors });
+            throw new BadRequestException(string.Join(" ", result.Errors));
 
         return Results.NoContent();
     }
