@@ -75,7 +75,7 @@ public sealed class SaleOrderDraftService : ISaleOrderDraftService
             return Ask(
                 pending,
                 slots,
-                $"I couldn't find a customer named {Get(slots, "customerName")} in this business. Tell me the customer's name, or create the customer first.",
+                CustomerNotFoundQuestion(slots, pending.OriginalRequest),
                 "customer");
         }
 
@@ -127,7 +127,7 @@ public sealed class SaleOrderDraftService : ISaleOrderDraftService
             return Copy(decision, pending, AdjustQuestion(decision.Question, customer));
         }
 
-        var quote = BuildQuote(customer.Value, product.Value, quantity, slots);
+        var quote = BuildQuote(customer.Value, product.Value, quantity, slots, pending.OriginalRequest);
         if (!quote.CanCreate)
             return Ask(pending, slots, quote.Text, "quantity");
 
@@ -225,11 +225,25 @@ public sealed class SaleOrderDraftService : ISaleOrderDraftService
         }
     }
 
+    private static string CustomerNotFoundQuestion(Dictionary<string, string?> slots, string? originalRequest)
+    {
+        var name = Get(slots, "customerName");
+        var productName = Get(slots, "productName");
+        var held = SaleOrderLanguage.TryGetSlotQuantity(slots, out var quantity) && !string.IsNullOrWhiteSpace(productName)
+            ? $" I still have {quantity.ToString("0.##", CultureInfo.InvariantCulture)} × {productName} for the order once {name} exists."
+            : "";
+        var price = SaleOrderLanguage.TryGetRequestedUnitPrice(originalRequest, out var requested)
+            ? $" Orders use the catalog price, so {Money(requested)} each is not saved as the unit price."
+            : "";
+        return $"I couldn't find a customer named {name}.{held} Create {name} first, then ask me to make the sale.{price}";
+    }
+
     private static QuoteResult BuildQuote(
         SaleCustomerHit customer,
         SaleProductHit product,
         decimal quantity,
-        Dictionary<string, string?> slots)
+        Dictionary<string, string?> slots,
+        string? originalRequest)
     {
         var discount = ReadMoney(slots, "discount");
         var tax = ReadMoney(slots, "tax");
@@ -246,6 +260,9 @@ public sealed class SaleOrderDraftService : ISaleOrderDraftService
             $"Tax: {Money(tax)}",
             $"Total: {Money(total)}"
         };
+        var priceNote = PriceNote(originalRequest, product.SalePrice);
+        if (!string.IsNullOrWhiteSpace(priceNote))
+            lines.Insert(4, priceNote);
 
         if (!product.HasInventory)
         {
@@ -342,6 +359,14 @@ public sealed class SaleOrderDraftService : ISaleOrderDraftService
     }
 
     private static string Money(decimal value) => value.ToString("0.00", CultureInfo.InvariantCulture);
+
+    private static string PriceNote(string? message, decimal catalogPrice)
+    {
+        if (!SaleOrderLanguage.TryGetRequestedUnitPrice(message, out var requested) || requested == catalogPrice)
+            return "";
+
+        return $"You mentioned {Money(requested)} each. This order uses the catalog price instead.";
+    }
 
     private static string Bullet(IEnumerable<string> lines) =>
         string.Join("\n", lines.Select(line => "• " + line));

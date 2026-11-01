@@ -3,6 +3,7 @@ using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Idempotency;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Invoices.Services;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using MediatR;
@@ -190,6 +191,8 @@ public sealed class CreatePaymentCommandHandler : IRequestHandler<CreatePaymentC
                 ErrorCodes.ConcurrencyConflict);
         }
 
+        await ReconcileSafeAsync(order.Id, cancellationToken);
+
         await EntityCacheInvalidator.InvalidatePaymentAsync(
             _cache,
             tenantId,
@@ -203,5 +206,17 @@ public sealed class CreatePaymentCommandHandler : IRequestHandler<CreatePaymentC
             tenantId);
 
         return payment.Id;
+    }
+
+    private async Task ReconcileSafeAsync(Guid orderId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await InvoicePaymentCalculator.ReconcileOrdersAsync(_context, [orderId], cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Invoice balance reconcile failed for order {OrderId}", orderId);
+        }
     }
 }

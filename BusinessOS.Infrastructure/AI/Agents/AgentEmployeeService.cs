@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Agents.DTOs;
+using BusinessOS.Application.Features.Agents;
 using BusinessOS.Application.Features.Agents.Enums;
 using BusinessOS.Application.Features.Agents.Services;
 using BusinessOS.Application.Features.AI.DTOs;
@@ -74,7 +75,12 @@ public sealed class AgentEmployeeService : IAgentEmployeeService
             request.AgentKey
             ?? voice.PreferredAgentKey
             ?? await _personaService.GetDefaultAgentKeyAsync(cancellationToken));
-        var language = AgentLanguages.Normalize(request.Language ?? voice.Language);
+        var voiceLanguage = AgentLanguages.Coalesce(voice.Language);
+        var language = ConversationLanguage.ResolveTurn(
+            request.Message,
+            request.Language,
+            memoryLanguage: null,
+            voiceLanguage);
 
         var persona = await _personaService.ResolvePersonaAsync(agentKey, cancellationToken);
 

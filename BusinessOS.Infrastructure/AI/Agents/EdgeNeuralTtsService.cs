@@ -39,9 +39,13 @@ public sealed class EdgeNeuralTtsService : ITtsProvider
 
     public IReadOnlyList<TtsVoiceOption> Voices { get; } =
     [
-        new() { Id = "en-US-JennyNeural", Label = "Jenny", Description = "Warm" },
-        new() { Id = "en-US-AriaNeural", Label = "Aria", Description = "Clear" },
-        new() { Id = "en-US-GuyNeural", Label = "Guy", Description = "Steady" }
+        new() { Id = "en-US-JennyNeural", Label = "Jenny", Description = "English" },
+        new() { Id = "en-US-AriaNeural", Label = "Aria", Description = "English" },
+        new() { Id = "en-US-GuyNeural", Label = "Guy", Description = "English" },
+        new() { Id = "ur-PK-UzmaNeural", Label = "Uzma", Description = "Urdu" },
+        new() { Id = "ur-PK-AsadNeural", Label = "Asad", Description = "Urdu" },
+        new() { Id = "ar-SA-ZariyahNeural", Label = "Zariyah", Description = "Arabic" },
+        new() { Id = "ar-SA-HamedNeural", Label = "Hamed", Description = "Arabic" }
     ];
 
     public async Task<SophiaTtsResult> SynthesizeAsync(
@@ -56,9 +60,9 @@ public sealed class EdgeNeuralTtsService : ITtsProvider
         if (cleaned.Length > 900)
             cleaned = cleaned[..900].TrimEnd() + "…";
 
-        var voice = ResolveVoice(request.VoiceName);
+        var voice = ResolveVoice(request.VoiceName, request.Language);
         var speechRate = request.SpeechRate;
-        const string xmlLang = "en-US";
+        var xmlLang = XmlLang(request.Language);
 
         try
         {
@@ -244,17 +248,46 @@ public sealed class EdgeNeuralTtsService : ITtsProvider
         return 0;
     }
 
-    private string ResolveVoice(string? requested)
+    private string ResolveVoice(string? requested, string? language)
     {
+        var fallback = language switch
+        {
+            not null when language.StartsWith("ur", StringComparison.OrdinalIgnoreCase) => "ur-PK-UzmaNeural",
+            not null when language.StartsWith("ar", StringComparison.OrdinalIgnoreCase) => "ar-SA-ZariyahNeural",
+            _ => DefaultVoice
+        };
+
         if (!string.IsNullOrWhiteSpace(requested) &&
             !requested.Equals("default", StringComparison.OrdinalIgnoreCase))
         {
             var match = Voices.FirstOrDefault(v => v.Id.Equals(requested.Trim(), StringComparison.OrdinalIgnoreCase));
-            if (match is not null)
+            if (match is not null && VoiceFitsLanguage(match.Id, language))
                 return match.Id;
         }
 
-        return DefaultVoice;
+        return fallback;
+    }
+
+    private static bool VoiceFitsLanguage(string voiceId, string? language)
+    {
+        if (string.IsNullOrWhiteSpace(language) || language.StartsWith("en", StringComparison.OrdinalIgnoreCase))
+            return voiceId.StartsWith("en-", StringComparison.OrdinalIgnoreCase);
+        if (language.StartsWith("ur", StringComparison.OrdinalIgnoreCase))
+            return voiceId.StartsWith("ur-", StringComparison.OrdinalIgnoreCase);
+        if (language.StartsWith("ar", StringComparison.OrdinalIgnoreCase))
+            return voiceId.StartsWith("ar-", StringComparison.OrdinalIgnoreCase);
+        return true;
+    }
+
+    private static string XmlLang(string? language)
+    {
+        if (string.IsNullOrWhiteSpace(language))
+            return "en-US";
+        if (language.StartsWith("ur", StringComparison.OrdinalIgnoreCase))
+            return "ur-PK";
+        if (language.StartsWith("ar", StringComparison.OrdinalIgnoreCase))
+            return "ar-SA";
+        return "en-US";
     }
 
     private static string GenerateSecMsGec(double clockSkewSeconds = 0)

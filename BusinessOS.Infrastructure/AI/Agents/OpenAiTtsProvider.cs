@@ -74,6 +74,18 @@ public sealed class OpenAiTtsProvider : ITtsProvider
         var instructions = SupportsInstructions && !string.IsNullOrWhiteSpace(_tts.Instructions)
             ? _tts.Instructions.Trim()
             : null;
+        if (SupportsInstructions)
+        {
+            var hint = request.Language switch
+            {
+                not null when request.Language.StartsWith("ur", StringComparison.OrdinalIgnoreCase) =>
+                    " The text is Urdu. Pronounce it as natural spoken Urdu. Do not translate it.",
+                not null when request.Language.StartsWith("ar", StringComparison.OrdinalIgnoreCase) =>
+                    " The text is Arabic. Pronounce it as natural spoken Arabic. Do not translate it.",
+                _ => " Speak the text in the language it is written. Do not translate it."
+            };
+            instructions = string.IsNullOrWhiteSpace(instructions) ? hint.Trim() : instructions + hint;
+        }
 
         var client = _httpClientFactory.CreateClient(HttpClientName);
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "v1/audio/speech");

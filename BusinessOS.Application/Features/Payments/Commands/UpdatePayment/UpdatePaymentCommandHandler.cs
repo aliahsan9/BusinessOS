@@ -1,6 +1,7 @@
 using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Invoices.Services;
 using BusinessOS.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -64,6 +65,7 @@ public sealed class UpdatePaymentCommandHandler : IRequestHandler<UpdatePaymentC
         if (payment.RefundedAmount > amount)
             throw new BadRequestException("Payment amount cannot be less than the amount already refunded.");
 
+        var previousOrderId = payment.OrderId;
         payment.OrderId = request.OrderId;
         payment.CustomerId = request.CustomerId;
         payment.Amount = amount;
@@ -83,6 +85,18 @@ public sealed class UpdatePaymentCommandHandler : IRequestHandler<UpdatePaymentC
             throw new ConflictException(
                 "This payment was changed by someone else. Refresh and try again.",
                 ErrorCodes.ConcurrencyConflict);
+        }
+
+        try
+        {
+            await InvoicePaymentCalculator.ReconcileOrdersAsync(
+                _context,
+                [previousOrderId, payment.OrderId],
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Invoice balance reconcile failed for payment {PaymentId}", payment.Id);
         }
 
         await EntityCacheInvalidator.InvalidatePaymentAsync(

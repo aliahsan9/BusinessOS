@@ -272,9 +272,10 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
         IReadOnlyList<AiCitationDto> citations,
         CancellationToken cancellationToken)
     {
-        var fallback = intent is AiCopilotIntent.Help
-            ? AiNaturalReplyBuilder.BuildHelpReply(message)
-            : AiNaturalReplyBuilder.BuildConversationalReply(
+        if (intent is AiCopilotIntent.Help)
+            return (AiNaturalReplyBuilder.BuildHelpReply(message), null);
+
+        var fallback = AiNaturalReplyBuilder.BuildConversationalReply(
                 message,
                 page,
                 request.PreferEmployeeTone ? ResolveEmployeeDisplayName(request.AgentKey) : null,
@@ -470,7 +471,8 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
                 tokenUsage,
                 request.ClientRequestId,
                 toolResults,
-                cancellationToken);
+                cancellationToken,
+                preferredLanguage: request.Language);
             await _limitService.RecordAiProviderUsageAsync(
                 inputTokens: null,
                 outputTokens: null,

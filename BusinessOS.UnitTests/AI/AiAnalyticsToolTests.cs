@@ -188,5 +188,61 @@ public class AiAnalyticsToolTests
         result.Summary.Should().Contain("This month so far");
         result.Summary.Should().Contain("Last month");
         result.Summary.Should().Contain("directional");
+        result.Summary.Should().Contain("not enough month-to-month volume");
+    }
+
+    [Fact]
+    public async Task GetSalesTrendsTool_NamesOnlyProductsWithEnoughPriorSales()
+    {
+        var (context, tenantId, _) = InMemoryDbContextFactory.Create();
+        var now = DateTime.UtcNow;
+        var thisMonth = new DateTime(now.Year, now.Month, 5, 0, 0, 0, DateTimeKind.Utc);
+        var lastMonth = thisMonth.AddMonths(-1);
+        var customerId = Guid.NewGuid();
+        var categoryId = Guid.NewGuid();
+        var decliningId = Guid.NewGuid();
+        var thinId = Guid.NewGuid();
+
+        context.Categories.Add(new Category { Id = categoryId, TenantId = tenantId, Name = "Electronics" });
+        context.Products.AddRange(
+            new Product { Id = decliningId, TenantId = tenantId, CategoryId = categoryId, Name = "Desk Lamp", SKU = "DL-1", CostPrice = 5, SalePrice = 12 },
+            new Product { Id = thinId, TenantId = tenantId, CategoryId = categoryId, Name = "Tiny Sample", SKU = "TS-1", CostPrice = 1, SalePrice = 2 });
+        context.Customers.Add(new Customer
+        {
+            Id = customerId,
+            TenantId = tenantId,
+            FirstName = "Grace",
+            LastName = "Hopper",
+            Email = "grace@example.com",
+            PhoneNumber = "222",
+            Address = "2 Street",
+            City = "NYC",
+            Country = "US",
+            PostalCode = "10001"
+        });
+
+        var lastOrder = Guid.NewGuid();
+        var thisOrder = Guid.NewGuid();
+        context.Orders.AddRange(
+            new Order { Id = lastOrder, TenantId = tenantId, CustomerId = customerId, OrderNumber = "ORD-L", OrderDate = lastMonth, GrandTotal = 60 },
+            new Order { Id = thisOrder, TenantId = tenantId, CustomerId = customerId, OrderNumber = "ORD-T", OrderDate = thisMonth, GrandTotal = 14 });
+        context.OrderItems.AddRange(
+            new OrderItem { Id = Guid.NewGuid(), TenantId = tenantId, OrderId = lastOrder, ProductId = decliningId, Quantity = 5, UnitPrice = 12, Total = 60 },
+            new OrderItem { Id = Guid.NewGuid(), TenantId = tenantId, OrderId = thisOrder, ProductId = decliningId, Quantity = 1, UnitPrice = 12, Total = 12 },
+            new OrderItem { Id = Guid.NewGuid(), TenantId = tenantId, OrderId = lastOrder, ProductId = thinId, Quantity = 1, UnitPrice = 2, Total = 2 });
+        await context.SaveChangesAsync();
+
+        var result = await new GetSalesTrendsTool(context).ExecuteAsync(new AiCopilotExecutionContext
+        {
+            Message = "Which products have declining sales?",
+            Intent = AiCopilotIntent.Analytics,
+            Page = new AiPageContextDto(),
+            Memory = new AiMemoryStateDto(),
+            Request = new AiChatRequest("Which products have declining sales?"),
+            SessionId = Guid.NewGuid()
+        });
+
+        result.Summary.Should().Contain("Desk Lamp");
+        result.Summary.Should().NotContain("Tiny Sample");
     }
 }

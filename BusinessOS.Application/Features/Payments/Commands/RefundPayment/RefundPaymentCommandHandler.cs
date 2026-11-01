@@ -3,6 +3,7 @@ using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Idempotency;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Invoices.Services;
 using BusinessOS.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -161,6 +162,15 @@ public sealed class RefundPaymentCommandHandler : IRequestHandler<RefundPaymentC
         {
             if (transaction is not null)
                 await transaction.DisposeAsync();
+        }
+
+        try
+        {
+            await InvoicePaymentCalculator.ReconcileOrdersAsync(_context, [payment.OrderId], cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Invoice balance reconcile failed for order {OrderId}", payment.OrderId);
         }
 
         await EntityCacheInvalidator.InvalidatePaymentAsync(_cache, tenantId, payment.Id, cancellationToken);

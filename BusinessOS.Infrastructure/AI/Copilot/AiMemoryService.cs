@@ -1,6 +1,7 @@
 using System.Text.Json;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Common.Options;
+using BusinessOS.Application.Features.Agents.Enums;
 using BusinessOS.Application.Features.AI.ConversationMemory;
 using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Enums;
@@ -181,7 +182,8 @@ public sealed class AiMemoryService : IAiMemoryService
         IReadOnlyList<AiToolResult>? toolResults = null,
         CancellationToken cancellationToken = default,
         bool updatePendingAction = false,
-        string? pendingActionJson = null)
+        string? pendingActionJson = null,
+        string? preferredLanguage = null)
     {
         var identity = RequireIdentity();
         if (string.IsNullOrWhiteSpace(userMessage) && string.IsNullOrWhiteSpace(assistantReply))
@@ -225,7 +227,9 @@ public sealed class AiMemoryService : IAiMemoryService
             SelectedInvoiceId = session.SelectedInvoiceId,
             LastIntent = intent.ToString(),
             LastAnalyticsQuery = intent is AiCopilotIntent.Analytics ? userMessage : prior?.LastAnalyticsQuery,
-            PreferredLanguage = prior?.PreferredLanguage,
+            PreferredLanguage = AgentLanguages.TryGetConcrete(preferredLanguage, out var rememberedLanguage)
+                ? rememberedLanguage
+                : prior?.PreferredLanguage,
             PreferredAgentKey = prior?.PreferredAgentKey,
             OnboardingStep = prior?.OnboardingStep,
             OnboardingDataJson = prior?.OnboardingDataJson,

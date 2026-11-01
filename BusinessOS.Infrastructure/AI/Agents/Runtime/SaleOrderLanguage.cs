@@ -46,7 +46,10 @@ public static partial class SaleOrderLanguage
     {
         "create", "add", "new", "order", "orders", "sale", "sales", "please", "the", "a", "an",
         "named", "called", "customer", "client", "for", "with", "make", "me", "this", "that",
-        "and", "of", "to", "my", "want", "need", "like", "would", "just", "also", "quantity", "qty"
+        "and", "of", "to", "my", "want", "need", "like", "would", "just", "also", "quantity", "qty",
+        "name", "is", "him", "her", "his", "each", "price", "rs", "pkr", "cost",
+        "dont", "don't", "not", "who", "you", "your", "what", "which", "tell", "can", "do",
+        "speak", "switch", "language", "urdu", "english", "arabic", "accent", "hey"
     };
 
     private static readonly JsonSerializerOptions ChoiceJson = new()
@@ -132,7 +135,7 @@ public static partial class SaleOrderLanguage
 
         foreach (Match match in BareNumberRegex().Matches(message))
         {
-            if (IsGenerationPrefix(message, match.Index))
+            if (IsGenerationPrefix(message, match.Index) || IsPriceNumber(message, match))
                 continue;
             if (TryDecimal(match.Value, out var number))
                 signals.Add(number);
@@ -144,6 +147,23 @@ public static partial class SaleOrderLanguage
 
         quantity = distinct[0];
         return quantity > 0 && quantity <= OrderConstants.MaxItemQuantity;
+    }
+
+    public static bool TryGetRequestedUnitPrice(string? message, out decimal price)
+    {
+        price = 0;
+        if (string.IsNullOrWhiteSpace(message))
+            return false;
+
+        foreach (Match match in BareNumberRegex().Matches(message))
+        {
+            if (!IsPriceNumber(message, match) || !TryDecimal(match.Value, out var number))
+                continue;
+            if (number > price)
+                price = number;
+        }
+
+        return price > 0;
     }
 
     public static bool TryGetSlotQuantity(IReadOnlyDictionary<string, string?> slots, out decimal quantity)
@@ -160,6 +180,14 @@ public static partial class SaleOrderLanguage
     {
         if (string.IsNullOrWhiteSpace(message) || IsConfirmation(message))
             return null;
+
+        var named = NameIsRegex().Match(message);
+        if (named.Success)
+        {
+            var fromLabel = TrimName(named.Groups[1].Value);
+            if (!string.IsNullOrWhiteSpace(fromLabel))
+                return fromLabel;
+        }
 
         var match = CustomerNameRegex().Match(message);
         if (!match.Success)
@@ -188,11 +216,12 @@ public static partial class SaleOrderLanguage
         text = LabeledQuantityRegex().Replace(text, " ");
         text = NumberWordRegex().Replace(text, match => IsGenerationPrefix(text, match.Index) ? match.Value : " ");
         text = LeadingCountRegex().Replace(text, " ");
-        text = Regex.Replace(text, @"\b(" + string.Join("|", ProductStopWords) + @")\b", " ", RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, @"\b(" + string.Join("|", ProductStopWords.Where(word => !word.Contains('\''))) + @")\b", " ", RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, @"\b\d{3,9}(?:\.\d+)?\b", " ");
         text = Regex.Replace(text, @"[,:;]+", " ");
         text = Regex.Replace(text, @"\s+", " ").Trim(' ', '.', '-', '"', '\'');
 
-        if (text.Length < 2)
+        if (text.Length < 2 || IsRejectedProductPhrase(text))
             return null;
         if (!string.IsNullOrWhiteSpace(customer)
             && text.Equals(customer, StringComparison.OrdinalIgnoreCase))
@@ -313,6 +342,26 @@ public static partial class SaleOrderLanguage
         };
     }
 
+    private static bool IsPriceNumber(string message, Match match)
+    {
+        var start = Math.Max(0, match.Index - 12);
+        var end = Math.Min(message.Length, match.Index + match.Length + 14);
+        var window = message[start..end];
+        return Regex.IsMatch(window, @"\b(price|each|rs|pkr|usd|cost|rate|\$)\b", RegexOptions.IgnoreCase);
+    }
+
+    private static bool IsRejectedProductPhrase(string text)
+    {
+        var normalized = text.Trim().ToLowerInvariant();
+        if (normalized is "who" or "you" or "are" or "language" or "urdu" or "english" or "arabic"
+            or "accent" or "switch" or "speak" or "top" or "sold" or "product" or "dont" or "cancel" or "change")
+            return true;
+
+        return Regex.IsMatch(
+            normalized,
+            @"\b(who are|what can|what do you|switch|speak|accent|language|ziada|zyada|kon sa|kaun sa|top product|low stock)\b");
+    }
+
     private static bool IsGenerationPrefix(string message, int index)
     {
         var prefix = message[..Math.Max(0, index)];
@@ -384,6 +433,9 @@ public static partial class SaleOrderLanguage
 
     [GeneratedRegex(@"\bfor\s+(?:the\s+)?(?:customer|client\s+)?([A-Za-z][A-Za-z' .-]{1,80})", RegexOptions.IgnoreCase)]
     private static partial Regex CustomerNameRegex();
+
+    [GeneratedRegex(@"\b(?:name\s+is|named|customer\s+name\s+is)\s+([A-Za-z][A-Za-z'.-]{1,40})", RegexOptions.IgnoreCase)]
+    private static partial Regex NameIsRegex();
 
     private sealed record ChoiceRow(Guid Id, string Label);
 }

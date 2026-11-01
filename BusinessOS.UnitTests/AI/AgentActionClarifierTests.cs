@@ -177,4 +177,134 @@ public class AgentActionClarifierTests
             .Should().BeFalse();
         AgentActionClarifier.IsSmallTalk("hello").Should().BeTrue();
     }
+
+    [Fact]
+    public void CreateCustomer_NameThenPhoneAndAddress_RemembersTheDraft()
+    {
+        var first = AgentActionClarifier.Decide(
+            AiToolName.CreateCustomer,
+            "Create customer named Asim",
+            pending: null,
+            State,
+            Page);
+
+        first.ShouldExecute.Should().BeFalse();
+        first.Question.Should().Contain("Asim");
+        first.Question.Should().Contain("phone number");
+
+        var second = AgentActionClarifier.Decide(
+            AiToolName.CreateCustomer,
+            "03291327355 and address Lahore",
+            AgentActionClarifier.Read(first.PendingJson),
+            State,
+            Page);
+
+        second.ShouldExecute.Should().BeFalse();
+        second.Question.Should().Contain("email");
+        var pending = AgentActionClarifier.Read(second.PendingJson);
+        pending!.Slots["phone"].Should().Contain("03291327355");
+        pending.Slots["address"].Should().Contain("Lahore");
+        pending.AwaitingConfirmation.Should().BeFalse();
+
+        var third = AgentActionClarifier.Decide(
+            AiToolName.CreateCustomer,
+            "asim@example.com",
+            pending,
+            State,
+            Page);
+
+        third.ShouldExecute.Should().BeFalse();
+        third.Question.Should().Contain("Should I create this customer?");
+
+        var confirmed = AgentActionClarifier.Decide(
+            AiToolName.CreateCustomer,
+            "Yes, create it",
+            AgentActionClarifier.Read(third.PendingJson),
+            State,
+            Page);
+
+        confirmed.ShouldExecute.Should().BeTrue();
+        confirmed.Args!.Value.GetProperty("phone").GetString().Should().Contain("03291327355");
+        confirmed.Args.Value.GetProperty("email").GetString().Should().Be("asim@example.com");
+    }
+
+    [Fact]
+    public void CreateCustomer_Correction_ReplacesThePhone()
+    {
+        var first = AgentActionClarifier.Decide(
+            AiToolName.CreateCustomer,
+            "Create customer. His name is Ahmed Ali. Phone number 03001234567. Address Lahore. Email ahmed@gmail.com",
+            pending: null,
+            State,
+            Page);
+
+        var corrected = AgentActionClarifier.Decide(
+            AiToolName.CreateCustomer,
+            "change the phone to 03009998877",
+            AgentActionClarifier.Read(first.PendingJson),
+            State,
+            Page);
+
+        corrected.ShouldExecute.Should().BeFalse();
+        var pending = AgentActionClarifier.Read(corrected.PendingJson);
+        pending!.Slots["phone"].Should().Be("03009998877");
+        pending.Slots["email"].Should().Be("ahmed@gmail.com");
+    }
+
+    [Fact]
+    public void PendingAction_ExpiresAfterTheLifetime()
+    {
+        var pending = new AgentPendingAction
+        {
+            Tool = AiToolName.CreateCustomer,
+            UpdatedAtUtc = DateTime.UtcNow.AddHours(-3)
+        };
+
+        AgentPendingAction.IsExpired(pending, DateTime.UtcNow).Should().BeTrue();
+        AgentPendingAction.IsExpired(
+            new AgentPendingAction { Tool = AiToolName.CreateCustomer, UpdatedAtUtc = DateTime.UtcNow },
+            DateTime.UtcNow).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Cancel_IsNotAProductSearch()
+    {
+        AgentActionClarifier.IsCancel("Cancel").Should().BeTrue();
+        AgentActionClarifier.IsCancel("stop that").Should().BeTrue();
+        var intent = new BusinessOS.Infrastructure.AI.Copilot.AiIntentDetector()
+            .Detect("Cancel", new AiPageContextDto(), new AiMemoryStateDto());
+        intent.SuggestedTools.Should().NotContain(AiToolName.GetProducts);
+        intent.SuggestedTools.Should().NotContain(AiToolName.SearchProduct);
+    }
+
+    [Theory]
+    [InlineData("Cancel")]
+    [InlineData("Don't create")]
+    [InlineData("do not create")]
+    public void IsCancel_StopsADraft(string message)
+    {
+        AgentActionClarifier.IsCancel(message).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("Who are you")]
+    [InlineData("top product sold")]
+    [InlineData("switch to urdu language")]
+    [InlineData("kon sa product ziada sale ho rha hai")]
+    [InlineData("Change your accent")]
+    public void ShouldReleaseDraft_LetsANewQuestionThrough(string message)
+    {
+        AgentActionClarifier.ShouldReleaseDraft(message).Should().BeTrue();
+    }
+
+    [Fact]
+    public void SaleSentence_KeepsCustomerProductAndQuantity()
+    {
+        const string message = "create new customer with name is David and sale 2 laptops to him, with 50000 each price";
+
+        SaleOrderLanguage.ExtractCustomerName(message).Should().Be("David");
+        SaleOrderLanguage.ExtractProductPhrase(message).Should().Be("laptops");
+        SaleOrderLanguage.TryParseQuantity(message, out var quantity).Should().BeTrue();
+        quantity.Should().Be(2);
+    }
 }

@@ -17,6 +17,19 @@ public sealed class AgentPendingAction
     public bool AwaitingConfirmation { get; set; }
     public string? NextField { get; set; }
     public string? OriginalRequest { get; set; }
+
+    /// <summary>Refreshed whenever the owner adds a detail. Abandoned drafts expire after <see cref="PendingLifetime"/>.</summary>
+    public DateTime UpdatedAtUtc { get; set; }
+
+    public static readonly TimeSpan PendingLifetime = TimeSpan.FromHours(2);
+
+    public static bool IsExpired(AgentPendingAction pending, DateTime utcNow)
+    {
+        if (pending.UpdatedAtUtc == default)
+            return false;
+
+        return utcNow - pending.UpdatedAtUtc > PendingLifetime;
+    }
 }
 
 public sealed class AgentClarificationDecision
@@ -54,8 +67,11 @@ public static class AgentActionClarifier
 
     private static readonly HashSet<string> CancelPhrases = new(StringComparer.OrdinalIgnoreCase)
     {
-        "no", "cancel", "stop", "never mind", "nevermind", "dont", "do not",
-        "no cancel", "nah", "nahi", "nai", "leave it", "no leave it", "no thanks", "no thank you"
+        "no", "cancel", "stop", "never mind", "nevermind", "dont", "do not", "don't",
+        "no cancel", "nah", "nahi", "nai", "leave it", "no leave it", "no thanks", "no thank you",
+        "dont create", "do not create", "dont do it", "do not do that", "dont do that",
+        "cancel it", "cancel that", "stop it", "stop that", "never mind that",
+        "no dont", "no do not", "mat karo", "rehne do", "nahi chahiye"
     };
 
     private static readonly HashSet<string> SmallTalk = new(StringComparer.OrdinalIgnoreCase)
@@ -97,6 +113,55 @@ public static class AgentActionClarifier
     }
 
     public static bool IsSmallTalk(string message) => SmallTalk.Contains(Normalize(message));
+
+    public static bool IsCancel(string message)
+    {
+        var normalized = Normalize(message);
+        if (normalized.Length == 0)
+            return false;
+        if (CancelPhrases.Contains(normalized))
+            return true;
+
+        // "Don't create", "please cancel that", "stop it".
+        if (normalized.Length > 48)
+            return false;
+        return Regex.IsMatch(
+            normalized,
+            @"^(please\s+)?(don'?t|dont|do not|cancel|stop|never mind|nevermind|abort)\b",
+            RegexOptions.IgnoreCase);
+    }
+
+    /// <summary>
+    /// The owner is asking something else, not answering the missing order field.
+    /// </summary>
+    public static bool ShouldReleaseDraft(string message)
+    {
+        if (IsCancel(message) || IsSmallTalk(message))
+            return true;
+
+        var normalized = Normalize(message);
+        if (normalized.Length == 0)
+            return false;
+
+        if (Regex.IsMatch(normalized, @"\b(who are you|what can you|what do you do|your name|tell me what you can|help me)\b"))
+            return true;
+        if (Regex.IsMatch(normalized, @"\b(speak|switch|language|accent|urdu|arabic|english)\b")
+            && !Regex.IsMatch(normalized, @"\b(order|invoice|customer|sku|stock)\b"))
+            return true;
+        if (Regex.IsMatch(normalized, @"\b(top|best|sold|selling|revenue|profit|low stock|out of stock|ziada|zyada|kitni|kitna|kon sa|kaun sa)\b"))
+            return true;
+        if (normalized.Contains('?', StringComparison.Ordinal)
+            || normalized.StartsWith("what ", StringComparison.Ordinal)
+            || normalized.StartsWith("who ", StringComparison.Ordinal)
+            || normalized.StartsWith("which ", StringComparison.Ordinal)
+            || normalized.StartsWith("how ", StringComparison.Ordinal)
+            || normalized.StartsWith("why ", StringComparison.Ordinal)
+            || normalized.StartsWith("kon ", StringComparison.Ordinal)
+            || normalized.StartsWith("kaun ", StringComparison.Ordinal))
+            return true;
+
+        return false;
+    }
 
     public static bool IsDifferentCommand(string message, AiToolName pendingTool)
     {
@@ -150,7 +215,8 @@ public static class AgentActionClarifier
             Tool = tool,
             Slots = slots,
             OriginalRequest = original,
-            NextField = pending?.NextField
+            NextField = pending?.NextField,
+            UpdatedAtUtc = DateTime.UtcNow
         };
 
         var missing = Missing(tool, slots, state);
@@ -315,6 +381,8 @@ public static class AgentActionClarifier
 
     private static void ApplyDetails(AiToolName tool, string message, Dictionary<string, string?> slots)
     {
+        ApplyCorrection(message, slots);
+
         var email = Regex.Match(message, @"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", RegexOptions.IgnoreCase);
         if (email.Success)
             slots["email"] = email.Value;
@@ -430,7 +498,7 @@ public static class AgentActionClarifier
     private static void AssignBare(string field, string message, Dictionary<string, string?> slots)
     {
         var text = message.Trim();
-        if (text.Length is < 1 or > 180 || IsUnusableValue(text) || IsPureConfirmation(text) || IsCancel(text))
+        if (text.Length is < 1 or > 180 || IsUnusableValue(text) || IsPureConfirmation(text) || IsCancel(text) || ShouldReleaseDraft(text))
             return;
 
         if (Regex.IsMatch(text, @"\b(create|delete|update|search|show|report)\b", RegexOptions.IgnoreCase)
@@ -656,6 +724,14 @@ public static class AgentActionClarifier
 
         if (tool == AiToolName.CreateCustomer)
         {
+            var named = Has(slots, "fullName") || Has(slots, "firstName");
+            if (named && missing[0] == "phone")
+                return $"I have the name {DisplayPerson(slots)}. What is the phone number? You can also include the email and address in the same message.";
+            if (missing.Count == 1 && missing[0] == "email")
+                return lead + "What email should I save? A customer record needs an email before I create it.";
+            if (missing.Count == 1 && missing[0] == "place")
+                return lead + "What city or address should I use?";
+
             return lead + "I can add that customer, but I need a few details before I save anything: "
                 + HumanList(missing.Select(Label))
                 + ".\nYou can send them in one message. Example: Ahmed Ali, 03001234567, ahmed@gmail.com, Lahore.";
@@ -836,6 +912,41 @@ public static class AgentActionClarifier
         return null;
     }
 
+    private static void ApplyCorrection(string message, Dictionary<string, string?> slots)
+    {
+        var match = Regex.Match(
+            message,
+            @"(?:change|update|correct|actually|instead)\s+(?:the\s+)?(phone|mobile|email|address|city|name)\s+(?:to|is|:)\s*([^\n.]+)",
+            RegexOptions.IgnoreCase);
+        if (!match.Success)
+            return;
+
+        var field = match.Groups[1].Value.ToLowerInvariant();
+        var value = match.Groups[2].Value.Trim().Trim(',');
+        switch (field)
+        {
+            case "phone":
+            case "mobile":
+                var digits = Regex.Replace(value, @"[^\d+]", "");
+                if (digits.Count(char.IsDigit) >= 7)
+                    slots["phone"] = digits;
+                break;
+            case "email" when value.Contains('@'):
+                slots["email"] = value.Trim();
+                break;
+            case "address":
+                slots["address"] = value;
+                break;
+            case "city":
+                slots["city"] = value;
+                slots["address"] = value;
+                break;
+            case "name" when LooksLikeName(value):
+                AssignName(value, slots);
+                break;
+        }
+    }
+
     private static void TakeLabeled(string message, Dictionary<string, string?> slots, string slot, string label)
     {
         var match = Regex.Match(message, $@"(?:{label})\s*(?:is|:)?\s*([^,\n.]+)", RegexOptions.IgnoreCase);
@@ -917,11 +1028,9 @@ public static class AgentActionClarifier
         return false;
     }
 
-    private static bool IsCancel(string message) => CancelPhrases.Contains(Normalize(message));
-
     private static string Normalize(string message)
     {
-        var t = message.Trim().ToLowerInvariant().Replace("'", "");
+        var t = message.Trim().ToLowerInvariant().Replace("'", "").Replace("\"", "");
         t = Regex.Replace(t, @"[!.?,]", " ");
         return Regex.Replace(t, @"\s+", " ").Trim();
     }
