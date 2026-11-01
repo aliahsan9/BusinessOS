@@ -54,7 +54,12 @@ public sealed class SophiaTtsService : ISophiaTtsService
         foreach (var provider in chain)
         {
             var voice = ResolveVoice(provider, voiceName);
-            var cacheKey = TtsTextNormalizer.CacheKey(provider.Key, provider.ModelId, voice, rate, spoken);
+                var cacheKey = TtsTextNormalizer.CacheKey(
+                    provider.Key,
+                    provider.ModelId,
+                    voice,
+                    rate,
+                    (string.IsNullOrWhiteSpace(language) ? "en" : language) + "\n" + spoken);
             try
             {
                 var result = await _cache.GetOrCreateAsync(

@@ -1,6 +1,7 @@
 using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Invoices.Services;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -34,8 +35,18 @@ public sealed class DeletePaymentCommandHandler : IRequestHandler<DeletePaymentC
         if (payment is null)
             throw new NotFoundException("Payment not found.");
 
+        var orderId = payment.OrderId;
         _context.Payments.Remove(payment);
         await _context.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await InvoicePaymentCalculator.ReconcileOrdersAsync(_context, [orderId], cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Invoice balance reconcile failed for order {OrderId}", orderId);
+        }
 
         await EntityCacheInvalidator.InvalidatePaymentAsync(
             _cache,

@@ -69,6 +69,8 @@ public sealed class AgentChatResponse
     public AiRetrievedSourcesDto Sources { get; init; } = new();
     public AiActionResultDto? ActionResult { get; init; }
     public bool PermissionDenied { get; init; }
+    public string Language { get; init; } = "en";
+    public string TextDirection { get; init; } = "ltr";
 }
 
 /// <summary>

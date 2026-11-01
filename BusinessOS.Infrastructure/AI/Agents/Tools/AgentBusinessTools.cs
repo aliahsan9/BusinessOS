@@ -28,7 +28,8 @@ public sealed class GetInventorySummaryTool : AiToolBase
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
         intent is AiCopilotIntent.ActionRead or AiCopilotIntent.ReportGeneration or AiCopilotIntent.Recommendation or AiCopilotIntent.Workflow
-        && ContainsAny(message, "inventory", "stock", "warehouse", "sku");
+        && ContainsAny(message, "inventory", "stock", "warehouse", "sku")
+        && !ContainsAny(message, "low stock", "low in stock", "out of stock", "reorder", "which product", "top product", "best selling");
 
     public override async Task<AiToolResult> ExecuteAsync(
         AiCopilotExecutionContext context,
@@ -76,8 +77,9 @@ public sealed class GetLowStockTool : AiToolBase
     public override string Description => "List products at or below reorder level.";
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
-        ContainsAny(message, "low stock", "reorder", "running low", "out of stock", "stock alert")
-        || intent is AiCopilotIntent.Recommendation or AiCopilotIntent.ReportGeneration;
+        ContainsAny(message, "low stock", "low in stock", "reorder", "running low", "out of stock", "stock alert",
+            "product km", "km stock", "kam stock", "kon sa product km")
+        || (intent is AiCopilotIntent.ReportGeneration && ContainsAny(message, "inventory", "stock"));
 
     public override async Task<AiToolResult> ExecuteAsync(
         AiCopilotExecutionContext context,

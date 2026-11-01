@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Agents.DTOs;
+using BusinessOS.Application.Features.Agents;
 using BusinessOS.Application.Features.Agents.Enums;
 using BusinessOS.Application.Features.Agents.Services;
 using BusinessOS.Application.Features.AI.DTOs;
@@ -85,6 +86,11 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             request.SessionId ?? request.ConversationId,
             cancellationToken);
         var memory = await _memory.LoadAsync(sessionId, cancellationToken);
+        language = ConversationLanguage.ResolveTurn(
+            request.Message,
+            request.Language,
+            memory.PreferredLanguage,
+            language);
 
         yield return Status("Planning…");
 
@@ -92,11 +98,45 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         var storedPending = AgentActionClarifier.Read(memory.PendingActionJson);
         var abandonPending = false;
         var pending = storedPending;
-        if (pending is not null && AgentActionClarifier.IsSmallTalk(request.Message))
+        if (pending is not null && AgentPendingAction.IsExpired(pending, DateTime.UtcNow))
         {
+            var expiredTool = pending.Tool;
+            await _memory.SetPendingActionAsync(sessionId, null, cancellationToken);
+            if (AgentActionClarifier.IsCancel(request.Message))
+            {
+                var alreadyDropped = "That request had already expired, so nothing will be created or changed.";
+                var droppedResponse = BuildResponse(persona, agentKey, language, AiCopilotIntent.Conversational, sessionId, alreadyDropped);
+                await foreach (var chunk in StreamText(alreadyDropped, droppedResponse, cancellationToken))
+                    yield return chunk;
+                yield break;
+            }
+
+            var continuing = !AgentActionClarifier.ShouldReleaseDraft(request.Message)
+                && !AgentActionClarifier.IsDifferentCommand(request.Message, expiredTool);
             pending = null;
+            if (continuing)
+            {
+                var expired = "That request sat for a while, so I dropped it. Tell me again if you still want to do it.";
+                var expiredResponse = BuildResponse(persona, agentKey, language, AiCopilotIntent.Conversational, sessionId, expired);
+                await foreach (var chunk in StreamText(expired, expiredResponse, cancellationToken))
+                    yield return chunk;
+                yield break;
+            }
         }
-        else if (pending is not null && AgentActionClarifier.IsDifferentCommand(request.Message, pending.Tool))
+
+        if (pending is not null && AgentActionClarifier.IsCancel(request.Message))
+        {
+            await _memory.SetPendingActionAsync(sessionId, null, cancellationToken);
+            var cancelled = "Okay, I cancelled that. I won't create or change anything. What do you want to do next?";
+            var cancelledResponse = BuildResponse(persona, agentKey, language, AiCopilotIntent.Conversational, sessionId, cancelled);
+            await foreach (var chunk in StreamText(cancelled, cancelledResponse, cancellationToken))
+                yield return chunk;
+            yield break;
+        }
+
+        if (pending is not null && (AgentActionClarifier.IsSmallTalk(request.Message)
+            || AgentActionClarifier.ShouldReleaseDraft(request.Message)
+            || AgentActionClarifier.IsDifferentCommand(request.Message, pending.Tool)))
         {
             pending = null;
             abandonPending = true;
@@ -205,7 +245,8 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
                     clientRequestId: request.ClientRequestId,
                     cancellationToken: cancellationToken,
                     updatePendingAction: true,
-                    pendingActionJson: decision.PendingJson);
+                    pendingActionJson: decision.PendingJson,
+                    preferredLanguage: language);
 
                 var held = BuildResponse(
                     persona,
@@ -503,7 +544,8 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             clientRequestId: request.ClientRequestId,
             cancellationToken: cancellationToken,
             updatePendingAction: updatePending,
-            pendingActionJson: pendingJson);
+            pendingActionJson: pendingJson,
+            preferredLanguage: language);
 
         var response = new AgentChatResponse
         {
@@ -519,7 +561,9 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             ToolsUsed = toolsUsed,
             Suggestions = suggestions,
             ActionResult = lastAction,
-            PermissionDenied = clarification is not null && clarification.Contains("permission", StringComparison.OrdinalIgnoreCase)
+            PermissionDenied = clarification is not null && clarification.Contains("permission", StringComparison.OrdinalIgnoreCase),
+            Language = language,
+            TextDirection = AgentLanguages.IsRtl(language) ? "rtl" : "ltr"
         };
 
         foreach (var word in reply.Split(' ', StringSplitOptions.RemoveEmptyEntries))
@@ -654,7 +698,9 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             AgentDisplayName = persona.DisplayName,
             Intent = intent,
             PermissionDenied = permissionDenied,
-            Suggestions = suggestions ?? []
+            Suggestions = suggestions ?? [],
+            Language = language,
+            TextDirection = AgentLanguages.IsRtl(language) ? "rtl" : "ltr"
         };
 
     private static async IAsyncEnumerable<AgentStreamChunkDto> StreamText(
@@ -720,7 +766,9 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             SearchResults = c.SearchResults,
             Sources = c.Sources,
             ActionResult = c.ActionResult,
-            PermissionDenied = c.PermissionDenied
+            PermissionDenied = c.PermissionDenied,
+            Language = language,
+            TextDirection = AgentLanguages.IsRtl(language) ? "rtl" : "ltr"
         };
     }
 

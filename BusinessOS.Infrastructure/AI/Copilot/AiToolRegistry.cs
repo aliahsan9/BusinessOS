@@ -1,3 +1,4 @@
+using BusinessOS.Application.Features.Agents;
 using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Enums;
 using BusinessOS.Application.Features.AI.Services;
@@ -21,6 +22,7 @@ public sealed class AiToolRegistry : IAiToolRegistry
         AiPageContextDto page,
         AiMemoryStateDto memory)
     {
+        message = ConversationLanguage.ExpandForRouting(message);
         var selected = new List<IAiTool>();
 
         foreach (var suggested in intent.SuggestedTools)

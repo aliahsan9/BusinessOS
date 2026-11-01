@@ -148,17 +148,19 @@ sequenceDiagram
 ---
 
 ## Configuration
-Controlled via `appsettings.json`:
+Controlled via `appsettings.json`. Leave the API key empty in source control.
+
 ```json
 {
   "Ai": {
-    "OpenAiApiKey": "sk-proj-...",
-    "DefaultModel": "gpt-4o",
-    "Temperature": 0.3,
-    "MaxTokens": 2000
+    "OpenAiApiKey": "",
+    "OpenAiModel": "gpt-4o-mini",
+    "OpenAiEmbeddingModel": "text-embedding-3-small"
   }
 }
 ```
+
+Language detection, Urdu, Roman Urdu, Arabic, and voice are described in [Sophia-Language.md](Sophia-Language.md).
 
 ---
 

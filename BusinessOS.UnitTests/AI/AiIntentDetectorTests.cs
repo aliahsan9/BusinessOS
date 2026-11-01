@@ -111,4 +111,57 @@ public class AiIntentDetectorTests
 
         result.Intent.Should().NotBe(AiCopilotIntent.FollowUp);
     }
+
+    [Theory]
+    [InlineData("hey tell me what you can do")]
+    [InlineData("Who are you")]
+    [InlineData("Change your accent")]
+    [InlineData("Speak with me in English language")]
+    [InlineData("switch to urdu language")]
+    public void Detect_CapabilityAndLanguage_IsHelpNotALookup(string message)
+    {
+        var memory = new AiMemoryStateDto
+        {
+            LastIntent = nameof(AiCopilotIntent.ActionCreate),
+            RecentTurns =
+            [
+                new AiMemoryTurnDto { Role = "user", Content = "create an order", SequenceNumber = 1 },
+                new AiMemoryTurnDto { Role = "assistant", Content = "Which product, and how many?", SequenceNumber = 2 }
+            ]
+        };
+
+        var result = _detector.Detect(message, Page, memory);
+
+        result.Intent.Should().Be(AiCopilotIntent.Help);
+        result.SuggestedTools.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("Which products are low in stock?", AiToolName.GetLowStock)]
+    [InlineData("kon sa product km hai", AiToolName.GetLowStock)]
+    [InlineData("top product sold", AiToolName.GetBestSellingProducts)]
+    [InlineData("kon sa product ziada sale ho rha hai", AiToolName.GetBestSellingProducts)]
+    public void Detect_StockAndSalesQuestions_UseTheMatchingTool(string message, AiToolName tool)
+    {
+        var result = _detector.Detect(message, Page, Memory);
+
+        result.SuggestedTools.Should().Contain(tool);
+        if (tool == AiToolName.GetLowStock)
+            result.SuggestedTools.Should().NotContain(AiToolName.GetInventorySummary);
+    }
+
+    [Theory]
+    [InlineData("Hello, how are you?")]
+    [InlineData("Tell me a joke")]
+    [InlineData("Cancel")]
+    [InlineData("What do you think about the weather?")]
+    public void Detect_GeneralConversation_DoesNotSearchInventory(string message)
+    {
+        var result = _detector.Detect(message, Page, Memory);
+
+        result.Intent.Should().Be(AiCopilotIntent.Conversational);
+        result.SuggestedTools.Should().NotContain(AiToolName.GetProducts);
+        result.SuggestedTools.Should().NotContain(AiToolName.GetInventorySummary);
+        result.SuggestedTools.Should().NotContain(AiToolName.SearchProduct);
+    }
 }

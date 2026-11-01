@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using BusinessOS.Application.Features.Agents.Enums;
 using BusinessOS.Application.Features.AI.DTOs;
 
 namespace BusinessOS.Infrastructure.AI;
@@ -20,6 +21,15 @@ internal static class AiNaturalReplyBuilder
     {
         var lower = message.Trim().ToLowerInvariant();
         var name = string.IsNullOrWhiteSpace(agentDisplayName) ? "Sophia" : agentDisplayName.Trim();
+        if (AgentLanguages.TryGetConcrete(language, out var replyLanguage))
+        {
+            var localized = LocalizedSmallTalk(message, lower, name, replyLanguage);
+            if (localized is not null)
+                return localized;
+        }
+
+        if (lower.Contains("accent") || lower.Contains("change your voice"))
+            return "I speak with the voice selected in this chat. Change it from the voice list, or under Settings → Sophia Voice.";
 
         if (lower.Contains("thank") || lower.Contains("shukriya") || lower.Contains("shukria"))
         {
@@ -30,6 +40,12 @@ internal static class AiNaturalReplyBuilder
         {
             return $"Take care — I'm {name}, here whenever you need me.";
         }
+
+        if (IsBareCancel(lower))
+            return "There is nothing waiting to cancel. Tell me what you want to do next.";
+
+        if (IsOpenQuestion(lower))
+            return Clarify(language);
 
         if (IsAdviceQuestion(lower))
             return BuildAdviceReply(message);
@@ -65,6 +81,39 @@ internal static class AiNaturalReplyBuilder
         return contextHint;
     }
 
+    private static string? LocalizedSmallTalk(string original, string lower, string name, string language)
+    {
+        var thanks = lower.Contains("thank") || lower.Contains("shukriya") || lower.Contains("shukria")
+            || original.Contains("شکریہ", StringComparison.Ordinal);
+        var goodbye = lower.Contains("bye") || lower.Contains("goodbye") || original.Contains("خدا حافظ", StringComparison.Ordinal);
+        var greeting = IsGreeting(lower, original);
+        if (!thanks && !goodbye && !greeting)
+            return null;
+
+        if (language == AgentLanguages.RomanUrdu)
+        {
+            if (thanks) return "Koi baat nahi. Sales, stock, ya invoices — jo chahiye batao.";
+            if (goodbye) return $"Allah hafiz. Main {name} hoon, jab chaho wapas aa jana.";
+            return $"Hi, main {name} hoon. Order, stock, ya is month ki sales — kya dekhna hai?";
+        }
+
+        if (language == AgentLanguages.Urdu)
+        {
+            if (thanks) return "کوئی بات نہیں۔ سیلز، اسٹاک، یا انوائس میں سے جو دیکھنا ہو بتائیں۔";
+            if (goodbye) return $"اللہ حافظ۔ میں {name} ہوں، جب چاہیں واپس آ جائیں۔";
+            return $"سلام، میں {name} ہوں۔ آرڈر، اسٹاک، یا اس مہینے کی سیلز — کیا دیکھنا ہے؟";
+        }
+
+        if (language == AgentLanguages.Arabic)
+        {
+            if (thanks) return "على الرحب. قل لي إن احتجت المبيعات أو المخزون أو الفواتير.";
+            if (goodbye) return $"إلى اللقاء. أنا {name}، أعود متى احتجت.";
+            return $"مرحباً، أنا {name}. هل نراجع طلبًا أو المخزون أو مبيعات هذا الشهر؟";
+        }
+
+        return null;
+    }
+
     private static bool IsGreeting(string lower, string original) =>
         lower is "hi" or "hello" or "hey" or "salam" or "assalam" or "assalamualaikum"
         || lower.StartsWith("hi ") || lower.StartsWith("hello") || lower.StartsWith("hey ")
@@ -72,6 +121,39 @@ internal static class AiNaturalReplyBuilder
         || lower.StartsWith("salam") || lower.Contains("assalam")
         || original.Contains("سلام", StringComparison.OrdinalIgnoreCase)
         || original.Contains("السلام", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsBareCancel(string lower)
+    {
+        var text = lower.Trim().TrimEnd('!', '.', '?');
+        return text is "cancel" or "stop" or "never mind" or "nevermind" or "nahi" or "nai" or "mat karo" or "rehne do";
+    }
+
+    private static bool IsOpenQuestion(string lower)
+    {
+        if (IsAdviceQuestion(lower))
+            return false;
+        if (lower.Contains("what can you") || lower.Contains("who are you") || lower.Contains("what do you"))
+            return false;
+
+        return lower.Contains('?')
+            || lower.StartsWith("what ")
+            || lower.StartsWith("who ")
+            || lower.StartsWith("why ")
+            || lower.StartsWith("which ")
+            || lower.StartsWith("how ");
+    }
+
+    private static string Clarify(string? language) => AgentLanguages.Normalize(language) switch
+    {
+        AgentLanguages.Urdu =>
+            "میں سیلز، اسٹاک، کسٹمر، آرڈر یا انوائس دیکھ سکتا ہوں، اور تصدیق کے بعد بنا بھی سکتا ہوں۔ ان میں سے کون سا کام مراد ہے؟",
+        AgentLanguages.RomanUrdu =>
+            "Main sales, stock, customer, order, ya invoice dekh sakta hoon, aur confirm karne ke baad bana bhi sakta hoon. In mein se kaun sa kaam murad hai?",
+        AgentLanguages.Arabic =>
+            "يمكنني مراجعة المبيعات أو المخزون أو العملاء أو الطلبات أو الفواتير، أو إنشاء أحدها بعد التأكيد. أيها تقصد؟",
+        _ =>
+            "I can look up sales, stock, customers, orders, or invoices, or create one of those after you confirm the details. Which of those did you mean?"
+    };
 
     public static string BuildAdviceReply(string message)
     {
@@ -140,6 +222,21 @@ internal static class AiNaturalReplyBuilder
     public static string BuildHelpReply(string message)
     {
         var lower = message.ToLowerInvariant();
+
+        if (lower.Contains("urdu"))
+            return "Theek hai — ab main Urdu mein jawab dun gi. Roman Urdu bhi theek hai.";
+
+        if (lower.Contains("arabic") || lower.Contains("عربي"))
+            return "حسناً، سأجيب بالعربية.";
+
+        if (lower.Contains("english"))
+            return "I'll reply in English.";
+
+        if (lower.Contains("who are you") || lower.Contains("what can you") || lower.Contains("what you can") || lower.Contains("what do you do") || lower.Contains("your name"))
+            return "I'm Sophia, the business analyst in BusinessOS. I can look up sales, stock, invoices, and customers, and I can create customers, products, and orders after you confirm the details. Ask in English, Urdu, or Arabic. Say \"cancel\" if you want me to drop something I started.";
+
+        if (ContainsWord(lower, "accent") || ContainsWord(lower, "voice"))
+            return "I speak with the voice selected in this chat. Change it from the voice list here, or under Settings → Sophia Voice. Spoken replies are AI-generated.";
 
         if (lower.Contains("customer"))
             return "To create a customer, go to Customers → New Customer. Enter name, email, phone, and address. Customers link to orders, invoices, and analytics.";
@@ -448,7 +545,23 @@ internal static class AiNaturalReplyBuilder
     private static string FormatMoney(decimal amount) =>
         amount.ToString("C2", CultureInfo.InvariantCulture);
 
+    private static bool ContainsWord(string text, string word)
+    {
+        var index = 0;
+        while ((index = text.IndexOf(word, index, StringComparison.Ordinal)) >= 0)
+        {
+            var before = index == 0 || !char.IsLetter(text[index - 1]);
+            var afterIndex = index + word.Length;
+            var after = afterIndex >= text.Length || !char.IsLetter(text[afterIndex]);
+            if (before && after)
+                return true;
+            index += word.Length;
+        }
+
+        return false;
+    }
+
     private static bool ContainsAny(string text, params string[] terms) =>
         terms.Any(term => text.Contains(term, StringComparison.OrdinalIgnoreCase));
 }
-
+

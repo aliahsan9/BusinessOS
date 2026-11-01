@@ -91,7 +91,8 @@ public interface IAiMemoryService
         IReadOnlyList<AiToolResult>? toolResults = null,
         CancellationToken cancellationToken = default,
         bool updatePendingAction = false,
-        string? pendingActionJson = null);
+        string? pendingActionJson = null,
+        string? preferredLanguage = null);
     Task SetPendingActionAsync(Guid sessionId, string? pendingActionJson, CancellationToken cancellationToken = default);
     Task AppendMessageAsync(Guid conversationId, ChatMessageInput message, CancellationToken cancellationToken = default);
     Task UpdateSummaryAsync(Guid conversationId, string summary, int summarizedThroughSequence, CancellationToken cancellationToken = default);

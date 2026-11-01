@@ -1,3 +1,4 @@
+using BusinessOS.Application.Features.Agents;
 using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Enums;
 using BusinessOS.Application.Features.AI.Services;
@@ -8,8 +9,17 @@ public sealed class AiIntentDetector : IAiIntentDetector
 {
     public AiIntentDetectionResult Detect(string message, AiPageContextDto page, AiMemoryStateDto memory)
     {
-        var text = message.Trim().ToLowerInvariant();
+        var text = ConversationLanguage.ExpandForRouting(message).Trim().ToLowerInvariant();
         var tools = new List<AiToolName>();
+
+        if (IsLanguageSwitch(text) || IsCapabilityQuestion(text))
+        {
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.Help,
+                Confidence = 0.96
+            };
+        }
 
         if (IsGreetingOrSmallTalk(text))
         {
@@ -72,11 +82,22 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
+        if (ConversationLanguage.IsStockOnHandCue(content))
+        {
+            tools.Add(AiToolName.GetInventorySummary);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.ActionRead,
+                Confidence = 0.93,
+                SuggestedTools = tools
+            };
+        }
+
         if (IsLowOrDeadStockRequest(content))
         {
             if (ContainsAny(content, "dead stock", "slow moving", "unsold", "stale stock"))
                 tools.Add(AiToolName.GetDeadStock);
-            if (ContainsAny(content, "low stock", "reorder", "running low", "stock alert", "out of stock"))
+            if (ContainsAny(content, "low stock", "low in stock", "reorder", "running low", "stock alert", "out of stock"))
                 tools.Add(AiToolName.GetLowStock);
 
             if (tools.Count == 0)
@@ -427,22 +448,28 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
-        if (ContainsAny(content, "product", "inventory", "catalog", "sku"))
+        if (IsConcreteCatalogQuery(content))
         {
             // Prefer inventory summary when the ask is about stock levels broadly.
-            if (ContainsAny(content, "inventory", "stock", "warehouse"))
+            if (ContainsAny(content, "inventory", "stock", "warehouse")
+                && !ContainsAny(content, "best selling", "top selling", "most sold"))
                 tools.Add(AiToolName.GetInventorySummary);
-            else
+            else if (!IsBestSellerQuery(content))
                 tools.Add(AiToolName.GetProducts);
 
-            if (ContainsAny(content, "sell", "sold", "performance", "ranking"))
+            if (ContainsAny(content, "sell", "sold", "performance", "ranking")
+                && !ContainsAny(content, "low stock", "out of stock"))
                 tools.Add(AiToolName.GetBestSellingProducts);
-            return new AiIntentDetectionResult
+
+            if (tools.Count > 0)
             {
-                Intent = AiCopilotIntent.ActionRead,
-                Confidence = 0.85,
-                SuggestedTools = tools
-            };
+                return new AiIntentDetectionResult
+                {
+                    Intent = AiCopilotIntent.ActionRead,
+                    Confidence = 0.85,
+                    SuggestedTools = tools
+                };
+            }
         }
 
         if (ContainsAny(content, "task", "todo", "pending"))
@@ -491,13 +518,33 @@ public sealed class AiIntentDetector : IAiIntentDetector
 
     private static bool IsLowOrDeadStockRequest(string text) =>
         ContainsAny(text,
-            "low stock", "dead stock", "slow moving", "reorder level",
-            "running low", "stock alert", "out of stock", "unsold", "stale stock");
+            "low stock", "low in stock", "dead stock", "slow moving", "reorder level",
+            "running low", "stock alert", "out of stock", "unsold", "stale stock",
+            "km stock", "kam stock", "product km", "kon sa product km", "kaun sa product km");
 
     private static bool IsPurchaseRecommendationRequest(string text) =>
         ContainsAny(text,
             "what should i buy", "what should we buy", "purchase recommend",
             "reorder recommend", "buying recommend", "suggest purchases", "what to reorder");
+
+    private static bool IsLanguageSwitch(string text) =>
+        ContainsPhrase(text, "in english")
+        || ContainsPhrase(text, "in urdu")
+        || ContainsPhrase(text, "in arabic")
+        || ContainsPhrase(text, "speak english")
+        || ContainsPhrase(text, "speak urdu")
+        || ContainsPhrase(text, "speak arabic")
+        || ContainsPhrase(text, "urdu language")
+        || ContainsPhrase(text, "english language")
+        || ContainsPhrase(text, "arabic language");
+
+    private static bool IsCapabilityQuestion(string text) =>
+        ContainsPhrase(text, "who are you")
+        || ContainsPhrase(text, "what can you")
+        || ContainsPhrase(text, "what do you do")
+        || ContainsPhrase(text, "tell me what you can")
+        || ContainsPhrase(text, "change your accent")
+        || ContainsPhrase(text, "your accent");
 
     private static bool IsHelpRequest(string text)
     {
@@ -537,7 +584,11 @@ public sealed class AiIntentDetector : IAiIntentDetector
         ContainsAny(text,
             "best selling", "best-selling", "bestseller", "best seller",
             "top product", "top selling", "most sold", "highest selling",
-            "which product is best", "popular product", "fastest selling");
+            "which product is best", "popular product", "fastest selling",
+            "ziada sale", "zyada sale", "zyada sell", "ziada sell",
+            "sab se ziada", "sab se zyada",
+            "kon sa product ziada", "kon sa product zyada",
+            "kaun sa product zyada", "kaun sa product ziada");
 
     private static bool IsTrendQuery(string text) =>
         ContainsAny(text,
@@ -636,6 +687,17 @@ public sealed class AiIntentDetector : IAiIntentDetector
         return !IsFactualDataLookup(text) || hasAdviceFraming;
     }
 
+    /// <summary>
+    /// A bare "product" or "stock" mention is not a catalog search.
+    /// General questions stay conversational so they are not sent to inventory.
+    /// </summary>
+    private static bool IsConcreteCatalogQuery(string text) =>
+        ContainsAny(text,
+            "catalog", "sku", "our products", "my products", "the products", "product list",
+            "list products", "list product", "which products", "what products",
+            "show products", "show product", "show me the product",
+            "inventory", "warehouse", "in stock", "stock level", "stock levels");
+
     private static bool IsFactualDataLookup(string text) =>
         ContainsAny(text,
             "how many", "what is my", "what's my", "what is our", "what's our", "what are my", "what are our",
@@ -646,7 +708,9 @@ public sealed class AiIntentDetector : IAiIntentDetector
             "best selling", "bestseller", "top product", "trend");
 
     private static bool IsFollowUp(string text, AiMemoryStateDto memory) =>
-        memory.RecentTurns.Count > 0
+        !IsCapabilityQuestion(text)
+        && !IsLanguageSwitch(text)
+        && memory.RecentTurns.Count > 0
         && (ContainsAny(text,
                 "last year", "last month", "what about", "same for", "and for", "how about",
                 "that customer", "them", "those", "which one", "which of", "highest revenue",

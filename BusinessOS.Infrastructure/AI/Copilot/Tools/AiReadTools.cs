@@ -1,7 +1,9 @@
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.Agents;
 using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Enums;
 using BusinessOS.Application.Features.AI.Services;
+using BusinessOS.Application.Features.Invoices.Services;
 using BusinessOS.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -38,6 +40,7 @@ public abstract class AiToolBase : IAiTool
 
     protected static (DateTime Start, DateTime End, string Label) ResolveDateRange(string message)
     {
+        message = ConversationLanguage.ExpandForRouting(message);
         var now = DateTime.UtcNow;
         if (ContainsAny(message, "last year", "previous year"))
         {
@@ -102,7 +105,10 @@ public sealed class GetCustomersTool : AiToolBase
                 .SumAsync(i => i.GrandTotal, cancellationToken);
 
             var unpaid = await _context.Invoices
-                .Where(i => i.CustomerId == customerId && i.OutstandingAmount > 0)
+                .Where(i => i.CustomerId == customerId
+                    && i.OutstandingAmount > 0
+                    && i.Status != "Paid"
+                    && i.Status != "Cancelled")
                 .CountAsync(cancellationToken);
 
             var name = $"{customer.FirstName} {customer.LastName}".Trim();
@@ -254,35 +260,110 @@ public sealed class GetInvoicesTool : AiToolBase
     {
         var now = DateTime.UtcNow;
         var customerId = context.Page.CustomerId ?? context.Memory.SelectedCustomerId;
+        var message = context.Message ?? "";
+        var wantOverdue = ContainsAny(message, "overdue", "past due");
+        var wantOutstanding = ContainsAny(message, "outstanding", "unpaid", "payment", "balance", "partial");
 
-        var query = _context.Invoices
-            .Where(i => i.OutstandingAmount > 0 && i.DueDate < now);
-
+        var query = _context.Invoices.AsNoTracking();
         if (customerId is not null)
             query = query.Where(i => i.CustomerId == customerId);
 
-        var overdue = await query
+        var invoices = await query
             .OrderBy(i => i.DueDate)
-            .Take(15)
             .Select(i => new
             {
+                i.OrderId,
                 i.InvoiceNumber,
                 Customer = (i.Customer.FirstName + " " + i.Customer.LastName).Trim(),
                 i.DueDate,
-                i.OutstandingAmount,
+                i.GrandTotal,
                 i.Status
             })
+            .Take(200)
             .ToListAsync(cancellationToken);
 
-        var totalOutstanding = overdue.Sum(i => i.OutstandingAmount);
+        if (invoices.Count == 0)
+        {
+            return new AiToolResult
+            {
+                ToolName = ToolName.ToString(),
+                Data = Array.Empty<object>(),
+                Summary = "No invoices found for this workspace."
+            };
+        }
+
+        var paidByOrder = await InvoicePaymentCalculator.GetAmountPaidByOrderIdsAsync(
+            _context,
+            invoices.Select(i => i.OrderId).Distinct().ToList(),
+            cancellationToken);
+
+        var rows = invoices.Select(i =>
+        {
+            var paid = paidByOrder.TryGetValue(i.OrderId, out var amount) ? amount : 0m;
+            var outstanding = InvoicePaymentCalculator.Outstanding(i.GrandTotal, paid);
+            return new
+            {
+                i.InvoiceNumber,
+                i.Customer,
+                i.DueDate,
+                i.Status,
+                i.GrandTotal,
+                AmountPaid = paid,
+                OutstandingAmount = outstanding,
+                IsOverdue = InvoicePaymentCalculator.IsCollectibleOverdue(i.Status, outstanding, i.DueDate, now),
+                PaidWithoutCoveringPayments = InvoicePaymentCalculator.IsPaidStatusWithOpenBalance(i.Status, outstanding)
+            };
+        }).ToList();
+
+        var overdue = rows.Where(r => r.IsOverdue).OrderBy(r => r.DueDate).Take(15).ToList();
+        var open = rows.Where(r => r.OutstandingAmount > 0
+                && !string.Equals(r.Status, "Cancelled", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(r.Status, "Draft", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(r.Status, "Paid", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(r => r.DueDate)
+            .Take(15)
+            .ToList();
+        var mismatches = rows.Where(r => r.PaidWithoutCoveringPayments).Take(10).ToList();
+
+        var focus = wantOverdue ? overdue : wantOutstanding ? open : overdue.Count > 0 ? overdue : open;
+        var lines = focus.Select(r =>
+            $"{r.InvoiceNumber} — {r.Customer}, due {r.DueDate:yyyy-MM-dd}, paid {r.AmountPaid:C}, outstanding {r.OutstandingAmount:C}, status {r.Status}");
+
+        var summary = new System.Text.StringBuilder();
+        if (wantOverdue || (!wantOutstanding && overdue.Count > 0))
+        {
+            summary.Append(overdue.Count == 0
+                ? "No overdue invoices. Paid, cancelled, and draft invoices are not counted as overdue."
+                : $"{overdue.Count} overdue invoice(s) totaling {overdue.Sum(r => r.OutstandingAmount):C} outstanding.");
+        }
+        else if (open.Count == 0)
+        {
+            summary.Append("No outstanding invoice balances. Every issued invoice is covered by recorded payments, or there are no issued invoices.");
+        }
+        else
+        {
+            summary.Append($"{open.Count} invoice(s) with an outstanding balance totaling {open.Sum(r => r.OutstandingAmount):C}.");
+        }
+
+        if (lines.Any())
+        {
+            summary.AppendLine();
+            summary.Append(string.Join("\n", lines));
+        }
+
+        if (mismatches.Count > 0)
+        {
+            summary.AppendLine();
+            summary.Append("These invoices are marked Paid, but recorded payments do not cover the total. They are not listed as overdue:");
+            foreach (var row in mismatches)
+                summary.Append($"\n• {row.InvoiceNumber} — payments {row.AmountPaid:C} of {row.GrandTotal:C}.");
+        }
 
         return new AiToolResult
         {
             ToolName = ToolName.ToString(),
-            Data = overdue,
-            Summary = overdue.Count == 0
-                ? "No overdue invoices found."
-                : $"{overdue.Count} overdue invoice(s) totaling {totalOutstanding:C} outstanding."
+            Data = focus,
+            Summary = summary.ToString().Trim()
         };
     }
 }
@@ -334,7 +415,9 @@ public sealed class GetProductsTool : AiToolBase
     public override string Description => "Retrieve product catalog and inventory summaries.";
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
-        ContainsAny(message, "product", "catalog", "inventory");
+        intent is AiCopilotIntent.ActionRead or AiCopilotIntent.BusinessIntelligence
+        && ContainsAny(message, "catalog", "product list", "list products", "our products")
+        && !ContainsAny(message, "best selling", "top selling", "low stock", "create product", "add product");
 
     public override async Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default)
     {

@@ -63,8 +63,7 @@ public sealed class VoicePreferenceService : IVoicePreferenceService
         var tenantId = _currentUser.TenantId
             ?? throw new InvalidOperationException("Tenant context is required.");
 
-        var language = AgentLanguages.Normalize(request.Language);
-        var voiceLanguage = AgentLanguages.ToVoiceLanguage(language);
+        var voiceLanguage = AgentLanguages.ToVoiceLanguage(request.Language);
         var agentKey = string.IsNullOrWhiteSpace(request.PreferredAgentKey)
             ? AgentKeys.Sophia
             : AgentKeys.Normalize(request.PreferredAgentKey);
@@ -101,8 +100,8 @@ public sealed class VoicePreferenceService : IVoicePreferenceService
     private static VoicePreferenceDto DefaultDto() => new()
     {
         Id = Guid.Empty,
-        Language = AgentLanguages.English,
-        VoiceLanguage = AgentLanguages.ToVoiceLanguage(AgentLanguages.English),
+        Language = AgentLanguages.Auto,
+        VoiceLanguage = AgentVoiceLanguage.Auto,
         VoiceName = "default",
         SpeechRate = 1.0,
         Pitch = 1.0,
@@ -114,8 +113,8 @@ public sealed class VoicePreferenceService : IVoicePreferenceService
     private static VoicePreferenceDto Map(VoicePreference entity) => new()
     {
         Id = entity.Id,
-        Language = AgentLanguages.English,
-        VoiceLanguage = AgentVoiceLanguage.En,
+        Language = AgentLanguages.FromVoiceLanguage(entity.Language),
+        VoiceLanguage = entity.Language,
         VoiceName = entity.VoiceName,
         SpeechRate = entity.SpeechRate,
         Pitch = entity.Pitch,

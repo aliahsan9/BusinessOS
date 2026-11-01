@@ -1,5 +1,6 @@
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Agents.DTOs;
+using BusinessOS.Application.Features.Agents;
 using BusinessOS.Application.Features.Agents.Enums;
 using BusinessOS.Application.Features.Agents.Services;
 using BusinessOS.Domain.Entities;
@@ -78,7 +79,7 @@ public sealed class AgentPersonaService : IAgentPersonaService
         CancellationToken cancellationToken = default)
     {
         var persona = await ResolvePersonaAsync(agentKey, cancellationToken);
-        var languageLine = "Respond in clear, professional English.";
+        var languageLine = ConversationLanguage.ResponseInstruction(language);
 
         if (!preferEmployeeTone)
         {
@@ -112,6 +113,8 @@ public sealed class AgentPersonaService : IAgentPersonaService
             - Write plain sentences. Never use asterisks, markdown bold, backticks, or hash headings.
             - Put each record on one line, for example: "INV-2026-000001 for Ali Ahsan, due July 28, 2026, $119,002.00 outstanding, status Paid."
             - Skip filler closings such as "let me know if you need anything else."
+            - Do not introduce yourself again after the first turn.
+            - Answer follow-ups from this conversation. "Why?" means why the last result looks that way. "What about last month?" keeps the same metric.
 
             {languageLine}
 

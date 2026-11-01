@@ -91,7 +91,9 @@ public sealed class GetBestSellingProductsTool : AiToolBase
         intent is AiCopilotIntent.Analytics or AiCopilotIntent.BusinessIntelligence or AiCopilotIntent.FollowUp or AiCopilotIntent.ActionRead
         && ContainsAny(message,
             "best selling", "best-selling", "bestseller", "best seller", "top product", "top selling",
-            "most sold", "highest selling", "which product", "popular product", "product performance");
+            "most sold", "highest selling", "which product", "popular product", "product performance",
+            "ziada sale", "zyada sale", "kon sa product ziada", "kaun sa product")
+        && !ContainsAny(message, "low stock", "low in stock", "out of stock", "reorder");
 
     public override async Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default)
     {
@@ -186,11 +188,16 @@ public sealed class GetSalesTrendsTool : AiToolBase
         var orderTrend = PctChange(current.Orders, previous.Orders);
         var unitTrend = PctChange(current.Units, previous.Units);
 
-        var momentum = current.Revenue >= previous.Revenue && previous.Revenue >= prior.Revenue
-            ? "Revenue is rising across the last three months — momentum is positive."
-            : current.Revenue < previous.Revenue && previous.Revenue < prior.Revenue
-                ? "Revenue has declined for two consecutive months — prioritize retention and conversion."
-                : "Revenue is mixed month-to-month — focus on consistent bestsellers and follow-ups.";
+        var hasHistory = current.Revenue > 0 || previous.Revenue > 0 || prior.Revenue > 0;
+        var momentum = !hasHistory
+            ? "There is not enough sales in these months to describe a trend."
+            : current.Revenue > previous.Revenue && previous.Revenue > prior.Revenue && previous.Revenue > 0
+                ? "Revenue is higher in each of the last two comparisons. That is based on recorded orders, not a forecast."
+                : current.Revenue < previous.Revenue && previous.Revenue < prior.Revenue && prior.Revenue > 0
+                    ? "Revenue is lower in each of the last two comparisons."
+                    : "Revenue moved differently from month to month. I am not calling that a trend.";
+
+        var decliningLines = await DescribeDecliningProductsAsync(thisMonthStart, lastMonthStart, now, cancellationToken);
 
         var summary =
             $"""
@@ -200,7 +207,9 @@ public sealed class GetSalesTrendsTool : AiToolBase
             • Month before last: {prior.Revenue:C} revenue, {prior.Orders:N0} orders, {prior.Units:N0} units.
             • Orders trend: {orderTrend}. Units trend: {unitTrend}.
             • Outlook from your data: {momentum}
-            Note: Future projections are directional from recent history, not guarantees.
+            • Products with declining sales: {decliningLines}
+            A product is listed as declining only when the previous month had at least 3 units and this month sold fewer.
+            The directional read is from recorded orders only, not a forecast.
             """;
 
         return new AiToolResult
@@ -218,5 +227,42 @@ public sealed class GetSalesTrendsTool : AiToolBase
             },
             Summary = summary.Trim()
         };
+    }
+
+    private async Task<string> DescribeDecliningProductsAsync(
+        DateTime thisMonthStart,
+        DateTime lastMonthStart,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        var lines = await _context.OrderItems
+            .AsNoTracking()
+            .Where(oi => !oi.IsDeleted && oi.Order.OrderDate >= lastMonthStart && oi.Order.OrderDate <= now)
+            .Select(oi => new
+            {
+                oi.ProductId,
+                Name = oi.Product != null ? oi.Product.Name : "Unknown product",
+                oi.Quantity,
+                oi.Order.OrderDate
+            })
+            .ToListAsync(cancellationToken);
+
+        var declining = lines
+            .GroupBy(x => new { x.ProductId, x.Name })
+            .Select(g => new
+            {
+                g.Key.Name,
+                Previous = g.Where(x => x.OrderDate < thisMonthStart).Sum(x => x.Quantity),
+                Current = g.Where(x => x.OrderDate >= thisMonthStart).Sum(x => x.Quantity)
+            })
+            .Where(x => x.Previous >= 3 && x.Current < x.Previous)
+            .OrderByDescending(x => x.Previous - x.Current)
+            .Take(5)
+            .ToList();
+
+        if (declining.Count == 0)
+            return "none. There is not enough month-to-month volume to name a declining product.";
+
+        return string.Join("; ", declining.Select(x => $"{x.Name} ({x.Previous:N0} → {x.Current:N0} units)"));
     }
 }
