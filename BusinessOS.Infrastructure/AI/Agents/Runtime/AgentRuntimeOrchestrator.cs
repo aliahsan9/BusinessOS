@@ -10,6 +10,7 @@ using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Enums;
 using BusinessOS.Application.Features.AI.Services;
 using BusinessOS.Domain.Enums;
+using BusinessOS.Infrastructure.AI;
 using Microsoft.Extensions.Logging;
 
 namespace BusinessOS.Infrastructure.AI.Agents.Runtime;
@@ -32,6 +33,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
     private readonly IAiInsightService _insights;
     private readonly ICurrentUserService _currentUser;
     private readonly ISaleOrderDraftService _saleDrafts;
+    private readonly SophiaModelToolLoop _modelLoop;
     private readonly ILogger<AgentRuntimeOrchestrator> _logger;
 
     public AgentRuntimeOrchestrator(
@@ -46,6 +48,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         IAiInsightService insights,
         ICurrentUserService currentUser,
         ISaleOrderDraftService saleDrafts,
+        SophiaModelToolLoop modelLoop,
         ILogger<AgentRuntimeOrchestrator> logger)
     {
         _intentParser = intentParser;
@@ -59,6 +62,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         _insights = insights;
         _currentUser = currentUser;
         _saleDrafts = saleDrafts;
+        _modelLoop = modelLoop;
         _logger = logger;
     }
 
@@ -199,6 +203,51 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             }
             yield return new AgentStreamChunkDto { Type = "final", Content = mapped.Reply, FinalResponse = mapped };
             yield break;
+        }
+
+        if (_modelLoop.IsAvailable
+            && intent.Intent is not (AiCopilotIntent.ActionCreate or AiCopilotIntent.Workflow or AiCopilotIntent.ReportGeneration or AiCopilotIntent.Onboarding)
+            && !intent.SuggestedTools.Any(AiToolSafetyGate.IsMutating))
+        {
+            var model = await _modelLoop.TryAnswerAsync(
+                request.Message,
+                language,
+                page,
+                memory,
+                sessionId,
+                cancellationToken);
+            var needsData = intent.SuggestedTools.Count > 0;
+            if (model is not null && (model.ToolCalls > 0 || !needsData))
+            {
+                if (abandonPending)
+                    await _memory.SetPendingActionAsync(sessionId, null, cancellationToken);
+
+                await _memory.CompleteTurnAsync(
+                    sessionId,
+                    chatRequest,
+                    intent.Intent,
+                    request.Message,
+                    model.Reply,
+                    model.ToolsUsed,
+                    citations: null,
+                    clientRequestId: request.ClientRequestId,
+                    cancellationToken: cancellationToken,
+                    updatePendingAction: abandonPending,
+                    pendingActionJson: null,
+                    preferredLanguage: language);
+
+                var modelResponse = BuildResponse(
+                    persona,
+                    agentKey,
+                    language,
+                    intent.Intent,
+                    sessionId,
+                    model.Reply,
+                    toolsUsed: model.ToolsUsed);
+                await foreach (var chunk in StreamText(model.Reply, modelResponse, cancellationToken))
+                    yield return chunk;
+                yield break;
+            }
         }
 
         var state = new AgentExecutionState
@@ -687,7 +736,8 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         Guid sessionId,
         string reply,
         bool permissionDenied = false,
-        IReadOnlyList<AiSuggestionDto>? suggestions = null) =>
+        IReadOnlyList<AiSuggestionDto>? suggestions = null,
+        IReadOnlyList<string>? toolsUsed = null) =>
         new()
         {
             Reply = reply,
@@ -699,6 +749,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             Intent = intent,
             PermissionDenied = permissionDenied,
             Suggestions = suggestions ?? [],
+            ToolsUsed = toolsUsed ?? [],
             Language = language,
             TextDirection = AgentLanguages.IsRtl(language) ? "rtl" : "ltr"
         };

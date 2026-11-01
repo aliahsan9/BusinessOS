@@ -36,6 +36,8 @@ public static class AiToolSafetyGate
         AiToolName.CreateTask
     ];
 
+    public static bool IsMutating(AiToolName tool) => MutatingTools.Contains(tool);
+
     public static bool TryBlock(AiToolName tool, string? message, JsonElement args, out string reason)
     {
         var text = message ?? string.Empty;

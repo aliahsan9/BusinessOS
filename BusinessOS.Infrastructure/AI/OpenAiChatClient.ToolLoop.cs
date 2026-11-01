@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace BusinessOS.Infrastructure.AI;
 
-public readonly record struct ModelToolDefinition(string Name, string Description);
+public readonly record struct ModelToolDefinition(string Name, string Description, string? ParametersJson = null);
 
 public readonly record struct ModelToolCall(string Id, string Name, string ArgumentsJson);
 
@@ -58,12 +58,7 @@ public sealed partial class OpenAiChatClient
             {
                 ["name"] = tool.Name,
                 ["description"] = tool.Description,
-                ["parameters"] = new JsonObject
-                {
-                    ["type"] = "object",
-                    ["additionalProperties"] = false,
-                    ["properties"] = new JsonObject()
-                }
+                ["parameters"] = ParseParameters(tool.ParametersJson)
             }
         }).ToArray();
 
@@ -195,6 +190,29 @@ public sealed partial class OpenAiChatClient
             or HttpStatusCode.BadGateway
             or HttpStatusCode.ServiceUnavailable
             or HttpStatusCode.GatewayTimeout;
+
+    private static JsonNode ParseParameters(string? json)
+    {
+        if (!string.IsNullOrWhiteSpace(json))
+        {
+            try
+            {
+                if (JsonNode.Parse(json) is JsonObject schema)
+                    return schema;
+            }
+            catch (JsonException)
+            {
+                // Fall through to the empty object schema.
+            }
+        }
+
+        return new JsonObject
+        {
+            ["type"] = "object",
+            ["additionalProperties"] = false,
+            ["properties"] = new JsonObject()
+        };
+    }
 
     private static bool TryParseArguments(string json)
     {

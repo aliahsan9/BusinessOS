@@ -2,6 +2,7 @@ using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Enums;
 using BusinessOS.Application.Features.AI.Services;
+using BusinessOS.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace BusinessOS.Infrastructure.AI.Copilot.Tools;
@@ -47,7 +48,7 @@ public sealed class GetSalesSummaryTool : AiToolBase
     public GetSalesSummaryTool(IApplicationDbContext context) => _context = context;
 
     public override AiToolName ToolName => AiToolName.GetSalesSummary;
-    public override string Description => "Summarize products sold, order counts, and sales volume.";
+    public override string Description => "Summarize units sold, order counts, and order grand total for a period. This is not invoiced revenue, payments received, or profit. Cancelled orders are excluded.";
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
         intent is AiCopilotIntent.Analytics or AiCopilotIntent.BusinessIntelligence or AiCopilotIntent.FollowUp
@@ -58,22 +59,24 @@ public sealed class GetSalesSummaryTool : AiToolBase
         var (start, end, label) = ResolveDateRange(context.Message);
 
         var productsSold = await _context.OrderItems
-            .Where(oi => !oi.IsDeleted && oi.Order.OrderDate >= start && oi.Order.OrderDate <= end)
+            .Where(oi => !oi.IsDeleted
+                && oi.Order.Status != OrderStatusNames.Cancelled
+                && oi.Order.OrderDate >= start && oi.Order.OrderDate <= end)
             .SumAsync(oi => oi.Quantity, cancellationToken);
 
         var orderCount = await _context.Orders
-            .Where(o => o.OrderDate >= start && o.OrderDate <= end)
+            .Where(o => o.Status != OrderStatusNames.Cancelled && o.OrderDate >= start && o.OrderDate <= end)
             .CountAsync(cancellationToken);
 
         var orderTotal = await _context.Orders
-            .Where(o => o.OrderDate >= start && o.OrderDate <= end)
+            .Where(o => o.Status != OrderStatusNames.Cancelled && o.OrderDate >= start && o.OrderDate <= end)
             .SumAsync(o => o.GrandTotal, cancellationToken);
 
         return new AiToolResult
         {
             ToolName = ToolName.ToString(),
-            Data = new { productsSold, orderCount, orderTotal, period = label },
-            Summary = $"{productsSold:N0} products sold across {orderCount:N0} orders {label} ({orderTotal:C} total)."
+            Data = new { productsSold, orderCount, orderTotal, period = label, measure = "order grand total" },
+            Summary = $"{productsSold:N0} units sold across {orderCount:N0} orders {label}. Order grand total {orderTotal:C}. This is the sum of order totals, excluding cancelled orders. It is not invoiced revenue, not payments received, and not profit."
         };
     }
 }
@@ -100,7 +103,9 @@ public sealed class GetBestSellingProductsTool : AiToolBase
         var (start, end, label) = ResolveDateRange(context.Message);
 
         var ranked = await _context.OrderItems
-            .Where(oi => !oi.IsDeleted && oi.Order.OrderDate >= start && oi.Order.OrderDate <= end)
+            .Where(oi => !oi.IsDeleted
+                && oi.Order.Status != OrderStatusNames.Cancelled
+                && oi.Order.OrderDate >= start && oi.Order.OrderDate <= end)
             .GroupBy(oi => new { oi.ProductId, Name = oi.Product != null ? oi.Product.Name : "Unknown product", Sku = oi.Product != null ? oi.Product.SKU : "" })
             .Select(g => new
             {
@@ -160,13 +165,15 @@ public sealed class GetSalesTrendsTool : AiToolBase
         async Task<(decimal Revenue, int Orders, decimal Units)> SnapshotAsync(DateTime start, DateTime end)
         {
             var revenue = await _context.Orders
-                .Where(o => o.OrderDate >= start && o.OrderDate <= end)
+                .Where(o => o.Status != OrderStatusNames.Cancelled && o.OrderDate >= start && o.OrderDate <= end)
                 .SumAsync(o => (decimal?)o.GrandTotal, cancellationToken) ?? 0m;
             var orders = await _context.Orders
-                .Where(o => o.OrderDate >= start && o.OrderDate <= end)
+                .Where(o => o.Status != OrderStatusNames.Cancelled && o.OrderDate >= start && o.OrderDate <= end)
                 .CountAsync(cancellationToken);
             var units = await _context.OrderItems
-                .Where(oi => !oi.IsDeleted && oi.Order.OrderDate >= start && oi.Order.OrderDate <= end)
+                .Where(oi => !oi.IsDeleted
+                    && oi.Order.Status != OrderStatusNames.Cancelled
+                    && oi.Order.OrderDate >= start && oi.Order.OrderDate <= end)
                 .SumAsync(oi => (decimal?)oi.Quantity, cancellationToken) ?? 0m;
             return (revenue, orders, units);
         }
@@ -201,7 +208,7 @@ public sealed class GetSalesTrendsTool : AiToolBase
 
         var summary =
             $"""
-            Sales trends (based on live orders):
+            Sales trends (order grand totals, cancelled orders excluded, not invoiced revenue and not profit):
             • This month so far: {current.Revenue:C} revenue, {current.Orders:N0} orders, {current.Units:N0} units ({revenueTrend}).
             • Last month: {previous.Revenue:C} revenue, {previous.Orders:N0} orders, {previous.Units:N0} units.
             • Month before last: {prior.Revenue:C} revenue, {prior.Orders:N0} orders, {prior.Units:N0} units.
@@ -237,7 +244,9 @@ public sealed class GetSalesTrendsTool : AiToolBase
     {
         var lines = await _context.OrderItems
             .AsNoTracking()
-            .Where(oi => !oi.IsDeleted && oi.Order.OrderDate >= lastMonthStart && oi.Order.OrderDate <= now)
+            .Where(oi => !oi.IsDeleted
+                && oi.Order.Status != OrderStatusNames.Cancelled
+                && oi.Order.OrderDate >= lastMonthStart && oi.Order.OrderDate <= now)
             .Select(oi => new
             {
                 oi.ProductId,

@@ -92,8 +92,12 @@ public static partial class ConversationLanguage
             cues.Add("revenue");
         if (ContainsAny(text, "منافع", "ربح", "profit"))
             cues.Add("profit");
+        if (IsOutOfStockCue(text))
+            cues.Add("out of stock");
         if (ContainsAny(text, "کم اسٹاک", "لو اسٹاک", "low stock", "اسٹاک ختم"))
             cues.Add("low stock");
+        if (IsAvailableProductsCue(text))
+            cues.Add("inventory stock");
         if (ContainsAny(text, "ٹاپ کسٹمر", "top customer"))
             cues.Add("top customer");
         if (ContainsAny(text, "آج", "اليوم"))
@@ -138,13 +142,39 @@ public static partial class ConversationLanguage
             return false;
         if (ContainsAny(text, "low stock", "out of stock", "dead stock", "km stock", "kam stock", "کم اسٹاک"))
             return false;
+        if (IsOutOfStockCue(text))
+            return false;
 
         return ContainsAny(text,
             "kitna stock", "kitni stock", "kitne stock", "stock baqi", "baqi stock",
             "stock left", "stock remaining", "remaining stock", "how much stock",
             "کتنا اسٹاک", "اسٹاک باقی", "کتنا سٹاک",
-            "كم المخزون", "المخزون المتبقي", "المخزون");
+            "كم المخزون", "المخزون المتبقي", "المخزون",
+            "inventory stock")
+            || IsAvailableProductsCue(text);
     }
+
+    /// <summary>Products with zero units, including Roman Urdu "stock mein nahi".</summary>
+    public static bool IsOutOfStockCue(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+        if (ContainsAny(text, "low stock", "running low", "reorder", "ختم ہونے", "khatam hone", "about to run out"))
+            return false;
+
+        return ContainsAny(text,
+            "out of stock", "out-of-stock", "zero stock", "stockout",
+            "stock mein nahi", "stock main nahi", "stock mein nahin", "stock main nahin",
+            "stock nahi hai", "stock nahin hai", "stock mein nahi hain",
+            "اسٹاک نہیں", "اسٹاک نهي");
+    }
+
+    /// <summary>Questions about how many products are on hand, including Arabic.</summary>
+    public static bool IsAvailableProductsCue(string? text) =>
+        ContainsAny(text,
+            "products available", "available products", "how many products",
+            "kitne product", "kitni product", "products in stock",
+            "المنتجات المتوفرة", "المنتجات المتوفر", "عدد المنتجات");
 
     public static bool IsCreateCustomerCue(string? text) =>
         ContainsAny(text,

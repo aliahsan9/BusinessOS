@@ -146,7 +146,7 @@ public sealed class AiPermissionValidator : IAiPermissionValidator
         AiToolName.CreateInvoice => [PermissionCodes.InvoiceCreate],
         AiToolName.SearchDocuments => [],
         AiToolName.GetInventorySummary or AiToolName.GetLowStock or AiToolName.GetDeadStock
-            or AiToolName.GetPurchaseRecommendations => [PermissionCodes.InventoryView],
+            or AiToolName.GetOutOfStock or AiToolName.GetPurchaseRecommendations => [PermissionCodes.InventoryView],
         AiToolName.CreatePurchaseOrderDraft => [PermissionCodes.PurchaseOrderCreate],
         AiToolName.GenerateInventoryReport or AiToolName.GenerateSalesReport => [PermissionCodes.ReportView],
         AiToolName.ApplyOnboardingProfile or AiToolName.GetBusinessSettings => [],
