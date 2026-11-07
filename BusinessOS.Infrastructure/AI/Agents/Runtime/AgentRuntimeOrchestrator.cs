@@ -11,6 +11,7 @@ using BusinessOS.Application.Features.AI.Enums;
 using BusinessOS.Application.Features.AI.Services;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.AI;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace BusinessOS.Infrastructure.AI.Agents.Runtime;
@@ -34,6 +35,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
     private readonly ICurrentUserService _currentUser;
     private readonly ISaleOrderDraftService _saleDrafts;
     private readonly SophiaModelToolLoop _modelLoop;
+    private readonly IApplicationDbContext _db;
     private readonly ILogger<AgentRuntimeOrchestrator> _logger;
 
     public AgentRuntimeOrchestrator(
@@ -49,6 +51,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         ICurrentUserService currentUser,
         ISaleOrderDraftService saleDrafts,
         SophiaModelToolLoop modelLoop,
+        IApplicationDbContext db,
         ILogger<AgentRuntimeOrchestrator> logger)
     {
         _intentParser = intentParser;
@@ -63,6 +66,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         _currentUser = currentUser;
         _saleDrafts = saleDrafts;
         _modelLoop = modelLoop;
+        _db = db;
         _logger = logger;
     }
 
@@ -102,6 +106,15 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         var storedPending = AgentActionClarifier.Read(memory.PendingActionJson);
         var abandonPending = false;
         var pending = storedPending;
+        if (pending is not null
+            && ((pending.UserId is not null && pending.UserId != _currentUser.UserId)
+                || (pending.TenantId is Guid pendingTenant
+                    && _currentUser.TenantId is Guid currentTenant
+                    && pendingTenant != currentTenant)))
+        {
+            pending = null;
+            abandonPending = true;
+        }
         if (pending is not null && AgentPendingAction.IsExpired(pending, DateTime.UtcNow))
         {
             var expiredTool = pending.Tool;
@@ -268,6 +281,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         AiActionResultDto? lastAction = null;
         var summaries = new List<string>();
         string? clarification = null;
+        AiPendingConfirmationDto? confirmationCard = null;
         var updatePending = abandonPending;
         string? pendingJson = null;
         var awaitingDetails = false;
@@ -308,7 +322,8 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
                     intent.Intent,
                     sessionId,
                     decision.Question,
-                    suggestions: decision.Suggestions);
+                    suggestions: decision.Suggestions,
+                    confirmation: decision.Confirmation);
                 await foreach (var chunk in StreamText(decision.Question, held, cancellationToken))
                     yield return chunk;
                 yield break;
@@ -404,6 +419,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
                     awaitingDetails = true;
                     updatePending = true;
                     pendingJson = decision.PendingJson;
+                    confirmationCard = decision.Confirmation;
                     suggestions.AddRange(decision.Suggestions);
                     var prefix = summaries.Count > 0 ? string.Join("\n", summaries) + "\n\n" : "";
                     clarification = prefix + decision.Question;
@@ -618,7 +634,8 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             ActionResult = lastAction,
             PermissionDenied = clarification is not null && clarification.Contains("permission", StringComparison.OrdinalIgnoreCase),
             Language = language,
-            TextDirection = AgentLanguages.IsRtl(language) ? "rtl" : "ltr"
+            TextDirection = AgentLanguages.IsRtl(language) ? "rtl" : "ltr",
+            PendingConfirmation = confirmationCard
         };
 
         foreach (var word in reply.Split(' ', StringSplitOptions.RemoveEmptyEntries))
@@ -636,7 +653,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         };
     }
 
-    private Task<AgentClarificationDecision> ClarifyAsync(
+    private async Task<AgentClarificationDecision> ClarifyAsync(
         AiToolName tool,
         string message,
         AgentPendingAction? pending,
@@ -646,9 +663,64 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         CancellationToken cancellationToken)
     {
         var decision = AgentActionClarifier.Decide(tool, message, pending, state, page);
-        if (tool != AiToolName.CreateSale)
-            return Task.FromResult(decision);
-        return _saleDrafts.ApplyAsync(decision, message, sessionId, cancellationToken);
+        if (tool == AiToolName.CreateSale)
+            decision = await _saleDrafts.ApplyAsync(decision, message, sessionId, cancellationToken);
+
+        decision = await BlockDuplicateProductSkuAsync(decision, cancellationToken);
+        var stamped = AgentActionClarifier.StampOwner(
+            decision.PendingJson,
+            _currentUser.UserId,
+            _currentUser.TenantId);
+        if (stamped == decision.PendingJson)
+            return decision;
+
+        return new AgentClarificationDecision
+        {
+            ShouldExecute = decision.ShouldExecute,
+            Question = decision.Question,
+            PendingJson = stamped,
+            Args = decision.Args,
+            Tool = decision.Tool,
+            Suggestions = decision.Suggestions,
+            Confirmation = decision.Confirmation
+        };
+    }
+
+    private async Task<AgentClarificationDecision> BlockDuplicateProductSkuAsync(
+        AgentClarificationDecision decision,
+        CancellationToken cancellationToken)
+    {
+        if (decision.Tool != AiToolName.CreateProduct || string.IsNullOrWhiteSpace(decision.PendingJson))
+            return decision;
+
+        var pending = AgentActionClarifier.Read(decision.PendingJson);
+        if (pending is null
+            || !pending.Slots.TryGetValue("sku", out var sku)
+            || string.IsNullOrWhiteSpace(sku))
+        {
+            return decision;
+        }
+        if (!pending.AwaitingConfirmation && !decision.ShouldExecute)
+            return decision;
+
+        var exists = await _db.Products.AsNoTracking()
+            .AnyAsync(product => product.SKU == sku, cancellationToken);
+        if (!exists)
+            return decision;
+
+        pending.Slots["sku"] = null;
+        pending.AwaitingConfirmation = false;
+        pending.NextField = "sku";
+        pending.ConfirmationFingerprint = null;
+        pending.UpdatedAtUtc = DateTime.UtcNow;
+        return new AgentClarificationDecision
+        {
+            ShouldExecute = false,
+            Tool = AiToolName.CreateProduct,
+            Question = $"SKU {sku} is already used in this business. I did not create a product. What SKU should I use instead?",
+            PendingJson = AgentActionClarifier.Write(pending),
+            Suggestions = [new AiSuggestionDto { Label = "Cancel", Message = "Cancel" }]
+        };
     }
 
     private static bool ShouldUseEmployeeRuntime(AiIntentDetectionResult intent)
@@ -743,7 +815,8 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         string reply,
         bool permissionDenied = false,
         IReadOnlyList<AiSuggestionDto>? suggestions = null,
-        IReadOnlyList<string>? toolsUsed = null) =>
+        IReadOnlyList<string>? toolsUsed = null,
+        AiPendingConfirmationDto? confirmation = null) =>
         new()
         {
             Reply = reply,
@@ -757,7 +830,8 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             Suggestions = suggestions ?? [],
             ToolsUsed = toolsUsed ?? [],
             Language = language,
-            TextDirection = AgentLanguages.IsRtl(language) ? "rtl" : "ltr"
+            TextDirection = AgentLanguages.IsRtl(language) ? "rtl" : "ltr",
+            PendingConfirmation = confirmation
         };
 
     private static async IAsyncEnumerable<AgentStreamChunkDto> StreamText(

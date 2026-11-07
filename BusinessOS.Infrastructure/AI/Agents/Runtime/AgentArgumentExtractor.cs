@@ -180,17 +180,56 @@ public sealed class AgentArgumentExtractor : IAgentArgumentExtractor
 
     private static JsonElement HeuristicCreateProduct(string message)
     {
-        var name = ParseLabeled(message, "name")
-            ?? ExtractAfterKeywords(message, "product", "item");
+        var name = ParseProductName(message);
         var sku = ParseLabeled(message, "sku", "SKU");
-        var cost = ParseDecimal(message, "cost", "cost price");
-        var sale = ParseDecimal(message, "price", "sale price", "selling");
+        var cost = ParseDecimal(message, "cost price", "cost");
+        var sale = ParseDecimal(message, "sale price", "selling price");
+        if (sale is null)
+        {
+            var bare = Regex.Match(
+                message,
+                @"(?<!cost\s)(?<!sale\s)\bprice\s*(?:is|:|=)?\s*(\d+(?:\.\d+)?)",
+                RegexOptions.IgnoreCase);
+            if (bare.Success && decimal.TryParse(bare.Groups[1].Value, out var parsed))
+                sale = parsed;
+        }
+
         return Obj(
             ("name", name),
             ("sku", sku),
             ("costPrice", cost),
             ("salePrice", sale),
             ("reorderLevel", ParseInt(message, "reorder")));
+    }
+
+    private static string? ParseProductName(string message)
+    {
+        var named = Regex.Match(
+            message,
+            @"\b(?:named|called|name is)\s+(.+?)(?=\s+with\b|\s+sku\b|,|$)",
+            RegexOptions.IgnoreCase);
+        if (named.Success)
+        {
+            var value = named.Groups[1].Value.Trim().Trim('.', ' ');
+            if (value.Length is > 0 and <= 200)
+                return value;
+        }
+
+        var labeled = ParseLabeled(message, "product name");
+        if (!string.IsNullOrWhiteSpace(labeled)
+            && !Regex.IsMatch(labeled, @"\b(sku|price|cost)\b", RegexOptions.IgnoreCase))
+        {
+            return labeled.Trim();
+        }
+
+        var after = ExtractAfterKeywords(message, "product", "item");
+        if (after is not null
+            && !Regex.IsMatch(after, @"\b(sku|price|cost|named|called|with)\b", RegexOptions.IgnoreCase))
+        {
+            return after;
+        }
+
+        return null;
     }
 
     private static JsonElement HeuristicCreateSupplier(string message)

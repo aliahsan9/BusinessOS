@@ -153,8 +153,10 @@ public sealed class AgentIntentParser : IAgentIntentParser
             && !tools.Contains(AiToolName.CreateSupplier))
             tools.Insert(0, AiToolName.CreateSupplier);
 
-        if ((Matches(text, "sale", "order")
-            || (Matches(text, "order") && !Matches(text, "purchase", "buy stock", "reorder")))
+        var mentionsSalePrice = Matches(text, "sale price", "selling price", "sales price");
+        if (!mentionsSalePrice
+            && (Matches(text, "sale", "order")
+                || (Matches(text, "order") && !Matches(text, "purchase", "buy stock", "reorder")))
             && !tools.Contains(AiToolName.CreateSale))
             tools.Insert(0, AiToolName.CreateSale);
 

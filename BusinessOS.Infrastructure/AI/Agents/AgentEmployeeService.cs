@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using BusinessOS.Application.Common.Authorization;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Agents.DTOs;
 using BusinessOS.Application.Features.Agents;
@@ -189,49 +190,33 @@ public sealed class AgentEmployeeService : IAgentEmployeeService
     {
         var persona = await _personaService.ResolvePersonaAsync(AgentKeys.Sophia, cancellationToken);
 
-        var suggestions = new List<AskSophiaSuggestionDto>
+        var suggestions = new List<AskSophiaSuggestionDto>();
+        var canAnalytics = CanSee(PermissionCodes.AnalyticsView, PermissionCodes.FinanceView)
+            || HasRole("Owner", "Admin", "Manager", "Accountant");
+        var canInventory = CanSee(PermissionCodes.InventoryView, PermissionCodes.ProductView)
+            || HasRole("Owner", "Admin", "Manager");
+        var canFinance = CanSee(PermissionCodes.FinanceView, PermissionCodes.InvoiceView)
+            || HasRole("Owner", "Admin", "Manager", "Accountant");
+        var canReports = CanSee(PermissionCodes.ReportView) || HasRole("Owner", "Admin", "Manager", "Accountant");
+
+        if (canAnalytics)
         {
-            new()
-            {
-                Label = "Inventory summary",
-                Message = "Show my inventory summary",
-                Category = "inventory",
-                AgentKey = AgentKeys.Adam,
-                Icon = "bi-box-seam"
-            },
-            new()
-            {
-                Label = "Low stock alerts",
-                Message = "Which products are low in stock?",
-                Category = "inventory",
-                AgentKey = AgentKeys.Adam,
-                Icon = "bi-exclamation-triangle"
-            },
-            new()
-            {
-                Label = "Sales report",
-                Message = "Generate a sales report for this month",
-                Category = "sales",
-                AgentKey = AgentKeys.Emma,
-                Icon = "bi-graph-up-arrow"
-            },
-            new()
-            {
-                Label = "What should I buy?",
-                Message = "What should I buy or reorder?",
-                Category = "recommendations",
-                AgentKey = AgentKeys.Adam,
-                Icon = "bi-cart3"
-            },
-            new()
-            {
-                Label = "Create a customer",
-                Message = "Create a new customer",
-                Category = "customers",
-                AgentKey = AgentKeys.Sophia,
-                Icon = "bi-person-plus"
-            }
-        };
+            suggestions.Add(Suggestion("Analyze my business performance", "Analyze my business performance", "performance"));
+            suggestions.Add(Suggestion("Show my top-selling products", "Show my top-selling products", "sales"));
+            suggestions.Add(Suggestion("Compare this month with last month", "Compare this month with last month", "sales"));
+        }
+
+        if (canInventory)
+            suggestions.Add(Suggestion("Which products need restocking?", "Which products need restocking?", "inventory"));
+
+        if (canFinance)
+            suggestions.Add(Suggestion("Show outstanding customer payments", "Show outstanding customer payments", "finance"));
+
+        if (canReports)
+            suggestions.Add(Suggestion("Generate my weekly report", "Generate my weekly sales report", "reports"));
+
+        if (suggestions.Count == 0)
+            suggestions.Add(Suggestion("What can you help with?", "What can you help me with?", "help"));
 
         try
         {
@@ -265,6 +250,22 @@ public sealed class AgentEmployeeService : IAgentEmployeeService
             Suggestions = suggestions
         };
     }
+
+    private static AskSophiaSuggestionDto Suggestion(string label, string message, string category) =>
+        new()
+        {
+            Label = label,
+            Message = message,
+            Category = category,
+            AgentKey = AgentKeys.Sophia,
+            Icon = "bi-chat-dots"
+        };
+
+    private bool CanSee(params string[] permissions) =>
+        permissions.Any(permission => _currentUser.HasPermission(permission));
+
+    private bool HasRole(params string[] roles) =>
+        _currentUser.Roles.Any(role => roles.Contains(role, StringComparer.OrdinalIgnoreCase));
 
     private async Task<bool> ShouldRouteToOnboardingAsync(
         AgentChatRequest request,

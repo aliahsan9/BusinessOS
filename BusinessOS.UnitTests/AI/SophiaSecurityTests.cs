@@ -98,6 +98,32 @@ public class SophiaSecurityTests
     }
 
     [Fact]
+    public async Task UnconfirmedProductCreate_DoesNotCallTheTool()
+    {
+        var user = DeniedUser();
+        user.Setup(u => u.HasPermission(It.IsAny<string>())).Returns(true);
+        var tool = new Mock<IAiTool>();
+        tool.SetupGet(t => t.ToolName).Returns(AiToolName.CreateProduct);
+        var registry = new Mock<IAiToolRegistry>();
+        registry.SetupGet(r => r.AllTools).Returns([tool.Object]);
+
+        var result = await Executor(registry.Object, new AiPermissionValidator(user.Object)).ExecuteAsync(
+            new AgentToolExecutionRequest
+            {
+                ToolName = AiToolName.CreateProduct,
+                Message = "How can I improve my products?",
+                Intent = AiCopilotIntent.ActionCreate
+            });
+
+        result.ToolResult.Success.Should().BeFalse();
+        result.ToolResult.Summary.Should().Contain("not confirmed");
+        tool.Verify(t => t.ExecuteWithArgsAsync(
+            It.IsAny<AiCopilotExecutionContext>(),
+            It.IsAny<JsonElement>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task ToolException_DoesNotBecomeASuccessfulAction()
     {
         var user = DeniedUser();

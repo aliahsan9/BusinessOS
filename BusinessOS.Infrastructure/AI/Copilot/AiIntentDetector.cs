@@ -2,6 +2,7 @@ using BusinessOS.Application.Features.Agents;
 using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Enums;
 using BusinessOS.Application.Features.AI.Services;
+using BusinessOS.Infrastructure.AI;
 
 namespace BusinessOS.Infrastructure.AI.Copilot;
 
@@ -234,11 +235,13 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
-        if (ContainsAny(content, "create", "add", "new", "generate", "register"))
+        if (SophiaSpeechActs.AllowsDatabaseWrite(content))
         {
+            var mentionsSalePrice = ContainsAny(content, "sale price", "selling price", "sales price");
             var creatingSaleOrOrder =
                 ContainsAny(content, "create sale", "create order", "new sale", "new order", "sales order", "sale order")
-                || (ContainsAny(content, "sale", "order")
+                || (!mentionsSalePrice
+                    && ContainsAny(content, "sale", "order")
                     && !ContainsAny(content, "purchase", "buy stock", "order stock")
                     && !IsExplicitCreateCustomer(content));
 
@@ -267,7 +270,7 @@ public sealed class AiIntentDetector : IAiIntentDetector
             }
         }
 
-        if (ContainsAny(content, "update", "edit", "change", "modify"))
+        if (SophiaSpeechActs.IsRecordUpdate(content))
         {
             if (ContainsAny(content, "customer", "client")) tools.Add(AiToolName.UpdateCustomer);
             if (ContainsAny(content, "product")) tools.Add(AiToolName.UpdateProduct);
@@ -285,7 +288,7 @@ public sealed class AiIntentDetector : IAiIntentDetector
             }
         }
 
-        if (ContainsAny(content, "delete", "remove"))
+        if (SophiaSpeechActs.IsRecordDelete(content))
         {
             if (ContainsAny(content, "customer", "client")) tools.Add(AiToolName.DeleteCustomer);
             if (ContainsAny(content, "product")) tools.Add(AiToolName.DeleteProduct);
@@ -384,7 +387,7 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
-        if (ContainsAny(content, "create", "add", "new", "generate"))
+        if (SophiaSpeechActs.AllowsDatabaseWrite(content))
         {
             if (IsExplicitCreateCustomer(content)) tools.Add(AiToolName.CreateCustomer);
             if (ContainsAny(content, "create order", "create sale", "new order", "new sale", "sales order")

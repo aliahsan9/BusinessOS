@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace BusinessOS.Infrastructure.AI;
 
@@ -6,7 +7,7 @@ namespace BusinessOS.Infrastructure.AI;
 /// Allowlisted arguments the model may send with a read tool.
 /// Tenant identity, SQL, and secrets are never accepted from the model.
 /// </summary>
-public static class SophiaToolArguments
+public static partial class SophiaToolArguments
 {
     public const string ReadParametersJson = """
         {"type":"object","additionalProperties":false,"properties":{"period":{"type":"string","enum":["today","yesterday","this_week","last_week","this_month","last_month","last_3_months","this_year","last_year"],"description":"Date range the user named. Omit when they did not name one."},"query":{"type":"string","description":"Person, product, or SKU named by the user. A short name only. Never a tenant id, SQL statement, or secret."}}}
@@ -76,8 +77,8 @@ public static class SophiaToolArguments
     }
 
     /// <summary>
-    /// Appends an English period phrase when the model selected an allowlisted period.
-    /// Existing date words in the user message still win inside <c>ResolveDateRange</c>.
+    /// Routes the tool to the period the model selected.
+    /// Other period phrases in the user message are removed so a comparison does not collapse onto the first one.
     /// </summary>
     public static string ApplyAllowlistedPeriod(string message, JsonElement arguments)
     {
@@ -102,8 +103,18 @@ public static class SophiaToolArguments
             _ => null
         };
 
-        return phrase is null ? message : $"{message} {phrase}";
+        if (phrase is null)
+            return message;
+
+        var withoutPeriods = PeriodPhrase().Replace(message ?? "", " ");
+        withoutPeriods = Regex.Replace(withoutPeriods, @"\s+", " ").Trim();
+        return string.IsNullOrWhiteSpace(withoutPeriods) ? phrase : $"{withoutPeriods} {phrase}";
     }
+
+    [GeneratedRegex(
+        @"\b(?:last 3 months|last three months|past 3 months|previous month|last month|this month|previous week|last week|this week|previous year|last year|this year|this quarter|yesterday|today)\b",
+        RegexOptions.IgnoreCase)]
+    private static partial Regex PeriodPhrase();
 
     public static string? ReadQuery(JsonElement? arguments)
     {

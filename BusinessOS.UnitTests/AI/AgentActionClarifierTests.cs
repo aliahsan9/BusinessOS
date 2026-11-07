@@ -150,7 +150,8 @@ public class AgentActionClarifierTests
             Page);
 
         decision.ShouldExecute.Should().BeFalse();
-        decision.Question.Should().Contain("price");
+        decision.Question.Should().Contain("SKU");
+        decision.Question.Should().Contain("won't generate");
     }
 
     [Fact]

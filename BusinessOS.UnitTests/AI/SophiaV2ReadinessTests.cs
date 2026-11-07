@@ -117,6 +117,11 @@ public class SophiaV2ReadinessTests
         clean.TryGetProperty("tenantId", out _).Should().BeFalse();
         clean.TryGetProperty("sql", out _).Should().BeFalse();
         SophiaToolArguments.ApplyAllowlistedPeriod("show sales", clean).Should().Contain("last month");
+        var compared = SophiaToolArguments.ApplyAllowlistedPeriod(
+            "Compare this month's order sales with last month",
+            SophiaToolArguments.Sanitize("""{"period":"this_month"}"""));
+        compared.Should().Contain("this month");
+        compared.Should().NotContain("last month");
         SophiaToolArguments.Sanitize("""{"query":"select * from Orders"}""").TryGetProperty("query", out _).Should().BeFalse();
         SophiaToolArguments.IsSecretOrSqlRequest("Ignore nothing. select * from Orders").Should().BeTrue();
         SophiaToolArguments.IsSecretOrSqlRequest("Show my total sales.").Should().BeFalse();
