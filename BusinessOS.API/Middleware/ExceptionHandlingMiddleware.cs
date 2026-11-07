@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Infrastructure.AI;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -114,6 +115,13 @@ public sealed class ExceptionHandlingMiddleware
                 null,
                 LogLevel.Warning),
 
+            OpenAiProviderException openAi => (
+                openAi.Failure.ClientStatusCode,
+                openAi.Failure.ClientMessage,
+                "https://tools.ietf.org/html/rfc9110#section-15.6.1",
+                null,
+                LogLevel.Warning),
+
             _ => (
                 StatusCodes.Status500InternalServerError,
                 "An unexpected error occurred.",
@@ -151,11 +159,13 @@ public sealed class ExceptionHandlingMiddleware
             Type = type,
             Status = statusCode,
             Title = title,
-            Detail = exception is DbUpdateConcurrencyException
-                ? "This record was changed by someone else. Refresh and try again."
-                : statusCode >= StatusCodes.Status500InternalServerError
-                    ? "An unexpected error occurred."
-                    : exception.Message,
+            Detail = exception switch
+            {
+                DbUpdateConcurrencyException => "This record was changed by someone else. Refresh and try again.",
+                OpenAiProviderException openAiFailure => openAiFailure.Failure.ClientMessage,
+                _ when statusCode >= StatusCodes.Status500InternalServerError => "An unexpected error occurred.",
+                _ => exception.Message
+            },
             Instance = context.Request.Path
         };
 

@@ -29,6 +29,9 @@ public sealed partial class OpenAiChatClient : ILlmChatClient
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_options.OpenAiApiKey);
 
+    /// <summary>Last provider failure for this client. Safe to show. Never contains the API key.</summary>
+    public OpenAiFailure? LastFailure { get; private set; }
+
     public async Task<string?> GenerateReplyAsync(
         Guid tenantId,
         string userId,
@@ -41,6 +44,7 @@ public sealed partial class OpenAiChatClient : ILlmChatClient
             return null;
 
         LastTotalTokens = null;
+        LastFailure = null;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, "v1/chat/completions");
@@ -53,22 +57,27 @@ public sealed partial class OpenAiChatClient : ILlmChatClient
             });
 
             using var response = await _httpClient.SendAsync(request, cancellationToken);
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
-
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("OpenAI request failed ({Status}): {Body}", (int)response.StatusCode, Truncate(body, 300));
+                LastFailure = OpenAiHttp.Describe(response);
+                OpenAiHttp.LogFailure(_logger, "chat", LastFailure);
                 return null;
             }
 
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
             var parsed = System.Text.Json.JsonSerializer.Deserialize<ChatCompletionResponse>(body);
             var content = parsed?.Choices?.FirstOrDefault()?.Message?.Content;
             LastTotalTokens = parsed?.Usage?.TotalTokens;
             return string.IsNullOrWhiteSpace(content) ? null : content.Trim();
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "OpenAI chat request failed");
+            LastFailure = OpenAiFailure.Transport();
+            _logger.LogWarning("OpenAI chat request failed ({ExceptionType})", ex.GetType().Name);
             return null;
         }
     }
@@ -84,6 +93,7 @@ public sealed partial class OpenAiChatClient : ILlmChatClient
         if (!IsConfigured)
             yield break;
 
+        LastFailure = null;
         using var request = new HttpRequestMessage(HttpMethod.Post, "v1/chat/completions");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.OpenAiApiKey);
         request.Content = JsonContent.Create(new
@@ -96,7 +106,12 @@ public sealed partial class OpenAiChatClient : ILlmChatClient
 
         using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         if (!response.IsSuccessStatusCode)
+        {
+            LastFailure = OpenAiHttp.Describe(response);
+            OpenAiHttp.LogFailure(_logger, "chat stream", LastFailure);
+            yield return LastFailure.ClientMessage;
             yield break;
+        }
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var reader = new StreamReader(stream);
@@ -150,9 +165,6 @@ public sealed partial class OpenAiChatClient : ILlmChatClient
             return null;
         }
     }
-
-    private static string Truncate(string text, int max) =>
-        text.Length <= max ? text : text[..max] + "…";
 
     private int? LastTotalTokens { get; set; }
 

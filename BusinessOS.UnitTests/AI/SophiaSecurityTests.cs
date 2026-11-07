@@ -243,7 +243,7 @@ public class SophiaSecurityTests
     [Theory]
     [InlineData("thanks", "You're welcome")]
         [InlineData("how can I increase laptop sales", "Bundle")]
-    [InlineData("hi", "What should we tackle")]
+    [InlineData("hi", "What would you like to work on")]
     public void ConversationalReplies_StayInTheirLane(string message, string expected)
     {
         var reply = AiNaturalReplyBuilder.BuildConversationalReply(

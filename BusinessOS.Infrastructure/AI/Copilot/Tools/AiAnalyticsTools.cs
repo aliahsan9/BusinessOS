@@ -22,21 +22,61 @@ public sealed class GetRevenueTool : AiToolBase
 
     public override async Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default)
     {
-        var (start, end, label) = ResolveDateRange(context.Message);
+        var zone = await BusinessClock.LoadAsync(_context, cancellationToken);
+        var (start, end, label) = BusinessClock.Resolve(context.Message, zone);
 
         var revenue = await _context.Invoices
-            .Where(i => i.InvoiceDate >= start && i.InvoiceDate <= end)
-            .SumAsync(i => i.GrandTotal, cancellationToken);
+            .Where(i => i.InvoiceDate >= start && i.InvoiceDate <= end
+                && i.Status != InvoiceStatusNames.Cancelled
+                && i.Status != InvoiceStatusNames.Draft)
+            .SumAsync(i => (decimal?)i.GrandTotal, cancellationToken) ?? 0m;
 
-        var paid = await _context.Invoices
-            .Where(i => i.InvoiceDate >= start && i.InvoiceDate <= end)
-            .SumAsync(i => i.AmountPaid, cancellationToken);
+        var paidOnInvoices = await _context.Invoices
+            .Where(i => i.InvoiceDate >= start && i.InvoiceDate <= end
+                && i.Status != InvoiceStatusNames.Cancelled
+                && i.Status != InvoiceStatusNames.Draft)
+            .SumAsync(i => (decimal?)i.AmountPaid, cancellationToken) ?? 0m;
+
+        var outstanding = await _context.Invoices
+            .Where(i => i.InvoiceDate >= start && i.InvoiceDate <= end
+                && i.Status != InvoiceStatusNames.Cancelled
+                && i.Status != InvoiceStatusNames.Draft)
+            .SumAsync(i => (decimal?)i.OutstandingAmount, cancellationToken) ?? 0m;
+
+        var paymentsReceived = await _context.Payments
+            .Where(p => p.PaymentDate >= start && p.PaymentDate <= end
+                && (p.Status == PaymentStatusNames.Completed || p.Status == PaymentStatusNames.Refunded))
+            .SumAsync(p => (decimal?)(p.Amount - p.RefundedAmount), cancellationToken) ?? 0m;
+
+        var orderTotal = await _context.Orders
+            .Where(o => o.Status != OrderStatusNames.Cancelled && o.OrderDate >= start && o.OrderDate <= end)
+            .SumAsync(o => (decimal?)o.GrandTotal, cancellationToken) ?? 0m;
+
+        var summary =
+            $"Financial snapshot {label}. " +
+            $"Order value (excluding cancelled orders): {orderTotal:C}. This is not invoiced revenue. " +
+            $"Invoiced revenue (excluding draft and cancelled invoices): {revenue:C}. " +
+            $"Payments collected in the period: {paymentsReceived:C}. " +
+            $"Outstanding balance on invoices issued in the period: {outstanding:C}. " +
+            $"Invoice records also show {paidOnInvoices:C} marked paid. " +
+            "These are different measures. Profit is not included here.";
 
         return new AiToolResult
         {
             ToolName = ToolName.ToString(),
-            Data = new { revenue, paid, period = label, start, end },
-            Summary = $"Invoiced revenue {label}: {revenue:C} ({paid:C} collected). This is invoice grand total, not profit and not orders that were never invoiced."
+            Data = new
+            {
+                revenue,
+                paid = paidOnInvoices,
+                paymentsReceived,
+                outstanding,
+                orderTotal,
+                period = label,
+                start,
+                end,
+                measure = "invoiced revenue"
+            },
+            Summary = summary
         };
     }
 }
@@ -52,7 +92,7 @@ public sealed class GetSalesSummaryTool : AiToolBase
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
         intent is AiCopilotIntent.Analytics or AiCopilotIntent.BusinessIntelligence or AiCopilotIntent.FollowUp
-        && ContainsAny(message, "sold", "sales", "products", "orders", "how many");
+        && ContainsAny(message, "sold", "sales", "units sold", "total sales", "my sales", "our sales", "orders this");
 
     public override async Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default)
     {

@@ -37,9 +37,12 @@ internal static class AiNaturalReplyBuilder
         if (lower.Contains("accent") || lower.Contains("change your voice") || lower.Contains("your voice"))
             return "I speak with the voice selected in this chat. Change it from the voice list, or under Settings → Navla Voice.";
 
+        if (IsHowAreYou(lower))
+            return "I'm doing well, thanks for asking. Ready to help you with your business. What can I do for you?";
+
         if (lower.Contains("thank") || lower.Contains("shukriya") || lower.Contains("shukria"))
         {
-            return "You're welcome. Tell me if you need anything on inventory, orders, customers, or reports.";
+            return "You're welcome. Let me know whenever you need help.";
         }
 
         if (lower.Contains("bye") || lower.Contains("goodbye"))
@@ -59,7 +62,7 @@ internal static class AiNaturalReplyBuilder
         // Short natural greeting — never dump revenue or a long capability brochure.
         if (IsGreeting(lower, message))
         {
-            return $"Hi — I'm {name}. What should we tackle: an order, inventory, or a quick report?";
+            return "Hello. How is your business doing today? What would you like to work on?";
         }
 
         var contextHint = page.Module switch
@@ -104,27 +107,48 @@ internal static class AiNaturalReplyBuilder
 
         if (language == AgentLanguages.RomanUrdu)
         {
-            if (thanks) return "Koi baat nahi. Sales, stock, ya invoices — jo chahiye batao.";
-            if (goodbye) return $"Allah hafiz. Main {name} hoon, jab chaho wapas aa jana.";
-            return $"Hi, main {name} hoon. Order, stock, ya is month ki sales — kya dekhna hai?";
+            if (thanks) return "Koi baat nahi. Jab bhi madad chahiye, bata dena.";
+            if (goodbye) return "Allah hafiz. Jab chaho wapas aa jana.";
+            return "Hello. Aaj business kaisa chal raha hai? Kis cheez par kaam karna hai?";
         }
 
         if (language == AgentLanguages.Urdu)
         {
-            if (thanks) return "کوئی بات نہیں۔ سیلز، اسٹاک، یا انوائس میں سے جو دیکھنا ہو بتائیں۔";
-            if (goodbye) return $"اللہ حافظ۔ میں {name} ہوں، جب چاہیں واپس آ جائیں۔";
-            return $"سلام، میں {name} ہوں۔ آرڈر، اسٹاک، یا اس مہینے کی سیلز — کیا دیکھنا ہے؟";
+            if (thanks) return "کوئی بات نہیں۔ جب بھی مدد چاہیے بتائیں۔";
+            if (goodbye) return "اللہ حافظ۔ جب چاہیں واپس آ جائیے۔";
+            return "سلام۔ آج کاروبار کیسا چل رہا ہے؟ کس کام میں مدد چاہیے؟";
         }
 
         if (language == AgentLanguages.Arabic)
         {
-            if (thanks) return "على الرحب. قل لي إن احتجت المبيعات أو المخزون أو الفواتير.";
-            if (goodbye) return $"إلى اللقاء. أنا {name}، أعود متى احتجت.";
-            return $"مرحباً، أنا {name}. هل نراجع طلبًا أو المخزون أو مبيعات هذا الشهر؟";
+            if (thanks) return "على الرحب والسعة. أخبرني متى احتجت مساعدة.";
+            if (goodbye) return "إلى اللقاء. أعود متى احتجت.";
+            return "مرحباً. كيف يسير عملك اليوم؟ بماذا تحب أن أساعدك؟";
         }
 
         return null;
     }
+
+    internal static bool IsStandaloneSmallTalk(string message)
+    {
+        var text = message.Trim();
+        if (text.Length == 0 || text.Length > 80)
+            return false;
+
+        var lower = text.ToLowerInvariant();
+        if (lower.Contains("invoice") || lower.Contains("stock") || lower.Contains("revenue")
+            || lower.Contains("sale") || lower.Contains("order") || lower.Contains("customer")
+            || lower.Contains("product") || lower.Contains("profit") || lower.Contains("employee")
+            || text.Contains("انوائس") || text.Contains("اسٹاک") || text.Contains("سيل"))
+            return false;
+
+        return IsGreeting(lower, text) || IsHowAreYou(lower)
+            || lower.Contains("thank") || lower.Contains("shukriya") || lower.Contains("shukria")
+            || lower is "bye" or "goodbye" || lower.StartsWith("bye ") || lower.StartsWith("goodbye");
+    }
+
+    private static bool IsHowAreYou(string lower) =>
+        lower.Contains("how are you") || lower.Contains("how r u") || lower.Contains("how's it going");
 
     private static bool IsGreeting(string lower, string original) =>
         lower is "hi" or "hello" or "hey" or "salam" or "assalam" or "assalamualaikum"

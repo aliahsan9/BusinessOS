@@ -95,15 +95,15 @@ public sealed class GetLowStockTool : AiToolBase
     {
         var items = await _inventoryService.GetLowStockProductsAsync(cancellationToken);
         var lines = items.Take(15)
-            .Select(i => $"{i.ProductName} ({i.ProductSku}): {i.CurrentStock:N0} / reorder {i.ReorderLevel:N0}");
+            .Select(i => $"{i.ProductName} ({i.ProductSku}) | {i.CurrentStock:N0} | {i.ReorderLevel:N0}");
 
         return new AiToolResult
         {
             ToolName = ToolName.ToString(),
             Data = items,
             Summary = items.Count == 0
-                ? "No low-stock products right now."
-                : $"Low stock ({items.Count}):\n{string.Join("\n", lines)}"
+                ? "I checked products whose available stock is above zero and at or below the reorder level. None match. This does not mean the whole inventory is healthy — products at zero are out of stock, and products above the reorder level are not listed here."
+                : $"Products at or below their reorder level, with some stock still available ({items.Count}):\nProduct | Available | Reorder level\n{string.Join("\n", lines)}\nReplenish these before they run out. Products already at zero are reported separately as out of stock."
         };
     }
 }

@@ -9,6 +9,7 @@ public interface IApplicationDbContext
     DbSet<Category> Categories { get; }
     DbSet<Product> Products { get; }
     DbSet<Customer> Customers { get; }
+    DbSet<Employee> Employees { get; }
     DbSet<Supplier> Suppliers { get; }
     DbSet<Purchase> Purchases { get; }
     DbSet<PurchaseItem> PurchaseItems { get; }

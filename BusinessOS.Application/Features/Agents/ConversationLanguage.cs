@@ -32,6 +32,10 @@ public static partial class ConversationLanguage
         if (RomanScore(text) >= 2)
             return new Resolution(AgentLanguages.RomanUrdu, false);
 
+        // "Hi" and "thank you" are English even when the previous turn was Urdu.
+        if (IsEnglishSmallTalk(text))
+            return new Resolution(AgentLanguages.English, false);
+
         if (IsSubstantialEnglish(text))
             return new Resolution(AgentLanguages.English, false);
 
@@ -94,7 +98,7 @@ public static partial class ConversationLanguage
             cues.Add("profit");
         if (IsOutOfStockCue(text))
             cues.Add("out of stock");
-        if (ContainsAny(text, "کم اسٹاک", "لو اسٹاک", "low stock", "اسٹاک ختم"))
+        if (IsLowStockCue(text))
             cues.Add("low stock");
         if (IsAvailableProductsCue(text))
             cues.Add("inventory stock");
@@ -153,6 +157,15 @@ public static partial class ConversationLanguage
             "inventory stock")
             || IsAvailableProductsCue(text);
     }
+
+    /// <summary>Reorder-threshold questions, including Urdu, Roman Urdu, and Arabic word order.</summary>
+    public static bool IsLowStockCue(string? text) =>
+        ContainsAny(text,
+            "low stock", "low in stock", "running low", "reorder level", "stock alert",
+            "km stock", "kam stock", "stock kam", "stock km", "stock low",
+            "product km", "product kam", "kon sa product km", "kaun sa product km",
+            "کم اسٹاک", "اسٹاک کم", "لو اسٹاک", "اسٹاک ختم",
+            "أوشكت", "اوشكت", "النفاد", "نفاد", "مخزون منخفض", "أوشك على النفاد");
 
     /// <summary>Products with zero units, including Roman Urdu "stock mein nahi".</summary>
     public static bool IsOutOfStockCue(string? text)
@@ -252,6 +265,14 @@ public static partial class ConversationLanguage
             ? AgentLanguages.Urdu
             : AgentLanguages.Arabic;
         return true;
+    }
+
+    private static bool IsEnglishSmallTalk(string text)
+    {
+        var trimmed = text.Trim().TrimEnd('!', '.', '?', ' ').ToLowerInvariant();
+        return trimmed is "hi" or "hello" or "hey" or "thanks" or "thank you" or "thankyou"
+            or "ok" or "okay" or "how are you" or "how are you doing" or "how r u"
+            or "good morning" or "good afternoon" or "good evening" or "bye" or "goodbye";
     }
 
     private static bool IsSubstantialEnglish(string text)

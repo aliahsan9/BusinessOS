@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
+using BusinessOS.Infrastructure.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -43,24 +44,39 @@ public sealed class OpenAiEmbeddingClient
             });
 
             using var response = await _httpClient.SendAsync(request, cancellationToken);
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("OpenAI embedding failed ({Status})", (int)response.StatusCode);
-                return GenerateFallbackEmbedding(text, vectorSize ?? 64);
+                var failure = OpenAiHttp.Describe(response);
+                OpenAiHttp.LogFailure(_logger, "embeddings", failure);
+                throw new OpenAiProviderException(failure);
             }
 
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
             var parsed = System.Text.Json.JsonSerializer.Deserialize<EmbeddingResponse>(body);
             var embedding = parsed?.Data?.FirstOrDefault()?.Embedding;
             if (embedding is null || embedding.Length == 0)
-                return GenerateFallbackEmbedding(text, vectorSize ?? 64);
+            {
+                throw new OpenAiProviderException(new OpenAiFailure(
+                    OpenAiFailureKind.Failed,
+                    (int)response.StatusCode,
+                    "OpenAI did not return an embedding.",
+                    null));
+            }
 
             return Resize(embedding, vectorSize);
         }
+        catch (OpenAiProviderException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Embedding request failed");
-            return GenerateFallbackEmbedding(text, vectorSize ?? 64);
+            _logger.LogWarning("Embedding request failed ({ExceptionType})", ex.GetType().Name);
+            throw new OpenAiProviderException(OpenAiFailure.Transport());
         }
     }
 

@@ -103,13 +103,13 @@ public sealed class OpenAiTtsProvider : ITtsProvider
         using var response = await client.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            var failure = OpenAiHttp.Describe(response);
             _logger.LogWarning(
-                "OpenAI speech failed ({Status}) for voice {Voice}: {Body}",
-                (int)response.StatusCode,
+                "OpenAI speech failed with status {StatusCode} for voice {Voice}. CorrelationId={CorrelationId}",
+                failure.StatusCode,
                 voice,
-                Truncate(body, 300));
-            throw new InvalidOperationException($"OpenAI speech synthesis failed ({(int)response.StatusCode}).");
+                string.IsNullOrWhiteSpace(failure.CorrelationId) ? "none" : failure.CorrelationId);
+            throw new OpenAiProviderException(failure);
         }
 
         var mediaType = response.Content.Headers.ContentType?.MediaType;
@@ -151,9 +151,6 @@ public sealed class OpenAiTtsProvider : ITtsProvider
         var fallback = Catalog.FirstOrDefault(v => v.Id.Equals(configured, StringComparison.OrdinalIgnoreCase));
         return fallback?.Id ?? "coral";
     }
-
-    private static string Truncate(string value, int max) =>
-        value.Length <= max ? value : value[..max];
 
     private sealed class SpeechBody
     {

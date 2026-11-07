@@ -236,7 +236,7 @@ try
                     .AllowAnyHeader()
                     .AllowAnyMethod()
                     .AllowCredentials()
-                    .WithExposedHeaders("X-Tts-Provider", "X-Tts-Voice", "X-Tts-Cache", "X-CSRF-Token");
+                    .WithExposedHeaders("X-Tts-Provider", "X-Tts-Voice", "X-Tts-Requested-Voice", "X-Tts-Cache", "X-CSRF-Token");
             }
         });
     });

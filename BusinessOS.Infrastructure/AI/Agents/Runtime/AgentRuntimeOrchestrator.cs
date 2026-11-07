@@ -176,7 +176,8 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             if (abandonPending)
                 await _memory.SetPendingActionAsync(sessionId, null, cancellationToken);
 
-            yield return Status("Consulting business data…");
+            if (!AiNaturalReplyBuilder.IsStandaloneSmallTalk(request.Message))
+                yield return Status("Consulting business data…");
             var copilotRequest = new AiCopilotChatRequest(
                 request.Message,
                 request.CurrentPage,
@@ -215,9 +216,12 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
                 page,
                 memory,
                 sessionId,
-                cancellationToken);
+                cancellationToken,
+                intent);
             var needsData = intent.SuggestedTools.Count > 0;
-            if (model is not null && (model.ToolCalls > 0 || !needsData))
+            if (model is not null
+                && (model.ProviderError
+                    || (AiToolScope.StaysOnScope(intent, model.ToolsUsed) && (model.ToolCalls > 0 || !needsData))))
             {
                 if (abandonPending)
                     await _memory.SetPendingActionAsync(sessionId, null, cancellationToken);

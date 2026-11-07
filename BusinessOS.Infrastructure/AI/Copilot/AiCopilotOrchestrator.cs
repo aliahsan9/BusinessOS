@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Infrastructure.AI;
+using BusinessOS.Application.Features.Agents;
 using BusinessOS.Application.Features.Agents.Enums;
 using BusinessOS.Application.Features.Agents.Services;
 using BusinessOS.Application.Features.AI.DTOs;
@@ -144,6 +145,21 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
             return new PipelineResult { Response = denied };
         }
 
+        if (AiNaturalReplyBuilder.IsStandaloneSmallTalk(message))
+        {
+            var talkLanguage = ConversationLanguage.ResolveTurn(
+                message, request.Language, memory.PreferredLanguage, null);
+            var talkReply = AiNaturalReplyBuilder.BuildConversationalReply(
+                message,
+                page,
+                request.PreferEmployeeTone ? ResolveEmployeeDisplayName(request.AgentKey) : null,
+                talkLanguage);
+            sw.Stop();
+            return await FinalizeAsync(
+                request, chatRequest, sessionId, AiCopilotIntent.Conversational, message,
+                talkReply, [], [], null, sw.ElapsedMilliseconds, null, stream, cancellationToken);
+        }
+
         if (_modelLoop.IsAvailable
             && intentResult.Intent is not (AiCopilotIntent.ActionCreate or AiCopilotIntent.Onboarding or AiCopilotIntent.DashboardInsight))
         {
@@ -153,10 +169,14 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
                 page,
                 memory,
                 sessionId,
-                cancellationToken);
+                cancellationToken,
+                intentResult);
             var keywordNeedsData = intentResult.SuggestedTools.Count > 0
                 && intentResult.Intent is not (AiCopilotIntent.Conversational or AiCopilotIntent.Help);
-            if (model is not null && (model.ToolCalls > 0 || !keywordNeedsData))
+            if (model is not null
+                && (model.ProviderError
+                    || (AiToolScope.StaysOnScope(intentResult, model.ToolsUsed)
+                        && (model.ToolCalls > 0 || !keywordNeedsData))))
             {
                 sw.Stop();
                 return await FinalizeAsync(
@@ -178,10 +198,31 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
 
         if (intentResult.Intent is AiCopilotIntent.DashboardInsight)
         {
-            var dashboard = await _insightService.GetDashboardCopilotAsync(cancellationToken);
+            var priorities = _toolRegistry.AllTools.FirstOrDefault(t => t.ToolName == AiToolName.GetDailyPriorities);
+            string reply;
+            var used = new List<string>();
+            if (priorities is null)
+            {
+                var dashboard = await _insightService.GetDashboardCopilotAsync(cancellationToken);
+                reply = dashboard.Summary;
+            }
+            else
+            {
+                var priorityResult = await priorities.ExecuteAsync(new AiCopilotExecutionContext
+                {
+                    Request = chatRequest,
+                    Page = page,
+                    Intent = intentResult.Intent,
+                    SessionId = sessionId,
+                    Memory = memory,
+                    Message = message
+                }, cancellationToken);
+                reply = priorityResult.Summary;
+                used.Add(priorityResult.ToolName);
+            }
+
             sw.Stop();
-            var reply = $"{dashboard.Summary}\n\n" + string.Join("\n", dashboard.Insights.Select(i => $"• {i.Title}: {i.Message}"));
-            var response = await FinalizeAsync(request, chatRequest, sessionId, intentResult.Intent, message, reply, [], [], null, sw.ElapsedMilliseconds, null, stream, cancellationToken);
+            var response = await FinalizeAsync(request, chatRequest, sessionId, intentResult.Intent, message, reply, used, [], null, sw.ElapsedMilliseconds, null, stream, cancellationToken);
             return response;
         }
 

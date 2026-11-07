@@ -59,6 +59,8 @@ services:
       EasyPaisa__HashKey: ""
       EasyPaisa__ReturnUrl: "${EASYPAISA_RETURN_URL}"
       Ai__ApiKey: ${AI_API_KEY:-}
+      # .NET user secrets are not mounted into this container.
+      # Set OPENAI_API_KEY in deploy/env/.env.* so it becomes Ai:OpenAiApiKey.
       Ai__OpenAiApiKey: ${OPENAI_API_KEY:-}
       Google__ClientId: ${GOOGLE_CLIENT_ID:-}
     volumes:

@@ -33,6 +33,7 @@ public sealed partial class OpenAiChatClient
     {
         _ = tenantId;
         _ = userId;
+        LastFailure = null;
         if (!IsConfigured || executeTool is null)
             return null;
 
@@ -156,25 +157,36 @@ public sealed partial class OpenAiChatClient
 
                 request.Content = new StringContent(body.ToJsonString(), System.Text.Encoding.UTF8, "application/json");
                 using var response = await _httpClient.SendAsync(request, timeout.Token);
-                var payload = await response.Content.ReadAsStringAsync(timeout.Token);
                 if (response.IsSuccessStatusCode)
-                    return ParseCompletion(payload);
-
-                if (!IsTransient(response.StatusCode) || attempt == maxAttempts)
                 {
-                    _logger.LogWarning("OpenAI tool loop failed ({Status}) on attempt {Attempt}", (int)response.StatusCode, attempt);
-                    return null;
+                    LastFailure = null;
+                    var payload = await response.Content.ReadAsStringAsync(timeout.Token);
+                    return ParseCompletion(payload);
                 }
+
+                LastFailure = OpenAiHttp.Describe(response);
+                OpenAiHttp.LogFailure(_logger, "tool loop", LastFailure);
+                if (!IsTransient(response.StatusCode) || attempt == maxAttempts)
+                    return null;
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
                 _logger.LogWarning("OpenAI tool loop timed out on attempt {Attempt}", attempt);
                 if (attempt == maxAttempts)
+                {
+                    LastFailure = OpenAiFailure.Transport();
                     return null;
+                }
             }
-            catch (HttpRequestException ex) when (attempt < maxAttempts)
+            catch (HttpRequestException) when (attempt < maxAttempts)
             {
-                _logger.LogWarning(ex, "OpenAI tool loop transport failure on attempt {Attempt}", attempt);
+                _logger.LogWarning("OpenAI tool loop transport failure on attempt {Attempt}", attempt);
+            }
+            catch (HttpRequestException)
+            {
+                LastFailure = OpenAiFailure.Transport();
+                _logger.LogWarning("OpenAI tool loop transport failure on attempt {Attempt}", attempt);
+                return null;
             }
 
             await Task.Delay(TimeSpan.FromMilliseconds(200 * attempt), cancellationToken);

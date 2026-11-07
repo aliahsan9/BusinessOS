@@ -32,10 +32,16 @@ public sealed class AiToolRegistry : IAiToolRegistry
                 selected.Add(tool);
         }
 
-        foreach (var tool in _tools)
+        // A confident, named intent already chose its tools. CanHandle must not append
+        // a sales summary (or any other tool) that the question did not ask for.
+        var scoped = intent.SuggestedTools.Count > 0 && intent.Confidence >= 0.85;
+        if (!scoped)
         {
-            if (tool.CanHandle(intent.Intent, message, page, memory) && !selected.Contains(tool))
-                selected.Add(tool);
+            foreach (var tool in _tools)
+            {
+                if (tool.CanHandle(intent.Intent, message, page, memory) && !selected.Contains(tool))
+                    selected.Add(tool);
+            }
         }
 
         // Analytics / sales questions often need summary + bestsellers + trends together.

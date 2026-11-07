@@ -1,6 +1,7 @@
 using System.Text.Json;
 using BusinessOS.Application.Features.Agents.DTOs;
 using BusinessOS.Application.Features.Agents.Services;
+using BusinessOS.Infrastructure.AI;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BusinessOS.API.Endpoints;
@@ -169,12 +170,21 @@ public static class AgentEndpoints
             var result = await tts.SynthesizeAsync(request.Text, language, rate, voice, cancellationToken);
             httpContext.Response.Headers["X-Tts-Provider"] = result.Provider;
             httpContext.Response.Headers["X-Tts-Voice"] = result.VoiceName;
+            httpContext.Response.Headers["X-Tts-Requested-Voice"] = voice;
             httpContext.Response.Headers["X-Tts-Cache"] = result.ServedFromCache ? "hit" : "miss";
             return Results.File(result.AudioBytes, result.ContentType, fileDownloadName: null);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
+        }
+        catch (OpenAiProviderException ex)
+        {
+            return SpeechFailure(ex.Failure);
+        }
+        catch (Exception ex) when (ex.InnerException is OpenAiProviderException provider)
+        {
+            return SpeechFailure(provider.Failure);
         }
         catch (Exception)
         {
@@ -183,6 +193,11 @@ public static class AgentEndpoints
                 statusCode: StatusCodes.Status503ServiceUnavailable);
         }
     }
+
+    private static IResult SpeechFailure(OpenAiFailure failure) =>
+        Results.Json(
+            new { error = failure.ClientMessage },
+            statusCode: failure.ClientStatusCode);
 
     private static async Task<IResult> StartOnboarding(
         AgentOnboardingStartRequest request,
