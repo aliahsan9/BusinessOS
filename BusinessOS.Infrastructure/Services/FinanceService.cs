@@ -328,7 +328,25 @@ public sealed class FinanceService : IFinanceService
         DashboardDateRange range,
         CancellationToken cancellationToken)
     {
-        var rows = await _context.Orders
+        var grain = TrendSeries.ForFinance(range);
+        if (grain is TrendSeries.Grain.Hour or TrendSeries.Grain.Day or TrendSeries.Grain.Month)
+        {
+            var rows = await _context.Orders
+                .AsNoTracking()
+                .Where(x => x.OrderDate >= range.StartDate
+                    && x.OrderDate <= range.EndDate
+                    && x.Status == OrderStatusNames.Completed)
+                .Select(x => new { x.OrderDate, x.GrandTotal })
+                .ToListAsync(cancellationToken);
+
+            var lookup = rows
+                .GroupBy(x => TrendSeries.Truncate(x.OrderDate, grain))
+                .ToDictionary(g => g.Key, g => (Amount: g.Sum(x => x.GrandTotal), Count: g.Count()));
+
+            return FillTrend(range, grain, lookup);
+        }
+
+        var monthly = await _context.Orders
             .AsNoTracking()
             .Where(x => x.OrderDate >= range.StartDate
                 && x.OrderDate <= range.EndDate
@@ -343,7 +361,7 @@ public sealed class FinanceService : IFinanceService
             })
             .ToListAsync(cancellationToken);
 
-        return rows
+        return monthly
             .OrderBy(x => x.Year)
             .ThenBy(x => x.Month)
             .Select(x => new TrendPoint
@@ -359,7 +377,23 @@ public sealed class FinanceService : IFinanceService
         DashboardDateRange range,
         CancellationToken cancellationToken)
     {
-        var rows = await _context.Expenses
+        var grain = TrendSeries.ForFinance(range);
+        if (grain is TrendSeries.Grain.Hour or TrendSeries.Grain.Day or TrendSeries.Grain.Month)
+        {
+            var rows = await _context.Expenses
+                .AsNoTracking()
+                .Where(x => x.ExpenseDate >= range.StartDate && x.ExpenseDate <= range.EndDate)
+                .Select(x => new { x.ExpenseDate, x.Amount })
+                .ToListAsync(cancellationToken);
+
+            var lookup = rows
+                .GroupBy(x => TrendSeries.Truncate(x.ExpenseDate, grain))
+                .ToDictionary(g => g.Key, g => (Amount: g.Sum(x => x.Amount), Count: g.Count()));
+
+            return FillTrend(range, grain, lookup);
+        }
+
+        var monthly = await _context.Expenses
             .AsNoTracking()
             .Where(x => x.ExpenseDate >= range.StartDate && x.ExpenseDate <= range.EndDate)
             .GroupBy(x => new { x.ExpenseDate.Year, x.ExpenseDate.Month })
@@ -372,7 +406,7 @@ public sealed class FinanceService : IFinanceService
             })
             .ToListAsync(cancellationToken);
 
-        return rows
+        return monthly
             .OrderBy(x => x.Year)
             .ThenBy(x => x.Month)
             .Select(x => new TrendPoint
@@ -380,6 +414,25 @@ public sealed class FinanceService : IFinanceService
                 Period = $"{x.Year}-{x.Month:D2}",
                 Amount = Math.Round(x.Amount, 2),
                 Count = x.Count
+            })
+            .ToList();
+    }
+
+    private static IReadOnlyList<TrendPoint> FillTrend(
+        DashboardDateRange range,
+        TrendSeries.Grain grain,
+        IReadOnlyDictionary<DateTime, (decimal Amount, int Count)> lookup)
+    {
+        return TrendSeries.Buckets(range, grain)
+            .Select(bucket =>
+            {
+                lookup.TryGetValue(bucket, out var hit);
+                return new TrendPoint
+                {
+                    Period = TrendSeries.Format(bucket, grain),
+                    Amount = Math.Round(hit.Amount, 2),
+                    Count = hit.Count
+                };
             })
             .ToList();
     }

@@ -102,30 +102,19 @@ public sealed class ReportingService : IReportingService
         CancellationToken cancellationToken)
     {
         var customers = await _analyticsService.GetCustomerAnalyticsAsync(dateRange, cancellationToken);
-
-        var newCustomersByMonth = await _context.Customers
-            .AsNoTracking()
-            .Where(x => x.CreatedAt >= dateRange.StartDate && x.CreatedAt <= dateRange.EndDate)
-            .GroupBy(x => new { x.CreatedAt.Year, x.CreatedAt.Month })
-            .Select(g => new
-            {
-                Period = new DateTime(g.Key.Year, g.Key.Month, 1),
-                Count = g.Count()
-            })
-            .OrderBy(x => x.Period)
-            .ToListAsync(cancellationToken);
+        var (labels, counts) = await BuildCustomerGrowthSeriesAsync(dateRange, cancellationToken);
 
         return new ChartDataResponse
         {
             ChartType = "line",
             Title = "Customer Growth",
-            Labels = newCustomersByMonth.Select(x => x.Period.ToString("yyyy-MM")).ToList(),
+            Labels = labels,
             Datasets =
             [
                 new ChartDatasetDto
                 {
                     Label = "New Customers",
-                    Data = newCustomersByMonth.Select(x => (decimal)x.Count).ToList(),
+                    Data = counts,
                     ChartStyle = "line"
                 },
                 new ChartDatasetDto
@@ -137,6 +126,102 @@ public sealed class ReportingService : IReportingService
             ],
             DateRange = DashboardService.MapDateRange(dateRange)
         };
+    }
+
+    /// <summary>
+    /// New customers over the active window. Short histories stay daily so quiet
+    /// days remain visible; longer histories roll up to months.
+    /// </summary>
+    private async Task<(List<string> Labels, List<decimal> Counts)> BuildCustomerGrowthSeriesAsync(
+        DashboardDateRange dateRange,
+        CancellationToken cancellationToken)
+    {
+        var span = dateRange.EndDate - dateRange.StartDate;
+        if (span <= TimeSpan.FromHours(36))
+            return await BuildCustomerBucketsAsync(dateRange, TrendSeries.Grain.Hour, cancellationToken);
+        if (span <= TimeSpan.FromDays(62) && !string.Equals(dateRange.Period, DateRangePeriods.All, StringComparison.OrdinalIgnoreCase))
+            return await BuildCustomerBucketsAsync(dateRange, TrendSeries.Grain.Day, cancellationToken);
+        if (span <= TimeSpan.FromDays(400) && !string.Equals(dateRange.Period, DateRangePeriods.All, StringComparison.OrdinalIgnoreCase))
+            return await BuildCustomerBucketsAsync(dateRange, TrendSeries.Grain.Month, cancellationToken);
+
+        var created = await _context.Customers
+            .AsNoTracking()
+            .Where(x => x.CreatedAt >= dateRange.StartDate && x.CreatedAt <= dateRange.EndDate)
+            .GroupBy(x => new { x.CreatedAt.Year, x.CreatedAt.Month, x.CreatedAt.Day })
+            .Select(g => new { g.Key.Year, g.Key.Month, g.Key.Day, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        if (created.Count == 0)
+            return ([], []);
+
+        var points = created
+            .Select(x => (
+                Date: new DateTime(x.Year, x.Month, x.Day, 0, 0, 0, DateTimeKind.Utc),
+                x.Count))
+            .OrderBy(x => x.Date)
+            .ToList();
+
+        var first = points[0].Date;
+        var last = points[^1].Date.Date;
+        var rangeEnd = DateTime.SpecifyKind(dateRange.EndDate.Date, DateTimeKind.Utc);
+        if (rangeEnd > last)
+            last = rangeEnd;
+
+        var labels = new List<string>();
+        var counts = new List<decimal>();
+        var spanDays = (last - first).TotalDays;
+
+        if (spanDays <= 400)
+        {
+            var byDay = points.ToDictionary(x => x.Date.Date, x => x.Count);
+            for (var day = first.Date; day <= last && labels.Count < 400; day = day.AddDays(1))
+            {
+                labels.Add(day.ToString("yyyy-MM-dd"));
+                counts.Add(byDay.GetValueOrDefault(DateTime.SpecifyKind(day, DateTimeKind.Utc), 0));
+            }
+
+            return (labels, counts);
+        }
+
+        var byMonth = points
+            .GroupBy(x => new DateTime(x.Date.Year, x.Date.Month, 1, 0, 0, 0, DateTimeKind.Utc))
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.Count));
+        var month = new DateTime(first.Year, first.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        var endMonth = new DateTime(last.Year, last.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        while (month <= endMonth && labels.Count < 36)
+        {
+            labels.Add(month.ToString("yyyy-MM"));
+            counts.Add(byMonth.GetValueOrDefault(month, 0));
+            month = month.AddMonths(1);
+        }
+
+        return (labels, counts);
+    }
+
+    private async Task<(List<string> Labels, List<decimal> Counts)> BuildCustomerBucketsAsync(
+        DashboardDateRange dateRange,
+        TrendSeries.Grain grain,
+        CancellationToken cancellationToken)
+    {
+        var stamps = await _context.Customers
+            .AsNoTracking()
+            .Where(x => x.CreatedAt >= dateRange.StartDate && x.CreatedAt <= dateRange.EndDate)
+            .Select(x => x.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        var lookup = stamps
+            .GroupBy(x => TrendSeries.Truncate(x, grain))
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        var labels = new List<string>();
+        var counts = new List<decimal>();
+        foreach (var bucket in TrendSeries.Buckets(dateRange, grain))
+        {
+            labels.Add(TrendSeries.Format(bucket, grain));
+            counts.Add(lookup.GetValueOrDefault(bucket));
+        }
+
+        return (labels, counts);
     }
 
     private async Task<ChartDataResponse> BuildProductsChartAsync(
