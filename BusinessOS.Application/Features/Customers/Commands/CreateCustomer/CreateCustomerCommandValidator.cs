@@ -17,6 +17,8 @@ public sealed class CreateCustomerCommandValidator : AbstractValidator<CreateCus
         RuleFor(x => x.Email)
             .NotEmpty().WithMessage("Email is required.")
             .EmailAddress().WithMessage("Email must be a valid email address.")
+            .Must(email => !email.Contains(';') && !email.Contains('"') && !email.Any(char.IsWhiteSpace))
+            .WithMessage("Email must be a valid email address.")
             .MaximumLength(256);
 
         RuleFor(x => x.PhoneNumber)

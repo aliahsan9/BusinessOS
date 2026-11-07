@@ -5,7 +5,7 @@ using BusinessOS.Application.Features.Agents.Enums;
 namespace BusinessOS.Application.Features.Agents;
 
 /// <summary>
-/// Picks Sophia's reply language from the current message, an explicit switch, or the
+/// Picks Navla's reply language from the current message, an explicit switch, or the
 /// conversation preference. Routing cues let existing English tool matchers understand
 /// Urdu, Roman Urdu, and Arabic without a second intent model.
 /// </summary>

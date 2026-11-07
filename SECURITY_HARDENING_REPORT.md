@@ -18,7 +18,7 @@ These were confirmed by reading the current code, not by copying the June audit.
 | High | JazzCash and EasyPaisa callbacks could be accepted without a verified provider signature, and verification methods could report success without authoritative provider evidence. |
 | High | `DevSeeder` contained the development password `Admin123!` and logged it. |
 | Medium | SignalR accepted `access_token` on the query string for any path that the JWT bearer handler saw. |
-| Medium | Sophia tool execution trusted model-generated tool requests for mutating operations, including instruction-override text in the user message. |
+| Medium | Navla tool execution trusted model-generated tool requests for mutating operations, including instruction-override text in the user message. |
 | Medium | Production configuration allowed `AllowedHosts: *`, an empty CORS list, and `Encrypt=False` on the SQL connection string. |
 | Medium | Rate limiting could observe a client IP from forwarded headers if a proxy was trusted too broadly. |
 | Low | Access tokens and user profiles were stored in `localStorage`. |
@@ -53,7 +53,7 @@ Implemented in this pass:
 - The development admin is seeded only when `DevAdmin:Password` is supplied. The password is not written to logs.
 - Production startup fails when CORS origins are missing, `*`, or null; when `AllowedHosts` is empty or `*`; or when the connection string contains `Encrypt=False`. Development and Testing are exempt.
 - SignalR query-string tokens are accepted only when the path starts with `/hubs/notifications`. The hub joins `tenant-{membership.TenantId}` and rejects a client-chosen tenant group.
-- Mutating Sophia tools are blocked when the user message contains instruction-override or unbounded-destruction language, or when tool arguments request a global delete. Copilot and agent tool loops are capped at 8 executions. Permission checks remain in front of execution.
+- Mutating Navla tools are blocked when the user message contains instruction-override or unbounded-destruction language, or when tool arguments request a global delete. Copilot and agent tool loops are capped at 8 executions. Permission checks remain in front of execution.
 - Forwarded headers are trusted only for proxies listed in `ForwardedHeaders:KnownProxies`. AI and agent routes use a 30-per-minute limiter. Request body size is limited to 5 MB.
 - Angular keeps the access token and user profile in memory, clears the old `localStorage` auth keys, refreshes through an HttpOnly cookie with a double-submit `X-CSRF-Token`, and retries one 401 after refresh.
 
@@ -176,7 +176,7 @@ Logout-all requires an authenticated user, a current `sec_ver`, and active membe
 - `SaveChanges` stamps `TenantId` on insert and reverts a later change to `TenantId` while a tenant is active.
 - RBAC audit rows created during a tenant request store that tenant id. Rows with a null tenant id remain system events and are hidden from tenant-scoped queries.
 - SignalR connects the caller only to their membership tenant group.
-- Sophia tools receive the server tenant. The model is not given a way to select another tenant. Qdrant search already filters by the current user's tenant.
+- Navla tools receive the server tenant. The model is not given a way to select another tenant. Qdrant search already filters by the current user's tenant.
 
 Roles and permissions are still global templates. Isolation is on data and on the user assignment, not on a per-tenant role catalog. That redesign was not done.
 
@@ -194,7 +194,7 @@ Background vector-sync work is explicitly outside the tenant filter. A full job-
 
 Integration tests post success-looking JazzCash and EasyPaisa JSON and expect 401. A unit test covers the JazzCash HMAC construction.
 
-## 9. Sophia AI security verification
+## 9. Navla AI security verification
 
 Enforced in application code:
 

@@ -420,7 +420,7 @@ public sealed class ReceiveStockTool : AiToolBase
             productId.Value,
             qty.Value,
             AgentToolArgHelpers.Str(args, "referenceNumber"),
-            AgentToolArgHelpers.Str(args, "notes") ?? "Received via Sophia"), cancellationToken);
+            AgentToolArgHelpers.Str(args, "notes") ?? "Received via Navla"), cancellationToken);
 
         return new AiToolResult
         {

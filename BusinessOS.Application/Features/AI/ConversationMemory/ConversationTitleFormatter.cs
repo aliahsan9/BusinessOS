@@ -12,7 +12,8 @@ public static partial class ConversationTitleFormatter
     [
         "can you please", "could you please", "would you please",
         "can you", "could you", "would you", "please", "hey sophia",
-        "hi sophia", "hello sophia", "sophia", "show me", "tell me",
+        "hi sophia", "hello sophia", "sophia", "hey navla",
+        "hi navla", "hello navla", "navla", "show me", "tell me",
         "i want you to", "i need you to", "help me"
     ];
 

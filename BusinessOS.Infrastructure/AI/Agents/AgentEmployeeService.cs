@@ -61,7 +61,7 @@ public sealed class AgentEmployeeService : IAgentEmployeeService
             Reply = "I couldn't complete that request.",
             SpokenReply = "I couldn't complete that request.",
             AgentKey = AgentKeys.Sophia,
-            AgentDisplayName = "Sophia",
+            AgentDisplayName = "Navla AI",
             Intent = AiCopilotIntent.Unknown
         };
     }
@@ -168,8 +168,12 @@ public sealed class AgentEmployeeService : IAgentEmployeeService
 
     public Task<AgentWorkflowDto?> GetWorkflowAsync(
         Guid workflowId,
-        CancellationToken cancellationToken = default) =>
-        _workflowService.GetAsync(workflowId, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        var userId = _currentUser.UserId
+            ?? throw new InvalidOperationException("User context is required.");
+        return _workflowService.GetForUserAsync(workflowId, userId, cancellationToken);
+    }
 
     public async Task<IReadOnlyList<AgentWorkflowSummaryDto>> ListRecentWorkflowsAsync(
         int limit = 20,
@@ -248,7 +252,7 @@ public sealed class AgentEmployeeService : IAgentEmployeeService
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Proactive insights unavailable for Ask Sophia");
+            _logger.LogDebug(ex, "Proactive insights unavailable for Ask Navla");
         }
 
         var greeting = $"Hi — I'm {persona.DisplayName}. How can I help your business today?";

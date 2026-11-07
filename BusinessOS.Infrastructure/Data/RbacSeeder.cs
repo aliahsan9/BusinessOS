@@ -20,7 +20,7 @@ public static class RbacSeeder
     {
         await SeedPermissionsAsync(context, logger, cancellationToken);
         var roleMap = await SeedRolesAsync(context, roleManager, logger, cancellationToken);
-        await SeedRolePermissionsAsync(context, roleMap, logger, cancellationToken);
+        await SeedRolePermissionsAsync(context, roleMap, userManager, logger, cancellationToken);
         await SyncIdentityUserRolesAsync(context, userManager, roleMap, cancellationToken);
         await MigrateAdminToOwnerAsync(context, userManager, roleMap, cancellationToken);
     }
@@ -103,6 +103,7 @@ public static class RbacSeeder
     private static async Task SeedRolePermissionsAsync(
         BusinessOSDbContext context,
         Dictionary<string, Role> roleMap,
+        UserManager<ApplicationUser> userManager,
         ILogger logger,
         CancellationToken cancellationToken)
     {
@@ -111,7 +112,7 @@ public static class RbacSeeder
 
         var rolePermissionMap = new Dictionary<string, IReadOnlySet<string>>(StringComparer.OrdinalIgnoreCase)
         {
-            [RoleNames.Owner] = permissions.Select(x => x.Code).ToHashSet(StringComparer.OrdinalIgnoreCase),
+            [RoleNames.Owner] = PermissionCodes.BuildOwnerPermissions(),
             [RoleNames.Admin] = PermissionCodes.BuildAdminPermissions(),
             [RoleNames.Manager] = PermissionCodes.ManagerPermissions,
             [RoleNames.Employee] = PermissionCodes.EmployeePermissions,
@@ -156,6 +157,57 @@ public static class RbacSeeder
                 logger.LogInformation("Assigned permission {Permission} to role {Role}", code, roleName);
             }
         }
+
+        await context.SaveChangesAsync(cancellationToken);
+        await RevokePlatformGrantsFromTenantRolesAsync(context, roleMap, userManager, cancellationToken);
+    }
+
+    /// <summary>
+    /// Removes grants that let an ordinary tenant role read or rewrite another tenant.
+    /// SystemAdmin.Manage is never seeded. It can be attached only by a caller who already holds it.
+    /// </summary>
+    private static async Task RevokePlatformGrantsFromTenantRolesAsync(
+        BusinessOSDbContext context,
+        Dictionary<string, Role> roleMap,
+        UserManager<ApplicationUser> userManager,
+        CancellationToken cancellationToken)
+    {
+        var seededRoleIds = roleMap.Values.Select(role => role.Id).ToHashSet();
+        var grants = await context.RolePermissions
+            .Include(x => x.Permission)
+            .Where(x => seededRoleIds.Contains(x.RoleId))
+            .ToListAsync(cancellationToken);
+
+        var remove = grants.Where(grant =>
+                string.Equals(grant.Permission.Code, PermissionCodes.SystemAdminManage, StringComparison.OrdinalIgnoreCase)
+                || (roleMap.TryGetValue(RoleNames.Viewer, out var viewer)
+                    && grant.RoleId == viewer.Id
+                    && string.Equals(grant.Permission.Code, PermissionCodes.SystemAdminView, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        if (remove.Count == 0)
+            return;
+
+        var affectedRoleIds = remove.Select(x => x.RoleId).Distinct().ToList();
+        context.RolePermissions.RemoveRange(remove);
+        await context.SaveChangesAsync(cancellationToken);
+
+        var userIds = await context.RbacUserRoles
+            .AsNoTracking()
+            .Where(x => affectedRoleIds.Contains(x.RoleId))
+            .Select(x => x.UserId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        if (userIds.Count == 0)
+            return;
+
+        var users = await userManager.Users
+            .Where(user => userIds.Contains(user.Id))
+            .ToListAsync(cancellationToken);
+
+        foreach (var user in users)
+            user.SecurityVersion++;
 
         await context.SaveChangesAsync(cancellationToken);
     }

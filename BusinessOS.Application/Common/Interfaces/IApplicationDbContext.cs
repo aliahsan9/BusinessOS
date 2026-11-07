@@ -88,6 +88,15 @@ public interface IApplicationDbContext
         decimal amount,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Accepts a payment only when the order balance still covers it.
+    /// On SQL Server the order row is locked for the caller's transaction.
+    /// </summary>
+    Task<bool> TryAcceptOrderPaymentAsync(
+        Guid orderId,
+        decimal amount,
+        CancellationToken cancellationToken = default);
+
     void Detach<TEntity>(TEntity entity) where TEntity : class;
 
     Task<int> SaveChangesAsync(

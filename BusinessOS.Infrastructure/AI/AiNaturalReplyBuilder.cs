@@ -20,7 +20,7 @@ internal static class AiNaturalReplyBuilder
         string? language = null)
     {
         var lower = message.Trim().ToLowerInvariant();
-        var name = string.IsNullOrWhiteSpace(agentDisplayName) ? "Sophia" : agentDisplayName.Trim();
+        var name = string.IsNullOrWhiteSpace(agentDisplayName) ? "Navla AI" : agentDisplayName.Trim();
         if (AgentLanguages.TryGetConcrete(language, out var replyLanguage))
         {
             var localized = LocalizedSmallTalk(message, lower, name, replyLanguage);
@@ -35,7 +35,7 @@ internal static class AiNaturalReplyBuilder
             return "Business intelligence means reading what already happened in the business — sales, stock, invoices, and customers — and saying what deserves attention. I use your workspace numbers when you ask for them, and I say so when there is nothing to report.";
 
         if (lower.Contains("accent") || lower.Contains("change your voice") || lower.Contains("your voice"))
-            return "I speak with the voice selected in this chat. Change it from the voice list, or under Settings → Sophia Voice.";
+            return "I speak with the voice selected in this chat. Change it from the voice list, or under Settings → Navla Voice.";
 
         if (lower.Contains("thank") || lower.Contains("shukriya") || lower.Contains("shukria"))
         {
@@ -248,10 +248,10 @@ internal static class AiNaturalReplyBuilder
             return "I'll reply in English.";
 
         if (lower.Contains("who are you") || lower.Contains("what can you") || lower.Contains("what you can") || lower.Contains("what do you do") || lower.Contains("your name"))
-            return "I'm Sophia, the business analyst in BusinessOS. I can look up sales, stock, invoices, and customers, and I can create customers, products, and orders after you confirm the details. Ask in English, Urdu, or Arabic. Say \"cancel\" if you want me to drop something I started.";
+            return "I'm Navla, your intelligent AI business assistant in BusinessOS. I can look up sales, stock, invoices, and customers, and I can create customers, products, and orders after you confirm the details. Ask in English, Urdu, or Arabic. Say \"cancel\" if you want me to drop something I started.";
 
         if (ContainsWord(lower, "accent") || ContainsWord(lower, "voice"))
-            return "I speak with the voice selected in this chat. Change it from the voice list here, or under Settings → Sophia Voice. Spoken replies are AI-generated.";
+            return "I speak with the voice selected in this chat. Change it from the voice list here, or under Settings → Navla Voice. Spoken replies are AI-generated.";
 
         if (lower.Contains("customer"))
             return "To create a customer, go to Customers → New Customer. Enter name, email, phone, and address. Customers link to orders, invoices, and analytics.";

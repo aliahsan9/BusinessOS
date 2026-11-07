@@ -14,7 +14,7 @@ public interface IAgentPersonaService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Resolves the effective persona for an agent key (falls back to Sophia / default).
+    /// Resolves the effective persona for an agent key (falls back to Navla / default). The stored key remains sophia.
     /// </summary>
     Task<AgentPersonaDto> ResolvePersonaAsync(
         string? agentKey,

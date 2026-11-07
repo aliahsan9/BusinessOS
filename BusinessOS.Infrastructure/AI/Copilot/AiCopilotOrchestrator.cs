@@ -663,14 +663,14 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
     private static string? ResolveEmployeeDisplayName(string? agentKey)
     {
         if (string.IsNullOrWhiteSpace(agentKey))
-            return "Sophia";
+            return "Navla AI";
 
         return AgentKeys.Normalize(agentKey) switch
         {
-            AgentKeys.Sophia => "Sophia",
+            AgentKeys.Sophia => "Navla AI",
             AgentKeys.Adam => "Adam",
             AgentKeys.Emma => "Emma",
-            _ => "Sophia"
+            _ => "Navla AI"
         };
     }
 

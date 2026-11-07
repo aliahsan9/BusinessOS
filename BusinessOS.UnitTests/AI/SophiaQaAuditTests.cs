@@ -68,7 +68,8 @@ public class SophiaQaAuditTests
         result.Intent.Should().Be(AiCopilotIntent.Help);
 
         var reply = AiNaturalReplyBuilder.BuildHelpReply("Hi Sophia, who are you?");
-        reply.Should().Contain("Sophia");
+        reply.Should().Contain("Navla");
+        reply.Should().NotContain("Sophia");
         reply.Should().Contain("business");
         reply.Should().NotContain("SELECT ");
         reply.Should().NotContain("api key");

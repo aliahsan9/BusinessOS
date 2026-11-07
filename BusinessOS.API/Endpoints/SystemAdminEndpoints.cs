@@ -32,12 +32,12 @@ public static class SystemAdminEndpoints
             .Produces<EnvironmentInfoResponse>(StatusCodes.Status200OK);
 
         group.MapPost("/enterprise-contracts", SetEnterpriseContract)
-            .RequirePermission(PermissionCodes.SystemAdminView)
+            .RequirePermission(PermissionCodes.SystemAdminManage)
             .WithName("SetEnterpriseContract")
             .Produces<CurrentPlanDto>(StatusCodes.Status200OK);
 
         group.MapGet("/billing-metrics", GetBillingMetrics)
-            .RequirePermission(PermissionCodes.SystemAdminView)
+            .RequirePermission(PermissionCodes.SystemAdminManage)
             .WithName("GetBillingMetrics")
             .Produces<BillingMetricsDto>(StatusCodes.Status200OK);
     }

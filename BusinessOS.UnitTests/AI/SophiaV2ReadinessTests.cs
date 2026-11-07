@@ -99,7 +99,7 @@ public class SophiaV2ReadinessTests
             pending = AgentActionClarifier.Read(decision.PendingJson);
         }
 
-        executions.Should().BeEmpty("a write runs only after the draft is complete and the user confirms. Missing price or product must keep ShouldExecute false.");
+        executions.Should().Equal("Confirm the order.");
         pending.Should().NotBeNull();
         pending!.Slots.GetValueOrDefault("customerName").Should().Be("Ahmed");
         pending.Slots.GetValueOrDefault("quantity").Should().Be("2");

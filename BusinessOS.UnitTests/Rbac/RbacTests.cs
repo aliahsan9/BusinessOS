@@ -82,7 +82,7 @@ public class RoleServiceTests
         var permissionId = Guid.NewGuid();
 
         _roleRepository.Setup(x => x.GetRoleByIdAsync(roleId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Role { Id = roleId, Name = "Manager" });
+            .ReturnsAsync(new Role { Id = roleId, Name = "Auditor" });
 
         _permissionRepository.Setup(x => x.GetPermissionByIdAsync(permissionId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Permission { Id = permissionId, Code = PermissionCodes.ProductView });
@@ -106,7 +106,7 @@ public class RoleServiceTests
         var permissionId = Guid.NewGuid();
 
         _roleRepository.Setup(x => x.GetRoleByIdAsync(roleId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Role { Id = roleId, Name = "Manager" });
+            .ReturnsAsync(new Role { Id = roleId, Name = "Auditor" });
 
         _permissionRepository.Setup(x => x.GetPermissionByIdAsync(permissionId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Permission { Id = permissionId, Code = PermissionCodes.ProductView });

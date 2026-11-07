@@ -129,35 +129,74 @@ public sealed class AgentPersonaService : IAgentPersonaService
             .IgnoreQueryFilters()
             .AnyAsync(p => p.TenantId == null && !p.IsDeleted, cancellationToken);
 
-        if (anySystem)
-            return;
-
-        _logger.LogInformation("Seeding system default AI employee agent profiles");
-
-        foreach (var seed in FallbackCatalog())
+        if (!anySystem)
         {
-            var exists = await _context.AgentProfiles
-                .IgnoreQueryFilters()
-                .AnyAsync(p => p.TenantId == null && p.Key == seed.Key && !p.IsDeleted, cancellationToken);
+            _logger.LogInformation("Seeding system default AI employee agent profiles");
 
-            if (exists)
-                continue;
-
-            _context.AgentProfiles.Add(new AgentProfile
+            foreach (var seed in FallbackCatalog())
             {
-                Id = Guid.NewGuid(),
-                TenantId = null,
-                Key = seed.Key,
-                DisplayName = seed.DisplayName,
-                RoleTitle = seed.RoleTitle,
-                Specialty = seed.Specialty,
-                SystemPersonaPrompt = seed.SystemPersonaPrompt,
-                DefaultLanguage = seed.DefaultLanguage,
-                IsDefault = seed.IsDefault,
-                IsActive = true
-            });
+                var exists = await _context.AgentProfiles
+                    .IgnoreQueryFilters()
+                    .AnyAsync(p => p.TenantId == null && p.Key == seed.Key && !p.IsDeleted, cancellationToken);
+
+                if (exists)
+                    continue;
+
+                _context.AgentProfiles.Add(new AgentProfile
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = null,
+                    Key = seed.Key,
+                    DisplayName = seed.DisplayName,
+                    RoleTitle = seed.RoleTitle,
+                    Specialty = seed.Specialty,
+                    SystemPersonaPrompt = seed.SystemPersonaPrompt,
+                    DefaultLanguage = seed.DefaultLanguage,
+                    IsDefault = seed.IsDefault,
+                    IsActive = true
+                });
+            }
+
+            await _context.SaveChangesAsync(cancellationToken);
         }
 
+        await RefreshStoredNavlaIdentityAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Rewrites the stored display name and self-introduction for the existing assistant.
+    /// The agent key stays <c>sophia</c> so saved preferences and API calls keep working.
+    /// </summary>
+    private async Task RefreshStoredNavlaIdentityAsync(CancellationToken cancellationToken)
+    {
+        var profiles = await _context.AgentProfiles
+            .IgnoreQueryFilters()
+            .Where(p => p.Key == AgentKeys.Sophia && !p.IsDeleted)
+            .ToListAsync(cancellationToken);
+
+        var changed = false;
+        foreach (var profile in profiles)
+        {
+            if (string.Equals(profile.DisplayName, "Sophia", StringComparison.Ordinal))
+            {
+                profile.DisplayName = "Navla AI";
+                changed = true;
+            }
+
+            if (profile.SystemPersonaPrompt?.Contains("Sophia", StringComparison.Ordinal) == true)
+            {
+                profile.SystemPersonaPrompt = profile.SystemPersonaPrompt.Replace(
+                    "Sophia",
+                    "Navla",
+                    StringComparison.Ordinal);
+                changed = true;
+            }
+        }
+
+        if (!changed)
+            return;
+
+        _logger.LogInformation("Updated stored assistant identity from Sophia to Navla");
         await _context.SaveChangesAsync(cancellationToken);
     }
 
@@ -194,11 +233,11 @@ public sealed class AgentPersonaService : IAgentPersonaService
         new AgentProfile
         {
             Key = AgentKeys.Sophia,
-            DisplayName = "Sophia",
+            DisplayName = "Navla AI",
             RoleTitle = "Senior Business Analyst",
             Specialty = "Business insights, onboarding, cross-functional coordination, and clear executive summaries",
             SystemPersonaPrompt =
-                "You are Sophia, Senior Business Analyst. You connect inventory, sales, finance, and operations into clear recommendations. " +
+                "You are Navla, Senior Business Analyst. You connect inventory, sales, finance, and operations into clear recommendations. " +
                 "You onboard new owners warmly, ask one focused question at a time, and keep workflows moving.",
             DefaultLanguage = AgentLanguages.English,
             IsDefault = true,

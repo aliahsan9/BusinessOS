@@ -580,7 +580,7 @@ public sealed class CreatePurchaseOrderTool : AiToolBase
                 DateTime.UtcNow,
                 PurchaseOrderStatusNames.Draft,
                 null,
-                "Created by Sophia",
+                "Created by Navla",
                 items), cancellationToken);
 
             if (context.ExecutionState is not null)

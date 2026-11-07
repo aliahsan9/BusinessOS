@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace BusinessOS.API.Endpoints;
 
 /// <summary>
-/// HTTP endpoints for AI employee agents (Sophia and future specialists).
+/// HTTP endpoints for AI employee agents (Navla and future specialists).
 /// Extends the existing Copilot surface without replacing <c>/api/v1/ai</c>.
 /// </summary>
 public static class AgentEndpoints

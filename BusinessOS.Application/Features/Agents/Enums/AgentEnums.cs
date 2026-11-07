@@ -29,7 +29,7 @@ public static class AgentKeys
 }
 
 /// <summary>
-/// Language codes for Sophia chat and voice. Concrete codes are en, ur, ur-Latn, and ar.
+/// Language codes for Navla chat and voice. Concrete codes are en, ur, ur-Latn, and ar.
 /// "auto" means detect from the message. Add a code here before teaching the resolver a new language.
 /// </summary>
 public static class AgentLanguages

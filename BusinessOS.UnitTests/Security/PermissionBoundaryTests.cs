@@ -102,5 +102,16 @@ public class RolePermissionMatrixTests
         admin.Should().Contain(PermissionCodes.ProductCreate);
         admin.Should().Contain(PermissionCodes.FinanceView);
         admin.Should().NotContain(PermissionCodes.SubscriptionManage);
+        admin.Should().NotContain(PermissionCodes.SystemAdminManage);
+    }
+
+    [Fact]
+    public void TenantRoles_CannotReceivePlatformAdministration()
+    {
+        PermissionCodes.ViewOnly.Should().NotContain(PermissionCodes.SystemAdminView);
+        PermissionCodes.ViewOnly.Should().NotContain(PermissionCodes.SystemAdminManage);
+        PermissionCodes.BuildOwnerPermissions().Should().NotContain(PermissionCodes.SystemAdminManage);
+        PermissionCodes.BuildOwnerPermissions().Should().Contain(PermissionCodes.SystemAdminView);
+        PermissionCodes.BuildOwnerPermissions().Should().Contain(PermissionCodes.SubscriptionManage);
     }
 }

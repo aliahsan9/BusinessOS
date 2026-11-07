@@ -238,7 +238,7 @@ public sealed class AgentOnboardingResponse
     public IReadOnlyList<AgentWorkflowStepDto> WorkflowSteps { get; init; } = [];
 }
 
-// ── Ask Sophia (dashboard) ────────────────────────────────────────────────────
+// ── Ask Navla (dashboard) ─────────────────────────────────────────────────────
 
 public sealed class AskSophiaSuggestionDto
 {

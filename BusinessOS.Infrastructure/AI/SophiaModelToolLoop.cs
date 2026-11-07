@@ -9,7 +9,7 @@ namespace BusinessOS.Infrastructure.AI;
 public sealed record SophiaModelAnswer(string Reply, int? TokenUsage, int ToolCalls, IReadOnlyList<string> ToolsUsed);
 
 /// <summary>
-/// Lets the configured model choose read-only Sophia tools, executes those tools
+/// Lets the configured model choose read-only Navla tools, executes those tools
 /// on the server, and asks the model for the final sentence. Tenant identity is never
 /// taken from the model.
 /// </summary>
@@ -91,7 +91,7 @@ public sealed class SophiaModelToolLoop
 
         var used = new List<string>();
         var system = $"""
-            You are Sophia, the business assistant inside BusinessOS.
+            You are Navla, the intelligent AI business assistant integrated into BusinessOS.
             {ConversationLanguage.ResponseInstruction(language)}
             Call a tool when the user asks for business numbers, stock, customers, orders, or invoices.
             When the user names a date range, set period. When they name a person or product, set query to that name only.
@@ -163,7 +163,7 @@ public sealed class SophiaModelToolLoop
         if (!result.Success && string.IsNullOrWhiteSpace(result.Summary))
             return "The tool failed. Do not invent a result.";
 
-        _logger.LogInformation("Sophia model selected {Tool}", name);
+        _logger.LogInformation("Navla model selected {Tool}", name);
         return string.IsNullOrWhiteSpace(result.Summary)
             ? "The tool returned no summary."
             : result.Summary;

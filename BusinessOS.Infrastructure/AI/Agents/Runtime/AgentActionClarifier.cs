@@ -88,7 +88,8 @@ public static class AgentActionClarifier
         or AiToolName.AdjustInventory or AiToolName.ReceiveStock
         or AiToolName.CreatePurchaseOrder or AiToolName.CreatePurchaseOrderDraft
         or AiToolName.ApprovePurchaseOrder or AiToolName.ReceivePurchase
-        or AiToolName.UpdateCompanyProfile or AiToolName.UpdateTaxDefaults;
+        or AiToolName.UpdateCompanyProfile or AiToolName.UpdateTaxDefaults
+        or AiToolName.CreateProject or AiToolName.CreateTask;
 
     public static AgentPendingAction? Read(string? json)
     {
@@ -849,6 +850,10 @@ public static class AgentActionClarifier
             case AiToolName.ReceiveStock:
                 var verb = tool == AiToolName.ReceiveStock ? "receive" : "adjust";
                 return $"I'll {verb} {Get(slots, "quantity")} units of {Get(slots, "productName") ?? "the selected product"}.\nShould I go ahead?";
+            case AiToolName.CreateProject:
+                return "I'll create that project. This can reserve stock on a new order.\nShould I go ahead?";
+            case AiToolName.CreateTask:
+                return "I'll create that task.\nShould I go ahead?";
             default:
                 return "I have what I need for this change.\nShould I go ahead?";
         }

@@ -131,6 +131,12 @@ public class PaymentAndInvoiceTests
 
         var id = await Payments(context, provider).Handle(PaymentCommand(order.Id, customer.Id, 10.126m), CancellationToken.None);
         (await context.Payments.SingleAsync(x => x.Id == id)).Amount.Should().Be(10.13m);
+
+        var overpay = () => Payments(context, provider).Handle(
+            PaymentCommand(order.Id, customer.Id, 200),
+            CancellationToken.None);
+        await overpay.Should().ThrowAsync<BadRequestException>().WithMessage("*outstanding balance*");
+        (await context.Payments.CountAsync()).Should().Be(1);
     }
 
     [Fact]

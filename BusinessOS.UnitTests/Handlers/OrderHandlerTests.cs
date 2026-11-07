@@ -10,6 +10,7 @@ using BusinessOS.Application.Features.Orders.Services;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using BusinessOS.UnitTests;
+using BusinessOS.UnitTests.Common;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -336,32 +337,94 @@ public class DeleteOrderHandlerTests
     [Fact]
     public async Task Handle_WithCompletedOrder_ThrowsConflictException()
     {
-        var orderId = Guid.NewGuid();
-        var orders = new List<Order>
-        {
-            new()
-            {
-                Id = orderId,
-                Status = OrderStatusNames.Completed,
-                TenantId = Guid.NewGuid(),
-                CustomerId = Guid.NewGuid(),
-                OrderNumber = "ORD-1"
-            }
-        };
+        var (context, tenantId, provider) = TenantDatabase.Open();
+        var customer = TestDataFactory.CreateCustomer(tenantId);
+        var order = TestDataFactory.CreateOrder(tenantId, customer.Id, OrderStatusNames.Completed);
+        context.AddRange(customer, order);
+        await context.SaveChangesAsync();
 
-        var context = new Mock<IApplicationDbContext>();
-        context.Setup(x => x.Orders).Returns(TestMockDbSet.CreateMockDbSet(orders.AsQueryable()).Object);
-
+        var inventory = new Mock<IInventoryService>();
         var handler = new DeleteOrderCommandHandler(
-            context.Object,
+            context,
+            inventory.Object,
             TestHandlerDependencies.CreateBusinessEvents(),
             TestHandlerDependencies.CreateCache(),
-            Mock.Of<ITenantProvider>(),
+            provider,
             TestHandlerDependencies.CreateLogger<DeleteOrderCommandHandler>());
 
-        var act = () => handler.Handle(new DeleteOrderCommand(orderId), CancellationToken.None);
+        var act = () => handler.Handle(new DeleteOrderCommand(order.Id), CancellationToken.None);
 
         await act.Should().ThrowAsync<ConflictException>();
+        inventory.Verify(
+            x => x.RestoreForCancelledOrderAsync(
+                It.IsAny<Order>(),
+                It.IsAny<IEnumerable<OrderItem>>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_PendingOrder_RestoresStockThenSoftDeletes()
+    {
+        var (context, tenantId, provider) = TenantDatabase.Open();
+        var customer = TestDataFactory.CreateCustomer(tenantId);
+        var order = TestDataFactory.CreateOrder(tenantId, customer.Id, OrderStatusNames.Pending);
+        var item = TestDataFactory.CreateOrderItem(order.Id, Guid.NewGuid(), 7, 10);
+        item.TenantId = tenantId;
+        order.OrderItems.Add(item);
+        context.AddRange(customer, order);
+        await context.SaveChangesAsync();
+
+        var inventory = new Mock<IInventoryService>();
+        inventory.Setup(x => x.RestoreForCancelledOrderAsync(
+                It.IsAny<Order>(),
+                It.IsAny<IEnumerable<OrderItem>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var handler = new DeleteOrderCommandHandler(
+            context,
+            inventory.Object,
+            TestHandlerDependencies.CreateBusinessEvents(),
+            TestHandlerDependencies.CreateCache(),
+            provider,
+            TestHandlerDependencies.CreateLogger<DeleteOrderCommandHandler>());
+
+        await handler.Handle(new DeleteOrderCommand(order.Id), CancellationToken.None);
+
+        inventory.Verify(x => x.RestoreForCancelledOrderAsync(
+            It.Is<Order>(saved => saved.Id == order.Id),
+            It.Is<IEnumerable<OrderItem>>(items => items.Sum(line => line.Quantity) == 7),
+            It.IsAny<CancellationToken>()), Times.Once);
+        (await context.Orders.AnyAsync(x => x.Id == order.Id)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Handle_CancelledOrder_DoesNotRestoreStockTwice()
+    {
+        var (context, tenantId, provider) = TenantDatabase.Open();
+        var customer = TestDataFactory.CreateCustomer(tenantId);
+        var order = TestDataFactory.CreateOrder(tenantId, customer.Id, OrderStatusNames.Cancelled);
+        context.AddRange(customer, order);
+        await context.SaveChangesAsync();
+
+        var inventory = new Mock<IInventoryService>();
+        var handler = new DeleteOrderCommandHandler(
+            context,
+            inventory.Object,
+            TestHandlerDependencies.CreateBusinessEvents(),
+            TestHandlerDependencies.CreateCache(),
+            provider,
+            TestHandlerDependencies.CreateLogger<DeleteOrderCommandHandler>());
+
+        await handler.Handle(new DeleteOrderCommand(order.Id), CancellationToken.None);
+
+        inventory.Verify(
+            x => x.RestoreForCancelledOrderAsync(
+                It.IsAny<Order>(),
+                It.IsAny<IEnumerable<OrderItem>>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 }
 

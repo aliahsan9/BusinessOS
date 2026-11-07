@@ -77,14 +77,14 @@ public sealed class HelpService : IHelpService
                 Id = "settings-1",
                 Category = "Settings",
                 Question = "How do I configure AI assistant settings?",
-                Answer = "Open Settings → General tab. Toggle Enable AI Assistant and Show Suggestions to control the floating BusinessOS AI widget."
+                Answer = "Open Settings → General tab. Toggle Enable AI Assistant and Show Suggestions to control the floating Navla widget."
             },
             new()
             {
                 Id = "ai-1",
                 Category = "AI Assistant",
-                Question = "What can BusinessOS AI help with?",
-                Answer = "BusinessOS AI answers questions about all modules, provides context-aware suggestions based on your current page, and supports smart search across customers, projects, invoices, and expenses."
+                Question = "What can Navla help with?",
+                Answer = "Navla is your intelligent AI business assistant. Navla answers questions about all modules, provides context-aware suggestions based on your current page, and supports smart search across customers, projects, invoices, and expenses."
             }
         };
 

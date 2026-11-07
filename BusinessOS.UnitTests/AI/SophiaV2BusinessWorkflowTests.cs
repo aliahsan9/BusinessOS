@@ -40,9 +40,14 @@ public class SophiaV2BusinessWorkflowTests
         invalid.IsValid.Should().BeFalse();
         (await context.Customers.CountAsync()).Should().Be(0);
 
-        var injectedEmail = new CreateCustomerCommandValidator().Validate(
-            new CreateCustomerCommand("Ahmed", "Khan", "ahmed@example.com'; DROP TABLE Customers;--", "03001234567", "Street 1", "Lahore", "Pakistan", "54000"));
-        injectedEmail.IsValid.Should().BeFalse();
+        new CreateCustomerCommandValidator().Validate(
+            new CreateCustomerCommand("Ahmed", "Khan", "not-an-email", "03001234567", "Street 1", "Lahore", "Pakistan", "54000"))
+            .IsValid.Should().BeFalse();
+
+        const string hostileEmail = "ahmed@example.com'; DROP TABLE Customers;--";
+        new CreateCustomerCommandValidator().Validate(
+            new CreateCustomerCommand("Ahmed", "Khan", hostileEmail, "03001234567", "Street 1", "Lahore", "Pakistan", "54000"))
+            .IsValid.Should().BeFalse();
 
         var customerId = await Customers(context, provider).Handle(
             new CreateCustomerCommand(
@@ -60,7 +65,10 @@ public class SophiaV2BusinessWorkflowTests
             CancellationToken.None);
         await duplicate.Should().ThrowAsync<ConflictException>();
         (await context.Customers.CountAsync()).Should().Be(1);
-        (await context.Customers.SingleAsync()).LastName.Should().Be("O'Brien; DROP TABLE Customers");
+        var stored = await context.Customers.SingleAsync();
+        stored.LastName.Should().Be("O'Brien; DROP TABLE Customers");
+        stored.Email.Should().Be("sophia.workflow@example.com");
+        (await context.Customers.CountAsync(c => c.LastName.Contains("DROP TABLE"))).Should().Be(1);
 
         var category = TestDataFactory.CreateCategory(tenantId, "Workflow");
         context.Categories.Add(category);

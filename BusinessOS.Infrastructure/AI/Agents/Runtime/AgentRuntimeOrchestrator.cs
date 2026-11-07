@@ -443,7 +443,9 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
                 exec = await _executor.ExecuteAsync(new AgentToolExecutionRequest
                 {
                     ToolName = toolName.Value,
-                    Message = request.Message,
+                    Message = injectedTool == toolName && pending?.OriginalRequest is { Length: > 0 } originalRequest
+                        ? originalRequest
+                        : request.Message,
                     Language = language,
                     Intent = intent.Intent,
                     Page = page,

@@ -74,12 +74,17 @@ try
     {
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-        options.AddFixedWindowLimiter("api", limiterOptions =>
-        {
-            limiterOptions.PermitLimit = 100;
-            limiterOptions.Window = TimeSpan.FromMinutes(1);
-            limiterOptions.QueueLimit = 0;
-        });
+        options.AddPolicy("api", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                    ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                    ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 180,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0
+                }));
 
         options.AddPolicy("auth", httpContext =>
             RateLimitPartition.GetFixedWindowLimiter(

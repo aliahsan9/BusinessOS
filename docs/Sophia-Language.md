@@ -1,6 +1,6 @@
-# Sophia language, voice, and business answers
+# Navla language, voice, and business answers
 
-Sophia is the existing BusinessOS assistant (`sophia` agent). Chat still goes through `AgentEmployeeService` and `AgentRuntimeOrchestrator`. This note covers the language and voice behavior added on that path.
+Navla is the existing BusinessOS assistant. The stored agent key remains `sophia`. Chat still goes through `AgentEmployeeService` and `AgentRuntimeOrchestrator`. This note covers the language and voice behavior added on that path.
 
 ## Languages
 

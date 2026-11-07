@@ -14,7 +14,7 @@ public interface ISaleOrderDraftService
 }
 
 /// <summary>
-/// Binds a sale draft to tenant records before Sophia asks for confirmation or creates the order.
+/// Binds a sale draft to tenant records before Navla asks for confirmation or creates the order.
 /// </summary>
 public sealed class SaleOrderDraftService : ISaleOrderDraftService
 {

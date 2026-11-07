@@ -40,7 +40,8 @@ public class SophiaLiveOpenAiToolTests
         var (other, _, _) = TenantDatabase.Open(name: database);
         await SeedAsync(home, other);
 
-        using var http = new HttpClient { BaseAddress = new Uri("https://api.openai.com/"), Timeout = TimeSpan.FromMinutes(2) };
+        var capture = new StatusCapture();
+        using var http = new HttpClient(capture) { BaseAddress = new Uri("https://api.openai.com/"), Timeout = TimeSpan.FromMinutes(2) };
         var client = new OpenAiChatClient(
             http,
             Options.Create(new AiOptions { OpenAiApiKey = key, OpenAiModel = model }),
@@ -74,11 +75,19 @@ public class SophiaLiveOpenAiToolTests
         async Task<SophiaModelAnswer?> Ask(string prompt, AiMemoryStateDto memory)
         {
             var language = ConversationLanguage.Resolve(prompt, "en").Language;
-            return await loop.TryAnswerAsync(prompt, language, page, memory, Guid.NewGuid(), CancellationToken.None);
+            var answer = await loop.TryAnswerAsync(prompt, language, page, memory, Guid.NewGuid(), CancellationToken.None);
+            if (answer is null && capture.Last is not null)
+                throw new InvalidOperationException("provider " + capture.Last);
+            return answer;
         }
 
         await Run("english-sales", "Show my total sales.", new AiMemoryStateDto(), Ask, results,
             answer => ExpectSales(answer, "GetSalesSummary", ThisMonthOrders, [CancelledOrders, ForeignOrders]));
+        if (ProviderRejected(results))
+        {
+            await WriteResults(results);
+            Assert.Fail("Live tool selection was not measured because the provider rejected the request. " + results[0].Failures[0]);
+        }
         await Run("roman-urdu-sales", "Meri total sales kitni hain?", new AiMemoryStateDto(), Ask, results,
             answer => ExpectSales(answer, "GetSalesSummary", ThisMonthOrders, [CancelledOrders, ForeignOrders]));
         await Run("roman-urdu-last-month", "Pichlay mahine ki sales kitni thi?", new AiMemoryStateDto(), Ask, results,
@@ -177,6 +186,20 @@ public class SophiaLiveOpenAiToolTests
                 return failures;
             });
 
+        await WriteResults(results);
+
+        var failed = results.Where(row => !row.Passed).Select(row => $"{row.Name}: {string.Join("; ", row.Failures)}").ToList();
+        failed.Should().BeEmpty("live tool-calling failures are listed in docs/QA/sophia-v2-live-run.json");
+    }
+
+    private static bool ProviderRejected(IReadOnlyList<LiveRow> results) =>
+        results.Any(row => row.Failures.Any(failure =>
+            failure.Contains("401", StringComparison.Ordinal)
+            || failure.Contains("403", StringComparison.Ordinal)
+            || failure.Contains("expired_secret_key", StringComparison.Ordinal)));
+
+    private static async Task WriteResults(IReadOnlyList<LiveRow> results)
+    {
         var path = Path.Combine(FindRepoRoot(), "docs", "QA", "sophia-v2-live-run.json");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var payload = results.Select(row => new
@@ -191,9 +214,6 @@ public class SophiaLiveOpenAiToolTests
             row.LatencyMs
         });
         await File.WriteAllTextAsync(path, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
-
-        var failed = results.Where(row => !row.Passed).Select(row => $"{row.Name}: {string.Join("; ", row.Failures)}").ToList();
-        failed.Should().BeEmpty("live tool-calling failures are listed in docs/QA/sophia-v2-live-run.json");
     }
 
     private static async Task<SophiaModelAnswer?> Run(
@@ -340,9 +360,10 @@ public class SophiaLiveOpenAiToolTests
         Email = $"{first}.{last}@example.com".ToLowerInvariant(),
         PhoneNumber = "03001234567",
         Address = "Street 1",
-        City = "Lahore",
-        Country = "Pakistan",
-        IsActive = true
+            City = "Lahore",
+            Country = "Pakistan",
+            PostalCode = "54000",
+            IsActive = true
     };
 
     private static Order Sale(Guid customerId, string number, DateTime when, decimal total, string status) => new()
@@ -424,6 +445,45 @@ public class SophiaLiveOpenAiToolTests
         }
 
         return Directory.GetCurrentDirectory();
+    }
+
+    private sealed class StatusCapture : HttpMessageHandler
+    {
+        public string? Last { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            using var handler = new HttpClientHandler();
+            using var client = new HttpClient(handler);
+            var uri = request.RequestUri ?? new Uri("https://api.openai.com/v1/chat/completions");
+            if (!uri.IsAbsoluteUri)
+                uri = new Uri(new Uri("https://api.openai.com/"), uri);
+            var outbound = new HttpRequestMessage(request.Method, uri);
+            foreach (var header in request.Headers)
+            {
+                if (!header.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase))
+                    outbound.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+
+            if (request.Headers.Authorization is not null)
+                outbound.Headers.Authorization = request.Headers.Authorization;
+            if (request.Content is not null)
+            {
+                var json = await request.Content.ReadAsStringAsync(cancellationToken);
+                outbound.Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            }
+
+            var response = await client.SendAsync(outbound, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            var snippet = Redact(body);
+            if (snippet.Length > 280)
+                snippet = snippet[..280];
+            Last = ((int)response.StatusCode) + " " + snippet;
+            return new HttpResponseMessage(response.StatusCode)
+            {
+                Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json")
+            };
+        }
     }
 
     private sealed record LiveRow(
