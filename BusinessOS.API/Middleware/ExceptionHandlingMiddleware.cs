@@ -94,9 +94,9 @@ public sealed class ExceptionHandlingMiddleware
                 null,
                 LogLevel.Warning),
 
-            PlanLimitExceededException planLimit => (
+            PlanLimitExceededException => (
                 StatusCodes.Status402PaymentRequired,
-                planLimit.Message,
+                "Plan limit reached",
                 "https://tools.ietf.org/html/rfc9110#section-15.5.1",
                 null,
                 LogLevel.Warning),
@@ -176,9 +176,14 @@ public sealed class ExceptionHandlingMiddleware
 
         if (exception is PlanLimitExceededException limit)
         {
+            problem.Extensions["success"] = false;
+            problem.Extensions["code"] = limit.ErrorCode;
             problem.Extensions["resource"] = limit.Resource;
             problem.Extensions["currentUsage"] = limit.CurrentUsage;
             problem.Extensions["maximum"] = limit.Maximum;
+            problem.Extensions["maximumAllowed"] = limit.Maximum;
+            problem.Extensions["remaining"] = limit.Remaining;
+            problem.Extensions["message"] = limit.Message;
             problem.Extensions["upgradeSuggestion"] = limit.UpgradeSuggestion;
         }
 

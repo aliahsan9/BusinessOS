@@ -69,6 +69,26 @@ public class ExceptionHandlingMiddlewareTests
     }
 
     [Fact]
+    public async Task PlanLimit_ReturnsStructuredQuotaPayload()
+    {
+        var body = await InvokeAsync(new PlanLimitExceededException("Users", 3, 3));
+
+        body.StatusCode.Should().Be(StatusCodes.Status402PaymentRequired);
+        using var document = JsonDocument.Parse(body.Text);
+        var root = document.RootElement;
+        root.GetProperty("title").GetString().Should().Be("Plan limit reached");
+        root.GetProperty("errorCode").GetString().Should().Be("PLAN_LIMIT_EXCEEDED");
+        root.GetProperty("success").GetBoolean().Should().BeFalse();
+        root.GetProperty("code").GetString().Should().Be("PLAN_LIMIT_EXCEEDED");
+        root.GetProperty("resource").GetString().Should().Be("Users");
+        root.GetProperty("currentUsage").GetInt64().Should().Be(3);
+        root.GetProperty("maximumAllowed").GetInt64().Should().Be(3);
+        root.GetProperty("remaining").GetInt64().Should().Be(0);
+        root.GetProperty("message").GetString().Should().Contain("maximum of 3 users");
+        body.Text.Should().NotContain("StackTrace");
+    }
+
+    [Fact]
     public async Task MalformedBody_ReturnsGenericInvalidRequest()
     {
         var body = await InvokeAsync(new BadHttpRequestException("Expected start of object but found junk."));

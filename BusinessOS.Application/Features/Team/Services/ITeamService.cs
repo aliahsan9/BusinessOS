@@ -39,6 +39,8 @@ public interface ITeamService
     Task<IReadOnlyList<TeamInvitationDto>> GetPendingInvitationsAsync(
         CancellationToken cancellationToken = default);
 
+    Task RevokeInvitationAsync(Guid invitationId, CancellationToken cancellationToken = default);
+
     Task<InvitationPreviewDto> GetInvitationPreviewAsync(
         string token,
         CancellationToken cancellationToken = default);

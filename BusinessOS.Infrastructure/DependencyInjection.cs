@@ -151,6 +151,7 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<ITenantRegistrationService, TenantRegistrationService>();
         services.AddScoped<ITenantService, TenantService>();
+        services.AddScoped<ISubscriptionEntitlementService, SubscriptionEntitlementService>();
         services.AddScoped<ITenantLimitService, TenantLimitService>();
         services.AddScoped<ITenantAuditService, TenantAuditService>();
         services.AddScoped<IUserAnalyticsService, UserAnalyticsService>();

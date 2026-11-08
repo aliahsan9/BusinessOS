@@ -129,9 +129,6 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
             }
         }
 
-        if (!string.IsNullOrWhiteSpace(request.Message))
-            await _limitService.TryConsumeAiRequestAsync(request.ClientRequestId, cancellationToken: cancellationToken);
-
         var memory = await _memoryService.LoadAsync(sessionId, cancellationToken);
 
         var intentResult = _intentDetector.Detect(message, page, memory);
@@ -144,6 +141,11 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
             await _observability.LogAsync(sessionId, intentResult.Intent, message, [], [], (int)sw.ElapsedMilliseconds, null, false, permission.DenialReason, cancellationToken);
             return new PipelineResult { Response = denied };
         }
+
+        // One billable request per accepted user message. Tool calls inside this turn are not charged again.
+        // The same client request id does not consume a second unit. Permission failures are not charged.
+        if (!string.IsNullOrWhiteSpace(request.Message))
+            await _limitService.TryConsumeAiRequestAsync(request.ClientRequestId, cancellationToken: cancellationToken);
 
         if (AiNaturalReplyBuilder.IsStandaloneSmallTalk(message))
         {

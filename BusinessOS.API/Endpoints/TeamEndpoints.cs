@@ -59,6 +59,12 @@ public static class TeamEndpoints
             .RequirePermission(PermissionCodes.TeamView)
             .WithName("GetPendingInvitations")
             .Produces<IReadOnlyList<TeamInvitationDto>>(StatusCodes.Status200OK);
+
+        group.MapDelete("/invitations/{id:guid}", RevokeInvitation)
+            .RequirePermission(PermissionCodes.TeamManage)
+            .WithName("RevokeTeamInvitation")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status404NotFound);
     }
 
     private static async Task<IResult> GetTeamDashboard(
@@ -134,5 +140,14 @@ public static class TeamEndpoints
     {
         var result = await teamService.GetPendingInvitationsAsync(cancellationToken);
         return Results.Ok(result);
+    }
+
+    private static async Task<IResult> RevokeInvitation(
+        Guid id,
+        ITeamService teamService,
+        CancellationToken cancellationToken)
+    {
+        await teamService.RevokeInvitationAsync(id, cancellationToken);
+        return Results.NoContent();
     }
 }

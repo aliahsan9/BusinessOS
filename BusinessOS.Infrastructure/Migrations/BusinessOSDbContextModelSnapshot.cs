@@ -2845,6 +2845,11 @@ namespace BusinessOS.Infrastructure.Migrations
 
                     b.HasIndex("TenantId", "Email", "Status");
 
+                    b.HasIndex("TenantId", "Email")
+                        .IsUnique()
+                        .HasDatabaseName("IX_TeamInvitations_OnePendingEmail")
+                        .HasFilter("[Status] = 0 AND [IsDeleted] = 0");
+
                     b.ToTable("TeamInvitations", (string)null);
                 });
 
