@@ -9,6 +9,7 @@ using BusinessOS.Application.Features.Billing.Services;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Domain.Billing;
+using BusinessOS.Infrastructure.Billing;
 using BusinessOS.Infrastructure.Data;
 using BusinessOS.Infrastructure.Payments;
 using Microsoft.EntityFrameworkCore;
@@ -110,29 +111,64 @@ public sealed partial class BillingService : IBillingService, IBillingPlanSyncSe
             .FirstOrDefaultAsync(x => x.TenantId == tenantId, cancellationToken);
         var limits = EntitlementResolver.Resolve(tenant.Plan, subscription);
         var unlimitedAi = PlanLimitHelper.IsUnlimited(limits.MaxAiRequests);
+        var measured = _context is BusinessOSDbContext quotaDb
+            ? await QuotaEnforcer.MeasureAsync(quotaDb, tenantId, cancellationToken)
+            : null;
+        var userCount = measured?.OccupiedSeats ?? usage.UserCount;
+        var customerCount = measured?.Customers ?? usage.CustomerCount;
+        var productCount = measured?.Products ?? usage.ProductCount;
+        var projectCount = measured?.Projects ?? usage.ProjectCount;
+        var taskCount = measured?.Tasks ?? usage.TaskCount;
+        var storageBytes = measured?.StorageBytes ?? usage.StorageUsedMb * 1024L * 1024L;
+        var aiUsed = usage.AiRequestsUsed;
         return new BillingUsageDto
         {
-            UserCount = usage.UserCount,
+            UserCount = userCount,
+            ActiveUserCount = measured?.ActiveUsers ?? userCount,
+            PendingInvitationCount = measured?.PendingInvitations ?? 0,
             MaxUsers = limits.MaxUsers,
-            CustomerCount = usage.CustomerCount,
+            UsersRemaining = Remaining(userCount, limits.MaxUsers),
+            UsersOverLimit = Over(userCount, limits.MaxUsers),
+            CustomerCount = customerCount,
             MaxCustomers = limits.MaxCustomers,
-            ProductCount = usage.ProductCount,
+            CustomersRemaining = Remaining(customerCount, limits.MaxCustomers),
+            CustomersOverLimit = Over(customerCount, limits.MaxCustomers),
+            ProductCount = productCount,
             MaxProducts = limits.MaxProducts,
-            ProjectCount = usage.ProjectCount,
+            ProductsRemaining = Remaining(productCount, limits.MaxProducts),
+            ProductsOverLimit = Over(productCount, limits.MaxProducts),
+            ProjectCount = projectCount,
             MaxProjects = limits.MaxProjects,
-            TaskCount = usage.TaskCount,
+            ProjectsRemaining = Remaining(projectCount, limits.MaxProjects),
+            ProjectsOverLimit = Over(projectCount, limits.MaxProjects),
+            TaskCount = taskCount,
             MaxTasks = limits.MaxTasks,
-            StorageUsedMb = usage.StorageUsedMb,
+            TasksRemaining = Remaining(taskCount, limits.MaxTasks),
+            TasksOverLimit = Over(taskCount, limits.MaxTasks),
+            StorageUsedBytes = storageBytes,
+            StorageUsedMb = storageBytes / (1024L * 1024L),
             MaxStorageMb = limits.MaxStorageMb,
-            AiRequestsUsed = usage.AiRequestsUsed,
+            StorageRemainingMb = limits.MaxStorageMb < 0
+                ? SubscriptionPlan.Unlimited
+                : Math.Max(0, limits.MaxStorageMb - (storageBytes / (1024L * 1024L))),
+            StorageOverLimit = limits.MaxStorageMb >= 0 && storageBytes > limits.MaxStorageMb * 1024L * 1024L,
+            AiRequestsUsed = aiUsed,
             MaxAiRequests = limits.MaxAiRequests,
-            AiRequestsRemaining = unlimitedAi ? SubscriptionPlan.Unlimited : Math.Max(0, limits.MaxAiRequests - usage.AiRequestsUsed),
+            AiRequestsRemaining = unlimitedAi ? SubscriptionPlan.Unlimited : Math.Max(0, limits.MaxAiRequests - aiUsed),
+            AiRequestsOverLimit = !unlimitedAi && limits.MaxAiRequests >= 0 && aiUsed > limits.MaxAiRequests,
             UsersAreCustom = tenant.Plan.IsCustomPricing && PlanLimitHelper.IsUnlimited(limits.MaxUsers),
             AiRequestsAreCustom = tenant.Plan.IsCustomPricing && unlimitedAi,
             ResetDate = subscription?.CurrentPeriodEnd ?? usage.AiPeriodStart?.AddMonths(1),
-            LastCalculatedAt = usage.LastCalculatedAt
+            LastCalculatedAt = usage.LastCalculatedAt,
+            SubscriptionStatus = subscription?.Status.ToString()
         };
     }
+
+    private static int Remaining(int current, int max) =>
+        PlanLimitHelper.IsUnlimited(max) ? SubscriptionPlan.Unlimited : Math.Max(0, max - current);
+
+    private static bool Over(int current, int max) =>
+        !PlanLimitHelper.IsUnlimited(max) && current > max;
 
     public async Task<BillingDashboardDto> GetDashboardAsync(CancellationToken cancellationToken = default)
     {
@@ -192,25 +228,25 @@ public sealed partial class BillingService : IBillingService, IBillingPlanSyncSe
         var violations = new List<string>();
 
         if (!PlanLimitHelper.IsWithinLimit(usage.UserCount, targetPlan.MaxUsers))
-            violations.Add($"You have {usage.UserCount} users but the {targetPlan.Name} plan allows {PlanLimitHelper.FormatLimit(targetPlan.MaxUsers)}.");
+            violations.Add($"You have {usage.UserCount} users but the {targetPlan.Name} plan allows {PlanLimitHelper.FormatLimit(targetPlan.MaxUsers)}. Existing users stay. New users are blocked until usage is within the limit.");
 
         if (!PlanLimitHelper.IsWithinLimit(usage.CustomerCount, targetPlan.MaxCustomers))
-            violations.Add($"You have {usage.CustomerCount} customers but the {targetPlan.Name} plan allows {PlanLimitHelper.FormatLimit(targetPlan.MaxCustomers)}.");
+            violations.Add($"You have {usage.CustomerCount} customers but the {targetPlan.Name} plan allows {PlanLimitHelper.FormatLimit(targetPlan.MaxCustomers)}. Existing customers stay. New customers are blocked until usage is within the limit.");
 
         if (!PlanLimitHelper.IsWithinLimit(usage.ProjectCount, targetPlan.MaxProjects))
-            violations.Add($"You have {usage.ProjectCount} projects but the {targetPlan.Name} plan allows {PlanLimitHelper.FormatLimit(targetPlan.MaxProjects)}.");
+            violations.Add($"You have {usage.ProjectCount} projects but the {targetPlan.Name} plan allows {PlanLimitHelper.FormatLimit(targetPlan.MaxProjects)}. Existing projects stay. New projects are blocked until usage is within the limit.");
 
         if (!PlanLimitHelper.IsWithinLimit(usage.TaskCount, targetPlan.MaxTasks))
-            violations.Add($"You have {usage.TaskCount} tasks but the {targetPlan.Name} plan allows {PlanLimitHelper.FormatLimit(targetPlan.MaxTasks)}.");
+            violations.Add($"You have {usage.TaskCount} tasks but the {targetPlan.Name} plan allows {PlanLimitHelper.FormatLimit(targetPlan.MaxTasks)}. Existing tasks stay. New tasks are blocked until usage is within the limit.");
 
         if (!PlanLimitHelper.IsWithinLimit(usage.ProductCount, targetPlan.MaxProducts))
-            violations.Add($"You have {usage.ProductCount} products but the {targetPlan.Name} plan allows {PlanLimitHelper.FormatLimit(targetPlan.MaxProducts)}.");
+            violations.Add($"You have {usage.ProductCount} products but the {targetPlan.Name} plan allows {PlanLimitHelper.FormatLimit(targetPlan.MaxProducts)}. Existing products stay. New products are blocked until usage is within the limit.");
 
         if (targetPlan.MaxStorageMb != SubscriptionPlan.Unlimited && usage.StorageUsedMb > targetPlan.MaxStorageMb)
-            violations.Add($"You are using {usage.StorageUsedMb} MB but the {targetPlan.Name} plan allows {targetPlan.MaxStorageMb} MB.");
+            violations.Add($"You are using {usage.StorageUsedMb} MB but the {targetPlan.Name} plan allows {targetPlan.MaxStorageMb} MB. Existing files stay. New uploads are blocked until usage is within the limit.");
 
         if (!PlanLimitHelper.IsUnlimited(targetPlan.MaxAiRequests) && usage.AiRequestsUsed > targetPlan.MaxAiRequests)
-            violations.Add($"You have used {usage.AiRequestsUsed} AI requests but the {targetPlan.Name} plan allows {PlanLimitHelper.FormatLimit(targetPlan.MaxAiRequests)}.");
+            violations.Add($"You have used {usage.AiRequestsUsed} AI requests but the {targetPlan.Name} plan allows {PlanLimitHelper.FormatLimit(targetPlan.MaxAiRequests)}. Historical usage stays. New AI requests are blocked until the allowance resets or you upgrade.");
 
         return new DowngradeValidationDto
         {
@@ -238,7 +274,9 @@ public sealed partial class BillingService : IBillingService, IBillingPlanSyncSe
         var validation = await ValidateDowngradeAsync(request.PlanId, cancellationToken);
         if (!validation.IsValid)
         {
-            throw new BadRequestException(string.Join(" ", validation.Violations));
+            _logger.LogInformation(
+                "Applying a downgrade while usage is above the target allowance. Existing records are kept. {Violations}",
+                string.Join(" ", validation.Violations));
         }
 
         var (tenant, subscription) = await GetTenantWithSubscriptionAsync(cancellationToken, tracked: true);

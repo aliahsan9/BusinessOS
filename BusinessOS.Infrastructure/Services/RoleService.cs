@@ -41,15 +41,19 @@ public sealed class RoleService : IRoleService
         CreateRoleRequest request,
         CancellationToken cancellationToken = default)
     {
-        var existing = await _roleRepository.GetRoleByNameAsync(request.Name, cancellationToken);
+        var requestedName = request.Name.Trim();
+        if (RoleNames.All.Contains(requestedName))
+            throw new BadRequestException($"System role '{requestedName}' is reserved.");
+
+        var existing = await _roleRepository.GetRoleByNameAsync(requestedName, cancellationToken);
         if (existing is not null)
         {
-            throw new ConflictException($"Role '{request.Name}' already exists.");
+            throw new ConflictException($"Role '{requestedName}' already exists.");
         }
 
         var role = new Role
         {
-            Name = request.Name,
+            Name = requestedName,
             Description = request.Description,
             IsActive = request.IsActive,
             CreatedAt = DateTime.UtcNow
@@ -77,7 +81,16 @@ public sealed class RoleService : IRoleService
         var role = await _roleRepository.GetRoleByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException($"Role '{id}' was not found.");
 
-        var duplicate = await _roleRepository.GetRoleByNameAsync(request.Name, cancellationToken);
+        EnsureTenantRoleCanChange(role, "changed");
+
+        var requestedName = request.Name.Trim();
+        if (RoleNames.All.Contains(requestedName)
+            && !string.Equals(role.Name, requestedName, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BadRequestException($"System role '{requestedName}' is reserved.");
+        }
+
+        var duplicate = await _roleRepository.GetRoleByNameAsync(requestedName, cancellationToken);
         if (duplicate is not null && duplicate.Id != id)
         {
             throw new ConflictException($"Role '{request.Name}' already exists.");
@@ -85,7 +98,7 @@ public sealed class RoleService : IRoleService
 
         var oldValue = RbacAuditService.Serialize(new { role.Name, role.Description, role.IsActive });
 
-        role.Name = request.Name;
+        role.Name = requestedName;
         role.Description = request.Description;
         role.IsActive = request.IsActive;
 
@@ -107,10 +120,7 @@ public sealed class RoleService : IRoleService
         var role = await _roleRepository.GetRoleByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException($"Role '{id}' was not found.");
 
-        if (RoleNames.Protected.Contains(role.Name))
-        {
-            throw new BadRequestException($"System role '{role.Name}' cannot be deleted.");
-        }
+        EnsureTenantRoleCanChange(role, "deleted");
 
         var oldValue = RbacAuditService.Serialize(new { role.Name, role.Description, role.IsActive });
         await _authorizationVersions.BumpUsersWithRoleAsync(role.Id, cancellationToken);
@@ -150,6 +160,9 @@ public sealed class RoleService : IRoleService
         var permission = await _permissionRepository.GetPermissionByIdAsync(permissionId, cancellationToken)
             ?? throw new NotFoundException($"Permission '{permissionId}' was not found.");
 
+        EnsureTenantRoleCanChange(role, "changed");
+        EnsureCanGrant(permission);
+
         await _roleRepository.AssignPermissionAsync(roleId, permissionId, cancellationToken);
         await _authorizationVersions.BumpUsersWithRoleAsync(roleId, cancellationToken);
 
@@ -172,6 +185,9 @@ public sealed class RoleService : IRoleService
 
         var permission = await _permissionRepository.GetPermissionByIdAsync(permissionId, cancellationToken)
             ?? throw new NotFoundException($"Permission '{permissionId}' was not found.");
+
+        EnsureTenantRoleCanChange(role, "changed");
+        EnsureCanGrant(permission);
 
         await _roleRepository.RemovePermissionAsync(roleId, permissionId, cancellationToken);
         await _authorizationVersions.BumpUsersWithRoleAsync(roleId, cancellationToken);
@@ -249,6 +265,23 @@ public sealed class RoleService : IRoleService
         string userId,
         CancellationToken cancellationToken = default) =>
         _roleRepository.GetUserRoleNamesAsync(userId, cancellationToken);
+
+    private void EnsureTenantRoleCanChange(Role role, string action)
+    {
+        if (RoleNames.Protected.Contains(role.Name))
+            throw new BadRequestException($"System role '{role.Name}' cannot be {action}.");
+    }
+
+    private void EnsureCanGrant(Permission permission)
+    {
+        if (!string.Equals(permission.Code, PermissionCodes.SystemAdminManage, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        if (_currentUser.HasPermission(PermissionCodes.SystemAdminManage))
+            return;
+
+        throw new BadRequestException("Platform administration cannot be granted from a tenant account.");
+    }
 
     private void EnsureUserInCurrentTenant(ApplicationUser user)
     {

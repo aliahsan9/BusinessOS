@@ -127,6 +127,51 @@ public partial class BusinessOSDbContext
         CancellationToken cancellationToken = default) =>
         TryTransitionStatusAsync(Purchases, purchaseId, expectedStatus, newStatus, cancellationToken);
 
+    public async Task<bool> TryAcceptOrderPaymentAsync(
+        Guid orderId,
+        decimal amount,
+        CancellationToken cancellationToken = default)
+    {
+        if (amount <= 0 || _tenantId == Guid.Empty)
+            return false;
+
+        if (Database.IsRelational())
+        {
+            var now = DateTime.UtcNow;
+            var completed = PaymentStatusNames.Completed;
+            var refunded = PaymentStatusNames.Refunded;
+            var updated = await Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE Orders
+                SET UpdatedAt = {now}
+                WHERE Id = {orderId}
+                  AND TenantId = {_tenantId}
+                  AND IsDeleted = 0
+                  AND GrandTotal >= {amount} + ISNULL((
+                      SELECT SUM(Amount - RefundedAmount)
+                      FROM Payments
+                      WHERE OrderId = {orderId}
+                        AND TenantId = {_tenantId}
+                        AND IsDeleted = 0
+                        AND Status IN ({completed}, {refunded})
+                  ), 0)
+                """, cancellationToken);
+            return updated == 1;
+        }
+
+        var order = await Orders.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == orderId, cancellationToken);
+        if (order is null)
+            return false;
+
+        var paid = await Payments.AsNoTracking()
+            .Where(p => p.OrderId == orderId
+                && (p.Status == PaymentStatusNames.Completed || p.Status == PaymentStatusNames.Refunded))
+            .SumAsync(p => (decimal?)(p.Amount - p.RefundedAmount), cancellationToken) ?? 0m;
+
+        var outstanding = Math.Round(order.GrandTotal - paid, 2, MidpointRounding.AwayFromZero);
+        return outstanding >= amount;
+    }
+
     public async Task<int> TryRefundPaymentAsync(
         Guid paymentId,
         decimal amount,

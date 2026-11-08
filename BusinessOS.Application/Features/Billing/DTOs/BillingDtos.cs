@@ -97,6 +97,23 @@ public class BillingUsageDto
     public bool AiRequestsAreCustom { get; set; }
     public DateTime? ResetDate { get; set; }
     public DateTime LastCalculatedAt { get; set; }
+    public int PendingInvitationCount { get; set; }
+    public int ActiveUserCount { get; set; }
+    public int UsersRemaining { get; set; }
+    public int CustomersRemaining { get; set; }
+    public int ProductsRemaining { get; set; }
+    public int ProjectsRemaining { get; set; }
+    public int TasksRemaining { get; set; }
+    public long StorageUsedBytes { get; set; }
+    public long StorageRemainingMb { get; set; }
+    public bool UsersOverLimit { get; set; }
+    public bool CustomersOverLimit { get; set; }
+    public bool ProductsOverLimit { get; set; }
+    public bool ProjectsOverLimit { get; set; }
+    public bool TasksOverLimit { get; set; }
+    public bool StorageOverLimit { get; set; }
+    public bool AiRequestsOverLimit { get; set; }
+    public string? SubscriptionStatus { get; set; }
 }
 
 public class BillingInvoiceDto

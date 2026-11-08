@@ -3,6 +3,7 @@ using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Activities.DTOs;
 using BusinessOS.Application.Features.Notifications.Services;
+using BusinessOS.Application.Features.Inventory.Services;
 using BusinessOS.Application.Features.Orders.Services;
 using BusinessOS.Domain.Enums;
 using MediatR;
@@ -14,6 +15,7 @@ namespace BusinessOS.Application.Features.Orders.Commands.DeleteOrder;
 public sealed class DeleteOrderCommandHandler : IRequestHandler<DeleteOrderCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
+    private readonly IInventoryService _inventoryService;
     private readonly IBusinessEventService _businessEvents;
     private readonly ICacheService _cache;
     private readonly ITenantProvider _tenantProvider;
@@ -21,12 +23,14 @@ public sealed class DeleteOrderCommandHandler : IRequestHandler<DeleteOrderComma
 
     public DeleteOrderCommandHandler(
         IApplicationDbContext context,
+        IInventoryService inventoryService,
         IBusinessEventService businessEvents,
         ICacheService cache,
         ITenantProvider tenantProvider,
         ILogger<DeleteOrderCommandHandler> logger)
     {
         _context = context;
+        _inventoryService = inventoryService;
         _businessEvents = businessEvents;
         _cache = cache;
         _tenantProvider = tenantProvider;
@@ -36,6 +40,7 @@ public sealed class DeleteOrderCommandHandler : IRequestHandler<DeleteOrderComma
     public async Task<Unit> Handle(DeleteOrderCommand request, CancellationToken cancellationToken)
     {
         var order = await _context.Orders
+            .Include(x => x.OrderItems)
             .FirstOrDefaultAsync(x => x.Id == request.Id, cancellationToken);
 
         if (order is null)
@@ -51,8 +56,29 @@ public sealed class DeleteOrderCommandHandler : IRequestHandler<DeleteOrderComma
                 $"Order in '{order.Status}' status cannot be deleted.");
         }
 
-        _context.Orders.Remove(order);
-        await _context.SaveChangesAsync(cancellationToken);
+        var restoreStock = !string.Equals(order.Status, OrderStatusNames.Cancelled, StringComparison.OrdinalIgnoreCase);
+        var transaction = await _context.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            if (restoreStock)
+                await _inventoryService.RestoreForCancelledOrderAsync(order, order.OrderItems, cancellationToken);
+
+            _context.Orders.Remove(order);
+            await _context.SaveChangesAsync(cancellationToken);
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            if (transaction is not null)
+                await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+        finally
+        {
+            if (transaction is not null)
+                await transaction.DisposeAsync();
+        }
 
         await EntityCacheInvalidator.InvalidateOrderAsync(
             _cache,
@@ -68,9 +94,9 @@ public sealed class DeleteOrderCommandHandler : IRequestHandler<DeleteOrderComma
                 ActivityEntityTypes.Project,
                 order.Id,
                 order.OrderNumber,
-                "Project Deleted",
-                $"Project {order.OrderNumber} was deleted.",
-                NotificationTypes.Project),
+                "Order Deleted",
+                $"Order {order.OrderNumber} was deleted.",
+                NotificationTypes.Business),
             cancellationToken);
 
         return Unit.Value;

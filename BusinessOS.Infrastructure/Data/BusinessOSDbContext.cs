@@ -1,5 +1,6 @@
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Domain.Entities;
+using BusinessOS.Infrastructure.Billing;
 using BusinessOS.Infrastructure.Data.Configurations;
 using BusinessOS.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -81,17 +82,27 @@ public partial class BusinessOSDbContext
     public DbSet<BillingPaymentMethod> BillingPaymentMethods => Set<BillingPaymentMethod>();
     public DbSet<AiUsageLedger> AiUsageLedgers => Set<AiUsageLedger>();
 
-    public override int SaveChanges()
-    {
-        ApplyTenantAndAuditRules();
-        return base.SaveChanges();
-    }
+    public override int SaveChanges() =>
+        SaveChangesAsync(CancellationToken.None).GetAwaiter().GetResult();
 
-    public override Task<int> SaveChangesAsync(
+    public override async Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default)
     {
         ApplyTenantAndAuditRules();
-        return base.SaveChangesAsync(cancellationToken);
+        if (QuotaEnforcer.IsReentrant)
+            return await base.SaveChangesAsync(cancellationToken);
+
+        var hold = await QuotaEnforcer.AcquireForSaveAsync(this, cancellationToken);
+        try
+        {
+            var result = await base.SaveChangesAsync(cancellationToken);
+            hold.MarkSuccess();
+            return result;
+        }
+        finally
+        {
+            await hold.DisposeAsync();
+        }
     }
 
     private void AssignInMemoryRowVersions()

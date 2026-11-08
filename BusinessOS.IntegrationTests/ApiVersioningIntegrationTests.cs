@@ -199,11 +199,12 @@ public class ApiVersioningIntegrationTests : IntegrationTestBase
         var legacy = await Client.PostAsJsonAsync("/api/billing/webhook/stripe", new { });
         var versioned = await Client.PostAsJsonAsync("/api/v1/billing/webhook/stripe", new { });
 
-        legacy.StatusCode.Should().Be(HttpStatusCode.OK);
-        versioned.StatusCode.Should().Be(HttpStatusCode.OK);
+        legacy.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        versioned.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
         var legacyBody = await legacy.Content.ReadAsStringAsync();
         legacyBody.Should().NotContain(ApiVersioningPaths.VersionRequiredCode);
+        legacyBody.Should().Contain("webhook");
     }
 
     [Fact]

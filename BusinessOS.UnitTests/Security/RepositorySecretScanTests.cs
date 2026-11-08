@@ -46,11 +46,12 @@ public class RepositorySecretScanTests
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null)
         {
-            var candidate = Path.Combine(directory.FullName, "BusinessOS.API", "appsettings.json");
-            if (File.Exists(candidate))
-            {
+            if (File.Exists(Path.Combine(directory.FullName, "BusinessOS.API", "appsettings.json")))
                 return directory.FullName;
-            }
+
+            var nested = Path.Combine(directory.FullName, "BusinessOS");
+            if (File.Exists(Path.Combine(nested, "BusinessOS.API", "appsettings.json")))
+                return nested;
 
             directory = directory.Parent;
         }

@@ -7,6 +7,7 @@ using BusinessOS.Application.Features.Invoices.Commands.UpdateInvoice;
 using BusinessOS.Application.Features.Invoices.Commands.UpdateInvoiceStatus;
 using BusinessOS.Application.Features.Invoices.Queries;
 using BusinessOS.Application.Features.Invoices.Queries.GetAllInvoices;
+using BusinessOS.Application.Features.Invoices.Queries.GetInvoiceSummary;
 using BusinessOS.Application.Features.Invoices.Queries.GetInvoiceById;
 using BusinessOS.Application.Features.Invoices.Queries.GetInvoicePdf;
 using BusinessOS.API.Authorization;
@@ -38,6 +39,13 @@ public static class InvoiceEndpoints
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);
+
+        group.MapGet("/summary", GetInvoiceSummary)
+            .RequirePermission(PermissionCodes.InvoiceView)
+            .WithName("GetInvoiceSummary")
+            .WithSummary("Invoice portfolio totals")
+            .WithDescription("Returns tenant-wide invoice counts and outstanding amount. Totals are not limited to one page.")
+            .Produces<InvoicePortfolioSummaryResponse>(StatusCodes.Status200OK);
 
         group.MapGet("", GetAllInvoices)
             .RequirePermission(PermissionCodes.InvoiceView)
@@ -132,6 +140,14 @@ public static class InvoiceEndpoints
                 QueryableSortingExtensions.ParseSortDirection(sortOrder)),
             cancellationToken);
 
+        return Results.Ok(result);
+    }
+
+    private static async Task<IResult> GetInvoiceSummary(
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(new GetInvoiceSummaryQuery(), cancellationToken);
         return Results.Ok(result);
     }
 

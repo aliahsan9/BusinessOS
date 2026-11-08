@@ -1,4 +1,5 @@
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Infrastructure.AI;
 using BusinessOS.Application.Features.Agents;
 using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Enums;
@@ -42,6 +43,37 @@ public abstract class AiToolBase : IAiTool
     {
         message = ConversationLanguage.ExpandForRouting(message);
         var now = DateTime.UtcNow;
+        if (ContainsAny(message, "today"))
+        {
+            var start = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Utc);
+            return (start, now, "today");
+        }
+
+        if (ContainsAny(message, "yesterday"))
+        {
+            var start = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Utc).AddDays(-1);
+            return (start, start.AddDays(1).AddTicks(-1), "yesterday");
+        }
+
+        if (ContainsAny(message, "last week", "previous week"))
+        {
+            var weekStart = StartOfWeek(now);
+            var start = weekStart.AddDays(-7);
+            return (start, weekStart.AddTicks(-1), "last week");
+        }
+
+        if (ContainsAny(message, "this week"))
+        {
+            var start = StartOfWeek(now);
+            return (start, now, "this week");
+        }
+
+        if (ContainsAny(message, "last 3 months", "last three months", "past 3 months"))
+        {
+            var start = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(-2);
+            return (start, now, "last 3 months");
+        }
+
         if (ContainsAny(message, "last year", "previous year"))
         {
             var start = new DateTime(now.Year - 1, 1, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -69,6 +101,13 @@ public abstract class AiToolBase : IAiTool
 
         var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
         return (monthStart, now, "this month");
+    }
+
+    private static DateTime StartOfWeek(DateTime now)
+    {
+        var day = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Utc);
+        var delta = ((int)day.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+        return day.AddDays(-delta);
     }
 }
 
@@ -163,13 +202,17 @@ public sealed class GetProjectsTool : AiToolBase
     public GetProjectsTool(IApplicationDbContext context) => _context = context;
 
     public override AiToolName ToolName => AiToolName.GetProjects;
-    public override string Description => "Retrieve projects/orders, progress, and delayed projects.";
+    public override string Description => "Retrieve orders and projects. Pass query when the user names a customer whose orders they want to see.";
 
     public override bool CanHandle(AiCopilotIntent intent, string message, AiPageContextDto page, AiMemoryStateDto memory) =>
         ContainsAny(message, "project", "order", "behind schedule", "delayed", "progress");
 
     public override async Task<AiToolResult> ExecuteAsync(AiCopilotExecutionContext context, CancellationToken cancellationToken = default)
     {
+        var namedOrders = await TryCustomerOrdersAsync(context, cancellationToken);
+        if (namedOrders is not null)
+            return namedOrders;
+
         if (ContainsAny(context.Message, "behind schedule", "delayed", "late"))
         {
             var delayedOrders = await _context.Orders
@@ -206,6 +249,59 @@ public sealed class GetProjectsTool : AiToolBase
             Data = new { activeProjects = active },
             Summary = $"You have {active:N0} active project(s)/order(s)."
         };
+    }
+
+    private async Task<AiToolResult?> TryCustomerOrdersAsync(
+        AiCopilotExecutionContext context,
+        CancellationToken cancellationToken)
+    {
+        var customers = await _context.Customers.AsNoTracking()
+            .Select(c => new { c.Id, c.FirstName, c.LastName })
+            .Take(200)
+            .ToListAsync(cancellationToken);
+        if (customers.Count == 0)
+            return null;
+
+        var haystack = $"{SophiaToolArguments.ReadQuery(context.ToolArgs)} {context.Message}";
+        var match = customers.FirstOrDefault(c =>
+            NameAppears(haystack, c.FirstName) || NameAppears(haystack, $"{c.FirstName} {c.LastName}"));
+        if (match is null)
+            return null;
+
+        var orders = await _context.Orders.AsNoTracking()
+            .Where(o => o.CustomerId == match.Id && o.Status != "Cancelled")
+            .OrderByDescending(o => o.OrderDate)
+            .Take(5)
+            .Select(o => new { o.OrderNumber, o.Status, o.GrandTotal, o.OrderDate })
+            .ToListAsync(cancellationToken);
+
+        var name = $"{match.FirstName} {match.LastName}".Trim();
+        if (orders.Count == 0)
+        {
+            return new AiToolResult
+            {
+                ToolName = ToolName.ToString(),
+                Data = new { customer = name, orders = Array.Empty<object>() },
+                Summary = $"{name} has no orders that are still open. I don't have an order total to report for them."
+            };
+        }
+
+        var lines = orders.Select(o =>
+            $"{o.OrderNumber} ({o.Status}) on {o.OrderDate:yyyy-MM-dd}: order grand total {o.GrandTotal:C}. This is not an invoice, a payment, or profit.");
+        return new AiToolResult
+        {
+            ToolName = ToolName.ToString(),
+            Data = new { customer = name, orders },
+            Summary = $"Orders for {name}:\n" + string.Join("\n", lines)
+        };
+    }
+
+    private static bool NameAppears(string haystack, string? name)
+    {
+        var trimmed = name?.Trim();
+        return !string.IsNullOrWhiteSpace(trimmed)
+            && trimmed.Length >= 3
+            && haystack.Contains(trimmed, StringComparison.OrdinalIgnoreCase);
     }
 }
 

@@ -77,7 +77,10 @@ public sealed class CreateQuotationCommandHandler : IRequestHandler<CreateQuotat
 
         foreach (var item in request.Items)
         {
-            var lineTotal = Math.Round(item.Quantity * item.UnitPrice, 2);
+            if (item.UnitPrice <= 0)
+                throw new BadRequestException("Unit price must be greater than zero.");
+
+            var lineTotal = Math.Round(item.Quantity * item.UnitPrice, 2, MidpointRounding.AwayFromZero);
 
             quotationItems.Add(new QuotationItem
             {
@@ -97,6 +100,9 @@ public sealed class CreateQuotationCommandHandler : IRequestHandler<CreateQuotat
 
         if (grandTotal < 0)
             throw new BadRequestException("Quotation grand total cannot be negative.");
+
+        if (discount > subTotal)
+            throw new BadRequestException("Discount cannot exceed the line subtotal.");
 
         var quotation = new Quotation
         {

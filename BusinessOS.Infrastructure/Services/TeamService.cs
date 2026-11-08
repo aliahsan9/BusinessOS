@@ -277,7 +277,14 @@ public sealed class TeamService : ITeamService
         };
 
         _context.TeamInvitations.Add(invitation);
-        await _context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (IsPendingInvitationCollision(ex))
+        {
+            throw new ConflictException("An invitation for this email is already pending.");
+        }
 
         var tenant = await _context.Tenants.AsNoTracking().FirstAsync(cancellationToken);
         var inviteUrl = $"/auth/accept-invitation?token={token}";
@@ -470,16 +477,36 @@ public sealed class TeamService : ITeamService
             true);
     }
 
+    public async Task RevokeInvitationAsync(Guid invitationId, CancellationToken cancellationToken = default)
+    {
+        var invitation = await _context.TeamInvitations
+            .FirstOrDefaultAsync(x => x.Id == invitationId, cancellationToken)
+            ?? throw new NotFoundException("Invitation not found.");
+
+        if (invitation.Status != InvitationStatus.Pending || invitation.ExpiresAt <= DateTime.UtcNow)
+            throw new BadRequestException("This invitation is no longer pending.");
+
+        invitation.Status = InvitationStatus.Cancelled;
+        invitation.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        await _auditService.LogAsync(
+            "TeamInvitationRevoked",
+            nameof(TeamInvitation),
+            invitation.Id.ToString(),
+            null,
+            RbacAuditService.Serialize(new { invitation.Email }),
+            cancellationToken);
+    }
+
     public async Task AcceptInvitationAsync(
         AcceptInvitationRequest request,
         CancellationToken cancellationToken = default)
     {
-        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-
-        var invitation = await dbContext.TeamInvitations
+        var invitation = await _context.TeamInvitations
             .IgnoreQueryFilters()
             .Include(x => x.Role)
-            .FirstOrDefaultAsync(x => x.Token == request.Token, cancellationToken)
+            .FirstOrDefaultAsync(x => x.Token == request.Token && !x.IsDeleted, cancellationToken)
             ?? throw new NotFoundException("Invitation not found.");
 
         if (invitation.Status != InvitationStatus.Pending)
@@ -490,27 +517,37 @@ public sealed class TeamService : ITeamService
         if (invitation.ExpiresAt <= DateTime.UtcNow)
         {
             invitation.Status = InvitationStatus.Expired;
-            await dbContext.SaveChangesAsync(cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
             throw new BadRequestException("This invitation has expired.");
         }
 
         var existingUser = await _userManager.FindByEmailAsync(invitation.Email);
         ApplicationUser user;
 
+        if (existingUser is not null && existingUser.TenantId != invitation.TenantId)
+            throw new ConflictException("This email is already registered with another organization.");
+
+        // Accepting consumes the seat already reserved by this invitation, so the
+        // invitation must leave Pending in the same save that activates the member.
+        invitation.Status = InvitationStatus.Accepted;
+        invitation.AcceptedAt = DateTime.UtcNow;
+        invitation.UpdatedAt = DateTime.UtcNow;
+
         if (existingUser is not null)
         {
-            if (existingUser.TenantId != invitation.TenantId)
-            {
-                throw new ConflictException("This email is already registered with another organization.");
-            }
-
             user = existingUser;
             user.FirstName = request.FirstName.Trim();
             user.LastName = request.LastName.Trim();
             user.IsActive = true;
             user.JoinedAt = DateTime.UtcNow;
             user.SecurityVersion++;
-            await _userManager.UpdateAsync(user);
+            var updateResult = await _userManager.UpdateAsync(user);
+            if (!updateResult.Succeeded)
+            {
+                invitation.Status = InvitationStatus.Pending;
+                invitation.AcceptedAt = null;
+                throw new BadRequestException(string.Join(", ", updateResult.Errors.Select(x => x.Description)));
+            }
         }
         else
         {
@@ -528,6 +565,8 @@ public sealed class TeamService : ITeamService
             var createResult = await _userManager.CreateAsync(user, request.Password);
             if (!createResult.Succeeded)
             {
+                invitation.Status = InvitationStatus.Pending;
+                invitation.AcceptedAt = null;
                 throw new BadRequestException(string.Join(", ", createResult.Errors.Select(x => x.Description)));
             }
         }
@@ -539,11 +578,6 @@ public sealed class TeamService : ITeamService
             await _sessions.RevokeAllAsync(user.Id, cancellationToken);
         }
 
-        invitation.Status = InvitationStatus.Accepted;
-        invitation.AcceptedAt = DateTime.UtcNow;
-        invitation.UpdatedAt = DateTime.UtcNow;
-        await dbContext.SaveChangesAsync(cancellationToken);
-
         await _auditService.LogAsync(
             "TeamMemberJoined",
             nameof(TeamInvitation),
@@ -551,6 +585,13 @@ public sealed class TeamService : ITeamService
             null,
             RbacAuditService.Serialize(new { invitation.Email, invitation.Role.Name }),
             cancellationToken);
+    }
+
+    private static bool IsPendingInvitationCollision(DbUpdateException exception)
+    {
+        var message = exception.InnerException?.Message ?? exception.Message;
+        return message.Contains("IX_TeamInvitations_OnePendingEmail", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("duplicate", StringComparison.OrdinalIgnoreCase);
     }
 
     private Guid RequireTenantId() =>

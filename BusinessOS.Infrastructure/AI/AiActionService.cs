@@ -325,7 +325,7 @@ public sealed class AiActionService : IAiActionService
             var command = new CreateInvoiceFromOrderCommand(
                 OrderId: orderId.Value,
                 DueDate: DateTime.UtcNow.AddDays(30),
-                Notes: "Created via BusinessOS AI assistant");
+                Notes: "Created via Navla");
 
             var id = await _mediator.Send(command, cancellationToken);
 

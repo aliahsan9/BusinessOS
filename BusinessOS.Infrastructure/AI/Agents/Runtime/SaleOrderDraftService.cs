@@ -14,7 +14,7 @@ public interface ISaleOrderDraftService
 }
 
 /// <summary>
-/// Binds a sale draft to tenant records before Sophia asks for confirmation or creates the order.
+/// Binds a sale draft to tenant records before Navla asks for confirmation or creates the order.
 /// </summary>
 public sealed class SaleOrderDraftService : ISaleOrderDraftService
 {
@@ -316,6 +316,11 @@ public sealed class SaleOrderDraftService : ISaleOrderDraftService
         pending.Slots = slots;
         pending.AwaitingConfirmation = awaitingConfirmation;
         pending.NextField = nextField;
+        // Catalog binding adds customer and product ids after the clarifier first stamped the draft.
+        // The fingerprint the user confirms has to be that bound draft, or a plain "yes" looks like a changed order.
+        pending.ConfirmationFingerprint = awaitingConfirmation
+            ? AgentActionClarifier.Fingerprint(slots)
+            : null;
         return new AgentClarificationDecision
         {
             ShouldExecute = false,

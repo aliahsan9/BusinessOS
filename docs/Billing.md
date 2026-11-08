@@ -79,4 +79,4 @@ PKR checkout through JazzCash or EasyPaisa is rejected until a PKR regional pric
 
 ## AI quota
 
-One request is consumed when Sophia accepts a non-empty message. The same client request id does not consume a second unit. A provider failure after acceptance still consumes the unit. Input tokens, output tokens, and estimated provider cost are stored for administrators and are not returned on the tenant usage API. The counter resets at the subscription period boundary.
+One request is consumed when Navla accepts a non-empty message. The same client request id does not consume a second unit. A provider failure after acceptance still consumes the unit. Input tokens, output tokens, and estimated provider cost are stored for administrators and are not returned on the tenant usage API. The counter resets at the subscription period boundary.

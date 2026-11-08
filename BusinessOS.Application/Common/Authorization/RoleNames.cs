@@ -30,6 +30,8 @@ public static class RoleNames
         Manager,
         Employee,
         Accountant,
-        Viewer
+        Viewer,
+        Sales,
+        InventoryManager
     };
 }

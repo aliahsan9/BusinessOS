@@ -129,7 +129,7 @@ public sealed class AgentOnboardingOrchestrator : IAgentOnboardingOrchestrator
         AgentWorkflowDto? workflow = null;
 
         if (workflowId is not null)
-            workflow = await _workflowService.GetAsync(workflowId.Value, cancellationToken);
+            workflow = await _workflowService.GetForUserAsync(workflowId.Value, userId, cancellationToken);
 
         if (workflow is null)
         {

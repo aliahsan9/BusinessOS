@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Infrastructure.AI;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -93,9 +94,9 @@ public sealed class ExceptionHandlingMiddleware
                 null,
                 LogLevel.Warning),
 
-            PlanLimitExceededException planLimit => (
+            PlanLimitExceededException => (
                 StatusCodes.Status402PaymentRequired,
-                planLimit.Message,
+                "Plan limit reached",
                 "https://tools.ietf.org/html/rfc9110#section-15.5.1",
                 null,
                 LogLevel.Warning),
@@ -111,6 +112,13 @@ public sealed class ExceptionHandlingMiddleware
                 StatusCodes.Status400BadRequest,
                 "Invalid request body",
                 "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+                null,
+                LogLevel.Warning),
+
+            OpenAiProviderException openAi => (
+                openAi.Failure.ClientStatusCode,
+                openAi.Failure.ClientMessage,
+                "https://tools.ietf.org/html/rfc9110#section-15.6.1",
                 null,
                 LogLevel.Warning),
 
@@ -151,11 +159,13 @@ public sealed class ExceptionHandlingMiddleware
             Type = type,
             Status = statusCode,
             Title = title,
-            Detail = exception is DbUpdateConcurrencyException
-                ? "This record was changed by someone else. Refresh and try again."
-                : statusCode >= StatusCodes.Status500InternalServerError
-                    ? "An unexpected error occurred."
-                    : exception.Message,
+            Detail = exception switch
+            {
+                DbUpdateConcurrencyException => "This record was changed by someone else. Refresh and try again.",
+                OpenAiProviderException openAiFailure => openAiFailure.Failure.ClientMessage,
+                _ when statusCode >= StatusCodes.Status500InternalServerError => "An unexpected error occurred.",
+                _ => exception.Message
+            },
             Instance = context.Request.Path
         };
 
@@ -166,9 +176,14 @@ public sealed class ExceptionHandlingMiddleware
 
         if (exception is PlanLimitExceededException limit)
         {
+            problem.Extensions["success"] = false;
+            problem.Extensions["code"] = limit.ErrorCode;
             problem.Extensions["resource"] = limit.Resource;
             problem.Extensions["currentUsage"] = limit.CurrentUsage;
             problem.Extensions["maximum"] = limit.Maximum;
+            problem.Extensions["maximumAllowed"] = limit.Maximum;
+            problem.Extensions["remaining"] = limit.Remaining;
+            problem.Extensions["message"] = limit.Message;
             problem.Extensions["upgradeSuggestion"] = limit.UpgradeSuggestion;
         }
 

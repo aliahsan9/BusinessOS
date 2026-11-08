@@ -70,15 +70,31 @@ public sealed class AgentWorkflowService : IAgentWorkflowService
         return Map(run);
     }
 
-    public async Task<AgentWorkflowDto?> GetAsync(
+    public Task<AgentWorkflowDto?> GetAsync(
         Guid workflowId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        FindAsync(workflowId, userId: null, cancellationToken);
+
+    public Task<AgentWorkflowDto?> GetForUserAsync(
+        Guid workflowId,
+        string userId,
+        CancellationToken cancellationToken = default) =>
+        FindAsync(workflowId, userId, cancellationToken);
+
+    private async Task<AgentWorkflowDto?> FindAsync(
+        Guid workflowId,
+        string? userId,
+        CancellationToken cancellationToken)
     {
-        var run = await _context.AgentWorkflowRuns
+        var query = _context.AgentWorkflowRuns
             .AsNoTracking()
             .Include(r => r.Steps)
-            .FirstOrDefaultAsync(r => r.Id == workflowId, cancellationToken);
+            .Where(r => r.Id == workflowId);
 
+        if (!string.IsNullOrWhiteSpace(userId))
+            query = query.Where(r => r.UserId == userId);
+
+        var run = await query.FirstOrDefaultAsync(cancellationToken);
         return run is null ? null : Map(run);
     }
 

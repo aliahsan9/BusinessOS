@@ -2,6 +2,7 @@ using BusinessOS.Application.Features.Agents;
 using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Enums;
 using BusinessOS.Application.Features.AI.Services;
+using BusinessOS.Infrastructure.AI;
 
 namespace BusinessOS.Infrastructure.AI.Copilot;
 
@@ -82,6 +83,17 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
+        if (IsOutOfStockQuery(content))
+        {
+            tools.Add(AiToolName.GetOutOfStock);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.ActionRead,
+                Confidence = 0.94,
+                SuggestedTools = tools
+            };
+        }
+
         if (ConversationLanguage.IsStockOnHandCue(content))
         {
             tools.Add(AiToolName.GetInventorySummary);
@@ -93,11 +105,25 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
+        if (IsPurchaseRecommendationRequest(content))
+        {
+            tools.Add(AiToolName.GetPurchaseRecommendations);
+            tools.Add(AiToolName.GetLowStock);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.Recommendation,
+                Confidence = 0.92,
+                SuggestedTools = tools
+            };
+        }
+
         if (IsLowOrDeadStockRequest(content))
         {
-            if (ContainsAny(content, "dead stock", "slow moving", "unsold", "stale stock"))
+            if (ContainsAny(content, "dead stock", "slow moving", "unsold", "stale stock", "not selling"))
                 tools.Add(AiToolName.GetDeadStock);
-            if (ContainsAny(content, "low stock", "low in stock", "reorder", "running low", "stock alert", "out of stock"))
+            if (ContainsAny(content, "excessive stock", "overstock", "too much stock"))
+                tools.Add(AiToolName.GetInventoryHealth);
+            if (ConversationLanguage.IsLowStockCue(content) || ContainsAny(content, "reorder"))
                 tools.Add(AiToolName.GetLowStock);
 
             if (tools.Count == 0)
@@ -110,18 +136,6 @@ public sealed class AiIntentDetector : IAiIntentDetector
             return new AiIntentDetectionResult
             {
                 Intent = intent,
-                Confidence = 0.92,
-                SuggestedTools = tools
-            };
-        }
-
-        if (IsPurchaseRecommendationRequest(content))
-        {
-            tools.Add(AiToolName.GetPurchaseRecommendations);
-            tools.Add(AiToolName.GetLowStock);
-            return new AiIntentDetectionResult
-            {
-                Intent = AiCopilotIntent.Recommendation,
                 Confidence = 0.92,
                 SuggestedTools = tools
             };
@@ -174,13 +188,29 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
+        // A new question that names its subject is not a follow-up, even in a short chat.
+        var domain = ClassifyBusinessQuestion(content);
+        if (domain is not null)
+            return domain;
+
         if (IsFollowUp(content, memory))
         {
-            tools.AddRange(InferToolsFromMemory(memory));
+            tools.AddRange(InferToolsFromMemory(content, memory));
             return new AiIntentDetectionResult
             {
                 Intent = AiCopilotIntent.FollowUp,
                 Confidence = 0.85,
+                SuggestedTools = tools
+            };
+        }
+
+        if (ContainsAny(content, "hasn't purchased", "has not purchased", "have not purchased", "haven't purchased", "hasn't bought", "dormant customer", "no purchase recently"))
+        {
+            tools.Add(AiToolName.GetCustomers);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.BusinessIntelligence,
+                Confidence = 0.86,
                 SuggestedTools = tools
             };
         }
@@ -205,11 +235,13 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
-        if (ContainsAny(content, "create", "add", "new", "generate", "register"))
+        if (SophiaSpeechActs.AllowsDatabaseWrite(content))
         {
+            var mentionsSalePrice = ContainsAny(content, "sale price", "selling price", "sales price");
             var creatingSaleOrOrder =
                 ContainsAny(content, "create sale", "create order", "new sale", "new order", "sales order", "sale order")
-                || (ContainsAny(content, "sale", "order")
+                || (!mentionsSalePrice
+                    && ContainsAny(content, "sale", "order")
                     && !ContainsAny(content, "purchase", "buy stock", "order stock")
                     && !IsExplicitCreateCustomer(content));
 
@@ -238,7 +270,7 @@ public sealed class AiIntentDetector : IAiIntentDetector
             }
         }
 
-        if (ContainsAny(content, "update", "edit", "change", "modify"))
+        if (SophiaSpeechActs.IsRecordUpdate(content))
         {
             if (ContainsAny(content, "customer", "client")) tools.Add(AiToolName.UpdateCustomer);
             if (ContainsAny(content, "product")) tools.Add(AiToolName.UpdateProduct);
@@ -256,7 +288,7 @@ public sealed class AiIntentDetector : IAiIntentDetector
             }
         }
 
-        if (ContainsAny(content, "delete", "remove"))
+        if (SophiaSpeechActs.IsRecordDelete(content))
         {
             if (ContainsAny(content, "customer", "client")) tools.Add(AiToolName.DeleteCustomer);
             if (ContainsAny(content, "product")) tools.Add(AiToolName.DeleteProduct);
@@ -355,7 +387,7 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
-        if (ContainsAny(content, "create", "add", "new", "generate"))
+        if (SophiaSpeechActs.AllowsDatabaseWrite(content))
         {
             if (IsExplicitCreateCustomer(content)) tools.Add(AiToolName.CreateCustomer);
             if (ContainsAny(content, "create order", "create sale", "new order", "new sale", "sales order")
@@ -374,6 +406,17 @@ public sealed class AiIntentDetector : IAiIntentDetector
                     SuggestedTools = tools
                 };
             }
+        }
+
+        if (ContainsAny(content, "top customer", "best customer", "top customers"))
+        {
+            tools.Add(AiToolName.GetCustomers);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.BusinessIntelligence,
+                Confidence = 0.9,
+                SuggestedTools = tools
+            };
         }
 
         if (ContainsAny(content, "revenue", "sales", "sold", "profit", "growth", "trend", "compare", "monthly", "quarterly", "yearly", "analytics")
@@ -517,15 +560,18 @@ public sealed class AiIntentDetector : IAiIntentDetector
             "create po for", "reorder from low stock", "draft po from low stock");
 
     private static bool IsLowOrDeadStockRequest(string text) =>
-        ContainsAny(text,
-            "low stock", "low in stock", "dead stock", "slow moving", "reorder level",
-            "running low", "stock alert", "out of stock", "unsold", "stale stock",
-            "km stock", "kam stock", "product km", "kon sa product km", "kaun sa product km");
+        ConversationLanguage.IsLowStockCue(text)
+        || ContainsAny(text,
+            "dead stock", "slow moving", "unsold", "stale stock", "not selling",
+            "excessive stock", "overstock", "too much stock");
 
     private static bool IsPurchaseRecommendationRequest(string text) =>
         ContainsAny(text,
             "what should i buy", "what should we buy", "purchase recommend",
-            "reorder recommend", "buying recommend", "suggest purchases", "what to reorder");
+            "reorder recommend", "buying recommend", "suggest purchases", "what to reorder",
+            "reorder first", "should i reorder", "reorder this week",
+            "what products should i add", "products should i add", "add to my inventory",
+            "what should i purchase", "which products should i purchase");
 
     private static bool IsLanguageSwitch(string text) =>
         ContainsPhrase(text, "in english")
@@ -544,7 +590,9 @@ public sealed class AiIntentDetector : IAiIntentDetector
         || ContainsPhrase(text, "what do you do")
         || ContainsPhrase(text, "tell me what you can")
         || ContainsPhrase(text, "change your accent")
-        || ContainsPhrase(text, "your accent");
+        || ContainsPhrase(text, "your accent")
+        || ContainsPhrase(text, "your voice")
+        || ContainsPhrase(text, "change your voice");
 
     private static bool IsHelpRequest(string text)
     {
@@ -585,6 +633,7 @@ public sealed class AiIntentDetector : IAiIntentDetector
             "best selling", "best-selling", "bestseller", "best seller",
             "top product", "top selling", "most sold", "highest selling",
             "which product is best", "popular product", "fastest selling",
+            "most revenue", "generating the most", "product revenue",
             "ziada sale", "zyada sale", "zyada sell", "ziada sell",
             "sab se ziada", "sab se zyada",
             "kon sa product ziada", "kon sa product zyada",
@@ -593,7 +642,8 @@ public sealed class AiIntentDetector : IAiIntentDetector
     private static bool IsTrendQuery(string text) =>
         ContainsAny(text,
             "trend", "future trend", "sales trend", "growth trend",
-            "are sales growing", "is revenue growing", "declining",
+            "are sales growing", "is revenue growing", "declining", "decreased", "decrease",
+            "compare ", "compared to", "compared with", "comparison",
             "compare last month", "vs last month", "versus last",
             "forecast", "what does the future", "momentum");
 
@@ -630,6 +680,9 @@ public sealed class AiIntentDetector : IAiIntentDetector
             || ContainsPhrase(text, "assalam") || ContainsPhrase(text, "assalamualaikum")
             || text.Contains("السلام", StringComparison.OrdinalIgnoreCase)
             || text.Contains("سلام", StringComparison.OrdinalIgnoreCase);
+
+        if (IsHowAreYou(text) && text.Length < 48)
+            return true;
 
         if (!hasGreeting)
             return false;
@@ -707,30 +760,174 @@ public sealed class AiIntentDetector : IAiIntentDetector
             "top customer", "best customer", "by revenue", "products sold",
             "best selling", "bestseller", "top product", "trend");
 
-    private static bool IsFollowUp(string text, AiMemoryStateDto memory) =>
-        !IsCapabilityQuestion(text)
-        && !IsLanguageSwitch(text)
-        && memory.RecentTurns.Count > 0
-        && (ContainsAny(text,
-                "last year", "last month", "what about", "same for", "and for", "how about",
-                "that customer", "them", "those", "which one", "which of", "highest revenue",
-                "based on", "previous", "earlier", "you recommended", "your analysis",
-                "that analysis", "those products", "continue", "summarize our", "what did i ask",
-                "second recommendation", "why did you", "compare that")
-            || (text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length <= 8
-                && (memory.SelectedCustomerId is not null || memory.LastIntent is not null)));
-
-    private static IReadOnlyList<AiToolName> InferToolsFromMemory(AiMemoryStateDto memory)
+    /// <summary>
+    /// Named business questions. These run before follow-up detection so a short invoice
+    /// question cannot inherit the previous turn's sales tool.
+    /// </summary>
+    private static AiIntentDetectionResult? ClassifyBusinessQuestion(string content)
     {
-        if (memory.LastAnalyticsQuery?.Contains("revenue", StringComparison.OrdinalIgnoreCase) == true)
-            return [AiToolName.GetRevenue, AiToolName.GetCustomers];
-        if (memory.LastAnalyticsQuery?.Contains("product", StringComparison.OrdinalIgnoreCase) == true
-            || memory.LastAnalyticsQuery?.Contains("best", StringComparison.OrdinalIgnoreCase) == true)
-            return [AiToolName.GetBestSellingProducts, AiToolName.GetSalesSummary];
+        if (HasPriorReference(content))
+            return null;
+
+        if (ContainsAny(content, "create ", "add a ", "add new", "update ", "delete ", "remove "))
+            return null;
+
+        if (IsBusinessHealthQuestion(content))
+        {
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.BusinessIntelligence,
+                Confidence = 0.94,
+                SuggestedTools = [AiToolName.GetBusinessHealth]
+            };
+        }
+
+        if (ContainsAny(content, "focus today", "what should i focus", "prioritize today", "priorities today", "what should i prioritize", "focus on today"))
+        {
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.DashboardInsight,
+                Confidence = 0.93,
+                SuggestedTools = [AiToolName.GetDailyPriorities]
+            };
+        }
+
+        if (IsInvoiceQuestion(content))
+        {
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.BusinessIntelligence,
+                Confidence = 0.94,
+                SuggestedTools = [AiToolName.GetInvoices]
+            };
+        }
+
+        if (IsRevenueQuestion(content))
+        {
+            var revenueTools = new List<AiToolName> { AiToolName.GetRevenue };
+            if (ContainsAny(content, "profit"))
+                revenueTools.Add(AiToolName.ShowProfit);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.Analytics,
+                Confidence = 0.93,
+                SuggestedTools = revenueTools
+            };
+        }
+
+        if (ContainsAny(content, "how many employees", "employee count", "how many staff", "staff count", "team size"))
+        {
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.BusinessIntelligence,
+                Confidence = 0.9,
+                SuggestedTools = [AiToolName.GetDailyPriorities]
+            };
+        }
+
+        if (ContainsAny(content, "haven't purchased", "has not purchased", "no purchase recently",
+                "outstanding balance", "who owes", "new customers", "most valuable customer"))
+        {
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.BusinessIntelligence,
+                Confidence = 0.9,
+                SuggestedTools = [AiToolName.GetCustomerInsights]
+            };
+        }
+
+        if (ContainsAny(content, "best customer", "top customer", "top customers"))
+        {
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.BusinessIntelligence,
+                Confidence = 0.9,
+                SuggestedTools = [AiToolName.GetCustomers, AiToolName.GetCustomerInsights]
+            };
+        }
+
+        if (ContainsAny(content, "inventory value", "stock value", "days of inventory", "days of stock", "sales velocity", "how much stock should"))
+        {
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.BusinessIntelligence,
+                Confidence = 0.91,
+                SuggestedTools = [AiToolName.GetInventoryHealth]
+            };
+        }
+
+        return null;
+    }
+
+    private static bool HasPriorReference(string text) =>
+        ContainsAny(text,
+            "what about", "how about", "same for", "and for",
+            "which one", "which of", "that customer", "those products", "those invoices",
+            "the second", "highest profit", "owes the most", "owes me the most",
+            "previous", "earlier", "you recommended", "that analysis", "your analysis",
+            "continue", "why did you", "compare that", "what did i ask");
+
+    private static bool IsBusinessHealthQuestion(string text) =>
+        ContainsAny(text,
+            "business health", "health of my business", "health of our business", "health of the business",
+            "how is my business", "how is our business", "how is the business",
+            "is my business doing", "is our business doing", "doing well",
+            "کاروبار کیسا", "بزنس کیسا", "business kaisa", "business kaisay");
+
+    private static bool IsInvoiceQuestion(string text) =>
+        ContainsAny(text, "overdue invoice", "unpaid invoice", "outstanding invoice", "show invoice", "list invoice", "my invoices", "our invoices")
+        || (ContainsAny(text, "overdue", "past due") && ContainsAny(text, "invoice", "bill"))
+        || (ContainsAny(text, "invoice", "انوائس", "فاتور") && ContainsAny(text, "overdue", "unpaid", "outstanding", "past due", "متأخر"));
+
+    private static bool IsRevenueQuestion(string text) =>
+        ContainsAny(text, "revenue", "income", "collected", "cash flow", "cashflow", "how much money", "money have i collected", "money have we collected")
+        && !ContainsAny(text, "best selling", "top selling", "low stock");
+
+    private static bool IsHowAreYou(string text) =>
+        ContainsPhrase(text, "how are you")
+        || ContainsPhrase(text, "how r u")
+        || ContainsPhrase(text, "how's it going")
+        || ContainsPhrase(text, "how is it going");
+
+    private static bool IsFollowUp(string text, AiMemoryStateDto memory)
+    {
+        if (memory.RecentTurns.Count == 0 || IsCapabilityQuestion(text) || IsLanguageSwitch(text))
+            return false;
+
+        if (HasPriorReference(text))
+            return true;
+
+        // A question that already names invoices, stock, or revenue is a new request.
+        return false;
+    }
+
+    private static IReadOnlyList<AiToolName> InferToolsFromMemory(string followUp, AiMemoryStateDto memory)
+    {
+        var prior = memory.LastAnalyticsQuery ?? "";
+        if (ContainsAny(followUp, "profit", "margin"))
+            return [AiToolName.ShowProfit, AiToolName.GetBestSellingProducts];
+        if (ContainsAny(followUp, "owe", "owes", "customer") || ContainsAny(prior, "invoice", "overdue"))
+            return [AiToolName.GetInvoices, AiToolName.GetCustomerInsights];
+        if (ContainsAny(prior, "revenue", "collected", "cash"))
+            return [AiToolName.GetRevenue];
+        if (ContainsAny(prior, "stock", "inventory", "reorder"))
+            return [AiToolName.GetInventoryHealth, AiToolName.GetLowStock];
+        if (ContainsAny(prior, "best", "selling", "product"))
+            return [AiToolName.GetBestSellingProducts];
+        if (ContainsAny(prior, "customer"))
+            return [AiToolName.GetCustomerInsights];
+        if (ContainsAny(prior, "sale", "sold", "order"))
+            return [AiToolName.GetSalesSummary];
         if (memory.SelectedCustomerId is not null)
             return [AiToolName.GetCustomers, AiToolName.GetInvoices];
-        return [AiToolName.GetSalesSummary];
+
+        // No relevant prior subject — do not invent a sales lookup.
+        return [];
     }
+
+    private static bool IsOutOfStockQuery(string text) =>
+        ContainsAny(text, "out of stock", "out-of-stock", "zero stock", "stockout")
+        && !ContainsAny(text, "low stock", "running low", "reorder");
 
     private static bool ContainsAny(string text, params string[] terms) =>
         terms.Any(term => text.Contains(term, StringComparison.OrdinalIgnoreCase));

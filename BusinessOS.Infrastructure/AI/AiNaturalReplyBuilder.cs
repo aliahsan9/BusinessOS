@@ -20,7 +20,7 @@ internal static class AiNaturalReplyBuilder
         string? language = null)
     {
         var lower = message.Trim().ToLowerInvariant();
-        var name = string.IsNullOrWhiteSpace(agentDisplayName) ? "Sophia" : agentDisplayName.Trim();
+        var name = string.IsNullOrWhiteSpace(agentDisplayName) ? "Navla AI" : agentDisplayName.Trim();
         if (AgentLanguages.TryGetConcrete(language, out var replyLanguage))
         {
             var localized = LocalizedSmallTalk(message, lower, name, replyLanguage);
@@ -28,12 +28,21 @@ internal static class AiNaturalReplyBuilder
                 return localized;
         }
 
-        if (lower.Contains("accent") || lower.Contains("change your voice"))
-            return "I speak with the voice selected in this chat. Change it from the voice list, or under Settings → Sophia Voice.";
+        if (IsChatbotDifference(lower))
+            return $"The difference is that I am {name}, tied to this BusinessOS workspace. I can look up your stock, sales, customers, and invoices, and I only create a record after you confirm it. A normal chatbot answers from general text and cannot see your books.";
+
+        if (lower.Contains("business intelligence"))
+            return "Business intelligence means reading what already happened in the business — sales, stock, invoices, and customers — and saying what deserves attention. I use your workspace numbers when you ask for them, and I say so when there is nothing to report.";
+
+        if (lower.Contains("accent") || lower.Contains("change your voice") || lower.Contains("your voice"))
+            return "I speak with the voice selected in this chat. Change it from the voice list, or under Settings → Navla Voice.";
+
+        if (IsHowAreYou(lower))
+            return "I'm doing well, thanks for asking. Ready to help you with your business. What can I do for you?";
 
         if (lower.Contains("thank") || lower.Contains("shukriya") || lower.Contains("shukria"))
         {
-            return "You're welcome. Tell me if you need anything on inventory, orders, customers, or reports.";
+            return "You're welcome. Let me know whenever you need help.";
         }
 
         if (lower.Contains("bye") || lower.Contains("goodbye"))
@@ -53,7 +62,7 @@ internal static class AiNaturalReplyBuilder
         // Short natural greeting — never dump revenue or a long capability brochure.
         if (IsGreeting(lower, message))
         {
-            return $"Hi — I'm {name}. What should we tackle: an order, inventory, or a quick report?";
+            return "Hello. How is your business doing today? What would you like to work on?";
         }
 
         var contextHint = page.Module switch
@@ -88,31 +97,58 @@ internal static class AiNaturalReplyBuilder
         var goodbye = lower.Contains("bye") || lower.Contains("goodbye") || original.Contains("خدا حافظ", StringComparison.Ordinal);
         var greeting = IsGreeting(lower, original);
         if (!thanks && !goodbye && !greeting)
+        {
+            if (language == AgentLanguages.Arabic && (original.Contains("العرب", StringComparison.Ordinal) || lower.Contains("arabic")))
+                return $"حسنًا، سأتحدث معك بالعربية. أنا {name}، ويمكنني مراجعة المبيعات والمخزون والعملاء.";
+            if (language == AgentLanguages.Urdu && (original.Contains("اردو", StringComparison.Ordinal) || lower.Contains("urdu")))
+                return $"ٹھیک ہے، اب میں اردو میں جواب دوں گی۔ میں {name} ہوں۔";
             return null;
+        }
 
         if (language == AgentLanguages.RomanUrdu)
         {
-            if (thanks) return "Koi baat nahi. Sales, stock, ya invoices — jo chahiye batao.";
-            if (goodbye) return $"Allah hafiz. Main {name} hoon, jab chaho wapas aa jana.";
-            return $"Hi, main {name} hoon. Order, stock, ya is month ki sales — kya dekhna hai?";
+            if (thanks) return "Koi baat nahi. Jab bhi madad chahiye, bata dena.";
+            if (goodbye) return "Allah hafiz. Jab chaho wapas aa jana.";
+            return "Hello. Aaj business kaisa chal raha hai? Kis cheez par kaam karna hai?";
         }
 
         if (language == AgentLanguages.Urdu)
         {
-            if (thanks) return "کوئی بات نہیں۔ سیلز، اسٹاک، یا انوائس میں سے جو دیکھنا ہو بتائیں۔";
-            if (goodbye) return $"اللہ حافظ۔ میں {name} ہوں، جب چاہیں واپس آ جائیں۔";
-            return $"سلام، میں {name} ہوں۔ آرڈر، اسٹاک، یا اس مہینے کی سیلز — کیا دیکھنا ہے؟";
+            if (thanks) return "کوئی بات نہیں۔ جب بھی مدد چاہیے بتائیں۔";
+            if (goodbye) return "اللہ حافظ۔ جب چاہیں واپس آ جائیے۔";
+            return "سلام۔ آج کاروبار کیسا چل رہا ہے؟ کس کام میں مدد چاہیے؟";
         }
 
         if (language == AgentLanguages.Arabic)
         {
-            if (thanks) return "على الرحب. قل لي إن احتجت المبيعات أو المخزون أو الفواتير.";
-            if (goodbye) return $"إلى اللقاء. أنا {name}، أعود متى احتجت.";
-            return $"مرحباً، أنا {name}. هل نراجع طلبًا أو المخزون أو مبيعات هذا الشهر؟";
+            if (thanks) return "على الرحب والسعة. أخبرني متى احتجت مساعدة.";
+            if (goodbye) return "إلى اللقاء. أعود متى احتجت.";
+            return "مرحباً. كيف يسير عملك اليوم؟ بماذا تحب أن أساعدك؟";
         }
 
         return null;
     }
+
+    internal static bool IsStandaloneSmallTalk(string message)
+    {
+        var text = message.Trim();
+        if (text.Length == 0 || text.Length > 80)
+            return false;
+
+        var lower = text.ToLowerInvariant();
+        if (lower.Contains("invoice") || lower.Contains("stock") || lower.Contains("revenue")
+            || lower.Contains("sale") || lower.Contains("order") || lower.Contains("customer")
+            || lower.Contains("product") || lower.Contains("profit") || lower.Contains("employee")
+            || text.Contains("انوائس") || text.Contains("اسٹاک") || text.Contains("سيل"))
+            return false;
+
+        return IsGreeting(lower, text) || IsHowAreYou(lower)
+            || lower.Contains("thank") || lower.Contains("shukriya") || lower.Contains("shukria")
+            || lower is "bye" or "goodbye" || lower.StartsWith("bye ") || lower.StartsWith("goodbye");
+    }
+
+    private static bool IsHowAreYou(string lower) =>
+        lower.Contains("how are you") || lower.Contains("how r u") || lower.Contains("how's it going");
 
     private static bool IsGreeting(string lower, string original) =>
         lower is "hi" or "hello" or "hey" or "salam" or "assalam" or "assalamualaikum"
@@ -127,6 +163,9 @@ internal static class AiNaturalReplyBuilder
         var text = lower.Trim().TrimEnd('!', '.', '?');
         return text is "cancel" or "stop" or "never mind" or "nevermind" or "nahi" or "nai" or "mat karo" or "rehne do";
     }
+
+    private static bool IsChatbotDifference(string lower) =>
+        lower.Contains("difference") && (lower.Contains("chatbot") || lower.Contains("chat bot"));
 
     private static bool IsOpenQuestion(string lower)
     {
@@ -224,7 +263,7 @@ internal static class AiNaturalReplyBuilder
         var lower = message.ToLowerInvariant();
 
         if (lower.Contains("urdu"))
-            return "Theek hai — ab main Urdu mein jawab dun gi. Roman Urdu bhi theek hai.";
+            return "ٹھیک ہے، اب میں اردو رسم الخط میں جواب دوں گی۔ رومن اردو بھی ٹھیک ہے۔";
 
         if (lower.Contains("arabic") || lower.Contains("عربي"))
             return "حسناً، سأجيب بالعربية.";
@@ -233,10 +272,10 @@ internal static class AiNaturalReplyBuilder
             return "I'll reply in English.";
 
         if (lower.Contains("who are you") || lower.Contains("what can you") || lower.Contains("what you can") || lower.Contains("what do you do") || lower.Contains("your name"))
-            return "I'm Sophia, the business analyst in BusinessOS. I can look up sales, stock, invoices, and customers, and I can create customers, products, and orders after you confirm the details. Ask in English, Urdu, or Arabic. Say \"cancel\" if you want me to drop something I started.";
+            return "I'm Navla, your intelligent AI business assistant in BusinessOS. I can look up sales, stock, invoices, and customers, and I can create customers, products, and orders after you confirm the details. Ask in English, Urdu, or Arabic. Say \"cancel\" if you want me to drop something I started.";
 
         if (ContainsWord(lower, "accent") || ContainsWord(lower, "voice"))
-            return "I speak with the voice selected in this chat. Change it from the voice list here, or under Settings → Sophia Voice. Spoken replies are AI-generated.";
+            return "I speak with the voice selected in this chat. Change it from the voice list here, or under Settings → Navla Voice. Spoken replies are AI-generated.";
 
         if (lower.Contains("customer"))
             return "To create a customer, go to Customers → New Customer. Enter name, email, phone, and address. Customers link to orders, invoices, and analytics.";

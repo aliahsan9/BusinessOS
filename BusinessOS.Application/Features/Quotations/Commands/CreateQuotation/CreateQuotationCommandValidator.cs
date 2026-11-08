@@ -48,7 +48,7 @@ public sealed class CreateQuotationCommandValidator : AbstractValidator<CreateQu
                 .WithMessage($"Quantity cannot exceed {QuotationConstants.MaxItemQuantity}.");
 
             item.RuleFor(x => x.UnitPrice)
-                .GreaterThanOrEqualTo(0).WithMessage("Unit price cannot be negative.");
+                .GreaterThan(0).WithMessage("Unit price must be greater than zero.");
         });
     }
 }

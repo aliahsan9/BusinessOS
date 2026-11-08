@@ -21,6 +21,15 @@ public sealed class AgentPendingAction
     /// <summary>Refreshed whenever the owner adds a detail. Abandoned drafts expire after <see cref="PendingLifetime"/>.</summary>
     public DateTime UpdatedAtUtc { get; set; }
 
+    /// <summary>Authenticated user who started the draft. A confirmation from another user is ignored.</summary>
+    public string? UserId { get; set; }
+
+    /// <summary>Tenant that owns the draft. Never taken from the model.</summary>
+    public Guid? TenantId { get; set; }
+
+    /// <summary>Slot fingerprint shown to the user. A confirmation executes only this exact set.</summary>
+    public string? ConfirmationFingerprint { get; set; }
+
     public static readonly TimeSpan PendingLifetime = TimeSpan.FromHours(2);
 
     public static bool IsExpired(AgentPendingAction pending, DateTime utcNow)
@@ -40,6 +49,7 @@ public sealed class AgentClarificationDecision
     public JsonElement? Args { get; init; }
     public AiToolName Tool { get; init; }
     public IReadOnlyList<AiSuggestionDto> Suggestions { get; init; } = [];
+    public AiPendingConfirmationDto? Confirmation { get; init; }
 }
 
 /// <summary>
@@ -88,7 +98,8 @@ public static class AgentActionClarifier
         or AiToolName.AdjustInventory or AiToolName.ReceiveStock
         or AiToolName.CreatePurchaseOrder or AiToolName.CreatePurchaseOrderDraft
         or AiToolName.ApprovePurchaseOrder or AiToolName.ReceivePurchase
-        or AiToolName.UpdateCompanyProfile or AiToolName.UpdateTaxDefaults;
+        or AiToolName.UpdateCompanyProfile or AiToolName.UpdateTaxDefaults
+        or AiToolName.CreateProject or AiToolName.CreateTask;
 
     public static AgentPendingAction? Read(string? json)
     {
@@ -121,6 +132,8 @@ public static class AgentActionClarifier
             return false;
         if (CancelPhrases.Contains(normalized))
             return true;
+        if (IsDeferral(message))
+            return false;
 
         // "Don't create", "please cancel that", "stop it".
         if (normalized.Length > 48)
@@ -138,6 +151,8 @@ public static class AgentActionClarifier
     {
         if (IsCancel(message) || IsSmallTalk(message))
             return true;
+        if (IsDraftReview(message) || IsDeferral(message))
+            return false;
 
         var normalized = Normalize(message);
         if (normalized.Length == 0)
@@ -165,7 +180,9 @@ public static class AgentActionClarifier
 
     public static bool IsDifferentCommand(string message, AiToolName pendingTool)
     {
-        if (IsPureConfirmation(message) || IsCancel(message) || IsSmallTalk(message))
+        if (IsPureConfirmation(message) || IsCancel(message) || IsSmallTalk(message) || IsDraftReview(message) || IsDeferral(message))
+            return false;
+        if (pendingTool == AiToolName.CreateSale && IsSaleLineDetail(message))
             return false;
 
         var lower = message.ToLowerInvariant();
@@ -210,6 +227,29 @@ public static class AgentActionClarifier
         if (!string.IsNullOrWhiteSpace(pending?.NextField))
             AssignBare(pending.NextField, message, slots);
 
+        if (IsDraftReview(message))
+        {
+            var review = new AgentPendingAction
+            {
+                Tool = tool,
+                Slots = slots,
+                OriginalRequest = original,
+                NextField = pending?.NextField,
+                UpdatedAtUtc = DateTime.UtcNow
+            };
+            var stillMissing = Missing(tool, slots, state);
+            review.NextField = stillMissing.Count > 0 ? stillMissing[0] : null;
+            review.AwaitingConfirmation = stillMissing.Count == 0;
+            if (review.AwaitingConfirmation)
+                review.ConfirmationFingerprint = Fingerprint(slots);
+            var reviewText = DescribeDraft(tool, slots);
+            if (stillMissing.Count > 0)
+                reviewText += "\n" + QuestionForMissing(tool, stillMissing, slots);
+            else
+                reviewText += "\nSay create it when you want me to save this.";
+            return Ask(tool, review, reviewText, includeCancelOnly: stillMissing.Count > 0);
+        }
+
         var draft = new AgentPendingAction
         {
             Tool = tool,
@@ -230,9 +270,27 @@ public static class AgentActionClarifier
         var waiting = pending?.AwaitingConfirmation == true;
         if (waiting && IsPureConfirmation(message))
         {
+            var presented = pending?.ConfirmationFingerprint;
+            var current = Fingerprint(slots);
+            if (!string.IsNullOrEmpty(presented) && !string.Equals(presented, current, StringComparison.Ordinal))
+            {
+                draft.Slots = slots;
+                draft.AwaitingConfirmation = true;
+                draft.NextField = null;
+                draft.ConfirmationFingerprint = current;
+                var changed = ConfirmationCopy(tool, slots);
+                return Ask(
+                    tool,
+                    draft,
+                    "Those details changed, so I need you to confirm this version.\n" + changed.Text,
+                    includeCancelOnly: false,
+                    changed.Card);
+            }
+
             ApplyConfirmedAssumptions(tool, slots);
             draft.Slots = slots;
             draft.AwaitingConfirmation = true;
+            draft.ConfirmationFingerprint = presented ?? current;
             return new AgentClarificationDecision
             {
                 ShouldExecute = true,
@@ -245,14 +303,17 @@ public static class AgentActionClarifier
 
         draft.AwaitingConfirmation = true;
         draft.NextField = null;
-        return Ask(tool, draft, Confirmation(tool, slots), includeCancelOnly: false);
+        draft.ConfirmationFingerprint = Fingerprint(slots);
+        var confirmation = ConfirmationCopy(tool, slots);
+        return Ask(tool, draft, confirmation.Text, includeCancelOnly: false, confirmation.Card);
     }
 
     private static AgentClarificationDecision Ask(
         AiToolName tool,
         AgentPendingAction draft,
         string question,
-        bool includeCancelOnly)
+        bool includeCancelOnly,
+        AiPendingConfirmationDto? confirmation = null)
     {
         IReadOnlyList<AiSuggestionDto> suggestions = includeCancelOnly
             ? [new AiSuggestionDto { Label = "Cancel", Message = "Cancel" }]
@@ -268,8 +329,26 @@ public static class AgentActionClarifier
             Tool = tool,
             Question = question,
             PendingJson = JsonSerializer.Serialize(draft, JsonOptions),
-            Suggestions = suggestions
+            Suggestions = suggestions,
+            Confirmation = confirmation
         };
+    }
+
+    public static string Fingerprint(IReadOnlyDictionary<string, string?> slots) =>
+        string.Join("|", slots
+            .Where(pair => !string.IsNullOrWhiteSpace(pair.Value))
+            .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(pair => $"{pair.Key.ToLowerInvariant()}={pair.Value!.Trim()}"));
+
+    public static string? StampOwner(string? json, string? userId, Guid? tenantId)
+    {
+        var pending = Read(json);
+        if (pending is null)
+            return string.IsNullOrWhiteSpace(json) ? null : json;
+
+        pending.UserId = userId;
+        pending.TenantId = tenantId;
+        return Write(pending);
     }
 
     private static void Absorb(
@@ -626,13 +705,6 @@ public static class AgentActionClarifier
                 slots["postalCode"] = "";
         }
 
-        if (tool == AiToolName.CreateProduct)
-        {
-            if (!Has(slots, "salePrice") && Has(slots, "costPrice"))
-                slots["salePrice"] = Get(slots, "costPrice");
-            if (!Has(slots, "costPrice") && Has(slots, "salePrice"))
-                slots["costPrice"] = Get(slots, "salePrice");
-        }
     }
 
     private static List<string> Missing(AiToolName tool, Dictionary<string, string?> slots, AgentExecutionState state)
@@ -656,8 +728,9 @@ public static class AgentActionClarifier
                 break;
             case AiToolName.CreateProduct:
                 if (!Has(slots, "name")) missing.Add("name");
-                if (!Has(slots, "salePrice") && !Has(slots, "costPrice")) missing.Add("prices");
-                else if (!Has(slots, "salePrice")) missing.Add("salePrice");
+                if (!Has(slots, "sku")) missing.Add("sku");
+                if (!Has(slots, "salePrice")) missing.Add("salePrice");
+                if (!Has(slots, "costPrice")) missing.Add("costPrice");
                 break;
             case AiToolName.CreateSupplier:
                 if (!Has(slots, "name")) missing.Add("supplierName");
@@ -754,10 +827,12 @@ public static class AgentActionClarifier
 
         if (tool == AiToolName.CreateProduct)
         {
-            if (missing.Contains("name") && missing.Contains("prices"))
-                return "I can add that product. What is the name, sale price, and cost price?\nExample: Wireless Mouse, sale 2500, cost 1800.";
-            if (missing.Contains("prices") || missing.Contains("salePrice"))
-                return $"What sale price and cost price should I use for {Get(slots, "name") ?? "this product"}?\nExample: sale 2500, cost 1800.";
+            if (missing.Contains("name"))
+                return "I can add that product, but I need the name, SKU, sale price, and cost price. I won't invent any of them.\nExample: Dell Laptop, SKU DELL-001, sale price 170000, cost price 150000.";
+            if (missing.Contains("sku"))
+                return $"What SKU should I use for {Get(slots, "name") ?? "this product"}? I won't generate one.";
+            if (missing.Contains("salePrice") || missing.Contains("costPrice"))
+                return $"What sale price and cost price should I use for {Get(slots, "name") ?? "this product"}?\nExample: sale price 170000, cost price 150000.";
             return "What should I name this product?";
         }
 
@@ -783,6 +858,47 @@ public static class AgentActionClarifier
         return "I need a bit more detail before I do that: " + HumanList(missing.Select(Label)) + ".";
     }
 
+    private readonly record struct ConfirmCopy(string Text, AiPendingConfirmationDto? Card);
+
+    private static ConfirmCopy ConfirmationCopy(AiToolName tool, Dictionary<string, string?> slots)
+    {
+        if (tool != AiToolName.CreateProduct)
+            return new ConfirmCopy(Confirmation(tool, slots), null);
+
+        var name = Get(slots, "name") ?? "";
+        var sku = Get(slots, "sku") ?? "";
+        var cost = Money(Get(slots, "costPrice"));
+        var sale = Money(Get(slots, "salePrice"));
+        return new ConfirmCopy(
+            ProductConfirmationText(slots),
+            new AiPendingConfirmationDto
+            {
+                Action = "Create product",
+                Fields =
+                [
+                    new AiConfirmationFieldDto { Label = "Product name", Value = name },
+                    new AiConfirmationFieldDto { Label = "SKU", Value = sku },
+                    new AiConfirmationFieldDto { Label = "Cost price", Value = cost },
+                    new AiConfirmationFieldDto { Label = "Sale price", Value = sale }
+                ]
+            });
+    }
+
+    private static string ProductConfirmationText(Dictionary<string, string?> slots) =>
+        "I'll create this product only after you confirm.\n"
+        + $"Name: {Get(slots, "name")}\n"
+        + $"SKU: {Get(slots, "sku")}\n"
+        + $"Cost price: {Money(Get(slots, "costPrice"))}\n"
+        + $"Sale price: {Money(Get(slots, "salePrice"))}\n"
+        + "Should I create this product?";
+
+    private static string Money(string? raw)
+    {
+        if (decimal.TryParse(raw, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var amount))
+            return amount.ToString("#,##0.##", System.Globalization.CultureInfo.InvariantCulture);
+        return raw ?? "";
+    }
+
     private static string Confirmation(AiToolName tool, Dictionary<string, string?> slots)
     {
         var lines = new List<string>();
@@ -798,12 +914,9 @@ public static class AgentActionClarifier
                     : "Country: Pakistan, unless you want a different one");
                 return "Here's the customer I'll create:\n" + Bullet(lines) + "\nShould I create this customer?";
             case AiToolName.CreateSale:
-                return $"I'll create an order for {DisplayCustomer(slots)}: {Get(slots, "productName") ?? "the selected product"} × {Get(slots, "quantity")}.\nShould I go ahead?";
+                return $"I'll create an order for {DisplayCustomer(slots)}: {Get(slots, "productName") ?? "the selected product"} × {Get(slots, "quantity")}.{SaleTotalClause(slots)}\nShould I go ahead?";
             case AiToolName.CreateProduct:
-                var costNote = Has(slots, "costPrice")
-                    ? Get(slots, "costPrice")
-                    : $"{Get(slots, "salePrice")} (same as the sale price, unless you tell me otherwise)";
-                return $"I'll create product {Get(slots, "name")}.\nSale price: {Get(slots, "salePrice") ?? Get(slots, "costPrice")}\nCost price: {costNote}\nI'll generate a SKU if you don't give one.\nShould I create this product?";
+                return ProductConfirmationText(slots);
             case AiToolName.CreateSupplier:
                 return $"I'll create supplier {Get(slots, "name")}.\nPhone: {Get(slots, "phone")}\nEmail: {Get(slots, "email")}\nAddress: {Get(slots, "address")}\nShould I save this supplier?";
             case AiToolName.DeleteCustomer:
@@ -822,6 +935,10 @@ public static class AgentActionClarifier
             case AiToolName.ReceiveStock:
                 var verb = tool == AiToolName.ReceiveStock ? "receive" : "adjust";
                 return $"I'll {verb} {Get(slots, "quantity")} units of {Get(slots, "productName") ?? "the selected product"}.\nShould I go ahead?";
+            case AiToolName.CreateProject:
+                return "I'll create that project. This can reserve stock on a new order.\nShould I go ahead?";
+            case AiToolName.CreateTask:
+                return "I'll create that task.\nShould I go ahead?";
             default:
                 return "I have what I need for this change.\nShould I go ahead?";
         }
@@ -878,6 +995,60 @@ public static class AgentActionClarifier
 
     private static string ConfirmMessage(AiToolName tool) => ConfirmLabel(tool);
 
+    private static bool IsDeferral(string message)
+    {
+        var normalized = Normalize(message);
+        return normalized.Contains("yet", StringComparison.Ordinal)
+            || normalized.Contains("not now", StringComparison.Ordinal)
+            || normalized.Contains("hold on", StringComparison.Ordinal);
+    }
+
+    private static bool IsDraftReview(string message)
+    {
+        var lower = message.ToLowerInvariant();
+        if (Regex.IsMatch(lower, @"\b(total|subtotal|amount|details|draft|summary)\b"))
+            return true;
+        return Regex.IsMatch(lower, @"\b(show|see|review|display)\b")
+            && Regex.IsMatch(lower, @"\b(detail|details|draft|customer|order|this)\b");
+    }
+
+    private static bool IsSaleLineDetail(string message)
+    {
+        var lower = message.ToLowerInvariant();
+        if (Regex.IsMatch(lower, @"\b(new product|create product|add product)\b"))
+            return false;
+        return Regex.IsMatch(lower, @"\b(unit|units|qty|quantity|each)\b")
+            || Regex.IsMatch(lower, @"\badd\b.+\bproduct\b");
+    }
+
+    private static string SaleTotalClause(Dictionary<string, string?> slots)
+    {
+        if (!SaleOrderLanguage.TryGetSlotQuantity(slots, out var quantity))
+            return "";
+        var raw = Get(slots, "unitPrice") ?? Get(slots, "price");
+        if (!decimal.TryParse(raw, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var price))
+            return "";
+        var total = quantity * price;
+        return $" Unit price {price.ToString("#,##0", System.Globalization.CultureInfo.InvariantCulture)}, total {total.ToString("#,##0", System.Globalization.CultureInfo.InvariantCulture)}.";
+    }
+
+    private static string DescribeDraft(AiToolName tool, Dictionary<string, string?> slots)
+    {
+        if (tool == AiToolName.CreateCustomer)
+        {
+            return "Here are the customer details so far:\n"
+                + $"Name: {DisplayPerson(slots)}\n"
+                + $"Phone: {Get(slots, "phone") ?? "(not set)"}\n"
+                + $"Email: {Get(slots, "email") ?? "(not set)"}\n"
+                + $"Address: {Get(slots, "address") ?? Get(slots, "city") ?? "(not set)"}";
+        }
+
+        if (tool == AiToolName.CreateSale)
+            return $"Order draft for {DisplayCustomer(slots)}: {Get(slots, "productName") ?? "(product not set)"} × {Get(slots, "quantity") ?? "(quantity not set)"}.{SaleTotalClause(slots)}";
+
+        return "Here is what I have so far.";
+    }
+
     private static AiToolName? GuessCommandTool(string lower)
     {
         var delete = lower.Contains("delete") || lower.Contains("remove");
@@ -916,7 +1087,7 @@ public static class AgentActionClarifier
     {
         var match = Regex.Match(
             message,
-            @"(?:change|update|correct|actually|instead)\s+(?:the\s+)?(phone|mobile|email|address|city|name)\s+(?:to|is|:)\s*([^\n.]+)",
+            @"(?:change|update|correct|actually|instead)\s+(?:his|her|their|the|my)?\s*(phone|mobile|email|address|city|name)\s+(?:to|is|:)\s*([^\n.]+)",
             RegexOptions.IgnoreCase);
         if (!match.Success)
             return;
@@ -936,6 +1107,8 @@ public static class AgentActionClarifier
                 break;
             case "address":
                 slots["address"] = value;
+                if (IsKnownCity(value))
+                    slots["city"] = value;
                 break;
             case "city":
                 slots["city"] = value;
@@ -949,9 +1122,17 @@ public static class AgentActionClarifier
 
     private static void TakeLabeled(string message, Dictionary<string, string?> slots, string slot, string label)
     {
-        var match = Regex.Match(message, $@"(?:{label})\s*(?:is|:)?\s*([^,\n.]+)", RegexOptions.IgnoreCase);
-        if (match.Success)
-            slots[slot] = match.Groups[1].Value.Trim();
+        var match = Regex.Match(
+            message,
+            $@"(?<![\p{{L}}\p{{N}}]){label}(?![\p{{L}}\p{{N}}])\s*(?:is|:)?\s*([^,\n.]+)",
+            RegexOptions.IgnoreCase);
+        if (!match.Success)
+            return;
+        var value = match.Groups[1].Value.Trim();
+        if (value.StartsWith("to ", StringComparison.OrdinalIgnoreCase))
+            value = value[3..].Trim();
+        if (value.Length > 0)
+            slots[slot] = value;
     }
 
     private static bool LooksLikeName(string? text)
@@ -1017,6 +1198,15 @@ public static class AgentActionClarifier
         if (key.Equals("customerName", StringComparison.OrdinalIgnoreCase)
             && !message.Contains(newValue, StringComparison.OrdinalIgnoreCase))
             return true;
+
+        if (key.Equals("firstName", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("lastName", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("fullName", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("name", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!Regex.IsMatch(message, @"\b(named|called|name\s+is)\b", RegexOptions.IgnoreCase))
+                return true;
+        }
 
         if (key.Equals("productName", StringComparison.OrdinalIgnoreCase) && IsPureConfirmation(message))
             return true;

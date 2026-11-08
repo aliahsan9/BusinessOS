@@ -5,7 +5,7 @@ using BusinessOS.Application.Features.Agents.Enums;
 namespace BusinessOS.Application.Features.Agents;
 
 /// <summary>
-/// Picks Sophia's reply language from the current message, an explicit switch, or the
+/// Picks Navla's reply language from the current message, an explicit switch, or the
 /// conversation preference. Routing cues let existing English tool matchers understand
 /// Urdu, Roman Urdu, and Arabic without a second intent model.
 /// </summary>
@@ -31,6 +31,10 @@ public static partial class ConversationLanguage
 
         if (RomanScore(text) >= 2)
             return new Resolution(AgentLanguages.RomanUrdu, false);
+
+        // "Hi" and "thank you" are English even when the previous turn was Urdu.
+        if (IsEnglishSmallTalk(text))
+            return new Resolution(AgentLanguages.English, false);
 
         if (IsSubstantialEnglish(text))
             return new Resolution(AgentLanguages.English, false);
@@ -86,14 +90,22 @@ public static partial class ConversationLanguage
         else if (MentionsThisMonth(text))
             cues.Add("this month");
 
-        if (ContainsAny(text, "سیلز", "سيلز", "فروخت", "مبيعات", "مبیع"))
+        if (ContainsAny(text, "سیلز", "سيلز", "فروخت", "مبيعات", "مبیع", "سیل"))
             cues.Add("sales");
         if (ContainsAny(text, "آمدنی", "إيراد", "ایراد"))
             cues.Add("revenue");
         if (ContainsAny(text, "منافع", "ربح", "profit"))
             cues.Add("profit");
-        if (ContainsAny(text, "کم اسٹاک", "لو اسٹاک", "low stock", "out of stock"))
+        if (IsOutOfStockCue(text))
+            cues.Add("out of stock");
+        if (IsLowStockCue(text))
             cues.Add("low stock");
+        if (IsAvailableProductsCue(text))
+            cues.Add("inventory stock");
+        if (ContainsAny(text, "ٹاپ کسٹمر", "top customer"))
+            cues.Add("top customer");
+        if (ContainsAny(text, "آج", "اليوم"))
+            cues.Add("today");
         if (ContainsAny(text, "انوائس", "فاتورة", "فواتير"))
             cues.Add("invoice");
         if (ContainsAny(text, "متأخر", "اوورڈیو", "overdue", "unpaid"))
@@ -134,13 +146,48 @@ public static partial class ConversationLanguage
             return false;
         if (ContainsAny(text, "low stock", "out of stock", "dead stock", "km stock", "kam stock", "کم اسٹاک"))
             return false;
+        if (IsOutOfStockCue(text))
+            return false;
 
         return ContainsAny(text,
             "kitna stock", "kitni stock", "kitne stock", "stock baqi", "baqi stock",
             "stock left", "stock remaining", "remaining stock", "how much stock",
             "کتنا اسٹاک", "اسٹاک باقی", "کتنا سٹاک",
-            "كم المخزون", "المخزون المتبقي", "المخزون");
+            "كم المخزون", "المخزون المتبقي", "المخزون",
+            "inventory stock")
+            || IsAvailableProductsCue(text);
     }
+
+    /// <summary>Reorder-threshold questions, including Urdu, Roman Urdu, and Arabic word order.</summary>
+    public static bool IsLowStockCue(string? text) =>
+        ContainsAny(text,
+            "low stock", "low in stock", "running low", "reorder level", "stock alert",
+            "km stock", "kam stock", "stock kam", "stock km", "stock low",
+            "product km", "product kam", "kon sa product km", "kaun sa product km",
+            "کم اسٹاک", "اسٹاک کم", "لو اسٹاک", "اسٹاک ختم",
+            "أوشكت", "اوشكت", "النفاد", "نفاد", "مخزون منخفض", "أوشك على النفاد");
+
+    /// <summary>Products with zero units, including Roman Urdu "stock mein nahi".</summary>
+    public static bool IsOutOfStockCue(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+        if (ContainsAny(text, "low stock", "running low", "reorder", "ختم ہونے", "khatam hone", "about to run out"))
+            return false;
+
+        return ContainsAny(text,
+            "out of stock", "out-of-stock", "zero stock", "stockout",
+            "stock mein nahi", "stock main nahi", "stock mein nahin", "stock main nahin",
+            "stock nahi hai", "stock nahin hai", "stock mein nahi hain",
+            "اسٹاک نہیں", "اسٹاک نهي");
+    }
+
+    /// <summary>Questions about how many products are on hand, including Arabic.</summary>
+    public static bool IsAvailableProductsCue(string? text) =>
+        ContainsAny(text,
+            "products available", "available products", "how many products",
+            "kitne product", "kitni product", "products in stock",
+            "المنتجات المتوفرة", "المنتجات المتوفر", "عدد المنتجات");
 
     public static bool IsCreateCustomerCue(string? text) =>
         ContainsAny(text,
@@ -218,6 +265,14 @@ public static partial class ConversationLanguage
             ? AgentLanguages.Urdu
             : AgentLanguages.Arabic;
         return true;
+    }
+
+    private static bool IsEnglishSmallTalk(string text)
+    {
+        var trimmed = text.Trim().TrimEnd('!', '.', '?', ' ').ToLowerInvariant();
+        return trimmed is "hi" or "hello" or "hey" or "thanks" or "thank you" or "thankyou"
+            or "ok" or "okay" or "how are you" or "how are you doing" or "how r u"
+            or "good morning" or "good afternoon" or "good evening" or "bye" or "goodbye";
     }
 
     private static bool IsSubstantialEnglish(string text)

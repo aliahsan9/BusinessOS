@@ -107,27 +107,56 @@ public sealed class CreateProductTool : AiToolBase
         {
             var name = AgentToolArgHelpers.Str(args, "name");
             if (string.IsNullOrWhiteSpace(name))
-                return Fail("Product name is required.");
+                return Fail("Product name is required. I did not create a product.");
 
-            var categoryId = AgentToolArgHelpers.GuidVal(args, "categoryId")
-                ?? context.ExecutionState?.CategoryId
-                ?? await _db.Categories.AsNoTracking().Select(c => (Guid?)c.Id).FirstOrDefaultAsync(cancellationToken);
+            var sku = AgentToolArgHelpers.Str(args, "sku");
+            if (string.IsNullOrWhiteSpace(sku))
+                return Fail("SKU is required. I will not invent one, and I did not create a product.");
 
-            if (categoryId is null)
-                return Fail("No product category found. Create a category first.");
-
-            var sku = AgentToolArgHelpers.Str(args, "sku") ?? $"SKU-{Guid.NewGuid().ToString("N")[..8]}".ToUpperInvariant();
             var cost = AgentToolArgHelpers.Dec(args, "costPrice");
-            var sale = AgentToolArgHelpers.Dec(args, "salePrice") ?? cost;
+            var sale = AgentToolArgHelpers.Dec(args, "salePrice");
             if (sale is null or <= 0 || cost is null or <= 0)
             {
-                return Fail("I need a sale price and a cost price greater than zero before I create this product. Example: sale 2500, cost 1800.");
+                return Fail("I need a sale price and a cost price greater than zero. I did not create a product.");
             }
 
-            var reorder = AgentToolArgHelpers.Int(args, "reorderLevel") ?? 10;
+            var categories = await _db.Categories.AsNoTracking()
+                .OrderBy(c => c.Name)
+                .Select(c => new { c.Id, c.Name })
+                .Take(8)
+                .ToListAsync(cancellationToken);
+
+            var requestedCategory = AgentToolArgHelpers.GuidVal(args, "categoryId") ?? context.ExecutionState?.CategoryId;
+            string? categoryName = null;
+            Guid categoryId;
+            if (requestedCategory is Guid given)
+            {
+                categoryId = given;
+            }
+            else if (categories.Count == 0)
+            {
+                return Fail("No product category exists yet. Create a category first. I did not create a product.");
+            }
+            else if (categories.Count > 1)
+            {
+                var names = string.Join(", ", categories.Select(c => c.Name));
+                return Fail($"Which category should {name} use? Available categories: {names}. I did not create a product.");
+            }
+            else
+            {
+                categoryId = categories[0].Id;
+                categoryName = categories[0].Name;
+            }
+
+            var duplicate = await _db.Products.AsNoTracking()
+                .AnyAsync(p => p.SKU == sku, cancellationToken);
+            if (duplicate)
+                return Fail($"SKU {sku} is already used in this business. I did not create a product.");
+
+            var reorder = AgentToolArgHelpers.Int(args, "reorderLevel") ?? 0;
 
             var id = await _mediator.Send(new CreateProductCommand(
-                categoryId.Value,
+                categoryId,
                 name,
                 sku,
                 AgentToolArgHelpers.Str(args, "description"),
@@ -141,7 +170,8 @@ public sealed class CreateProductTool : AiToolBase
                 context.ExecutionState.ProductName = name;
             }
 
-            return Ok($"Product \"{name}\" has been created successfully.", id);
+            var categoryNote = string.IsNullOrWhiteSpace(categoryName) ? "" : $" Category: {categoryName}.";
+            return Ok($"Product \"{name}\" (SKU {sku}) has been created.{categoryNote}", id);
         }
         catch (Exception ex)
         {
@@ -420,7 +450,7 @@ public sealed class ReceiveStockTool : AiToolBase
             productId.Value,
             qty.Value,
             AgentToolArgHelpers.Str(args, "referenceNumber"),
-            AgentToolArgHelpers.Str(args, "notes") ?? "Received via Sophia"), cancellationToken);
+            AgentToolArgHelpers.Str(args, "notes") ?? "Received via Navla"), cancellationToken);
 
         return new AiToolResult
         {

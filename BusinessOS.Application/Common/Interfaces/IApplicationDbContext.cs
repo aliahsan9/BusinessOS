@@ -9,6 +9,7 @@ public interface IApplicationDbContext
     DbSet<Category> Categories { get; }
     DbSet<Product> Products { get; }
     DbSet<Customer> Customers { get; }
+    DbSet<Employee> Employees { get; }
     DbSet<Supplier> Suppliers { get; }
     DbSet<Purchase> Purchases { get; }
     DbSet<PurchaseItem> PurchaseItems { get; }
@@ -85,6 +86,15 @@ public interface IApplicationDbContext
 
     Task<int> TryRefundPaymentAsync(
         Guid paymentId,
+        decimal amount,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Accepts a payment only when the order balance still covers it.
+    /// On SQL Server the order row is locked for the caller's transaction.
+    /// </summary>
+    Task<bool> TryAcceptOrderPaymentAsync(
+        Guid orderId,
         decimal amount,
         CancellationToken cancellationToken = default);
 

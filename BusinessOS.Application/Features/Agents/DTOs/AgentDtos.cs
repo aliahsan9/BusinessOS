@@ -71,6 +71,23 @@ public sealed class AgentChatResponse
     public bool PermissionDenied { get; init; }
     public string Language { get; init; } = "en";
     public string TextDirection { get; init; } = "ltr";
+
+    /// <summary>
+    /// Present only when a write is waiting for the user. Displaying this does not execute the action.
+    /// </summary>
+    public AiPendingConfirmationDto? PendingConfirmation { get; init; }
+}
+
+public sealed class AiPendingConfirmationDto
+{
+    public string Action { get; init; } = "";
+    public IReadOnlyList<AiConfirmationFieldDto> Fields { get; init; } = [];
+}
+
+public sealed class AiConfirmationFieldDto
+{
+    public string Label { get; init; } = "";
+    public string Value { get; init; } = "";
 }
 
 /// <summary>
@@ -238,7 +255,7 @@ public sealed class AgentOnboardingResponse
     public IReadOnlyList<AgentWorkflowStepDto> WorkflowSteps { get; init; } = [];
 }
 
-// ── Ask Sophia (dashboard) ────────────────────────────────────────────────────
+// ── Ask Navla (dashboard) ─────────────────────────────────────────────────────
 
 public sealed class AskSophiaSuggestionDto
 {

@@ -60,17 +60,11 @@ public sealed class AnalyticsService : IAnalyticsService
             .Where(x => x.Status.Equals(OrderStatusNames.Completed, StringComparison.OrdinalIgnoreCase))
             .Sum(x => x.GrandTotal);
 
-        var revenueTrends = filteredOrders
+        var completedRows = filteredOrders
             .Where(x => x.Status.Equals(OrderStatusNames.Completed, StringComparison.OrdinalIgnoreCase))
-            .GroupBy(x => x.OrderDate.Date)
-            .Select(g => new RevenueTrendPointDto
-            {
-                Date = g.Key,
-                Revenue = Math.Round(g.Sum(x => x.GrandTotal), 2),
-                OrderCount = g.Count()
-            })
-            .OrderBy(x => x.Date)
+            .Select(x => (x.OrderDate, x.GrandTotal))
             .ToList();
+        var revenueTrends = BuildRevenueTrends(completedRows, dateRange);
 
         return new SalesAnalyticsResponse
         {
@@ -86,6 +80,43 @@ public sealed class AnalyticsService : IAnalyticsService
             RevenueTrends = revenueTrends,
             DateRange = DashboardService.MapDateRange(dateRange)
         };
+    }
+
+    private static List<RevenueTrendPointDto> BuildRevenueTrends(
+        IReadOnlyList<(DateTime OrderDate, decimal GrandTotal)> orders,
+        DashboardDateRange dateRange)
+    {
+        var grain = TrendSeries.ForSales(dateRange);
+        if (grain == TrendSeries.Grain.SparseDay)
+        {
+            return orders
+                .GroupBy(x => TrendSeries.Truncate(x.OrderDate, grain))
+                .Select(g => new RevenueTrendPointDto
+                {
+                    Date = g.Key,
+                    Revenue = Math.Round(g.Sum(x => x.GrandTotal), 2),
+                    OrderCount = g.Count()
+                })
+                .OrderBy(x => x.Date)
+                .ToList();
+        }
+
+        var lookup = orders
+            .GroupBy(x => TrendSeries.Truncate(x.OrderDate, grain))
+            .ToDictionary(g => g.Key, g => (Revenue: g.Sum(x => x.GrandTotal), Count: g.Count()));
+
+        return TrendSeries.Buckets(dateRange, grain)
+            .Select(bucket =>
+            {
+                lookup.TryGetValue(bucket, out var hit);
+                return new RevenueTrendPointDto
+                {
+                    Date = bucket,
+                    Revenue = Math.Round(hit.Revenue, 2),
+                    OrderCount = hit.Count
+                };
+            })
+            .ToList();
     }
 
     public async Task<CustomerAnalyticsDashboardResponse> GetCustomerAnalyticsAsync(

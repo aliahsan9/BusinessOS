@@ -64,7 +64,8 @@ public sealed class AiPermissionValidator : IAiPermissionValidator
     public AiPermissionCheckResult ValidateTool(AiToolName tool)
     {
         if (tool is AiToolName.GetRevenue or AiToolName.GetSalesSummary
-            or AiToolName.GetBestSellingProducts or AiToolName.GetSalesTrends)
+            or AiToolName.GetBestSellingProducts or AiToolName.GetSalesTrends
+            or AiToolName.GetBusinessHealth or AiToolName.GetDailyPriorities)
         {
             if (HasAnyRole("Owner", "Admin", "Manager", "Accountant")
                 || _currentUser.HasPermission(PermissionCodes.AnalyticsView)
@@ -146,7 +147,9 @@ public sealed class AiPermissionValidator : IAiPermissionValidator
         AiToolName.CreateInvoice => [PermissionCodes.InvoiceCreate],
         AiToolName.SearchDocuments => [],
         AiToolName.GetInventorySummary or AiToolName.GetLowStock or AiToolName.GetDeadStock
-            or AiToolName.GetPurchaseRecommendations => [PermissionCodes.InventoryView],
+            or AiToolName.GetOutOfStock or AiToolName.GetPurchaseRecommendations
+            or AiToolName.GetInventoryHealth => [PermissionCodes.InventoryView],
+        AiToolName.GetCustomerInsights => [PermissionCodes.CustomerView],
         AiToolName.CreatePurchaseOrderDraft => [PermissionCodes.PurchaseOrderCreate],
         AiToolName.GenerateInventoryReport or AiToolName.GenerateSalesReport => [PermissionCodes.ReportView],
         AiToolName.ApplyOnboardingProfile or AiToolName.GetBusinessSettings => [],

@@ -226,7 +226,7 @@ public sealed class AiMemoryService : IAiMemoryService
             SelectedOrderId = session.SelectedOrderId,
             SelectedInvoiceId = session.SelectedInvoiceId,
             LastIntent = intent.ToString(),
-            LastAnalyticsQuery = intent is AiCopilotIntent.Analytics ? userMessage : prior?.LastAnalyticsQuery,
+            LastAnalyticsQuery = IsRecallable(intent) ? userMessage : prior?.LastAnalyticsQuery,
             PreferredLanguage = AgentLanguages.TryGetConcrete(preferredLanguage, out var rememberedLanguage)
                 ? rememberedLanguage
                 : prior?.PreferredLanguage,
@@ -679,6 +679,14 @@ public sealed class AiMemoryService : IAiMemoryService
         var tenantId = _currentUser.TenantId ?? throw new InvalidOperationException("Tenant is required.");
         return (tenantId, userId);
     }
+
+    private static bool IsRecallable(AiCopilotIntent intent) =>
+        intent is AiCopilotIntent.Analytics
+            or AiCopilotIntent.BusinessIntelligence
+            or AiCopilotIntent.ActionRead
+            or AiCopilotIntent.Recommendation
+            or AiCopilotIntent.DashboardInsight
+            or AiCopilotIntent.FollowUp;
 
     private static AiMemoryStateDto? TryParseMemory(string? json)
     {

@@ -14,8 +14,8 @@ public class SophiaReplyBuilderTests
     [InlineData("thanks", "You're welcome")]
     [InlineData("shukriya", "You're welcome")]
     [InlineData("goodbye", "Take care")]
-    [InlineData("hi", "What should we tackle")]
-    [InlineData("سلام", "What should we tackle")]
+    [InlineData("hi", "What would you like to work on")]
+    [InlineData("سلام", "What would you like to work on")]
     public void ConversationalReply_HandlesGreetingAndThanks(string message, string expected)
     {
         AiNaturalReplyBuilder.BuildConversationalReply(message, new AiPageContextDto())

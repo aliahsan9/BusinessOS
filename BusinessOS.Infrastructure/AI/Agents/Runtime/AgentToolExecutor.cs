@@ -77,6 +77,22 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
             };
         }
 
+        if (AgentActionClarifier.NeedsBrief(request.ToolName) && request.PreextractedArgs is null)
+        {
+            sw.Stop();
+            return new AgentToolExecutionResult
+            {
+                DurationMs = sw.ElapsedMilliseconds,
+                State = request.State,
+                ToolResult = new AiToolResult
+                {
+                    ToolName = request.ToolName.ToString(),
+                    Success = false,
+                    Summary = "This change is not confirmed. I did not change any records."
+                }
+            };
+        }
+
         var tool = _registry.AllTools.FirstOrDefault(t => t.ToolName == request.ToolName);
         if (tool is null)
         {

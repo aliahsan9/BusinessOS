@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Infrastructure.AI;
+using BusinessOS.Application.Features.Agents;
 using BusinessOS.Application.Features.Agents.Enums;
 using BusinessOS.Application.Features.Agents.Services;
 using BusinessOS.Application.Features.AI.DTOs;
@@ -30,6 +31,7 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
     private readonly IAiInsightService _insightService;
     private readonly IAiPromptBuilder _promptBuilder;
     private readonly ILlmChatClient _llmChat;
+    private readonly SophiaModelToolLoop _modelLoop;
     private readonly IAgentPersonaService? _personaService;
     private readonly ILogger<AiCopilotOrchestrator> _logger;
 
@@ -48,6 +50,7 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
         IAiInsightService insightService,
         IAiPromptBuilder promptBuilder,
         ILlmChatClient llmChat,
+        SophiaModelToolLoop modelLoop,
         ILogger<AiCopilotOrchestrator> logger,
         IAgentPersonaService? personaService = null)
     {
@@ -65,6 +68,7 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
         _insightService = insightService;
         _promptBuilder = promptBuilder;
         _llmChat = llmChat;
+        _modelLoop = modelLoop;
         _logger = logger;
         _personaService = personaService;
     }
@@ -125,9 +129,6 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
             }
         }
 
-        if (!string.IsNullOrWhiteSpace(request.Message))
-            await _limitService.TryConsumeAiRequestAsync(request.ClientRequestId, cancellationToken: cancellationToken);
-
         var memory = await _memoryService.LoadAsync(sessionId, cancellationToken);
 
         var intentResult = _intentDetector.Detect(message, page, memory);
@@ -141,12 +142,89 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
             return new PipelineResult { Response = denied };
         }
 
+        // One billable request per accepted user message. Tool calls inside this turn are not charged again.
+        // The same client request id does not consume a second unit. Permission failures are not charged.
+        if (!string.IsNullOrWhiteSpace(request.Message))
+            await _limitService.TryConsumeAiRequestAsync(request.ClientRequestId, cancellationToken: cancellationToken);
+
+        if (AiNaturalReplyBuilder.IsStandaloneSmallTalk(message))
+        {
+            var talkLanguage = ConversationLanguage.ResolveTurn(
+                message, request.Language, memory.PreferredLanguage, null);
+            var talkReply = AiNaturalReplyBuilder.BuildConversationalReply(
+                message,
+                page,
+                request.PreferEmployeeTone ? ResolveEmployeeDisplayName(request.AgentKey) : null,
+                talkLanguage);
+            sw.Stop();
+            return await FinalizeAsync(
+                request, chatRequest, sessionId, AiCopilotIntent.Conversational, message,
+                talkReply, [], [], null, sw.ElapsedMilliseconds, null, stream, cancellationToken);
+        }
+
+        if (_modelLoop.IsAvailable
+            && intentResult.Intent is not (AiCopilotIntent.ActionCreate or AiCopilotIntent.Onboarding or AiCopilotIntent.DashboardInsight))
+        {
+            var model = await _modelLoop.TryAnswerAsync(
+                message,
+                request.Language,
+                page,
+                memory,
+                sessionId,
+                cancellationToken,
+                intentResult);
+            var keywordNeedsData = intentResult.SuggestedTools.Count > 0
+                && intentResult.Intent is not (AiCopilotIntent.Conversational or AiCopilotIntent.Help);
+            if (model is not null
+                && (model.ProviderError
+                    || (AiToolScope.StaysOnScope(intentResult, model.ToolsUsed)
+                        && (model.ToolCalls > 0 || !keywordNeedsData))))
+            {
+                sw.Stop();
+                return await FinalizeAsync(
+                    request,
+                    chatRequest,
+                    sessionId,
+                    intentResult.Intent,
+                    message,
+                    model.Reply,
+                    model.ToolsUsed,
+                    [],
+                    null,
+                    sw.ElapsedMilliseconds,
+                    model.TokenUsage,
+                    stream,
+                    cancellationToken);
+            }
+        }
+
         if (intentResult.Intent is AiCopilotIntent.DashboardInsight)
         {
-            var dashboard = await _insightService.GetDashboardCopilotAsync(cancellationToken);
+            var priorities = _toolRegistry.AllTools.FirstOrDefault(t => t.ToolName == AiToolName.GetDailyPriorities);
+            string reply;
+            var used = new List<string>();
+            if (priorities is null)
+            {
+                var dashboard = await _insightService.GetDashboardCopilotAsync(cancellationToken);
+                reply = dashboard.Summary;
+            }
+            else
+            {
+                var priorityResult = await priorities.ExecuteAsync(new AiCopilotExecutionContext
+                {
+                    Request = chatRequest,
+                    Page = page,
+                    Intent = intentResult.Intent,
+                    SessionId = sessionId,
+                    Memory = memory,
+                    Message = message
+                }, cancellationToken);
+                reply = priorityResult.Summary;
+                used.Add(priorityResult.ToolName);
+            }
+
             sw.Stop();
-            var reply = $"{dashboard.Summary}\n\n" + string.Join("\n", dashboard.Insights.Select(i => $"• {i.Title}: {i.Message}"));
-            var response = await FinalizeAsync(request, chatRequest, sessionId, intentResult.Intent, message, reply, [], [], null, sw.ElapsedMilliseconds, null, stream, cancellationToken);
+            var response = await FinalizeAsync(request, chatRequest, sessionId, intentResult.Intent, message, reply, used, [], null, sw.ElapsedMilliseconds, null, stream, cancellationToken);
             return response;
         }
 
@@ -628,14 +706,14 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
     private static string? ResolveEmployeeDisplayName(string? agentKey)
     {
         if (string.IsNullOrWhiteSpace(agentKey))
-            return "Sophia";
+            return "Navla AI";
 
         return AgentKeys.Normalize(agentKey) switch
         {
-            AgentKeys.Sophia => "Sophia",
+            AgentKeys.Sophia => "Navla AI",
             AgentKeys.Adam => "Adam",
             AgentKeys.Emma => "Emma",
-            _ => "Sophia"
+            _ => "Navla AI"
         };
     }
 

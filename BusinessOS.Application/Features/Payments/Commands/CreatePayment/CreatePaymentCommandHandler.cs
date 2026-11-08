@@ -118,39 +118,61 @@ public sealed class CreatePaymentCommandHandler : IRequestHandler<CreatePaymentC
         if (!customerExists)
             throw new NotFoundException("Customer not found.");
 
-        var payment = new Payment
-        {
-            Id = Guid.NewGuid(),
-            OrderId = request.OrderId,
-            CustomerId = request.CustomerId,
-            Amount = amount,
-            PaymentMethod = paymentMethod,
-            PaymentDate = request.PaymentDate.ToUniversalTime(),
-            ReferenceNo = string.IsNullOrWhiteSpace(request.ReferenceNo)
-                ? null
-                : request.ReferenceNo.Trim(),
-            Status = PaymentStatusNames.Completed,
-            Currency = currency.Trim().ToUpperInvariant(),
-            RefundedAmount = 0
-        };
-
-        _context.Payments.Add(payment);
-        if (staged is not null)
-        {
-            _idempotency.CompleteLocal(
-                staged,
-                201,
-                JsonSerializer.Serialize(new { id = payment.Id }),
-                payment.Id);
-        }
-
+        var transaction = await _context.BeginTransactionAsync(cancellationToken);
+        Payment? payment = null;
         try
         {
+            var accepted = await _context.TryAcceptOrderPaymentAsync(order.Id, amount, cancellationToken);
+            if (!accepted)
+            {
+                var paidByOrder = await InvoicePaymentCalculator.GetAmountPaidByOrderIdsAsync(
+                    _context,
+                    [order.Id],
+                    cancellationToken);
+                var netPaid = paidByOrder.GetValueOrDefault(order.Id);
+                var outstanding = Math.Max(
+                    0,
+                    Math.Round(order.GrandTotal - netPaid, 2, MidpointRounding.AwayFromZero));
+                throw new BadRequestException(
+                    $"Payment of {amount:0.00} exceeds the outstanding balance of {outstanding:0.00}.");
+            }
+
+            payment = new Payment
+            {
+                Id = Guid.NewGuid(),
+                OrderId = request.OrderId,
+                CustomerId = request.CustomerId,
+                Amount = amount,
+                PaymentMethod = paymentMethod,
+                PaymentDate = request.PaymentDate.ToUniversalTime(),
+                ReferenceNo = string.IsNullOrWhiteSpace(request.ReferenceNo)
+                    ? null
+                    : request.ReferenceNo.Trim(),
+                Status = PaymentStatusNames.Completed,
+                Currency = currency.Trim().ToUpperInvariant(),
+                RefundedAmount = 0
+            };
+
+            _context.Payments.Add(payment);
+            if (staged is not null)
+            {
+                _idempotency.CompleteLocal(
+                    staged,
+                    201,
+                    JsonSerializer.Serialize(new { id = payment.Id }),
+                    payment.Id);
+            }
+
             await _context.SaveChangesAsync(cancellationToken);
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
         }
         catch (DbUpdateException ex) when (staged is not null && DbExceptionClassifier.IsUniqueViolation(ex))
         {
-            _context.Detach(payment);
+            if (transaction is not null)
+                await transaction.RollbackAsync(cancellationToken);
+            if (payment is not null)
+                _context.Detach(payment);
             _idempotency.Detach(staged);
             var replay = await _idempotency.BeginLocalAsync(
                 IdempotencyOperations.PaymentCreate,
@@ -185,10 +207,23 @@ public sealed class CreatePaymentCommandHandler : IRequestHandler<CreatePaymentC
         }
         catch (DbUpdateConcurrencyException ex)
         {
+            if (transaction is not null)
+                await transaction.RollbackAsync(cancellationToken);
             _logger.LogWarning(ex, "Concurrency conflict while creating payment for order {OrderId}", order.Id);
             throw new ConflictException(
                 "The order changed while the payment was being saved. Refresh and try again.",
                 ErrorCodes.ConcurrencyConflict);
+        }
+        catch
+        {
+            if (transaction is not null)
+                await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+        finally
+        {
+            if (transaction is not null)
+                await transaction.DisposeAsync();
         }
 
         await ReconcileSafeAsync(order.Id, cancellationToken);
@@ -196,7 +231,7 @@ public sealed class CreatePaymentCommandHandler : IRequestHandler<CreatePaymentC
         await EntityCacheInvalidator.InvalidatePaymentAsync(
             _cache,
             tenantId,
-            payment.Id,
+            payment!.Id,
             cancellationToken);
 
         _logger.LogInformation(

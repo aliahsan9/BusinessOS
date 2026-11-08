@@ -68,5 +68,12 @@ public enum AiToolName
     DeleteSupplier,
     ShowProfit,
     UpdateCompanyProfile,
-    UpdateTaxDefaults
+    UpdateTaxDefaults,
+    GetOutOfStock,
+
+    // Deterministic business intelligence. The model explains these results; it does not calculate them.
+    GetInventoryHealth,
+    GetBusinessHealth,
+    GetDailyPriorities,
+    GetCustomerInsights
 }

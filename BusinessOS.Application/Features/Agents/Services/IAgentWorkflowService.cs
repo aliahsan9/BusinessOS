@@ -18,6 +18,11 @@ public interface IAgentWorkflowService
         Guid workflowId,
         CancellationToken cancellationToken = default);
 
+    Task<AgentWorkflowDto?> GetForUserAsync(
+        Guid workflowId,
+        string userId,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<AgentWorkflowSummaryDto>> ListRecentAsync(
         string userId,
         int limit = 20,

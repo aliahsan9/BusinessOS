@@ -88,7 +88,10 @@ public sealed class UpdateQuotationCommandHandler : IRequestHandler<UpdateQuotat
 
         foreach (var reqItem in request.Items)
         {
-            var lineTotal = Math.Round(reqItem.Quantity * reqItem.UnitPrice, 2);
+            if (reqItem.UnitPrice <= 0)
+                throw new BadRequestException("Unit price must be greater than zero.");
+
+            var lineTotal = Math.Round(reqItem.Quantity * reqItem.UnitPrice, 2, MidpointRounding.AwayFromZero);
 
             var existingItem = quotation.QuotationItems
                 .FirstOrDefault(x => x.ProductId == reqItem.ProductId);
@@ -123,6 +126,9 @@ public sealed class UpdateQuotationCommandHandler : IRequestHandler<UpdateQuotat
 
         if (grandTotal < 0)
             throw new BadRequestException("Quotation grand total cannot be negative.");
+
+        if (discount > subTotal)
+            throw new BadRequestException("Discount cannot exceed the line subtotal.");
 
         quotation.CustomerId = request.CustomerId;
         quotation.QuotationDate = request.QuotationDate.ToUniversalTime();

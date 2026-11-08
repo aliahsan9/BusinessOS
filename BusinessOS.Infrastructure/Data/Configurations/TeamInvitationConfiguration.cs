@@ -24,5 +24,9 @@ public class TeamInvitationConfiguration : IEntityTypeConfiguration<TeamInvitati
 
         builder.HasIndex(x => x.Token).IsUnique();
         builder.HasIndex(x => new { x.TenantId, x.Email, x.Status });
+        builder.HasIndex(x => new { x.TenantId, x.Email })
+            .IsUnique()
+            .HasFilter("[Status] = 0 AND [IsDeleted] = 0")
+            .HasDatabaseName("IX_TeamInvitations_OnePendingEmail");
     }
 }

@@ -1,5 +1,6 @@
 using BusinessOS.Application.Features.Agents.DTOs;
 using BusinessOS.Application.Features.Agents.Services;
+using BusinessOS.Infrastructure.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -53,7 +54,7 @@ public sealed class SophiaTtsService : ISophiaTtsService
         Exception? lastError = null;
         foreach (var provider in chain)
         {
-            var voice = ResolveVoice(provider, voiceName);
+            var voice = ResolveVoice(provider, voiceName, language);
                 var cacheKey = TtsTextNormalizer.CacheKey(
                     provider.Key,
                     provider.ModelId,
@@ -96,10 +97,28 @@ public sealed class SophiaTtsService : ISophiaTtsService
             {
                 throw;
             }
+            catch (OpenAiProviderException ex) when (ex.Failure.IsCredentialFailure)
+            {
+                _logger.LogWarning(
+                    "Speech provider {Provider} rejected the API key with status {StatusCode}. CorrelationId={CorrelationId}",
+                    provider.Key,
+                    ex.Failure.StatusCode,
+                    string.IsNullOrWhiteSpace(ex.Failure.CorrelationId) ? "none" : ex.Failure.CorrelationId);
+                throw;
+            }
+            catch (OpenAiProviderException ex)
+            {
+                lastError = ex;
+                _logger.LogWarning(
+                    "Speech provider {Provider} failed with status {StatusCode}. CorrelationId={CorrelationId}",
+                    provider.Key,
+                    ex.Failure.StatusCode,
+                    string.IsNullOrWhiteSpace(ex.Failure.CorrelationId) ? "none" : ex.Failure.CorrelationId);
+            }
             catch (Exception ex)
             {
                 lastError = ex;
-                _logger.LogWarning(ex, "Speech provider {Provider} failed", provider.Key);
+                _logger.LogWarning("Speech provider {Provider} failed ({ExceptionType})", provider.Key, ex.GetType().Name);
             }
         }
 
@@ -133,7 +152,7 @@ public sealed class SophiaTtsService : ISophiaTtsService
         chain.Add(provider);
     }
 
-    private static string ResolveVoice(ITtsProvider provider, string? requested)
+    private static string ResolveVoice(ITtsProvider provider, string? requested, string? language)
     {
         if (!string.IsNullOrWhiteSpace(requested) &&
             !requested.Equals("default", StringComparison.OrdinalIgnoreCase))
@@ -142,8 +161,34 @@ public sealed class SophiaTtsService : ISophiaTtsService
                 v.Id.Equals(requested.Trim(), StringComparison.OrdinalIgnoreCase));
             if (match is not null)
                 return match.Id;
+
+            // The backup voice catalog uses different ids. Map a named OpenAI voice
+            // onto a distinct backup voice instead of always speaking the default.
+            if (provider.Key.Equals("edge", StringComparison.OrdinalIgnoreCase))
+            {
+                var mapped = MapToBackupVoice(requested, language);
+                var backup = provider.Voices.FirstOrDefault(v =>
+                    v.Id.Equals(mapped, StringComparison.OrdinalIgnoreCase));
+                if (backup is not null)
+                    return backup.Id;
+            }
         }
 
         return provider.DefaultVoice;
+    }
+
+    internal static string MapToBackupVoice(string requested, string? language)
+    {
+        if (language?.StartsWith("ur", StringComparison.OrdinalIgnoreCase) == true)
+            return "ur-PK-UzmaNeural";
+        if (language?.StartsWith("ar", StringComparison.OrdinalIgnoreCase) == true)
+            return "ar-SA-ZariyahNeural";
+
+        return requested.Trim().ToLowerInvariant() switch
+        {
+            "nova" or "sage" or "shimmer" => "en-US-AriaNeural",
+            "onyx" or "echo" or "ash" or "verse" or "ballad" or "fable" => "en-US-GuyNeural",
+            _ => "en-US-JennyNeural"
+        };
     }
 }

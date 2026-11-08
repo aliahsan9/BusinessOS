@@ -96,6 +96,9 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
         if (grandTotal < 0)
             throw new BadRequestException("Order grand total cannot be negative.");
 
+        if (discount > totalAmount)
+            throw new BadRequestException("Discount cannot exceed the line subtotal.");
+
         var stockRequirements = request.Items
             .GroupBy(x => x.ProductId)
             .ToDictionary(g => g.Key, g => g.Sum(x => x.Quantity));

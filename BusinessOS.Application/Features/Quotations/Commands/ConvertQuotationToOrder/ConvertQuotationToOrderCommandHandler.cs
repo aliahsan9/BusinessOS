@@ -74,16 +74,33 @@ public sealed class ConvertQuotationToOrderCommandHandler
                 throw new BadRequestException($"Product '{product.Name}' is not active.");
         }
 
-        var orderItems = quotation.QuotationItems
-            .Select(item => new OrderItem
+        var orderItems = new List<OrderItem>();
+        decimal subTotal = 0;
+        foreach (var item in quotation.QuotationItems)
+        {
+            if (item.UnitPrice <= 0)
+                throw new BadRequestException("Quotation line prices must be greater than zero before conversion.");
+
+            var lineTotal = Math.Round(item.Quantity * item.UnitPrice, 2, MidpointRounding.AwayFromZero);
+            subTotal += lineTotal;
+            orderItems.Add(new OrderItem
             {
                 Id = Guid.NewGuid(),
                 ProductId = item.ProductId,
                 Quantity = item.Quantity,
                 UnitPrice = item.UnitPrice,
-                Total = item.Total
-            })
-            .ToList();
+                Total = lineTotal
+            });
+        }
+
+        var discount = Math.Round(quotation.Discount, 2, MidpointRounding.AwayFromZero);
+        var tax = Math.Round(quotation.Tax, 2, MidpointRounding.AwayFromZero);
+        if (discount > subTotal)
+            throw new BadRequestException("Discount cannot exceed the line subtotal.");
+
+        var grandTotal = Math.Round(subTotal - discount + tax, 2, MidpointRounding.AwayFromZero);
+        if (grandTotal < 0)
+            throw new BadRequestException("Order grand total cannot be negative.");
 
         var stockRequirements = quotation.QuotationItems
             .GroupBy(x => x.ProductId)
@@ -98,10 +115,10 @@ public sealed class ConvertQuotationToOrderCommandHandler
             OrderNumber = await _orderNumberGenerator.GenerateNextAsync(cancellationToken),
             OrderDate = DateTime.UtcNow,
             Status = OrderStatusNames.Pending,
-            TotalAmount = quotation.SubTotal,
-            Discount = quotation.Discount,
-            Tax = quotation.Tax,
-            GrandTotal = quotation.GrandTotal,
+            TotalAmount = Math.Round(subTotal, 2, MidpointRounding.AwayFromZero),
+            Discount = discount,
+            Tax = tax,
+            GrandTotal = grandTotal,
             OrderItems = orderItems
         };
 

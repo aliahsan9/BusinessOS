@@ -87,6 +87,7 @@ public static class PermissionCodes
     public const string SettingsManage = "Settings.Manage";
 
     public const string SystemAdminView = "SystemAdmin.View";
+    public const string SystemAdminManage = "SystemAdmin.Manage";
 
     public const string ProjectCreate = "Projects.Create";
     public const string ProjectView = "Projects.View";
@@ -195,7 +196,8 @@ public static class PermissionCodes
         new("View Settings", SettingsView, "View business settings", "Settings"),
         new("Update Settings", SettingsUpdate, "Update business settings", "Settings"),
         new("Manage Settings", SettingsManage, "Full settings management", "Settings"),
-        new("View System Admin", SystemAdminView, "View system administration", "SystemAdmin"),
+        new("View System Admin", SystemAdminView, "View system administration for the current tenant", "SystemAdmin"),
+        new("Manage Platform", SystemAdminManage, "Platform-only billing and contract administration", "SystemAdmin"),
 
         new("Create Project", ProjectCreate, "Create projects", "Project"),
         new("View Projects", ProjectView, "View projects", "Project"),
@@ -246,7 +248,6 @@ public static class PermissionCodes
         NotificationView,
         ReportView,
         SettingsView,
-        SystemAdminView,
         ActivityView,
         ProjectView,
         TaskView,
@@ -305,9 +306,16 @@ public static class PermissionCodes
         PurchaseOrderCreate, PurchaseOrderView, PurchaseOrderUpdate, PurchaseOrderDelete
     };
 
-    public static IReadOnlySet<string> BuildAdminPermissions()
+    public static IReadOnlySet<string> BuildOwnerPermissions()
     {
         var all = All.Select(x => x.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        all.Remove(SystemAdminManage);
+        return all;
+    }
+
+    public static IReadOnlySet<string> BuildAdminPermissions()
+    {
+        var all = BuildOwnerPermissions().ToHashSet(StringComparer.OrdinalIgnoreCase);
         all.Remove(SubscriptionManage);
         return all;
     }

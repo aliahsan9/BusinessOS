@@ -47,7 +47,7 @@ public sealed class InventoryRepository : IInventoryRepository
         _context.Inventories
             .AsNoTracking()
             .Include(x => x.Product)
-            .Where(x => x.CurrentStock <= 0)
+            .Where(x => x.CurrentStock == 0)
             .OrderBy(x => x.Product!.Name)
             .ToListAsync(cancellationToken);
 

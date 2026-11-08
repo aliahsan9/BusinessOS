@@ -151,6 +151,7 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<ITenantRegistrationService, TenantRegistrationService>();
         services.AddScoped<ITenantService, TenantService>();
+        services.AddScoped<ISubscriptionEntitlementService, SubscriptionEntitlementService>();
         services.AddScoped<ITenantLimitService, TenantLimitService>();
         services.AddScoped<ITenantAuditService, TenantAuditService>();
         services.AddScoped<IUserAnalyticsService, UserAnalyticsService>();
@@ -206,6 +207,16 @@ public static class DependencyInjection
             client.BaseAddress = new Uri(baseUrl);
             client.Timeout = TimeSpan.FromSeconds(45);
         });
+        services.AddHttpClient(OpenAiStartupCheck.HttpClientName, (sp, client) =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AiOptions>>().Value;
+            var baseUrl = string.IsNullOrWhiteSpace(options.OpenAiBaseUrl)
+                ? "https://api.openai.com/"
+                : options.OpenAiBaseUrl.TrimEnd('/') + "/";
+            client.BaseAddress = new Uri(baseUrl);
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
+        services.AddHostedService<OpenAiStartupCheck>();
         services.AddScoped<IAgentOnboardingOrchestrator, AgentOnboardingOrchestrator>();
         services.AddScoped<IAgentIntentParser, AgentIntentParser>();
         services.AddScoped<IAgentArgumentExtractor, AgentArgumentExtractor>();
@@ -229,6 +240,10 @@ public static class DependencyInjection
         services.AddScoped<IAiTool, GetSalesSummaryTool>();
         services.AddScoped<IAiTool, GetBestSellingProductsTool>();
         services.AddScoped<IAiTool, GetSalesTrendsTool>();
+        services.AddScoped<IAiTool, GetInventoryHealthTool>();
+        services.AddScoped<IAiTool, GetBusinessHealthTool>();
+        services.AddScoped<IAiTool, GetDailyPrioritiesTool>();
+        services.AddScoped<IAiTool, GetCustomerInsightsTool>();
         services.AddScoped<IAiTool, StructuredCreateCustomerTool>();
         services.AddScoped<IAiTool, SearchCustomerTool>();
         services.AddScoped<IAiTool, UpdateCustomerTool>();
@@ -241,6 +256,7 @@ public static class DependencyInjection
         services.AddScoped<IAiTool, SearchDocumentsTool>();
         services.AddScoped<IAiTool, GetInventorySummaryTool>();
         services.AddScoped<IAiTool, GetLowStockTool>();
+        services.AddScoped<IAiTool, GetOutOfStockTool>();
         services.AddScoped<IAiTool, GetDeadStockTool>();
         services.AddScoped<IAiTool, CreatePurchaseOrderDraftTool>();
         services.AddScoped<IAiTool, CreatePurchaseOrderTool>();
@@ -302,6 +318,7 @@ public static class DependencyInjection
         });
 
         services.AddScoped<ILlmChatClient, LlmChatClientRouter>();
+        services.AddScoped<SophiaModelToolLoop>();
 
         RegisterVectorSearch(services);
 

@@ -160,7 +160,7 @@ Controlled via `appsettings.json`. Leave the API key empty in source control.
 }
 ```
 
-Language detection, Urdu, Roman Urdu, Arabic, and voice are described in [Sophia-Language.md](Sophia-Language.md).
+Language detection, Urdu, Roman Urdu, Arabic, and voice are described in [Navla language, voice, and business answers](Sophia-Language.md).
 
 ---
 

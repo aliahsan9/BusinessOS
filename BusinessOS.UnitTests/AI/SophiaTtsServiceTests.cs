@@ -52,6 +52,32 @@ public class SophiaTtsServiceTests
     }
 
     [Fact]
+    public async Task WhenOpenAiFails_ADifferentRequestedVoice_UsesADifferentBackupVoice()
+    {
+        var openai = new FakeTtsProvider { Key = "openai", DefaultVoice = "coral", Fail = true };
+        var edge = new FakeTtsProvider
+        {
+            Key = "edge",
+            DefaultVoice = "en-US-JennyNeural",
+            Voices =
+            [
+                new TtsVoiceOption { Id = "en-US-JennyNeural", Label = "Jenny" },
+                new TtsVoiceOption { Id = "en-US-AriaNeural", Label = "Aria" },
+                new TtsVoiceOption { Id = "en-US-GuyNeural", Label = "Guy" }
+            ]
+        };
+        var service = CreateService(openai, edge);
+
+        var coral = await service.SynthesizeAsync("Hello there", "en", 1, "coral");
+        var nova = await service.SynthesizeAsync("Hello there", "en", 1, "nova");
+
+        coral.VoiceName.Should().Be("en-US-JennyNeural");
+        nova.VoiceName.Should().Be("en-US-AriaNeural");
+        coral.AudioBytes.Should().NotEqual(nova.AudioBytes);
+        edge.RequestedVoices.Should().Equal("en-US-JennyNeural", "en-US-AriaNeural");
+    }
+
+    [Fact]
     public async Task WhenOpenAiFails_TheFallbackProviderSpeaks()
     {
         var openai = new FakeTtsProvider
@@ -74,6 +100,55 @@ public class SophiaTtsServiceTests
         edge.Calls.Should().Be(1);
         result.Provider.Should().Be("edge");
         result.VoiceName.Should().Be("en-US-JennyNeural");
+    }
+
+    [Fact]
+    public async Task WhenOpenAiRejectsTheKey_TheBackupVoiceIsNotUsed()
+    {
+        var failure = new OpenAiProviderException(new OpenAiFailure(
+            OpenAiFailureKind.Unauthorized,
+            401,
+            "OpenAI rejected the API key. It may be invalid, expired, or revoked. Update Ai:OpenAiApiKey and try again.",
+            "req_voice"));
+        var openai = new FakeTtsProvider { Key = "openai", DefaultVoice = "coral", Fail = true, Thrown = failure };
+        var edge = new FakeTtsProvider
+        {
+            Key = "edge",
+            DefaultVoice = "en-US-JennyNeural",
+            Voices = [new TtsVoiceOption { Id = "en-US-JennyNeural", Label = "Jenny" }]
+        };
+        var service = CreateService(openai, edge);
+
+        var act = () => service.SynthesizeAsync("Hello there", "en", 1, "ballad");
+
+        var error = await act.Should().ThrowAsync<OpenAiProviderException>();
+        error.Which.Message.Should().NotContain("sk-");
+        error.Which.Failure.CorrelationId.Should().Be("req_voice");
+        edge.Calls.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData("ballad")]
+    [InlineData("coral")]
+    public async Task SelectedVoice_IsPassedToTheProvider(string voice)
+    {
+        var provider = new FakeTtsProvider
+        {
+            Key = "openai",
+            DefaultVoice = "coral",
+            Voices =
+            [
+                new TtsVoiceOption { Id = "coral", Label = "Coral" },
+                new TtsVoiceOption { Id = "ballad", Label = "Ballad" }
+            ]
+        };
+        var service = CreateService(provider);
+
+        var result = await service.SynthesizeAsync("Hello there", "en", 1, voice);
+
+        result.VoiceName.Should().Be(voice);
+        result.Provider.Should().Be("openai");
+        provider.RequestedVoices.Should().Equal(voice);
     }
 
     [Fact]
@@ -142,6 +217,7 @@ public class SophiaTtsServiceTests
             [new TtsVoiceOption { Id = "coral", Label = "Coral" }, new TtsVoiceOption { Id = "nova", Label = "Nova" }];
 
         public bool Fail { get; init; }
+        public Exception? Thrown { get; init; }
         public string FailureMessage { get; init; } = "provider failed";
         public int Calls { get; private set; }
         public List<string> RequestedVoices { get; } = [];
@@ -151,7 +227,7 @@ public class SophiaTtsServiceTests
             Calls++;
             RequestedVoices.Add(request.VoiceName ?? "");
             if (Fail)
-                throw new InvalidOperationException(FailureMessage);
+                throw Thrown ?? new InvalidOperationException(FailureMessage);
 
             var audio = new byte[256];
             audio[0] = (byte)Calls;
@@ -199,6 +275,27 @@ public class OpenAiTtsProviderTests
         result.AudioBytes.Length.Should().BeGreaterThan(32);
     }
 
+    [Theory]
+    [InlineData("ballad")]
+    [InlineData("coral")]
+    public async Task Synthesize_SendsBalladAndCoralToOpenAi(string voice)
+    {
+        var handler = new RecordingHandler(_ => AudioResponse());
+        var provider = CreateProvider(handler, apiKey: ApiKey, model: "gpt-4o-mini-tts");
+
+        var result = await provider.SynthesizeAsync(new TtsSynthesisRequest
+        {
+            Text = "Hello there",
+            VoiceName = voice,
+            SpeechRate = 1
+        });
+
+        handler.Body.Should().Contain($"\"voice\":\"{voice}\"");
+        handler.Body.Should().NotContain(ApiKey);
+        result.VoiceName.Should().Be(voice);
+        result.Provider.Should().Be("openai");
+    }
+
     [Fact]
     public async Task Synthesize_UsesTheDefaultVoice_WhenTheRequestedVoiceIsUnknown()
     {
@@ -219,17 +316,25 @@ public class OpenAiTtsProviderTests
     [Fact]
     public async Task Synthesize_FailsCleanly_WhenOpenAiReturnsAnError()
     {
-        var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized)
+        var handler = new RecordingHandler(_ =>
         {
-            Content = new StringContent($"{{\"error\":{{\"message\":\"{ApiKey} leaked\"}}}}", Encoding.UTF8, "application/json")
+            var response = new HttpResponseMessage(HttpStatusCode.Unauthorized)
+            {
+                Content = new StringContent($"{{\"error\":{{\"message\":\"{ApiKey} leaked\"}}}}", Encoding.UTF8, "application/json")
+            };
+            response.Headers.TryAddWithoutValidation("x-request-id", "req_test_401");
+            return response;
         });
         var provider = CreateProvider(handler, apiKey: ApiKey, model: "gpt-4o-mini-tts");
 
         var act = () => provider.SynthesizeAsync(new TtsSynthesisRequest { Text = "Hello there", VoiceName = "coral" });
 
-        var error = await act.Should().ThrowAsync<InvalidOperationException>();
-        error.Which.Message.Should().Be("OpenAI speech synthesis failed (401).");
+        var error = await act.Should().ThrowAsync<OpenAiProviderException>();
+        error.Which.Failure.StatusCode.Should().Be(401);
+        error.Which.Failure.Kind.Should().Be(OpenAiFailureKind.Unauthorized);
         error.Which.Message.Should().NotContain(ApiKey);
+        error.Which.Message.Should().Contain("rejected the API key");
+        error.Which.Failure.CorrelationId.Should().Be("req_test_401");
     }
 
     [Fact]

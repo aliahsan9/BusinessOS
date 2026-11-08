@@ -64,9 +64,7 @@ public sealed class NotificationService : INotificationService
 
     public async Task MarkReadAsync(Guid notificationId, CancellationToken cancellationToken = default)
     {
-        var notification = await _context.Notifications
-            .FirstOrDefaultAsync(x => x.Id == notificationId, cancellationToken)
-            ?? throw new NotFoundException($"Notification '{notificationId}' was not found.");
+        var notification = await FindOwnedNotificationAsync(notificationId, cancellationToken);
 
         notification.IsRead = true;
         notification.UpdatedAt = DateTime.UtcNow;
@@ -90,12 +88,24 @@ public sealed class NotificationService : INotificationService
 
     public async Task DeleteAsync(Guid notificationId, CancellationToken cancellationToken = default)
     {
-        var notification = await _context.Notifications
-            .FirstOrDefaultAsync(x => x.Id == notificationId, cancellationToken)
-            ?? throw new NotFoundException($"Notification '{notificationId}' was not found.");
+        var notification = await FindOwnedNotificationAsync(notificationId, cancellationToken);
 
         _context.Notifications.Remove(notification);
         await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task<Notification> FindOwnedNotificationAsync(
+        Guid notificationId,
+        CancellationToken cancellationToken)
+    {
+        var userId = _currentUserService.UserId
+            ?? throw new UnauthorizedException("User context is required.");
+
+        var notification = await _context.Notifications
+            .FirstOrDefaultAsync(x => x.Id == notificationId && x.UserId == userId, cancellationToken)
+            ?? throw new NotFoundException($"Notification '{notificationId}' was not found.");
+
+        return notification;
     }
 
     public async Task<NotificationPreferencesDto> GetPreferencesAsync(

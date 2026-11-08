@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Common.Models;
@@ -7,85 +6,64 @@ using BusinessOS.Application.Features.Tenant.Services;
 using BusinessOS.Domain.Billing;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
+using BusinessOS.Infrastructure.Billing;
 using BusinessOS.Infrastructure.Data;
-using BusinessOS.Infrastructure.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace BusinessOS.Infrastructure.Services;
 
 public sealed class TenantLimitService : ITenantLimitService
 {
-    private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> AiLocks = new();
-
     private readonly IApplicationDbContext _context;
     private readonly ITenantProvider _tenantProvider;
     private readonly IDbContextFactory<BusinessOSDbContext> _dbContextFactory;
+    private readonly ISubscriptionEntitlementService _entitlements;
 
     public TenantLimitService(
         IApplicationDbContext context,
         ITenantProvider tenantProvider,
         IDbContextFactory<BusinessOSDbContext> dbContextFactory)
+        : this(context, tenantProvider, dbContextFactory, new SubscriptionEntitlementService(dbContextFactory, tenantProvider))
+    {
+    }
+
+    public TenantLimitService(
+        IApplicationDbContext context,
+        ITenantProvider tenantProvider,
+        IDbContextFactory<BusinessOSDbContext> dbContextFactory,
+        ISubscriptionEntitlementService entitlements)
     {
         _context = context;
         _tenantProvider = tenantProvider;
         _dbContextFactory = dbContextFactory;
+        _entitlements = entitlements;
     }
 
-    public async Task<TenantLimits> GetLimitsAsync(Guid tenantId, CancellationToken cancellationToken = default)
-    {
-        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-
-        var tenant = await dbContext.Tenants
-            .IgnoreQueryFilters()
-            .AsNoTracking()
-            .Include(x => x.Plan)
-            .Include(x => x.Subscription)
-            .FirstOrDefaultAsync(x => x.Id == tenantId, cancellationToken);
-
-        if (tenant?.Plan is null)
-            return new TenantLimits(1, 25, 3, 100, 512, 20, 50);
-
-        return EntitlementResolver.Resolve(tenant.Plan, tenant.Subscription);
-    }
+    public Task<TenantLimits> GetLimitsAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
+        _entitlements.GetLimitsAsync(tenantId, cancellationToken);
 
     public async Task EnsureWithinLimitAsync(string resourceType, CancellationToken cancellationToken = default)
     {
         if (!_tenantProvider.HasTenant())
-        {
             return;
-        }
 
-        var tenantId = _tenantProvider.TenantId;
-        var limits = await GetLimitsAsync(tenantId, cancellationToken);
-        await RefreshUsageAsync(tenantId, cancellationToken);
-
-        var usage = await _context.TenantUsages
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.TenantId == tenantId, cancellationToken);
-
-        if (usage is null)
+        var resource = resourceType.Trim().ToLowerInvariant() switch
         {
-            return;
-        }
-
-        var resource = resourceType.ToLowerInvariant();
-        var (current, maximum, blocked) = resource switch
-        {
-            "users" => (usage.UserCount, (long)limits.MaxUsers, !PlanLimitHelper.IsWithinLimit(usage.UserCount, limits.MaxUsers)),
-            "customers" => (usage.CustomerCount, (long)limits.MaxCustomers, !PlanLimitHelper.IsWithinLimit(usage.CustomerCount, limits.MaxCustomers)),
-            "products" => (usage.ProductCount, (long)limits.MaxProducts, !PlanLimitHelper.IsWithinLimit(usage.ProductCount, limits.MaxProducts)),
-            "projects" => (usage.ProjectCount, (long)limits.MaxProjects, !PlanLimitHelper.IsWithinLimit(usage.ProjectCount, limits.MaxProjects)),
-            "tasks" => (usage.TaskCount, (long)limits.MaxTasks, !PlanLimitHelper.IsWithinLimit(usage.TaskCount, limits.MaxTasks)),
-            "storage" => (usage.StorageUsedMb, limits.MaxStorageMb, limits.MaxStorageMb != SubscriptionPlan.Unlimited && usage.StorageUsedMb >= limits.MaxStorageMb),
-            "ai" when limits.MaxAiRequests == 0 => (usage.AiRequestsUsed, 0L, true),
-            "ai" => (usage.AiRequestsUsed, (long)limits.MaxAiRequests, !PlanLimitHelper.IsUnlimited(limits.MaxAiRequests) && usage.AiRequestsUsed >= limits.MaxAiRequests),
-            _ => (0L, 0L, false)
+            "users" or "user" => QuotaResource.Users,
+            "customers" or "customer" => QuotaResource.Customers,
+            "products" or "product" => QuotaResource.Products,
+            "projects" or "project" => QuotaResource.Projects,
+            "tasks" or "task" => QuotaResource.Tasks,
+            "storage" => QuotaResource.Storage,
+            "ai" => QuotaResource.AiRequests,
+            _ => (QuotaResource?)null
         };
 
-        if (blocked)
-        {
-            throw new PlanLimitExceededException(resource, current, maximum);
-        }
+        if (resource is null)
+            return;
+
+        var additional = resource == QuotaResource.Storage ? 1L : 1L;
+        await _entitlements.EnsureCanCreateAsync(resource.Value, additional, cancellationToken);
     }
 
     public Task IncrementAiUsageAsync(CancellationToken cancellationToken = default) =>
@@ -103,11 +81,9 @@ public sealed class TenantLimitService : ITenantLimitService
             return;
 
         var tenantId = _tenantProvider.TenantId;
-        var gate = AiLocks.GetOrAdd(tenantId, _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync(cancellationToken);
-        try
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var hold = await QuotaEnforcer.LockTenantAsync(dbContext, tenantId, cancellationToken);
         {
-            await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
             var limits = await GetLimitsAsync(tenantId, cancellationToken);
             var usage = await LoadUsageAsync(dbContext, tenantId, cancellationToken);
             await ResetAiPeriodIfNeededAsync(dbContext, tenantId, usage, cancellationToken);
@@ -118,13 +94,17 @@ public sealed class TenantLimitService : ITenantLimitService
                     .IgnoreQueryFilters()
                     .AnyAsync(x => x.TenantId == tenantId && x.OperationKey == operationKey && !x.IsDeleted, cancellationToken);
                 if (duplicate)
+                {
+                    await dbContext.SaveChangesAsync(cancellationToken);
+                    hold.MarkSuccess();
                     return;
+                }
             }
 
             if (limits.MaxAiRequests == 0 ||
                 (!PlanLimitHelper.IsUnlimited(limits.MaxAiRequests) && usage.AiRequestsUsed >= limits.MaxAiRequests))
             {
-                throw new PlanLimitExceededException("ai", usage.AiRequestsUsed, limits.MaxAiRequests);
+                throw new PlanLimitExceededException("AI requests", usage.AiRequestsUsed, limits.MaxAiRequests);
             }
 
             usage.AiRequestsUsed++;
@@ -145,10 +125,7 @@ public sealed class TenantLimitService : ITenantLimitService
             });
 
             await dbContext.SaveChangesAsync(cancellationToken);
-        }
-        finally
-        {
-            gate.Release();
+            hold.MarkSuccess();
         }
     }
 
@@ -179,25 +156,12 @@ public sealed class TenantLimitService : ITenantLimitService
     {
         await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
 
-        var userCount = await dbContext.Users
-            .IgnoreQueryFilters()
-            .CountAsync(x => x.TenantId == tenantId && x.IsActive, cancellationToken);
-
-        var customerCount = await dbContext.Customers
-            .IgnoreQueryFilters()
-            .CountAsync(x => x.TenantId == tenantId && !x.IsDeleted, cancellationToken);
-
-        var projectCount = await dbContext.Projects
-            .IgnoreQueryFilters()
-            .CountAsync(x => x.TenantId == tenantId && !x.IsDeleted, cancellationToken);
-
-        var taskCount = await dbContext.WorkTasks
-            .IgnoreQueryFilters()
-            .CountAsync(x => x.TenantId == tenantId && !x.IsDeleted, cancellationToken);
-
-        var productCount = await dbContext.Products
-            .IgnoreQueryFilters()
-            .CountAsync(x => x.TenantId == tenantId && !x.IsDeleted, cancellationToken);
+        var measured = await QuotaEnforcer.MeasureAsync(dbContext, tenantId, cancellationToken);
+        var userCount = measured.OccupiedSeats;
+        var customerCount = measured.Customers;
+        var projectCount = measured.Projects;
+        var taskCount = measured.Tasks;
+        var productCount = measured.Products;
 
         var usage = await dbContext.TenantUsages
             .IgnoreQueryFilters()
@@ -218,6 +182,7 @@ public sealed class TenantLimitService : ITenantLimitService
         usage.ProductCount = productCount;
         usage.ProjectCount = projectCount;
         usage.TaskCount = taskCount;
+        usage.StorageUsedMb = measured.StorageBytes / (1024L * 1024L);
         usage.LastCalculatedAt = DateTime.UtcNow;
         usage.UpdatedAt = DateTime.UtcNow;
 
