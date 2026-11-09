@@ -43,8 +43,15 @@ services:
       Qdrant__ApiKey: ${QDRANT_API_KEY:-}
       Qdrant__CollectionName: ${QDRANT_COLLECTION}
       VectorSync__BackfillOnStartup: ${VECTOR_BACKFILL_ON_STARTUP:-false}
-      Email__Enabled: "false"
-      Email__Password: ""
+      Email__Enabled: "${EMAIL_ENABLED:-false}"
+      Email__SmtpHost: "${EMAIL_SMTP_HOST:-}"
+      Email__SmtpPort: "${EMAIL_SMTP_PORT:-587}"
+      Email__UseSsl: "${EMAIL_USE_SSL:-true}"
+      Email__Username: "${EMAIL_SMTP_USERNAME:-}"
+      Email__Password: "${EMAIL_SMTP_PASSWORD:-}"
+      Email__FromAddress: "${EMAIL_FROM_ADDRESS:-}"
+      Email__FromName: "${EMAIL_FROM_NAME:-BusinessOS}"
+      Email__TimeoutSeconds: "${EMAIL_TIMEOUT_SECONDS:-15}"
       Stripe__SecretKey: ""
       Stripe__PublishableKey: ""
       Stripe__WebhookSecret: ""
