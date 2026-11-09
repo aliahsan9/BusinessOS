@@ -26,7 +26,7 @@ These values were read from the project and from Windows. They are not guesses.
 | SQL TCP/IP | Disabled on `SQLEXPRESS`, and SQL Server Browser is stopped. A Linux container cannot use Windows integrated security or shared memory. |
 | Qdrant | Used when `Qdrant:Enabled` is true. The client port in configuration is `6334`. |
 | Redis, RabbitMQ | Not used. |
-| Email, Stripe, JazzCash, EasyPaisa, OpenAI, Cursor AI | Optional. Empty credentials leave those features off. |
+| Email, Stripe, JazzCash, EasyPaisa, OpenAI, Cursor AI | Optional. Email is disabled until SMTP settings are supplied in the gitignored environment file. |
 
 ## Ports
 
@@ -357,7 +357,8 @@ These features stay inactive until their secrets are added to the gitignored env
 | `AI_API_KEY` | Cursor AI API |
 | `OPENAI_API_KEY` | OpenAI chat, embeddings, and speech |
 | `GOOGLE_CLIENT_ID` | Google sign-in. The same public client id belongs in `app-config.json` and `Google__ClientId`. |
-| Email settings | Password reset mail. `Email__Enabled` is false in the containers. |
+| `EMAIL_ENABLED`, `EMAIL_SMTP_HOST`, `EMAIL_SMTP_PORT`, `EMAIL_USE_SSL`, `EMAIL_SMTP_USERNAME`, `EMAIL_SMTP_PASSWORD`, `EMAIL_FROM_ADDRESS`, `EMAIL_FROM_NAME` | SMTP delivery for password-reset emails. Set these only in the gitignored `deploy/env/.env.*` file; never commit credentials. |
+| Email settings | Password reset mail. `EMAIL_ENABLED` defaults to false; set it to true and supply valid SMTP host, credentials, and a verified sender in the gitignored environment file. Recreate/restart the API container after changing it. |
 | Stripe, JazzCash, EasyPaisa | Payments. Provider secrets are empty and the providers are disabled. Do not use production payment keys in these environments. |
 
 Qdrant runs locally and does not need a cloud key. Semantic search stays degraded if Qdrant is down. The ERP still starts.
