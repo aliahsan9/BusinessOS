@@ -13,6 +13,12 @@ public interface IAgentPersonaService
     Task<IReadOnlyList<AgentEmployeeDto>> ListEmployeesAsync(
         CancellationToken cancellationToken = default);
 
+    /// <summary>Creates or updates a tenant-scoped activation override for a catalog employee.</summary>
+    Task<AgentEmployeeDto?> SetEmployeeActivationAsync(
+        string agentKey,
+        bool isActive,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Resolves the effective persona for an agent key (falls back to Navla / default). The stored key remains sophia.
     /// </summary>
