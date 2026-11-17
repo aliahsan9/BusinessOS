@@ -486,14 +486,10 @@ public sealed class CreatePurchaseOrderTool : AiToolBase
                         .Select(s => (Guid?)s.Id)
                         .FirstOrDefaultAsync(cancellationToken);
                 }
-                supplierId ??= await _db.Suppliers.AsNoTracking()
-                    .OrderBy(s => s.Name)
-                    .Select(s => (Guid?)s.Id)
-                    .FirstOrDefaultAsync(cancellationToken);
             }
 
             if (supplierId is null)
-                return Fail("No supplier found. Create a supplier first (e.g. \"Create supplier Acme Traders\"), then I can create the purchase order.");
+                return Fail("I couldn't identify the supplier. Please select a supplier by name or supplier ID before I create this purchase order. I won't choose a supplier automatically.");
 
             var items = new List<CreatePurchaseOrderLineItemDto>();
             if (args.TryGetProperty("items", out var itemsEl) && itemsEl.ValueKind == JsonValueKind.Array)
