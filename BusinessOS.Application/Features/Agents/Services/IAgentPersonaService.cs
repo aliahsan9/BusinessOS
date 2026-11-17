@@ -19,6 +19,12 @@ public interface IAgentPersonaService
         bool isActive,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Updates tenant-owned display metadata and language without exposing the system prompt.</summary>
+    Task<AgentEmployeeDto?> UpdateEmployeeConfigurationAsync(
+        string agentKey,
+        UpdateAgentConfigurationRequest request,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Resolves the effective persona for an agent key (falls back to Navla / default). The stored key remains sophia.
     /// </summary>
