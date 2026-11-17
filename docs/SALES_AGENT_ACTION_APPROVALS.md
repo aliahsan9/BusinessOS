@@ -77,3 +77,8 @@ The execution slice adds:
 SMTP is not an idempotent delivery provider. To avoid duplicate customer emails, automatic retries are intentionally disabled. If the process is interrupted after SMTP accepts a message but before the database records success, the proposal remains `Executing` for manual reconciliation. `Executed` means the configured SMTP provider accepted the message, not that the recipient opened or received it in their inbox.
 
 This is an explicit authenticated execution request after approval; it is not yet an autonomous background worker. Tenant-specific AI employee tool allow-lists must be enforced before production use. Add provider-level idempotency where supported and a reconciliation dashboard for stuck executions.
+
+
+## Tenant capability gate
+
+The proposal creator and execution endpoint both require the tenant's `emma` AI employee profile to explicitly include `SendCustomerFollowUp` in `AllowedToolsJson`. This capability is disabled by default and is exposed in the existing employee tool-permissions API as an additional capability alongside registered AI tools. Owner/Admin configuration is required to enable it. The execution endpoint re-reads the tenant profile and allow-list immediately before claiming the proposal; missing, inactive, or malformed profiles fail closed.
