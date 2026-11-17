@@ -8,6 +8,7 @@ public static class IdempotencyOperations
 {
     public const string PaymentCreate = "payments.create";
     public const string PaymentRefund = "payments.refund";
+    public const string AgentSaleCreate = "agents.sales.create";
     public const string BillingCheckout = "billing.checkout";
     public const string BillingRefund = "billing.refund";
 }
