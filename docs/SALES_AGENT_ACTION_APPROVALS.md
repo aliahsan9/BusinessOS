@@ -53,9 +53,22 @@ Creation and decision events are written to the existing RBAC audit log. The pro
 - Run backend build, unit/integration tests, and relational SQL Server tests before merging.
 
 
+ fix/sales-proposal-concurrent-decisions
+## Concurrent reviewer decisions
+
+The decision endpoint uses a provider-aware compare-and-set transition constrained by proposal ID, tenant ID, and the expected `AwaitingApproval` state.
+
+- Relational providers use a single conditional `UPDATE`; only one reviewer can transition a pending proposal.
+- The status transition and RBAC audit insert share the same database transaction.
+- The EF Core InMemory test provider uses a process-wide semaphore and reloads the tracked row before deciding, so concurrent integration requests still exercise a single-winner state transition.
+- The integration suite includes a concurrent approve/reject test that expects one HTTP 200 and one HTTP 409.
+
+The concurrent integration test has been added but not executed here. Run it against both the InMemory test provider and SQL Server before production rollout.
+=======
 ## Concurrent reviewer protection
 
 Decision and execution transitions use a shared compare-and-set method. SQL Server uses a conditional `UPDATE` constrained by tenant, proposal ID, and expected status. The in-memory integration provider uses a serialized transition gate and persists the state before releasing it. A competing request receives HTTP 409 once the proposal has left its expected state. Run the concurrency integration test against SQL Server before production.
+ master
 
 ## Proposal expiry
 
