@@ -112,7 +112,7 @@ public sealed class AgentPersonaService : IAgentPersonaService
             throw new ArgumentException("AllowedTools must contain no more than 100 registered tool names.");
 
         var registered = _toolRegistry?.AllTools.Select(t => t.ToolName).ToHashSet()
-            ?? Enum.GetValues<AiToolName>().ToHashSet();
+            ?? new HashSet<AiToolName>();
         var normalized = new HashSet<string>(StringComparer.Ordinal);
         foreach (var name in request.AllowedTools)
         {
