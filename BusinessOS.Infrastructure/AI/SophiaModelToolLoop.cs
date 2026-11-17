@@ -56,18 +56,21 @@ public sealed partial class SophiaModelToolLoop
     private readonly OpenAiChatClient _openAi;
     private readonly IAiToolRegistry _tools;
     private readonly IAiPermissionValidator _permissions;
+    private readonly IAgentPersonaService? _personaService;
     private readonly ILogger<SophiaModelToolLoop> _logger;
 
     public SophiaModelToolLoop(
         OpenAiChatClient openAi,
         IAiToolRegistry tools,
         IAiPermissionValidator permissions,
-        ILogger<SophiaModelToolLoop> logger)
+        ILogger<SophiaModelToolLoop> logger,
+        IAgentPersonaService? personaService = null)
     {
         _openAi = openAi;
         _tools = tools;
         _permissions = permissions;
         _logger = logger;
+        _personaService = personaService;
     }
 
     public bool IsAvailable => _openAi.IsConfigured;
@@ -79,7 +82,8 @@ public sealed partial class SophiaModelToolLoop
         AiMemoryStateDto memory,
         Guid sessionId,
         CancellationToken cancellationToken,
-        AiIntentDetectionResult? routedIntent = null)
+        AiIntentDetectionResult? routedIntent = null,
+        string? agentKey = null)
     {
         if (!IsAvailable)
             return null;
@@ -94,8 +98,19 @@ public sealed partial class SophiaModelToolLoop
         }
 
         var allowed = AiToolScope.ForModel(routedIntent);
+        HashSet<string>? employeeAllowed = null;
+        if (!string.IsNullOrWhiteSpace(agentKey))
+        {
+            if (_personaService is null)
+                return null;
+            var employeePermissions = await _personaService.GetToolPermissionsAsync(agentKey, cancellationToken);
+            employeeAllowed = employeePermissions?.AllowedTools.ToHashSet(StringComparer.Ordinal) ?? [];
+        }
+
         var catalog = _tools.AllTools
-            .Where(tool => ReadTools.Contains(tool.ToolName) && (allowed is null || allowed.Contains(tool.ToolName)))
+            .Where(tool => ReadTools.Contains(tool.ToolName)
+                && (allowed is null || allowed.Contains(tool.ToolName))
+                && (employeeAllowed is null || employeeAllowed.Contains(tool.ToolName.ToString())))
             .Select(tool => new ModelToolDefinition(
                 tool.ToolName.ToString(),
                 tool.Description,
@@ -128,7 +143,7 @@ public sealed partial class SophiaModelToolLoop
             system,
             message,
             catalog,
-            (call, token) => ExecuteAsync(call, message, page, memory, sessionId, used, summaries, token),
+            (call, token) => ExecuteAsync(call, message, page, memory, sessionId, used, summaries, agentKey, token),
             cancellationToken,
             memory.RecentTurns);
 
@@ -154,6 +169,7 @@ public sealed partial class SophiaModelToolLoop
         Guid sessionId,
         List<string> used,
         List<string> summaries,
+        string? agentKey,
         CancellationToken cancellationToken)
     {
         if (!Enum.TryParse<AiToolName>(call.Name, ignoreCase: false, out var name) || !ReadTools.Contains(name))
@@ -161,6 +177,10 @@ public sealed partial class SophiaModelToolLoop
 
         if (AiToolSafetyGate.IsMutating(name))
             return "Write tools are not available in this turn. Ask the user to confirm the change in a separate step.";
+
+        if (!string.IsNullOrWhiteSpace(agentKey)
+            && (_personaService is null || !await _personaService.IsToolAllowedAsync(agentKey, name, cancellationToken)))
+            return "This AI employee is not permitted to use that tool.";
 
         var permission = _permissions.ValidateTool(name);
         if (!permission.Allowed)
