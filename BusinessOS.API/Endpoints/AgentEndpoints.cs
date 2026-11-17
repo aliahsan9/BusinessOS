@@ -57,6 +57,19 @@ public static class AgentEndpoints
             .Produces(StatusCodes.Status403Forbidden)
             .Produces(StatusCodes.Status404NotFound);
 
+        group.MapGet("/employees/{agentKey}/permissions", GetEmployeeToolPermissions)
+            .WithName("AgentGetToolPermissions")
+            .Produces<AgentToolPermissionsDto>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound);
+
+        group.MapPut("/employees/{agentKey}/permissions", UpdateEmployeeToolPermissions)
+            .WithName("AgentUpdateToolPermissions")
+            .Produces<AgentToolPermissionsDto>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound);
+
         group.MapGet("/voice-preferences", GetVoicePreferences)
             .WithName("AgentGetVoicePreferences")
             .Produces<VoicePreferenceDto>(StatusCodes.Status200OK);
@@ -248,6 +261,62 @@ public static class AgentEndpoints
             return Results.Conflict(new { error = ex.Message });
         }
     }
+
+    private static async Task<IResult> GetEmployeeToolPermissions(
+        string agentKey,
+        IAgentPersonaService personaService,
+        ICurrentUserService currentUser,
+        CancellationToken cancellationToken)
+    {
+        if (currentUser.TenantId is null || currentUser.TenantId == Guid.Empty)
+            return Results.Forbid();
+
+        if (!CanManageAgents(currentUser))
+            return Results.Forbid();
+
+        var permissions = await personaService.GetToolPermissionsAsync(agentKey, cancellationToken);
+        return permissions is null
+            ? Results.NotFound(new { error = "AI employee was not found." })
+            : Results.Ok(permissions);
+    }
+
+    private static async Task<IResult> UpdateEmployeeToolPermissions(
+        string agentKey,
+        UpdateAgentToolPermissionsRequest request,
+        IAgentPersonaService personaService,
+        ICurrentUserService currentUser,
+        CancellationToken cancellationToken)
+    {
+        if (currentUser.TenantId is null || currentUser.TenantId == Guid.Empty)
+            return Results.Forbid();
+
+        if (!CanManageAgents(currentUser))
+            return Results.Forbid();
+
+        if (string.IsNullOrWhiteSpace(agentKey))
+            return Results.BadRequest(new { error = "Agent key is required." });
+
+        try
+        {
+            var permissions = await personaService.UpdateToolPermissionsAsync(agentKey, request, cancellationToken);
+            return permissions is null
+                ? Results.NotFound(new { error = "AI employee was not found." })
+                : Results.Ok(permissions);
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new { error = ex.Message });
+        }
+    }
+
+    private static bool CanManageAgents(ICurrentUserService currentUser) =>
+        currentUser.Roles.Any(role =>
+            string.Equals(role, "Owner", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase));
 
     private static async Task<IResult> GetVoicePreferences(
         IAgentEmployeeService agentService,
@@ -469,14 +538,15 @@ public static class AgentEndpoints
         var query = db.AgentWorkflowRuns.AsNoTracking()
             .Where(run => run.AgentKey == SalesAgentKey);
 
-        if (pendingOnly)
-            query = query.Where(run => run.Status == AgentWorkflowStatus.AwaitingApproval);
-
         var runs = await query.OrderByDescending(run => run.StartedAt)
             .Take(Math.Clamp(limit, 1, 100))
             .ToListAsync(cancellationToken);
 
-        return Results.Ok(runs.Select(MapActionProposal).ToList());
+        var proposals = runs.Select(MapActionProposal);
+        if (pendingOnly)
+            proposals = proposals.Where(proposal => proposal.Status == AgentWorkflowStatus.AwaitingApproval);
+
+        return Results.Ok(proposals.ToList());
     }
 
     private static async Task<IResult> GetActionProposal(
@@ -785,7 +855,11 @@ public static class AgentEndpoints
                 : run.Title,
             Summary = payload.Summary,
             PayloadJson = payload.PayloadJson,
-            Status = run.Status,
+            Status = run.Status == AgentWorkflowStatus.AwaitingApproval
+                && payload.ExpiresAt is DateTime expiresAt
+                && expiresAt <= DateTime.UtcNow
+                    ? AgentWorkflowStatus.Expired
+                    : run.Status,
             CreatedAt = run.StartedAt,
             ExpiresAt = payload.ExpiresAt,
             DecisionComment = payload.DecisionComment,
