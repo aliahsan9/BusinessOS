@@ -145,6 +145,7 @@ public sealed class AgentPersonaService : IAgentPersonaService
                 Specialty = specialty,
                 SystemPersonaPrompt = systemProfile.SystemPersonaPrompt,
                 DefaultLanguage = language,
+                AllowedToolsJson = systemProfile.AllowedToolsJson,
                 IsDefault = systemProfile.IsDefault,
                 IsActive = systemProfile.IsActive
             };
