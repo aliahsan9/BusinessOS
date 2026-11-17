@@ -54,3 +54,19 @@ Creation and decision events are written to the existing RBAC audit log. The pro
 ## Concurrent reviewer protection
 
 Decision updates use a database compare-and-set operation constrained to the `AwaitingApproval` state, inside the same transaction as the RBAC audit insert. If two reviewers submit at the same time, only the request that changes the pending row can commit; the other receives HTTP 409. An integration test exercises concurrent approve/reject requests. Run it against the production relational provider (SQL Server) before merge; EF InMemory does not provide equivalent relational concurrency semantics.
+
+## One-time email execution
+
+The next execution slice adds:
+
+- `POST /actions/proposals/{proposalId}/execute`
+- Only Owner, Admin, or Manager may request execution.
+- Only an `Approved` `SendCustomerFollowUp` proposal can be executed.
+- The customer is reloaded from the authenticated tenant and must still be active with a valid email address.
+- A conditional status transition claims the proposal as `Executing` before contacting SMTP. The proposal ID is the one-time execution key; subsequent requests cannot claim it again.
+- Delivery success becomes `Executed`; provider-disabled or failed delivery becomes `ExecutionFailed`.
+- Audit records are written for execution start, success, and failure.
+
+SMTP is not an idempotent delivery provider. To avoid duplicate customer emails, automatic retries are intentionally disabled. If the process is interrupted after SMTP accepts a message but before the database records success, the proposal remains `Executing` for manual reconciliation. `Executed` means the configured SMTP provider accepted the message, not that the recipient opened or received it in their inbox.
+
+This endpoint is an explicit, authenticated execution request after approval; it is not yet an autonomous background worker. Before production, connect tenant-specific AI employee tool allow-lists, add provider-level idempotency where supported, and add a reconciliation dashboard for stuck executions.
