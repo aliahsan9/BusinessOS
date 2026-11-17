@@ -287,3 +287,39 @@ public sealed class AskSophiaSuggestionsDto
     public string AgentDisplayName { get; init; } = default!;
     public IReadOnlyList<AskSophiaSuggestionDto> Suggestions { get; init; } = [];
 }
+
+
+/// <summary>
+/// A proposed Sales Agent action. Proposals are stored for human review and are never
+/// executed by the proposal API.
+/// </summary>
+public sealed class CreateAgentActionProposalRequest
+{
+    public string ActionType { get; init; } = string.Empty;
+    public string Title { get; init; } = string.Empty;
+    public string Summary { get; init; } = string.Empty;
+    public string PayloadJson { get; init; } = "{}";
+    public DateTime? ExpiresAt { get; init; }
+}
+
+public sealed class DecideAgentActionProposalRequest
+{
+    /// <summary>Must be either "approved" or "rejected". Approval does not execute the action.</summary>
+    public string Decision { get; init; } = string.Empty;
+    public string? Comment { get; init; }
+}
+
+public sealed class AgentActionProposalDto
+{
+    public Guid Id { get; init; }
+    public string AgentKey { get; init; } = "sales-assistant";
+    public string ActionType { get; init; } = string.Empty;
+    public string Title { get; init; } = string.Empty;
+    public string Summary { get; init; } = string.Empty;
+    public string PayloadJson { get; init; } = "{}";
+    public AgentWorkflowStatus Status { get; init; }
+    public DateTime CreatedAt { get; init; }
+    public DateTime? ExpiresAt { get; init; }
+    public string? DecisionComment { get; init; }
+    public DateTime? DecidedAt { get; init; }
+}
