@@ -51,3 +51,15 @@ The backend contract and enforcement are implemented first. The Angular permissi
 ## Registered tool catalog endpoint
 
 The authenticated `GET /api/v1/agents/tools` endpoint returns the actual dependency-injected `IAiToolRegistry.AllTools` catalog. Each item contains the stable enum-backed `name` and user-facing `description`. It intentionally does not expose internal permission requirements. The frontend should use this endpoint rather than maintain a duplicate hardcoded list.
+
+## Permission change auditing
+
+Tenant AI employee tool-permission updates are recorded through the existing RBAC audit log:
+
+- Action: `AgentEmployeeToolPermissionsUpdated`
+- Entity type: `AgentProfile`
+- Entity ID: tenant-owned agent profile ID
+- Actor and tenant: taken from the authenticated request context
+- Old/new values: serialized allowed-tool lists (tool names only; no prompts or secrets)
+
+The profile update and audit record are saved through the same scoped EF Core context, so they are persisted together. An omitted prior policy is recorded as a null old value, distinguishing legacy inherited permissions from an explicitly configured allow-list.
