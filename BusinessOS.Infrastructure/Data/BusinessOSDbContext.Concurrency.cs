@@ -129,7 +129,11 @@ public partial class BusinessOSDbContext
         CancellationToken cancellationToken = default) =>
         TryTransitionStatusAsync(Purchases, purchaseId, expectedStatus, newStatus, cancellationToken);
 
+ fix/sales-proposal-concurrent-decisions
 public async Task<bool> TryTransitionAgentWorkflowStatusAsync(
+=======
+    public async Task<bool> TryTransitionAgentWorkflowStatusAsync(
+ master
         Guid workflowRunId,
         Guid tenantId,
         AgentWorkflowStatus expectedStatus,

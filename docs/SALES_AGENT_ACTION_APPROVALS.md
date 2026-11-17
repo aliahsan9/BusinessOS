@@ -53,6 +53,7 @@ Creation and decision events are written to the existing RBAC audit log. The pro
 - Run backend build, unit/integration tests, and relational SQL Server tests before merging.
 
 
+ fix/sales-proposal-concurrent-decisions
 ## Concurrent reviewer decisions
 
 The decision endpoint uses a provider-aware compare-and-set transition constrained by proposal ID, tenant ID, and the expected `AwaitingApproval` state.
@@ -63,7 +64,34 @@ The decision endpoint uses a provider-aware compare-and-set transition constrain
 - The integration suite includes a concurrent approve/reject test that expects one HTTP 200 and one HTTP 409.
 
 The concurrent integration test has been added but not executed here. Run it against both the InMemory test provider and SQL Server before production rollout.
+=======
+## Concurrent reviewer protection
+
+Decision and execution transitions use a shared compare-and-set method. SQL Server uses a conditional `UPDATE` constrained by tenant, proposal ID, and expected status. The in-memory integration provider uses a serialized transition gate and persists the state before releasing it. A competing request receives HTTP 409 once the proposal has left its expected state. Run the concurrency integration test against SQL Server before production.
+ master
 
 ## Proposal expiry
 
 The API derives `Expired` for a pending proposal whose `ExpiresAt` timestamp has passed. Expired proposals are excluded from the pending-only list and remain visible in the all-proposals list. The underlying workflow row is not mutated by a read; the decision endpoint independently rejects an expired proposal with HTTP 409. This avoids a background worker or migration in the first release.
+
+
+## One-time email execution
+
+The execution slice adds:
+
+- `POST /actions/proposals/{proposalId}/execute`
+- Only Owner, Admin, or Manager may request execution.
+- Only an `Approved` `SendCustomerFollowUp` proposal can be executed.
+- The customer is reloaded from the authenticated tenant and must still be active with a valid email address.
+- A conditional state transition claims the proposal as `Executing` before contacting SMTP. The proposal ID is the one-time execution key; subsequent requests cannot claim it again.
+- Delivery success becomes `Executed`; provider-disabled or failed delivery becomes `ExecutionFailed`.
+- Execution start, success, and failure are written to the existing RBAC audit log.
+
+SMTP is not an idempotent delivery provider. To avoid duplicate customer emails, automatic retries are intentionally disabled. If the process is interrupted after SMTP accepts a message but before the database records success, the proposal remains `Executing` for manual reconciliation. `Executed` means the configured SMTP provider accepted the message, not that the recipient opened or received it in their inbox.
+
+This is an explicit authenticated execution request after approval; it is not yet an autonomous background worker. Tenant-specific AI employee tool allow-lists must be enforced before production use. Add provider-level idempotency where supported and a reconciliation dashboard for stuck executions.
+
+
+## Tenant capability gate
+
+The proposal creator and execution endpoint both require the tenant's `emma` AI employee profile to explicitly include `SendCustomerFollowUp` in `AllowedToolsJson`. This capability is disabled by default and is exposed in the existing employee tool-permissions API as an additional capability alongside registered AI tools. Owner/Admin configuration is required to enable it. The execution endpoint re-reads the tenant profile and allow-list immediately before claiming the proposal; missing, inactive, or malformed profiles fail closed.
