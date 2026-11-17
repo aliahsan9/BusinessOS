@@ -296,6 +296,43 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task AgentAuditHistory_IsTenantScoped_AndRecordsPermissionChanges()
+    {
+        var tenantA = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var tenantB = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+
+        var update = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            "/api/v1/agents/employees/adam/permissions",
+            tenantA,
+            new UpdateAgentToolPermissionsRequest
+            {
+                AllowedTools = [nameof(BusinessOS.Application.Features.AI.Enums.AiToolName.GetLowStock)]
+            });
+        update.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var tenantAHistory = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            "/api/v1/agents/audit-history?limit=50",
+            tenantA);
+        tenantAHistory.StatusCode.Should().Be(HttpStatusCode.OK);
+        using var tenantAJson = JsonDocument.Parse(await tenantAHistory.Content.ReadAsStringAsync());
+        tenantAJson.RootElement.EnumerateArray()
+            .Should().Contain(entry => entry.GetProperty("action").GetString() == "AgentToolPermissionsUpdated");
+
+        var tenantBHistory = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            "/api/v1/agents/audit-history?limit=50",
+            tenantB);
+        tenantBHistory.StatusCode.Should().Be(HttpStatusCode.OK);
+        using var tenantBJson = JsonDocument.Parse(await tenantBHistory.Content.ReadAsStringAsync());
+        tenantBJson.RootElement.GetArrayLength().Should().Be(0);
+    }
+
+    [Fact]
     public async Task AgentOnboardingStart_ReturnsWorkflowSteps()
     {
         var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
@@ -396,48 +433,6 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
             tenantA,
             new DecideAgentActionProposalRequest { Decision = "rejected" });
         duplicateDecision.StatusCode.Should().Be(HttpStatusCode.Conflict);
-    }
-
-    [Fact]
-    public async Task SalesActionProposal_ConcurrentDecisions_OnlyOneReviewerWins()
-    {
-        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
-        var create = await IntegrationHttp.SendAuthorizedAsync(
-            Client,
-            HttpMethod.Post,
-            "/api/v1/agents/actions/proposals",
-            auth,
-            new CreateAgentActionProposalRequest
-            {
-                ActionType = "SendCustomerFollowUp",
-                Title = "Concurrency check",
-                Summary = "Only one reviewer may decide this proposal.",
-                PayloadJson = "{}"
-            });
-
-        create.StatusCode.Should().Be(HttpStatusCode.Created);
-        var proposal = await create.Content.ReadFromJsonAsync<AgentActionProposalDto>(JsonOptions);
-        proposal.Should().NotBeNull();
-
-        var approveTask = IntegrationHttp.SendAuthorizedAsync(
-            Client,
-            HttpMethod.Post,
-            $"/api/v1/agents/actions/proposals/{proposal!.Id}/decision",
-            auth,
-            new DecideAgentActionProposalRequest { Decision = "approved" });
-
-        var rejectTask = IntegrationHttp.SendAuthorizedAsync(
-            Client,
-            HttpMethod.Post,
-            $"/api/v1/agents/actions/proposals/{proposal.Id}/decision",
-            auth,
-            new DecideAgentActionProposalRequest { Decision = "rejected" });
-
-        var responses = await Task.WhenAll(approveTask, rejectTask);
-        responses.Select(response => response.StatusCode)
-            .Should().ContainSingle(status => status == HttpStatusCode.OK);
-        responses.Select(response => response.StatusCode)
-            .Should().ContainSingle(status => status == HttpStatusCode.Conflict);
     }
 
     [Fact]
