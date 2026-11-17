@@ -62,6 +62,44 @@ public class SophiaSecurityTests
     }
 
     [Fact]
+    public async Task AgentToolExecutor_DeniesToolOutsideEmployeeAllowlist_EvenWhenUserHasPermission()
+    {
+        var user = DeniedUser();
+        user.Setup(u => u.HasPermission(It.IsAny<string>())).Returns(true);
+        var validator = new AiPermissionValidator(user.Object);
+
+        var tool = new Mock<IAiTool>();
+        tool.SetupGet(t => t.ToolName).Returns(AiToolName.GetProducts);
+        var registry = new Mock<IAiToolRegistry>();
+        registry.SetupGet(r => r.AllTools).Returns([tool.Object]);
+
+        var persona = new Mock<IAgentPersonaService>();
+        persona.Setup(p => p.IsToolAllowedAsync(
+                "adam",
+                AiToolName.GetProducts,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        var executor = Executor(registry.Object, validator, persona.Object);
+        var result = await executor.ExecuteAsync(new AgentToolExecutionRequest
+        {
+            AgentKey = "adam",
+            ToolName = AiToolName.GetProducts,
+            Message = "Show all products.",
+            Intent = AiCopilotIntent.ActionRead
+        });
+
+        result.PermissionDenied.Should().BeTrue();
+        result.ToolResult.Success.Should().BeFalse();
+        result.ToolResult.Summary.Should().Contain("not permitted");
+        tool.Verify(t => t.ExecuteAsync(It.IsAny<AiCopilotExecutionContext>(), It.IsAny<CancellationToken>()), Times.Never);
+        tool.Verify(t => t.ExecuteWithArgsAsync(
+            It.IsAny<AiCopilotExecutionContext>(),
+            It.IsAny<JsonElement>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task FailedBackendOperation_IsNotReportedAsSuccess()
     {
         var user = DeniedUser();
@@ -294,7 +332,10 @@ public class SophiaSecurityTests
         reply.Should().NotContain("$");
     }
 
-    private static AgentToolExecutor Executor(IAiToolRegistry registry, IAiPermissionValidator permissions)
+    private static AgentToolExecutor Executor(
+        IAiToolRegistry registry,
+        IAiPermissionValidator permissions,
+        IAgentPersonaService? personaService = null)
     {
         var corrector = new Mock<IAgentSelfCorrector>();
         corrector.Setup(c => c.Analyze(
@@ -315,7 +356,8 @@ public class SophiaSecurityTests
             Mock.Of<IAgentArgumentExtractor>(),
             corrector.Object,
             logger.Object,
-            NullLogger<AgentToolExecutor>.Instance);
+            NullLogger<AgentToolExecutor>.Instance,
+            personaService);
     }
 
     private static Mock<ICurrentUserService> DeniedUser()
