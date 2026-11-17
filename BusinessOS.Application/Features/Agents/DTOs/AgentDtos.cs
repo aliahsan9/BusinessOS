@@ -322,4 +322,5 @@ public sealed class AgentActionProposalDto
     public DateTime? ExpiresAt { get; init; }
     public string? DecisionComment { get; init; }
     public DateTime? DecidedAt { get; init; }
+    public string? ExecutionMessage { get; init; }
 }
