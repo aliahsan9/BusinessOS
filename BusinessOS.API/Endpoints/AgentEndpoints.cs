@@ -457,14 +457,15 @@ public static class AgentEndpoints
         var query = db.AgentWorkflowRuns.AsNoTracking()
             .Where(run => run.AgentKey == SalesAgentKey);
 
-        if (pendingOnly)
-            query = query.Where(run => run.Status == AgentWorkflowStatus.AwaitingApproval);
-
         var runs = await query.OrderByDescending(run => run.StartedAt)
             .Take(Math.Clamp(limit, 1, 100))
             .ToListAsync(cancellationToken);
 
-        return Results.Ok(runs.Select(MapActionProposal).ToList());
+        var proposals = runs.Select(MapActionProposal);
+        if (pendingOnly)
+            proposals = proposals.Where(proposal => proposal.Status == AgentWorkflowStatus.AwaitingApproval);
+
+        return Results.Ok(proposals.ToList());
     }
 
     private static async Task<IResult> GetActionProposal(
@@ -571,7 +572,11 @@ public static class AgentEndpoints
                 : run.Title,
             Summary = payload.Summary,
             PayloadJson = payload.PayloadJson,
-            Status = run.Status,
+            Status = run.Status == AgentWorkflowStatus.AwaitingApproval
+                && payload.ExpiresAt is DateTime expiresAt
+                && expiresAt <= DateTime.UtcNow
+                    ? AgentWorkflowStatus.Expired
+                    : run.Status,
             CreatedAt = run.StartedAt,
             ExpiresAt = payload.ExpiresAt,
             DecisionComment = payload.DecisionComment,
