@@ -318,6 +318,48 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task SalesActionProposal_ConcurrentDecisions_OnlyOneReviewerWins()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var create = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/v1/agents/actions/proposals",
+            auth,
+            new CreateAgentActionProposalRequest
+            {
+                ActionType = "SendCustomerFollowUp",
+                Title = "Concurrency check",
+                Summary = "Only one reviewer may decide this proposal.",
+                PayloadJson = "{}"
+            });
+
+        create.StatusCode.Should().Be(HttpStatusCode.Created);
+        var proposal = await create.Content.ReadFromJsonAsync<AgentActionProposalDto>(JsonOptions);
+        proposal.Should().NotBeNull();
+
+        var approveTask = IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            $"/api/v1/agents/actions/proposals/{proposal!.Id}/decision",
+            auth,
+            new DecideAgentActionProposalRequest { Decision = "approved" });
+
+        var rejectTask = IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            $"/api/v1/agents/actions/proposals/{proposal.Id}/decision",
+            auth,
+            new DecideAgentActionProposalRequest { Decision = "rejected" });
+
+        var responses = await Task.WhenAll(approveTask, rejectTask);
+        responses.Select(response => response.StatusCode)
+            .Should().ContainSingle(status => status == HttpStatusCode.OK);
+        responses.Select(response => response.StatusCode)
+            .Should().ContainSingle(status => status == HttpStatusCode.Conflict);
+    }
+
+    [Fact]
     public async Task SalesActionProposal_RejectsUnsupportedActionAndMalformedPayload()
     {
         var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
