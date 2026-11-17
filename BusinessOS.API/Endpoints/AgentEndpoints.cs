@@ -438,7 +438,8 @@ public static class AgentEndpoints
     }
 
 
-    private const string SalesAgentKey = "sales-assistant";
+    private const string SalesAgentKey = "emma";
+    private const string SalesFollowUpCapability = "SendCustomerFollowUp";
     private static readonly HashSet<string> SupportedProposalActions =
         new(StringComparer.Ordinal) { "SendCustomerFollowUp" };
 
@@ -465,6 +466,9 @@ public static class AgentEndpoints
 
         if (!SupportedProposalActions.Contains(request.ActionType))
             return Results.BadRequest(new { error = "Unsupported proposal action type." });
+
+        if (!await HasSalesFollowUpCapabilityAsync(db, tenantId, cancellationToken))
+            return Results.Forbid();
 
         if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Trim().Length > 120)
             return Results.BadRequest(new { error = "Title is required and must be at most 120 characters." });
@@ -685,6 +689,10 @@ public static class AgentEndpoints
         if (!canExecute)
             return Results.Forbid();
 
+        // Revalidate the tenant's explicit employee capability at execution time.
+        if (!await HasSalesFollowUpCapabilityAsync(db, tenantId, cancellationToken))
+            return Results.Forbid();
+
         var run = await db.AgentWorkflowRuns.FirstOrDefaultAsync(
             item => item.Id == proposalId
                 && item.TenantId == tenantId
@@ -839,6 +847,35 @@ public static class AgentEndpoints
             return Results.Json(
                 new { error = "Email delivery failed. Automatic retry is disabled; review the execution history before taking further action." },
                 statusCode: StatusCodes.Status502BadGateway);
+        }
+    }
+
+    private static async Task<bool> HasSalesFollowUpCapabilityAsync(
+        IApplicationDbContext db,
+        Guid tenantId,
+        CancellationToken cancellationToken)
+    {
+        var profile = await db.AgentProfiles
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                item => item.TenantId == tenantId
+                    && item.Key == SalesAgentKey
+                    && item.IsActive
+                    && !item.IsDeleted,
+                cancellationToken);
+
+        if (profile is null)
+            return false;
+
+        try
+        {
+            var allowed = JsonSerializer.Deserialize<string[]>(profile.AllowedToolsJson ?? "[]", JsonOptions) ?? [];
+            return allowed.Contains(SalesFollowUpCapability, StringComparer.Ordinal);
+        }
+        catch (JsonException)
+        {
+            return false;
         }
     }
 
