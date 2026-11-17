@@ -30,6 +30,8 @@ The request does not expose the agent key, system persona prompt, active state, 
 
 System profiles are read-only through this API. Tenant overrides do not affect other tenants.
 
+When a chat request does not explicitly select a language and the user has no saved concrete voice-language preference (the default is Auto), the runtime uses the effective tenant employee's `DefaultLanguage`. An explicit request language or saved concrete user preference takes precedence.
+
 ## Follow-up work
 
 - Add a dedicated, constrained custom-instructions field with prompt-injection boundaries and a migration.
