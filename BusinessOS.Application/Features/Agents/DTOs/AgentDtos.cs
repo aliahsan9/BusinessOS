@@ -18,6 +18,11 @@ public sealed class AgentEmployeeDto
     public string? AvatarHint { get; init; }
 }
 
+public sealed class SetAgentActivationRequest
+{
+    public bool IsActive { get; init; }
+}
+
 public sealed class AgentPersonaDto
 {
     public string Key { get; init; } = default!;
