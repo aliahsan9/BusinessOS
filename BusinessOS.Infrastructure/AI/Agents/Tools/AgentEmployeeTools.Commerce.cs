@@ -218,13 +218,11 @@ public sealed class CreateSaleTool : AiToolBase
             productName ??= name;
             if (qty is decimal amount)
             {
-                if (!sawQuantity)
-                {
-                    quantity = amount;
-                    sawQuantity = true;
-                }
-                else if (quantity != amount)
-                    quantity = null;
+                // Multiple lines for the same product are equivalent to one line
+                // with the summed quantity. This is safe because distinct products
+                // are rejected before this parser is called.
+                quantity = (quantity ?? 0m) + amount;
+                sawQuantity = true;
             }
         }
 
