@@ -55,6 +55,7 @@ public sealed class AgentSelfCorrectionResult
 
 public sealed class AgentToolExecutionRequest
 {
+    public string AgentKey { get; init; } = string.Empty;
     public AiToolName ToolName { get; init; }
     public string Message { get; init; } = default!;
     public string Language { get; init; } = "en";

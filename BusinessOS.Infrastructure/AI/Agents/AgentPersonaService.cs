@@ -4,6 +4,8 @@ using BusinessOS.Application.Features.Agents;
 using BusinessOS.Application.Features.Agents.Enums;
 using BusinessOS.Application.Features.Agents.Services;
 using BusinessOS.Domain.Entities;
+using BusinessOS.Application.Features.AI.Enums;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -77,6 +79,7 @@ public sealed class AgentPersonaService : IAgentPersonaService
                 Specialty = systemProfile.Specialty,
                 SystemPersonaPrompt = systemProfile.SystemPersonaPrompt,
                 DefaultLanguage = systemProfile.DefaultLanguage,
+                AllowedToolsJson = systemProfile.AllowedToolsJson,
                 IsDefault = systemProfile.IsDefault,
                 IsActive = isActive
             };
@@ -142,6 +145,7 @@ public sealed class AgentPersonaService : IAgentPersonaService
                 Specialty = specialty,
                 SystemPersonaPrompt = systemProfile.SystemPersonaPrompt,
                 DefaultLanguage = language,
+                AllowedToolsJson = systemProfile.AllowedToolsJson,
                 IsDefault = systemProfile.IsDefault,
                 IsActive = systemProfile.IsActive
             };
@@ -158,6 +162,169 @@ public sealed class AgentPersonaService : IAgentPersonaService
 
         await _context.SaveChangesAsync(cancellationToken);
         return ToEmployeeDto(tenantProfile);
+    }
+
+    public async Task<AgentToolPermissionsDto?> GetToolPermissionsAsync(
+        string agentKey,
+        CancellationToken cancellationToken = default)
+    {
+        var key = AgentKeys.Normalize(agentKey);
+        var profiles = await LoadEffectiveProfilesAsync(cancellationToken, includeInactiveOverrides: true);
+        var profile = profiles.FirstOrDefault(p => string.Equals(p.Key, key, StringComparison.OrdinalIgnoreCase));
+        return profile is null ? null : ToToolPermissionsDto(profile);
+    }
+
+    public async Task<AgentToolPermissionsDto?> UpdateToolPermissionsAsync(
+        string agentKey,
+        UpdateAgentToolPermissionsRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (_currentUser.TenantId is not Guid tenantId || tenantId == Guid.Empty)
+            throw new InvalidOperationException("A tenant context is required to manage AI employee permissions.");
+
+        ArgumentNullException.ThrowIfNull(request);
+        var key = AgentKeys.Normalize(agentKey);
+        if (!AgentKeys.IsKnown(key))
+            return null;
+
+        var submitted = request.AllowedTools ?? [];
+        if (submitted.Count > 100)
+            throw new ArgumentException("An AI employee can have at most 100 allowed tools.");
+
+        var normalized = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var raw in submitted)
+        {
+            if (string.IsNullOrWhiteSpace(raw)
+                || !Enum.TryParse<AiToolName>(raw.Trim(), ignoreCase: false, out var parsed)
+                || !Enum.IsDefined(parsed))
+            {
+                throw new ArgumentException($"Unknown AI tool: {raw}.");
+            }
+
+            normalized.Add(parsed.ToString());
+        }
+
+        await EnsureDefaultProfilesAsync(cancellationToken);
+        var systemProfile = await _context.AgentProfiles
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.TenantId == null && p.Key == key && !p.IsDeleted, cancellationToken);
+        if (systemProfile is null)
+            return null;
+
+        var tenantProfile = await _context.AgentProfiles
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.TenantId == tenantId && p.Key == key && !p.IsDeleted, cancellationToken);
+
+        if (tenantProfile is null)
+        {
+            tenantProfile = new AgentProfile
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                Key = systemProfile.Key,
+                DisplayName = systemProfile.DisplayName,
+                RoleTitle = systemProfile.RoleTitle,
+                Specialty = systemProfile.Specialty,
+                SystemPersonaPrompt = systemProfile.SystemPersonaPrompt,
+                DefaultLanguage = systemProfile.DefaultLanguage,
+                AllowedToolsJson = systemProfile.AllowedToolsJson,
+                IsDefault = systemProfile.IsDefault,
+                IsActive = systemProfile.IsActive
+            };
+            _context.AgentProfiles.Add(tenantProfile);
+        }
+
+        tenantProfile.AllowedToolsJson = JsonSerializer.Serialize(normalized.OrderBy(x => x, StringComparer.Ordinal));
+        tenantProfile.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+        return ToToolPermissionsDto(tenantProfile);
+    }
+
+    public async Task<bool> IsToolAllowedAsync(
+        string agentKey,
+        AiToolName tool,
+        CancellationToken cancellationToken = default)
+    {
+        var key = AgentKeys.Normalize(agentKey);
+        var profiles = await LoadEffectiveProfilesAsync(cancellationToken);
+        var profile = profiles.FirstOrDefault(p => string.Equals(p.Key, key, StringComparison.OrdinalIgnoreCase));
+        if (profile is null || !profile.IsActive)
+            return false;
+
+        try
+        {
+            var allowed = JsonSerializer.Deserialize<string[]>(profile.AllowedToolsJson ?? "[]") ?? [];
+            return allowed.Contains(tool.ToString(), StringComparer.Ordinal);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Invalid tool permission JSON for AI employee {AgentKey}", key);
+            return false;
+        }
+    }
+
+    private static string DefaultAllowedToolsJson(string key)
+    {
+        // Specialist defaults are read-only; Navla retains confirmed core business actions. Owners/Admins can customize each allowlist.
+        var baselineTools = key switch
+        {
+            AgentKeys.Adam => new[]
+            {
+                AiToolName.GetProducts, AiToolName.SearchProduct, AiToolName.GetInventorySummary,
+                AiToolName.GetLowStock, AiToolName.GetOutOfStock, AiToolName.GetDeadStock,
+                AiToolName.GetPurchaseRecommendations, AiToolName.GetInventoryHealth,
+                AiToolName.SearchSupplier
+            },
+            AgentKeys.Emma => new[]
+            {
+                AiToolName.GetCustomers, AiToolName.SearchCustomer, AiToolName.GetInvoices,
+                AiToolName.SearchInvoice, AiToolName.GetRevenue, AiToolName.GetSalesSummary,
+                AiToolName.GetBestSellingProducts, AiToolName.GetSalesTrends,
+                AiToolName.GetCustomerInsights, AiToolName.GetBusinessHealth,
+                AiToolName.GetDailyPriorities, AiToolName.ShowProfit
+            },
+            _ => new[]
+            {
+                AiToolName.GetCustomers, AiToolName.GetProjects, AiToolName.GetTasks,
+                AiToolName.GetInvoices, AiToolName.GetExpenses, AiToolName.GetProducts,
+                AiToolName.GetRevenue, AiToolName.GetSalesSummary, AiToolName.GetBestSellingProducts,
+                AiToolName.GetSalesTrends, AiToolName.GetInventorySummary, AiToolName.GetLowStock,
+                AiToolName.GetDeadStock, AiToolName.GetPurchaseRecommendations,
+                AiToolName.GetBusinessSettings, AiToolName.GetNotificationsSummary,
+                AiToolName.SearchDocuments, AiToolName.ShowProfit, AiToolName.SearchCustomer,
+                AiToolName.SearchProduct, AiToolName.SearchInvoice, AiToolName.SearchSupplier,
+                AiToolName.GetOutOfStock, AiToolName.GetInventoryHealth,
+                AiToolName.GetBusinessHealth, AiToolName.GetDailyPriorities, AiToolName.GetCustomerInsights,
+                AiToolName.CreateTask, AiToolName.CreateInvoice, AiToolName.CreateCustomer,
+                AiToolName.CreateProject, AiToolName.CreatePurchaseOrderDraft, AiToolName.CreateProduct,
+                AiToolName.UpdateCustomer, AiToolName.UpdateProduct, AiToolName.AdjustInventory,
+                AiToolName.ReceiveStock, AiToolName.CreateSale, AiToolName.CreatePurchaseOrder,
+                AiToolName.CreateSupplier, AiToolName.UpdateSupplier
+            }
+        };
+
+        return JsonSerializer.Serialize(baselineTools.Select(x => x.ToString()));
+    }
+
+    private static AgentToolPermissionsDto ToToolPermissionsDto(AgentProfile profile)
+    {
+        string[] allowed;
+        try
+        {
+            allowed = JsonSerializer.Deserialize<string[]>(profile.AllowedToolsJson ?? "[]") ?? [];
+        }
+        catch (JsonException)
+        {
+            allowed = [];
+        }
+
+        return new AgentToolPermissionsDto
+        {
+            AgentKey = profile.Key,
+            AllowedTools = allowed,
+            AvailableTools = Enum.GetNames<AiToolName>()
+        };
     }
 
     public async Task<AgentPersonaDto> ResolvePersonaAsync(
@@ -275,6 +442,7 @@ public sealed class AgentPersonaService : IAgentPersonaService
                     Specialty = seed.Specialty,
                     SystemPersonaPrompt = seed.SystemPersonaPrompt,
                     DefaultLanguage = seed.DefaultLanguage,
+                    AllowedToolsJson = DefaultAllowedToolsJson(seed.Key),
                     IsDefault = seed.IsDefault,
                     IsActive = true
                 });

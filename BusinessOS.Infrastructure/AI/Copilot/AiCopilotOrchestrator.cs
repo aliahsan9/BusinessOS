@@ -172,7 +172,8 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
                 memory,
                 sessionId,
                 cancellationToken,
-                intentResult);
+                intentResult,
+                request.AgentKey);
             var keywordNeedsData = intentResult.SuggestedTools.Count > 0
                 && intentResult.Intent is not (AiCopilotIntent.Conversational or AiCopilotIntent.Help);
             if (model is not null
@@ -200,6 +201,25 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
 
         if (intentResult.Intent is AiCopilotIntent.DashboardInsight)
         {
+            var employeeCanUseDashboardTool = string.IsNullOrWhiteSpace(request.AgentKey)
+                || (_personaService is not null
+                    && await _personaService.IsToolAllowedAsync(request.AgentKey, AiToolName.GetDailyPriorities, cancellationToken));
+            if (!employeeCanUseDashboardTool)
+            {
+                sw.Stop();
+                var denied = new AiCopilotChatResponse
+                {
+                    Reply = "This AI employee is not permitted to access dashboard priorities.",
+                    SpokenReply = "This AI employee is not permitted to access dashboard priorities.",
+                    SessionId = sessionId,
+                    ConversationId = sessionId,
+                    Intent = intentResult.Intent,
+                    PermissionDenied = true,
+                    AgentKey = request.AgentKey
+                };
+                return new PipelineResult { Response = denied };
+            }
+
             var priorities = _toolRegistry.AllTools.FirstOrDefault(t => t.ToolName == AiToolName.GetDailyPriorities);
             string reply;
             var used = new List<string>();
@@ -235,6 +255,22 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
                 .ToList()
             : _toolRegistry.SelectTools(intentResult, message, page, memory).ToList();
 
+        if (!string.IsNullOrWhiteSpace(request.AgentKey))
+        {
+            if (_personaService is null)
+                tools.Clear();
+            else
+            {
+                var employeeTools = new List<IAiTool>(tools.Count);
+                foreach (var candidate in tools)
+                {
+                    if (await _personaService.IsToolAllowedAsync(request.AgentKey, candidate.ToolName, cancellationToken))
+                        employeeTools.Add(candidate);
+                }
+                tools = employeeTools;
+            }
+        }
+
         var executedTools = 0;
         var toolResults = new List<AiToolResult>();
         var toolsUsed = new List<string>();
@@ -248,6 +284,11 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
                 _logger.LogWarning("AI tool budget exhausted for session {SessionId}", sessionId);
                 break;
             }
+
+            if (!string.IsNullOrWhiteSpace(request.AgentKey)
+                && (_personaService is null
+                    || !await _personaService.IsToolAllowedAsync(request.AgentKey, tool.ToolName, cancellationToken)))
+                continue;
 
             var toolPermission = _permissionValidator.ValidateTool(tool.ToolName);
             if (!toolPermission.Allowed)
@@ -283,7 +324,9 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
             }
         }
 
-        if (intentResult.Intent is AiCopilotIntent.DocumentSearch && !toolsUsed.Contains(AiToolName.SearchDocuments.ToString()))
+        if (intentResult.Intent is AiCopilotIntent.DocumentSearch && !toolsUsed.Contains(AiToolName.SearchDocuments.ToString())
+            && (string.IsNullOrWhiteSpace(request.AgentKey)
+                || (_personaService is not null && await _personaService.IsToolAllowedAsync(request.AgentKey, AiToolName.SearchDocuments, cancellationToken))))
         {
             var ragCitations = await _ragService.SearchAsync(message, null, 5, cancellationToken);
             citations.AddRange(ragCitations);
@@ -295,7 +338,9 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
             });
             toolsUsed.Add(AiToolName.SearchDocuments.ToString());
         }
-        else if (ShouldEnrichWithRag(intentResult.Intent, message) && citations.Count == 0)
+        else if (ShouldEnrichWithRag(intentResult.Intent, message) && citations.Count == 0
+            && (string.IsNullOrWhiteSpace(request.AgentKey)
+                || (_personaService is not null && await _personaService.IsToolAllowedAsync(request.AgentKey, AiToolName.SearchDocuments, cancellationToken))))
         {
             try
             {

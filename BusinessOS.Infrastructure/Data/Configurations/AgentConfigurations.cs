@@ -17,6 +17,7 @@ public class AgentProfileConfiguration : IEntityTypeConfiguration<AgentProfile>
         builder.Property(x => x.Specialty).HasMaxLength(300).IsRequired();
         builder.Property(x => x.SystemPersonaPrompt).HasColumnType("nvarchar(max)").IsRequired();
         builder.Property(x => x.DefaultLanguage).HasMaxLength(10).IsRequired();
+        builder.Property(x => x.AllowedToolsJson).HasColumnType("nvarchar(max)").IsRequired().HasDefaultValue("[]");
 
         builder.HasIndex(x => new { x.TenantId, x.Key }).IsUnique();
         builder.HasIndex(x => new { x.TenantId, x.IsDefault, x.IsActive });

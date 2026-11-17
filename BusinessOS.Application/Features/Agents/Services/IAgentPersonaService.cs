@@ -25,6 +25,12 @@ public interface IAgentPersonaService
         UpdateAgentConfigurationRequest request,
         CancellationToken cancellationToken = default);
 
+    Task<AgentToolPermissionsDto?> GetToolPermissionsAsync(string agentKey, CancellationToken cancellationToken = default);
+
+    Task<AgentToolPermissionsDto?> UpdateToolPermissionsAsync(string agentKey, UpdateAgentToolPermissionsRequest request, CancellationToken cancellationToken = default);
+
+    Task<bool> IsToolAllowedAsync(string agentKey, BusinessOS.Application.Features.AI.Enums.AiToolName tool, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Resolves the effective persona for an agent key (falls back to Navla / default). The stored key remains sophia.
     /// </summary>

@@ -230,7 +230,8 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
                 memory,
                 sessionId,
                 cancellationToken,
-                intent);
+                intent,
+                agentKey);
             var needsData = intent.SuggestedTools.Count > 0;
             if (model is not null
                 && (model.ProviderError
@@ -462,6 +463,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             {
                 exec = await _executor.ExecuteAsync(new AgentToolExecutionRequest
                 {
+                    AgentKey = agentKey,
                     ToolName = toolName.Value,
                     Message = injectedTool == toolName && pending?.OriginalRequest is { Length: > 0 } originalRequest
                         ? originalRequest
