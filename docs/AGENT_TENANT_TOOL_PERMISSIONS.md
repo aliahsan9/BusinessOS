@@ -46,3 +46,8 @@ Apply the normal EF Core migration process before deploying the API.
 ## Not included yet
 
 The backend contract and enforcement are implemented first. The Angular permission editor should be added only after the backend PR is reviewed, merged, and its migration/build/tests have passed.
+
+
+## Registered tool catalog endpoint
+
+The authenticated `GET /api/v1/agents/tools` endpoint returns the actual dependency-injected `IAiToolRegistry.AllTools` catalog. Each item contains the stable enum-backed `name` and user-facing `description`. It intentionally does not expose internal permission requirements. The frontend should use this endpoint rather than maintain a duplicate hardcoded list.
