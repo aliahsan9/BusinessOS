@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using BusinessOS.Application.Features.Agents;
+using BusinessOS.Application.Features.Agents.Services;
 using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Enums;
 using BusinessOS.Application.Features.AI.Services;

@@ -670,7 +670,11 @@ public static class AgentEndpoints
             DecidedAt = now
         }, JsonOptions);
 
+ ci/dotnet-agent-regression-pipeline
+        // Compare-and-set the pending state. Only one concurrent reviewer can win.
+=======
         // Compare-and-set the pending state so only one concurrent reviewer can win.
+ master
         await using var transaction = await db.BeginTransactionAsync(cancellationToken);
         var transitioned = await db.TryTransitionAgentWorkflowStatusAsync(
             proposalId,
@@ -689,10 +693,18 @@ public static class AgentEndpoints
             return Results.Conflict(new { error = "This proposal has already been decided by another reviewer." });
         }
 
+ ci/dotnet-agent-regression-pipeline
+        // Keep the tracked instance aligned with the successful conditional update.
+=======
+ master
         run.Status = newStatus;
         run.CompletedAt = now;
         run.UpdatedAt = now;
         run.ProgressJson = updatedPayload;
+ ci/dotnet-agent-regression-pipeline
+
+=======
+ master
         db.RbacAuditLogs.Add(new RbacAuditLog
         {
             TenantId = tenantId,

@@ -88,6 +88,14 @@ public sealed class CreateSaleTool : AiToolBase
             if (customer.Kind != SaleMatchKind.Unique || customer.Value is null)
                 return Fail(CustomerFailure(customer));
 
+            // The current agent draft supports one distinct product. Repeated identical
+            // lines can be safely collapsed by ReadSingleLine; distinct products must fail
+            // closed rather than silently creating an incomplete order.
+            if (HasMultipleDistinctProducts(args))
+            {
+                return Fail("The order was not created. Multi-product sales are not supported by this agent action yet. Please create one product per order.");
+            }
+
             var line = ReadSingleLine(args);
             var product = await _catalog.ResolveProductAsync(
                 line.ProductId?.ToString() ?? AgentToolArgHelpers.Str(args, "productId"),
@@ -161,6 +169,33 @@ public sealed class CreateSaleTool : AiToolBase
         return Ok(message, "Order", order.Id, $"/orders/{order.Id}");
     }
 
+    private static bool HasMultipleDistinctProducts(JsonElement args)
+    {
+        if (!args.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
+            return false;
+
+        var identities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in items.EnumerateArray())
+        {
+            var id = AgentToolArgHelpers.GuidVal(item, "productId");
+            var name = AgentToolArgHelpers.Str(item, "productName")
+                ?? AgentToolArgHelpers.Str(item, "sku");
+
+            // An item without a stable product identity cannot safely be merged with
+            // another line, so treat it as a distinct request.
+            var identity = id is Guid productId
+                ? $"id:{productId:N}|name:{name?.Trim()}"
+                : $"name:{name?.Trim()}";
+
+            if (!identities.Add(identity))
+                continue;
+            if (identities.Count > 1)
+                return true;
+        }
+
+        return false;
+    }
+
     private static (Guid? ProductId, string? ProductName, decimal? Quantity) ReadSingleLine(JsonElement args)
     {
         if (!args.TryGetProperty("items", out var itemsEl) || itemsEl.ValueKind != JsonValueKind.Array)
@@ -169,7 +204,6 @@ public sealed class CreateSaleTool : AiToolBase
         Guid? productId = null;
         string? productName = null;
         decimal? quantity = null;
-        var sawQuantity = false;
         foreach (var item in itemsEl.EnumerateArray())
         {
             var id = AgentToolArgHelpers.GuidVal(item, "productId");
@@ -183,13 +217,10 @@ public sealed class CreateSaleTool : AiToolBase
             productName ??= name;
             if (qty is decimal amount)
             {
-                if (!sawQuantity)
-                {
-                    quantity = amount;
-                    sawQuantity = true;
-                }
-                else if (quantity != amount)
-                    quantity = null;
+                // Multiple lines for the same product are equivalent to one line
+                // with the summed quantity. This is safe because distinct products
+                // are rejected before this parser is called.
+                quantity = (quantity ?? 0m) + amount;
             }
         }
 
@@ -486,14 +517,10 @@ public sealed class CreatePurchaseOrderTool : AiToolBase
                         .Select(s => (Guid?)s.Id)
                         .FirstOrDefaultAsync(cancellationToken);
                 }
-                supplierId ??= await _db.Suppliers.AsNoTracking()
-                    .OrderBy(s => s.Name)
-                    .Select(s => (Guid?)s.Id)
-                    .FirstOrDefaultAsync(cancellationToken);
             }
 
             if (supplierId is null)
-                return Fail("No supplier found. Create a supplier first (e.g. \"Create supplier Acme Traders\"), then I can create the purchase order.");
+                return Fail("I couldn't identify the supplier. Please select a supplier by name or supplier ID before I create this purchase order. I won't choose a supplier automatically.");
 
             var items = new List<CreatePurchaseOrderLineItemDto>();
             if (args.TryGetProperty("items", out var itemsEl) && itemsEl.ValueKind == JsonValueKind.Array)

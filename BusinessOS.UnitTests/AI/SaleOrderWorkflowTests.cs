@@ -191,6 +191,45 @@ public class SaleOrderWorkflowTests
     }
 
     [Fact]
+    public async Task MultipleDistinctProducts_AreRejectedInsteadOfCreatingAnIncompleteOrder()
+    {
+        await using var db = CreateContext(out var tenantId);
+        var (customer, firstProduct) = await SeedLaptopAsync(
+            db, tenantId, "HP Laptop Generation 5", "HP-G5", 1200, 10);
+        var secondProduct = TestDataFactory.CreateProduct(
+            tenantId,
+            (await db.Categories.SingleAsync()).Id,
+            "Wireless Mouse",
+            "MOUSE-01",
+            salePrice: 25,
+            stock: 10);
+        db.Products.Add(secondProduct);
+        db.Inventories.Add(TestDataFactory.CreateInventory(tenantId, secondProduct.Id, 10));
+        await db.SaveChangesAsync();
+
+        var tool = CreateTool(db, tenantId, out var mediator);
+        using var document = JsonDocument.Parse($"""
+            {
+              "customerId": "{{customer.Id}}",
+              "items": [
+                { "productId": "{{firstProduct.Id}}", "productName": "HP Laptop Generation 5", "quantity": 1 },
+                { "productId": "{{secondProduct.Id}}", "productName": "Wireless Mouse", "quantity": 2 }
+              ]
+            }
+            """);
+
+        var result = await tool.ExecuteWithArgsAsync(
+            Context(Guid.NewGuid()), document.RootElement.Clone(), CancellationToken.None);
+
+        result.Success.Should().BeFalse();
+        result.Summary.Should().Contain("Multi-product sales are not supported");
+        mediator.Verify(
+            m => m.Send(It.IsAny<CreateOrderCommand>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        (await db.Orders.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
     public async Task InsufficientStock_DoesNotCreateTheOrder()
     {
         await using var db = CreateContext(out var tenantId);

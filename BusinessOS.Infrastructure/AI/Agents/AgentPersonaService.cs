@@ -552,7 +552,7 @@ public sealed class AgentPersonaService : IAgentPersonaService
                 byKey[tenantProfile.Key] = tenantProfile;
         }
 
-        var effective = byKey.Values;
+        IEnumerable<AgentProfile> effective = byKey.Values;
         if (!includeInactiveOverrides)
             effective = effective.Where(p => p.IsActive);
 
