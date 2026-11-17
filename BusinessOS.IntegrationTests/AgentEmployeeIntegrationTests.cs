@@ -232,6 +232,54 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task AgentToolPermissions_AreTenantScoped_AndRejectUnknownTools()
+    {
+        var tenantA = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var tenantB = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+
+        var update = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            "/api/v1/agents/employees/adam/permissions",
+            tenantA,
+            new UpdateAgentToolPermissionsRequest
+            {
+                AllowedTools = [nameof(BusinessOS.Application.Features.AI.Enums.AiToolName.GetInventorySummary)]
+            });
+
+        update.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updated = await update.Content.ReadFromJsonAsync<AgentEmployeeDto>(JsonOptions);
+        updated.Should().NotBeNull();
+        updated!.AllowedTools.Should().ContainSingle()
+            .Which.Should().Be(nameof(BusinessOS.Application.Features.AI.Enums.AiToolName.GetInventorySummary));
+
+        var tenantAResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client, HttpMethod.Get, "/api/v1/agents/employees", tenantA);
+        var tenantAEmployees = await tenantAResponse.Content.ReadFromJsonAsync<List<AgentEmployeeDto>>(JsonOptions);
+        tenantAEmployees.Should().Contain(e =>
+            e.Key == "adam" && e.AllowedTools!.Contains(nameof(BusinessOS.Application.Features.AI.Enums.AiToolName.GetInventorySummary)));
+
+        var tenantBResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client, HttpMethod.Get, "/api/v1/agents/employees", tenantB);
+        var tenantBEmployees = await tenantBResponse.Content.ReadFromJsonAsync<List<AgentEmployeeDto>>(JsonOptions);
+        tenantBEmployees.Should().Contain(e => e.Key == "adam" && e.AllowedTools is null);
+    }
+
+    [Fact]
+    public async Task AgentToolPermissions_RejectsToolsOutsideTheRegisteredCatalog()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            "/api/v1/agents/employees/adam/permissions",
+            auth,
+            new UpdateAgentToolPermissionsRequest { AllowedTools = ["RunArbitraryCode"] });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task AgentOnboardingStart_ReturnsWorkflowSteps()
     {
         var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
