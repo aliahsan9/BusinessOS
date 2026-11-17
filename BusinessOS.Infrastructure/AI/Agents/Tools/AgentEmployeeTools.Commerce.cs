@@ -88,6 +88,15 @@ public sealed class CreateSaleTool : AiToolBase
             if (customer.Kind != SaleMatchKind.Unique || customer.Value is null)
                 return Fail(CustomerFailure(customer));
 
+            // The current command contract creates a single-line order. Never silently
+            // discard extra AI-generated lines and create a different order than requested.
+            if (args.TryGetProperty("items", out var requestedItems)
+                && requestedItems.ValueKind == JsonValueKind.Array
+                && requestedItems.GetArrayLength() > 1)
+            {
+                return Fail("The order was not created. Multi-product sales are not supported by this agent action yet. Please create one product per order.");
+            }
+
             var line = ReadSingleLine(args);
             var product = await _catalog.ResolveProductAsync(
                 line.ProductId?.ToString() ?? AgentToolArgHelpers.Str(args, "productId"),
