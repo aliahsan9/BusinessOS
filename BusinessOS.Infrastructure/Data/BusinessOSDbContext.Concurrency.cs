@@ -9,6 +9,8 @@ namespace BusinessOS.Infrastructure.Data;
 
 public partial class BusinessOSDbContext
 {
+    private static readonly SemaphoreSlim InMemoryAgentWorkflowTransitionLock = new(1, 1);
+
     public bool HasActiveTransaction => Database.CurrentTransaction is not null;
 
     public async Task<IApplicationTransaction?> BeginTransactionAsync(CancellationToken cancellationToken = default)
@@ -161,20 +163,32 @@ public partial class BusinessOSDbContext
             return rows == 1;
         }
 
-        var tracked = await AgentWorkflowRuns.FirstOrDefaultAsync(
-            run => run.Id == workflowRunId
-                && run.TenantId == tenantId
-                && !run.IsDeleted,
-            cancellationToken);
+        // The in-memory provider is used by integration tests and does not support
+        // ExecuteUpdate. Serialize transitions across DbContext instances and persist the
+        // state before releasing the gate so concurrent requests still observe one winner.
+        await InMemoryAgentWorkflowTransitionLock.WaitAsync(cancellationToken);
+        try
+        {
+            var tracked = await AgentWorkflowRuns.FirstOrDefaultAsync(
+                run => run.Id == workflowRunId
+                    && run.TenantId == tenantId
+                    && !run.IsDeleted,
+                cancellationToken);
 
-        if (tracked is null || tracked.Status != expectedStatus)
-            return false;
+            if (tracked is null || tracked.Status != expectedStatus)
+                return false;
 
-        tracked.Status = newStatus;
-        tracked.UpdatedAt = updatedAt;
-        tracked.CompletedAt = completedAt;
-        tracked.ProgressJson = progressJson;
-        return true;
+            tracked.Status = newStatus;
+            tracked.UpdatedAt = updatedAt;
+            tracked.CompletedAt = completedAt;
+            tracked.ProgressJson = progressJson;
+            await SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        finally
+        {
+            InMemoryAgentWorkflowTransitionLock.Release();
+        }
     }
 
     public async Task<bool> TryAcceptOrderPaymentAsync(
