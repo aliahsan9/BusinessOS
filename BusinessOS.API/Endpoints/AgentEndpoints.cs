@@ -652,24 +652,6 @@ public static class AgentEndpoints
         run.CompletedAt = now;
         run.UpdatedAt = now;
         run.ProgressJson = updatedPayload;
-        await using var transaction = await db.BeginTransactionAsync(cancellationToken);
-        var transitioned = await db.TryTransitionAgentWorkflowStatusAsync(
-            proposalId,
-            tenantId,
-            AgentWorkflowStatus.AwaitingApproval,
-            newStatus,
-            now,
-            now,
-            updatedPayload,
-            cancellationToken);
-
-        if (!transitioned)
-        {
-            if (transaction is not null)
-                await transaction.RollbackAsync(cancellationToken);
-            return Results.Conflict(new { error = "This proposal has already been decided by another reviewer." });
-        }
-
         db.RbacAuditLogs.Add(new RbacAuditLog
         {
             TenantId = tenantId,
