@@ -523,8 +523,9 @@ public static class AgentEndpoints
         if (currentUser.TenantId is null || currentUser.TenantId == Guid.Empty)
             return Results.Forbid();
 
+        var tenantId = currentUser.TenantId.Value;
         var query = db.AgentWorkflowRuns.AsNoTracking()
-            .Where(run => run.AgentKey == SalesAgentKey);
+            .Where(run => run.TenantId == tenantId && run.AgentKey == SalesAgentKey);
 
         var runs = await query.OrderByDescending(run => run.StartedAt)
             .Take(Math.Clamp(limit, 1, 100))
@@ -546,9 +547,12 @@ public static class AgentEndpoints
         if (currentUser.TenantId is null || currentUser.TenantId == Guid.Empty)
             return Results.Forbid();
 
+        var tenantId = currentUser.TenantId.Value;
         var run = await db.AgentWorkflowRuns.AsNoTracking()
             .FirstOrDefaultAsync(
-                item => item.Id == proposalId && item.AgentKey == SalesAgentKey,
+                item => item.TenantId == tenantId
+                    && item.Id == proposalId
+                    && item.AgentKey == SalesAgentKey,
                 cancellationToken);
 
         return run is null
@@ -580,8 +584,11 @@ public static class AgentEndpoints
         if (request.Comment?.Length > 500)
             return Results.BadRequest(new { error = "Comment must be at most 500 characters." });
 
+        var tenantId = currentUser.TenantId.Value;
         var run = await db.AgentWorkflowRuns.FirstOrDefaultAsync(
-            item => item.Id == proposalId && item.AgentKey == SalesAgentKey,
+            item => item.TenantId == tenantId
+                && item.Id == proposalId
+                && item.AgentKey == SalesAgentKey,
             cancellationToken);
         if (run is null)
             return Results.NotFound(new { error = "Proposal was not found." });
