@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using BusinessOS.Application.Features.Agents.DTOs;
 using BusinessOS.Application.Features.Auth.DTOs;
+using BusinessOS.Domain.Enums;
 using FluentAssertions;
 
 namespace BusinessOS.IntegrationTests;
@@ -249,3 +250,112 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
         body.WorkflowSteps.Should().NotBeEmpty();
     }
 }
+
+    [Fact]
+    public async Task SalesActionProposal_IsTenantScoped_AndRequiresExplicitDecision()
+    {
+        var tenantA = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var tenantB = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+
+        var create = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/v1/agents/actions/proposals",
+            tenantA,
+            new CreateAgentActionProposalRequest
+            {
+                ActionType = "SendCustomerFollowUp",
+                Title = "Follow up with Ahmed",
+                Summary = "Prepare a polite follow-up about the pending quotation.",
+                PayloadJson = "{\"customerId\":\"11111111-1111-1111-1111-111111111111\",\"message\":\"Hello Ahmed\"}"
+            });
+
+        create.StatusCode.Should().Be(HttpStatusCode.Created);
+        var proposal = await create.Content.ReadFromJsonAsync<AgentActionProposalDto>(JsonOptions);
+        proposal.Should().NotBeNull();
+        proposal!.Status.Should().Be(AgentWorkflowStatus.AwaitingApproval);
+        proposal.ActionType.Should().Be("SendCustomerFollowUp");
+
+        var tenantAList = await IntegrationHttp.SendAuthorizedAsync(
+            Client, HttpMethod.Get, "/api/v1/agents/actions/proposals", tenantA);
+        var tenantAProposals = await tenantAList.Content.ReadFromJsonAsync<List<AgentActionProposalDto>>(JsonOptions);
+        tenantAProposals.Should().ContainSingle(item => item.Id == proposal.Id);
+
+        var tenantBList = await IntegrationHttp.SendAuthorizedAsync(
+            Client, HttpMethod.Get, "/api/v1/agents/actions/proposals", tenantB);
+        var tenantBProposals = await tenantBList.Content.ReadFromJsonAsync<List<AgentActionProposalDto>>(JsonOptions);
+        tenantBProposals.Should().BeEmpty();
+
+        var crossTenantDecision = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            $"/api/v1/agents/actions/proposals/{proposal.Id}/decision",
+            tenantB,
+            new DecideAgentActionProposalRequest { Decision = "approved" });
+        crossTenantDecision.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        var approve = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            $"/api/v1/agents/actions/proposals/{proposal.Id}/decision",
+            tenantA,
+            new DecideAgentActionProposalRequest
+            {
+                Decision = "approved",
+                Comment = "Reviewed and approved for the next release."
+            });
+        approve.StatusCode.Should().Be(HttpStatusCode.OK);
+        var decided = await approve.Content.ReadFromJsonAsync<AgentActionProposalDto>(JsonOptions);
+        decided!.Status.Should().Be(AgentWorkflowStatus.Approved);
+        decided.DecisionComment.Should().Be("Reviewed and approved for the next release.");
+
+        var duplicateDecision = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            $"/api/v1/agents/actions/proposals/{proposal.Id}/decision",
+            tenantA,
+            new DecideAgentActionProposalRequest { Decision = "rejected" });
+        duplicateDecision.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task SalesActionProposal_RejectsUnsupportedActionAndMalformedPayload()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+
+        var unsupported = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/v1/agents/actions/proposals",
+            auth,
+            new CreateAgentActionProposalRequest
+            {
+                ActionType = "DeleteCustomer",
+                Title = "Delete customer",
+                Summary = "This action is not enabled.",
+                PayloadJson = "{}"
+            });
+        unsupported.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var malformed = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/v1/agents/actions/proposals",
+            auth,
+            new CreateAgentActionProposalRequest
+            {
+                ActionType = "SendCustomerFollowUp",
+                Title = "Follow up",
+                Summary = "Prepare a message.",
+                PayloadJson = "{not-json}"
+            });
+        malformed.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task SalesActionProposal_RequiresAuthentication()
+    {
+        var response = await Client.GetAsync("/api/v1/agents/actions/proposals");
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
