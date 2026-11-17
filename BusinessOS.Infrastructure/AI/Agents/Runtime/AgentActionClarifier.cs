@@ -99,7 +99,8 @@ public static class AgentActionClarifier
         or AiToolName.CreatePurchaseOrder or AiToolName.CreatePurchaseOrderDraft
         or AiToolName.ApprovePurchaseOrder or AiToolName.ReceivePurchase
         or AiToolName.UpdateCompanyProfile or AiToolName.UpdateTaxDefaults
-        or AiToolName.CreateProject or AiToolName.CreateTask;
+        or AiToolName.CreateProject or AiToolName.CreateTask
+        or AiToolName.ApplyOnboardingProfile;
 
     public static AgentPendingAction? Read(string? json)
     {
