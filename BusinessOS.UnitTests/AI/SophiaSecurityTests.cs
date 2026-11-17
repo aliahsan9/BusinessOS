@@ -129,7 +129,8 @@ public class SophiaSecurityTests
             ToolName = AiToolName.CreateProduct,
             Message = "Create this product",
             Intent = AiCopilotIntent.ActionCreate,
-            PreextractedArgs = JsonDocument.Parse("{}").RootElement.Clone()
+            PreextractedArgs = JsonDocument.Parse("{}").RootElement.Clone(),
+            AllowedTools = [nameof(AiToolName.CreateProduct)]
         });
 
         result.ToolResult.Success.Should().BeFalse();
