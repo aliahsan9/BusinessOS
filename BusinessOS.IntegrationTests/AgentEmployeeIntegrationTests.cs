@@ -5,6 +5,7 @@ using System.Text.Json;
 using BusinessOS.Application.Features.Agents.DTOs;
 using BusinessOS.Application.Features.Auth.DTOs;
 using BusinessOS.Domain.Enums;
+using BusinessOS.Domain.Enums;
 using FluentAssertions;
 
 namespace BusinessOS.IntegrationTests;
@@ -249,7 +250,6 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
         body!.Reply.Should().NotBeNullOrWhiteSpace();
         body.WorkflowSteps.Should().NotBeEmpty();
     }
-}
 
     [Fact]
     public async Task SalesActionProposal_IsTenantScoped_AndRequiresExplicitDecision()
