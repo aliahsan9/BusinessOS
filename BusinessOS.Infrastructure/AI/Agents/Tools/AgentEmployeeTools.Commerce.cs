@@ -18,6 +18,7 @@ using BusinessOS.Application.Features.Settings.Services;
 using BusinessOS.Application.Features.Suppliers.Commands.CreateSupplier;
 using BusinessOS.Application.Features.Suppliers.Commands.DeleteSupplier;
 using BusinessOS.Application.Features.Suppliers.Commands.UpdateSupplier;
+using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.AI.Agents.Runtime;
 using BusinessOS.Infrastructure.AI.Copilot.Tools;
