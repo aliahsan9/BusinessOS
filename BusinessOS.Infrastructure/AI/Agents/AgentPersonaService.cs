@@ -18,17 +18,20 @@ public sealed class AgentPersonaService : IAgentPersonaService
     private readonly ICurrentUserService _currentUser;
     private readonly ILogger<AgentPersonaService> _logger;
     private readonly IAiToolRegistry? _toolRegistry;
+    private readonly IRbacAuditService? _rbacAuditService;
 
     public AgentPersonaService(
         IApplicationDbContext context,
         ICurrentUserService currentUser,
         ILogger<AgentPersonaService> logger,
-        IAiToolRegistry? toolRegistry = null)
+        IAiToolRegistry? toolRegistry = null,
+        IRbacAuditService? rbacAuditService = null)
     {
         _context = context;
         _currentUser = currentUser;
         _logger = logger;
         _toolRegistry = toolRegistry;
+        _rbacAuditService = rbacAuditService;
     }
 
     public async Task<IReadOnlyList<AgentEmployeeDto>> ListEmployeesAsync(
@@ -141,6 +144,10 @@ public sealed class AgentPersonaService : IAgentPersonaService
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(p => p.TenantId == tenantId && p.Key == key && !p.IsDeleted, cancellationToken);
 
+        var previousAllowedToolsJson = tenantProfile?.AllowedToolsJson;
+        var updatedAllowedTools = normalized.OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        var updatedAllowedToolsJson = JsonSerializer.Serialize(updatedAllowedTools);
+
         if (tenantProfile is null)
         {
             tenantProfile = new AgentProfile
@@ -155,17 +162,33 @@ public sealed class AgentPersonaService : IAgentPersonaService
                 DefaultLanguage = systemProfile.DefaultLanguage,
                 IsDefault = systemProfile.IsDefault,
                 IsActive = systemProfile.IsActive,
-                AllowedToolsJson = JsonSerializer.Serialize(normalized.OrderBy(x => x))
+                AllowedToolsJson = updatedAllowedToolsJson
             };
             _context.AgentProfiles.Add(tenantProfile);
         }
         else
         {
-            tenantProfile.AllowedToolsJson = JsonSerializer.Serialize(normalized.OrderBy(x => x));
+            tenantProfile.AllowedToolsJson = updatedAllowedToolsJson;
             tenantProfile.UpdatedAt = DateTime.UtcNow;
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
+        if (_rbacAuditService is not null)
+        {
+            await _rbacAuditService.LogAsync(
+                action: "AgentEmployeeToolPermissionsUpdated",
+                entityType: "AgentProfile",
+                entityId: tenantProfile.Id.ToString(),
+                oldValue: previousAllowedToolsJson,
+                newValue: updatedAllowedToolsJson,
+                cancellationToken);
+        }
+        else
+        {
+            // Preserve compatibility for isolated unit tests that construct this service
+            // without the optional audit dependency. Production DI registers IRbacAuditService.
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
         return ToEmployeeDto(tenantProfile);
     }
 
