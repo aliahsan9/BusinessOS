@@ -593,6 +593,7 @@ public static class AgentEndpoints
 
     private sealed class SendCustomerFollowUpPayload
     {
+        public SendCustomerFollowUpPayload() { }
         public Guid CustomerId { get; init; }
         public string Message { get; init; } = string.Empty;
     }
