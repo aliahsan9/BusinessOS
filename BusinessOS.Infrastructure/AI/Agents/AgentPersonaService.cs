@@ -68,6 +68,7 @@ public sealed class AgentPersonaService : IAgentPersonaService
         var tenantProfile = await _context.AgentProfiles
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(p => p.TenantId == tenantId && p.Key == key && !p.IsDeleted, cancellationToken);
+        var previousActivation = tenantProfile?.IsActive ?? systemProfile.IsActive;
 
         if (tenantProfile is null)
         {
@@ -92,6 +93,18 @@ public sealed class AgentPersonaService : IAgentPersonaService
             tenantProfile.IsActive = isActive;
             tenantProfile.UpdatedAt = DateTime.UtcNow;
         }
+
+        _context.RbacAuditLogs.Add(new RbacAuditLog
+        {
+            TenantId = tenantId,
+            ActorUserId = _currentUser.UserId ?? "unknown",
+            Action = "AgentActivationUpdated",
+            EntityType = "AgentProfile",
+            EntityId = tenantProfile.Id.ToString(),
+            OldValue = previousActivation.ToString(),
+            NewValue = isActive.ToString(),
+            CreatedAt = DateTime.UtcNow
+        });
 
         await _context.SaveChangesAsync(cancellationToken);
         return ToEmployeeDto(tenantProfile);
@@ -227,6 +240,8 @@ public sealed class AgentPersonaService : IAgentPersonaService
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(p => p.TenantId == tenantId && p.Key == key && !p.IsDeleted, cancellationToken);
 
+        var previousAllowedToolsJson = tenantProfile?.AllowedToolsJson ?? systemProfile.AllowedToolsJson;
+
         if (tenantProfile is null)
         {
             tenantProfile = new AgentProfile
@@ -246,8 +261,20 @@ public sealed class AgentPersonaService : IAgentPersonaService
             _context.AgentProfiles.Add(tenantProfile);
         }
 
-        tenantProfile.AllowedToolsJson = JsonSerializer.Serialize(normalized.OrderBy(x => x, StringComparer.Ordinal));
+        var updatedAllowedToolsJson = JsonSerializer.Serialize(normalized.OrderBy(x => x, StringComparer.Ordinal));
+        tenantProfile.AllowedToolsJson = updatedAllowedToolsJson;
         tenantProfile.UpdatedAt = DateTime.UtcNow;
+        _context.RbacAuditLogs.Add(new RbacAuditLog
+        {
+            TenantId = tenantId,
+            ActorUserId = _currentUser.UserId ?? "unknown",
+            Action = "AgentToolPermissionsUpdated",
+            EntityType = "AgentProfile",
+            EntityId = tenantProfile.Id.ToString(),
+            OldValue = previousAllowedToolsJson,
+            NewValue = updatedAllowedToolsJson,
+            CreatedAt = DateTime.UtcNow
+        });
         await _context.SaveChangesAsync(cancellationToken);
         return ToToolPermissionsDto(tenantProfile);
     }
