@@ -201,6 +201,25 @@ public sealed class AiCopilotOrchestrator : IAiCopilotOrchestrator
 
         if (intentResult.Intent is AiCopilotIntent.DashboardInsight)
         {
+            var employeeCanUseDashboardTool = string.IsNullOrWhiteSpace(request.AgentKey)
+                || (_personaService is not null
+                    && await _personaService.IsToolAllowedAsync(request.AgentKey, AiToolName.GetDailyPriorities, cancellationToken));
+            if (!employeeCanUseDashboardTool)
+            {
+                sw.Stop();
+                var denied = new AiCopilotChatResponse
+                {
+                    Reply = "This AI employee is not permitted to access dashboard priorities.",
+                    SpokenReply = "This AI employee is not permitted to access dashboard priorities.",
+                    SessionId = sessionId,
+                    ConversationId = sessionId,
+                    Intent = intentResult.Intent,
+                    PermissionDenied = true,
+                    AgentKey = request.AgentKey
+                };
+                return new PipelineResult { Response = denied };
+            }
+
             var priorities = _toolRegistry.AllTools.FirstOrDefault(t => t.ToolName == AiToolName.GetDailyPriorities);
             string reply;
             var used = new List<string>();
