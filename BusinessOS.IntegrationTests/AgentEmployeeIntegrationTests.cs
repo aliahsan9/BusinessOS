@@ -399,4 +399,59 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
         var response = await Client.GetAsync("/api/v1/agents/actions/proposals");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
+
+    [Fact]
+    public async Task SalesActionProposal_ExecutionRequiresApprovalAndActiveTenantCustomer()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var create = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/v1/agents/actions/proposals",
+            auth,
+            new CreateAgentActionProposalRequest
+            {
+                ActionType = "SendCustomerFollowUp",
+                Title = "Follow up with a customer",
+                Summary = "Send a reviewed follow-up message.",
+                PayloadJson = "{\"customerId\":\"11111111-1111-1111-1111-111111111111\",\"message\":\"Hello, following up on your quotation.\"}"
+            });
+
+        create.StatusCode.Should().Be(HttpStatusCode.Created);
+        var proposal = await create.Content.ReadFromJsonAsync<AgentActionProposalDto>(JsonOptions);
+        proposal.Should().NotBeNull();
+
+        var beforeApproval = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            $"/api/v1/agents/actions/proposals/{proposal!.Id}/execute",
+            auth);
+        beforeApproval.StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        var approve = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            $"/api/v1/agents/actions/proposals/{proposal.Id}/decision",
+            auth,
+            new DecideAgentActionProposalRequest { Decision = "approved" });
+        approve.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // A missing customer is rejected before the one-time execution claim is acquired.
+        var execute = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            $"/api/v1/agents/actions/proposals/{proposal.Id}/execute",
+            auth);
+        execute.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var detail = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            $"/api/v1/agents/actions/proposals/{proposal.Id}",
+            auth);
+        var current = await detail.Content.ReadFromJsonAsync<AgentActionProposalDto>(JsonOptions);
+        current!.Status.Should().Be(AgentWorkflowStatus.Approved);
+    }
+
+
 }
