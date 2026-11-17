@@ -324,7 +324,7 @@ public sealed class DecideAgentActionProposalRequest
 public sealed class AgentActionProposalDto
 {
     public Guid Id { get; init; }
-    public string AgentKey { get; init; } = "sales-assistant";
+    public string AgentKey { get; init; } = "emma";
     public string ActionType { get; init; } = string.Empty;
     public string Title { get; init; } = string.Empty;
     public string Summary { get; init; } = string.Empty;
