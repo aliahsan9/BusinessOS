@@ -62,6 +62,87 @@ public class SophiaSecurityTests
     }
 
     [Fact]
+    public async Task FallbackSearch_RechecksPermissionsBeforeExecutingTheAlternateTool()
+    {
+        var user = DeniedUser();
+        user.Setup(u => u.HasPermission(BusinessOS.Application.Common.Authorization.PermissionCodes.ProductCreate))
+            .Returns(true);
+        var validator = new AiPermissionValidator(user.Object);
+
+        var createProduct = new Mock<IAiTool>();
+        createProduct.SetupGet(t => t.ToolName).Returns(AiToolName.CreateProduct);
+        createProduct.SetupGet(t => t.ParameterSchemaJson).Returns("{}");
+        createProduct.Setup(t => t.ExecuteWithArgsAsync(
+                It.IsAny<AiCopilotExecutionContext>(),
+                It.IsAny<JsonElement>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiToolResult
+            {
+                ToolName = AiToolName.CreateProduct.ToString(),
+                Success = false,
+                Summary = "Product not found."
+            });
+
+        var searchProduct = new Mock<IAiTool>();
+        searchProduct.SetupGet(t => t.ToolName).Returns(AiToolName.SearchProduct);
+        var registry = new Mock<IAiToolRegistry>();
+        registry.SetupGet(r => r.AllTools).Returns([createProduct.Object, searchProduct.Object]);
+
+        var corrector = new Mock<IAgentSelfCorrector>();
+        corrector.Setup(c => c.Analyze(
+                AiToolName.CreateProduct,
+                It.IsAny<AiToolResult>(),
+                It.IsAny<Exception?>(),
+                It.IsAny<JsonElement?>(),
+                It.IsAny<string>()))
+            .Returns(new AgentSelfCorrectionResult
+            {
+                ShouldRetry = true,
+                FailureKind = AgentFailureKind.NotFound,
+                AlternateTool = AiToolName.SearchProduct
+            });
+
+        var logger = new Mock<IAgentActionLogger>();
+        logger.Setup(l => l.LogAsync(It.IsAny<AgentActionLogEntry>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var extractor = new Mock<IAgentArgumentExtractor>();
+        extractor.Setup(e => e.ExtractAsync(
+                It.IsAny<AiToolName>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<AgentExecutionState>(),
+                It.IsAny<AiPageContextDto>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(JsonDocument.Parse("{}").RootElement.Clone());
+
+        var executor = new AgentToolExecutor(
+            registry.Object,
+            validator,
+            extractor.Object,
+            corrector.Object,
+            logger.Object,
+            NullLogger<AgentToolExecutor>.Instance);
+
+        var result = await executor.ExecuteAsync(new AgentToolExecutionRequest
+        {
+            ToolName = AiToolName.CreateProduct,
+            Message = "Create this product",
+            Intent = AiCopilotIntent.ActionCreate,
+            PreextractedArgs = JsonDocument.Parse("{}").RootElement.Clone()
+        });
+
+        result.ToolResult.Success.Should().BeFalse();
+        searchProduct.Verify(t => t.ExecuteAsync(
+            It.IsAny<AiCopilotExecutionContext>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        searchProduct.Verify(t => t.ExecuteWithArgsAsync(
+            It.IsAny<AiCopilotExecutionContext>(),
+            It.IsAny<JsonElement>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task FailedBackendOperation_IsNotReportedAsSuccess()
     {
         var user = DeniedUser();
