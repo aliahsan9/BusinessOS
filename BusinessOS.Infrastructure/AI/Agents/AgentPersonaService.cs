@@ -180,7 +180,7 @@ public sealed class AgentPersonaService : IAgentPersonaService
                 entityId: tenantProfile.Id.ToString(),
                 oldValue: previousAllowedToolsJson,
                 newValue: updatedAllowedToolsJson,
-                cancellationToken);
+                cancellationToken: cancellationToken);
         }
         else
         {
