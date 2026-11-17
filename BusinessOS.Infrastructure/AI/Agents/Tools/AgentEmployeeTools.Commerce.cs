@@ -204,7 +204,6 @@ public sealed class CreateSaleTool : AiToolBase
         Guid? productId = null;
         string? productName = null;
         decimal? quantity = null;
-        var sawQuantity = false;
         foreach (var item in itemsEl.EnumerateArray())
         {
             var id = AgentToolArgHelpers.GuidVal(item, "productId");
@@ -222,7 +221,6 @@ public sealed class CreateSaleTool : AiToolBase
                 // with the summed quantity. This is safe because distinct products
                 // are rejected before this parser is called.
                 quantity = (quantity ?? 0m) + amount;
-                sawQuantity = true;
             }
         }
 
