@@ -103,6 +103,32 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         yield return Status("Planning…");
 
         var intent = _intentParser.Parse(request.Message, page, memory, language);
+
+        // With an explicit employee policy, never hand a no-tool conversational turn to
+        // the legacy Copilot pipeline, which has its own independent tool dispatcher.
+        if (persona.AllowedTools is not null
+            && intent.SuggestedTools.Count == 0
+            && intent.Intent is AiCopilotIntent.Conversational or AiCopilotIntent.Help)
+        {
+            var conversationalReply = AiNaturalReplyBuilder.BuildConversationalReply(request.Message, page);
+            var conversationalResponse = BuildResponse(
+                persona, agentKey, language, intent.Intent, sessionId, conversationalReply);
+            await _memory.CompleteTurnAsync(
+                sessionId,
+                chatRequest,
+                intent.Intent,
+                request.Message,
+                conversationalReply,
+                toolsUsed: [],
+                citations: null,
+                clientRequestId: request.ClientRequestId,
+                cancellationToken: cancellationToken,
+                preferredLanguage: language);
+            await foreach (var chunk in StreamText(conversationalReply, conversationalResponse, cancellationToken))
+                yield return chunk;
+            yield break;
+        }
+
         var storedPending = AgentActionClarifier.Read(memory.PendingActionJson);
         var abandonPending = false;
         var pending = storedPending;
