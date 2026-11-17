@@ -266,8 +266,8 @@ public sealed class AgentPersonaService : IAgentPersonaService
 
     private static string DefaultAllowedToolsJson(string key)
     {
-        // Default permissions are intentionally read-only. Tenant Owners/Admins grant writes explicitly.
-        var readOnly = key switch
+        // Specialist defaults are read-only; Navla retains confirmed core business actions. Owners/Admins can customize each allowlist.
+        var baselineTools = key switch
         {
             AgentKeys.Adam => new[]
             {
@@ -304,7 +304,7 @@ public sealed class AgentPersonaService : IAgentPersonaService
             }
         };
 
-        return JsonSerializer.Serialize(readOnly.Select(x => x.ToString()));
+        return JsonSerializer.Serialize(baselineTools.Select(x => x.ToString()));
     }
 
     private static AgentToolPermissionsDto ToToolPermissionsDto(AgentProfile profile)
