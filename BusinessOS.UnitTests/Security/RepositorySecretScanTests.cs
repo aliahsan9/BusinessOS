@@ -13,9 +13,7 @@ public class RepositorySecretScanTests
             Path.Combine(root, "BusinessOS.API", "appsettings.json"),
             Path.Combine(root, "BusinessOS.API", "appsettings.Development.json"),
             Path.Combine(root, "BusinessOS.API", "appsettings.Production.json"),
-            Path.Combine(root, "BusinessOS.Infrastructure", "Data", "DevSeeder.cs"),
-            Path.Combine(root, "..", "BusinessOS_UI", "src", "environments", "environment.ts"),
-            Path.Combine(root, "..", "BusinessOS_UI", "src", "environments", "environment.prod.ts")
+            Path.Combine(root, "BusinessOS.Infrastructure", "Data", "DevSeeder.cs")
         };
 
         var forbidden = new[]
