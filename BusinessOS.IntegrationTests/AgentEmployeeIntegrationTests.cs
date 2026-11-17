@@ -166,6 +166,71 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
 
+
+    [Fact]
+    public async Task AgentConfiguration_IsTenantScoped_AndPreservesSystemPersonaPrompt()
+    {
+        var tenantA = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var tenantB = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+
+        var update = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            "/api/v1/agents/employees/adam/configuration",
+            tenantA,
+            new UpdateAgentConfigurationRequest
+            {
+                DisplayName = "Adam Retail",
+                RoleTitle = "Warehouse Lead",
+                Specialty = "Retail stock, reorder planning, and supplier follow-up",
+                DefaultLanguage = "ur-Latn"
+            });
+
+        update.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updated = await update.Content.ReadFromJsonAsync<AgentEmployeeDto>(JsonOptions);
+        updated.Should().NotBeNull();
+        updated!.DisplayName.Should().Be("Adam Retail");
+        updated.RoleTitle.Should().Be("Warehouse Lead");
+        updated.Specialty.Should().Be("Retail stock, reorder planning, and supplier follow-up");
+        updated.DefaultLanguage.Should().Be("ur-Latn");
+
+        var tenantAResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            "/api/v1/agents/employees",
+            tenantA);
+        var tenantAEmployees = await tenantAResponse.Content.ReadFromJsonAsync<List<AgentEmployeeDto>>(JsonOptions);
+        tenantAEmployees.Should().Contain(e => e.Key == "adam" && e.DisplayName == "Adam Retail");
+
+        var tenantBResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            "/api/v1/agents/employees",
+            tenantB);
+        var tenantBEmployees = await tenantBResponse.Content.ReadFromJsonAsync<List<AgentEmployeeDto>>(JsonOptions);
+        tenantBEmployees.Should().Contain(e => e.Key == "adam" && e.DisplayName == "Adam");
+    }
+
+    [Fact]
+    public async Task AgentConfiguration_RejectsUnsupportedLanguage()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            "/api/v1/agents/employees/adam/configuration",
+            auth,
+            new UpdateAgentConfigurationRequest
+            {
+                DisplayName = "Adam",
+                RoleTitle = "Inventory Expert",
+                Specialty = "Inventory management",
+                DefaultLanguage = "xx"
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
     [Fact]
     public async Task AgentOnboardingStart_ReturnsWorkflowSteps()
     {
