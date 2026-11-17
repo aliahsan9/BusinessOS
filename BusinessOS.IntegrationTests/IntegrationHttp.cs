@@ -15,10 +15,16 @@ internal static class IntegrationHttp
             password = "Password1!",
             firstName = "Test",
             lastName = "User",
-            businessName = "Test Business"
+            businessName = $"Test Business {Guid.NewGuid():N}"
         });
 
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            throw new HttpRequestException(
+                $"Test registration failed with {(int)response.StatusCode} ({response.StatusCode}). Response: {body}");
+        }
+
         return (await response.Content.ReadFromJsonAsync<AuthResponse>())!;
     }
 
