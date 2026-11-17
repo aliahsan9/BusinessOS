@@ -46,6 +46,9 @@ public class AgentProfile : AuditableEntity
     /// </summary>
     public string DefaultLanguage { get; set; } = "en";
 
+    /// <summary>JSON array of tool enum names this employee may invoke. Empty means deny all tools.</summary>
+    public string AllowedToolsJson { get; set; } = "[]";
+
     /// <summary>
     /// Indicates whether this profile is the default agent selection within its scope.
     /// </summary>
