@@ -56,7 +56,7 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
                 ToolName = request.ToolName.ToString(),
                 ExecutionTimeMs = sw.ElapsedMilliseconds,
                 Success = false,
-                FailureReason = permission.DenialReason,
+                FailureReason = employeeAllowed ? permission.DenialReason : "Agent tool allowlist denied execution.",
                 SessionId = request.SessionId,
                 WorkflowId = request.WorkflowId,
                 StepKey = request.StepKey
