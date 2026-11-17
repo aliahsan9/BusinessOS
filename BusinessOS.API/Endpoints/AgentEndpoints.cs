@@ -795,6 +795,16 @@ public static class AgentEndpoints
                 executingRun.ResultSummary = "Delivery was not attempted because email is not configured.";
                 executingRun.CompletedAt = DateTime.UtcNow;
                 executingRun.UpdatedAt = DateTime.UtcNow;
+                db.RbacAuditLogs.Add(new RbacAuditLog
+                {
+                    TenantId = tenantId,
+                    ActorUserId = currentUser.UserId ?? run.UserId,
+                    Action = "AgentActionProposalExecutionFailed",
+                    EntityType = "AgentWorkflowRun",
+                    EntityId = run.Id.ToString(),
+                    OldValue = AgentWorkflowStatus.Executing.ToString(),
+                    NewValue = AgentWorkflowStatus.ExecutionFailed.ToString()
+                });
                 await db.SaveChangesAsync(cancellationToken);
 
                 return Results.Json(
