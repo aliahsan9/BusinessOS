@@ -18,12 +18,25 @@ public class AgentToolRiskClassifierTests
     }
 
     [Fact]
-    public void EveryMutatingToolRequiresExplicitApproval()
+    public void RiskClassificationMustStayAlignedWithTheMutationRegistry()
     {
-        foreach (var tool in Enum.GetValues<AiToolName>().Where(AiToolSafetyGate.IsMutating))
+        foreach (var tool in Enum.GetValues<AiToolName>())
         {
-            AgentToolRiskClassifier.RequiresExplicitApproval(tool).Should().BeTrue(
-                $"{tool} mutates business data and must require explicit approval");
+            var isMutating = AiToolSafetyGate.IsMutating(tool);
+            var risk = AgentToolRiskClassifier.Classify(tool);
+
+            if (isMutating)
+            {
+                risk.Should().NotBe(AgentToolRiskLevel.ReadOnly,
+                    $"{tool} mutates business data and cannot be classified as read-only");
+                AgentToolRiskClassifier.RequiresExplicitApproval(tool).Should().BeTrue(
+                    $"{tool} mutates business data and must require explicit approval");
+            }
+            else
+            {
+                risk.Should().Be(AgentToolRiskLevel.ReadOnly,
+                    $"{tool} is not registered as a mutation and should be explicitly reviewed if it changes data");
+            }
         }
     }
 
