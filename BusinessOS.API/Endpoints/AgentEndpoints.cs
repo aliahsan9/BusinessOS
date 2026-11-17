@@ -363,6 +363,7 @@ public static class AgentEndpoints
 
     private sealed class AgentActionProposalPayload
     {
+        public AgentActionProposalPayload() { }
         public string ActionType { get; init; } = string.Empty;
         public string Summary { get; init; } = string.Empty;
         public string PayloadJson { get; init; } = "{}";
