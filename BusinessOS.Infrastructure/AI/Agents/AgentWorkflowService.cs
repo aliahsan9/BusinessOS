@@ -291,7 +291,8 @@ public sealed class AgentWorkflowService : IAgentWorkflowService
         var run = await LoadTrackedAsync(workflowId, cancellationToken);
         run.Status = status;
         run.UpdatedAt = DateTime.UtcNow;
-        if (status is AgentWorkflowStatus.Completed or AgentWorkflowStatus.Failed or AgentWorkflowStatus.Cancelled)
+        if (status is AgentWorkflowStatus.Completed or AgentWorkflowStatus.Failed or AgentWorkflowStatus.Cancelled
+            or AgentWorkflowStatus.Approved or AgentWorkflowStatus.Rejected)
             run.CompletedAt ??= DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
