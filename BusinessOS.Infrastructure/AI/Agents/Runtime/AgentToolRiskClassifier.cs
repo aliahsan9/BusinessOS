@@ -50,6 +50,10 @@ public static class AgentToolRiskClassifier
         _ => AgentToolRiskLevel.Critical
     };
 
+    /// <summary>
+    /// Current safe-default policy: every write requires approval. Future limited-autonomy
+    /// policy may allow Low-risk actions only after tenant-level opt-in and server enforcement.
+    /// </summary>
     public static bool RequiresExplicitApproval(AiToolName tool) =>
-        Classify(tool) is AgentToolRiskLevel.High or AgentToolRiskLevel.Critical;
+        Classify(tool) != AgentToolRiskLevel.ReadOnly;
 }
