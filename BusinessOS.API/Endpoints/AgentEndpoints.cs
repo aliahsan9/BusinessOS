@@ -5,6 +5,9 @@ using BusinessOS.Application.Features.Agents.Services;
 using BusinessOS.Infrastructure.AI;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
+using BusinessOS.Application.Features.Notifications.DTOs;
+using BusinessOS.Application.Features.Notifications.Services;
+using System.Net.Mail;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 
@@ -102,6 +105,15 @@ public static class AgentEndpoints
             .Produces(StatusCodes.Status403Forbidden)
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict);
+
+        group.MapPost("/actions/proposals/{proposalId:guid}/execute", ExecuteActionProposal)
+            .WithName("AgentExecuteActionProposal")
+            .Produces<AgentActionProposalDto>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict)
+            .Produces(StatusCodes.Status503ServiceUnavailable);
 
         group.MapGet("/workflows", ListWorkflows)
             .WithName("AgentListWorkflows")
@@ -589,6 +601,186 @@ public static class AgentEndpoints
         return Results.Ok(MapActionProposal(run));
     }
 
+    private sealed class SendCustomerFollowUpPayload
+    {
+        public Guid CustomerId { get; init; }
+        public string Message { get; init; } = string.Empty;
+    }
+
+    private static async Task<IResult> ExecuteActionProposal(
+        Guid proposalId,
+        IApplicationDbContext db,
+        ICurrentUserService currentUser,
+        IEmailNotificationService emailService,
+        CancellationToken cancellationToken)
+    {
+        if (currentUser.TenantId is not Guid tenantId || tenantId == Guid.Empty)
+            return Results.Forbid();
+
+        var canExecute = currentUser.Roles.Any(role =>
+            string.Equals(role, "Owner", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, "Manager", StringComparison.OrdinalIgnoreCase));
+        if (!canExecute)
+            return Results.Forbid();
+
+        var run = await db.AgentWorkflowRuns.FirstOrDefaultAsync(
+            item => item.Id == proposalId
+                && item.TenantId == tenantId
+                && item.AgentKey == SalesAgentKey,
+            cancellationToken);
+        if (run is null)
+            return Results.NotFound(new { error = "Proposal was not found." });
+
+        if (run.Status != AgentWorkflowStatus.Approved)
+            return Results.Conflict(new { error = "Only an approved proposal can be executed, and each proposal can be attempted once." });
+
+        var proposal = DeserializeProposalPayload(run.ProgressJson);
+        if (!string.Equals(proposal.ActionType, "SendCustomerFollowUp", StringComparison.Ordinal))
+            return Results.BadRequest(new { error = "Unsupported proposal action type." });
+
+        SendCustomerFollowUpPayload? action;
+        try
+        {
+            action = JsonSerializer.Deserialize<SendCustomerFollowUpPayload>(proposal.PayloadJson, JsonOptions);
+        }
+        catch (JsonException)
+        {
+            action = null;
+        }
+
+        if (action is null || action.CustomerId == Guid.Empty
+            || string.IsNullOrWhiteSpace(action.Message) || action.Message.Length > 5000)
+            return Results.BadRequest(new { error = "The approved follow-up payload is invalid." });
+
+        var customer = await db.Customers.AsNoTracking()
+            .FirstOrDefaultAsync(
+                item => item.Id == action.CustomerId
+                    && item.TenantId == tenantId
+                    && item.IsActive,
+                cancellationToken);
+
+        if (customer is null)
+            return Results.BadRequest(new { error = "The approved customer no longer exists or is inactive." });
+
+        if (!MailAddress.TryCreate(customer.Email, out _))
+            return Results.BadRequest(new { error = "The customer does not have a valid email address." });
+
+        var now = DateTime.UtcNow;
+        await using var transaction = await db.BeginTransactionAsync(cancellationToken);
+        var claimed = await db.AgentWorkflowRuns
+            .Where(item => item.Id == proposalId
+                && item.TenantId == tenantId
+                && item.AgentKey == SalesAgentKey
+                && item.Status == AgentWorkflowStatus.Approved)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(item => item.Status, AgentWorkflowStatus.Executing)
+                .SetProperty(item => item.UpdatedAt, now),
+                cancellationToken);
+
+        if (claimed != 1)
+        {
+            if (transaction is not null)
+                await transaction.RollbackAsync(cancellationToken);
+            return Results.Conflict(new { error = "This proposal has already been claimed for execution." });
+        }
+
+        db.RbacAuditLogs.Add(new RbacAuditLog
+        {
+            TenantId = tenantId,
+            ActorUserId = currentUser.UserId ?? run.UserId,
+            Action = "AgentActionProposalExecutionStarted",
+            EntityType = "AgentWorkflowRun",
+            EntityId = run.Id.ToString(),
+            OldValue = AgentWorkflowStatus.Approved.ToString(),
+            NewValue = AgentWorkflowStatus.Executing.ToString()
+        });
+
+        await db.SaveChangesAsync(cancellationToken);
+        if (transaction is not null)
+            await transaction.CommitAsync(cancellationToken);
+
+        // The proposal ID is the idempotency key. The compare-and-set claim above allows
+        // only one delivery attempt; automatic SMTP retries are deliberately disabled.
+        db.Detach(run);
+        var executingRun = await db.AgentWorkflowRuns.FirstOrDefaultAsync(
+            item => item.Id == proposalId && item.TenantId == tenantId,
+            cancellationToken);
+
+        if (executingRun is null)
+            return Results.Conflict(new { error = "The proposal was claimed but could not be reloaded. Manual reconciliation is required." });
+
+        try
+        {
+            var delivery = await emailService.SendMessageAsync(
+                new EmailMessage(
+                    customer.Email,
+                    "A follow-up from your business",
+                    action.Message.Trim()),
+                cancellationToken);
+
+            if (!delivery.Delivered)
+            {
+                executingRun.Status = AgentWorkflowStatus.ExecutionFailed;
+                executingRun.ErrorMessage = "Email provider is not configured; no message was sent.";
+                executingRun.ResultSummary = "Delivery was not attempted because email is not configured.";
+                executingRun.CompletedAt = DateTime.UtcNow;
+                executingRun.UpdatedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync(cancellationToken);
+
+                return Results.Json(
+                    new { error = "Email delivery is not configured. The proposal was marked as failed and will not be retried automatically." },
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+
+            executingRun.Status = AgentWorkflowStatus.Executed;
+            executingRun.ResultSummary = "Customer follow-up email was accepted by the configured SMTP provider.";
+            executingRun.ErrorMessage = null;
+            executingRun.CompletedAt = DateTime.UtcNow;
+            executingRun.UpdatedAt = DateTime.UtcNow;
+            db.RbacAuditLogs.Add(new RbacAuditLog
+            {
+                TenantId = tenantId,
+                ActorUserId = currentUser.UserId ?? run.UserId,
+                Action = "AgentActionProposalExecuted",
+                EntityType = "AgentWorkflowRun",
+                EntityId = run.Id.ToString(),
+                OldValue = AgentWorkflowStatus.Executing.ToString(),
+                NewValue = AgentWorkflowStatus.Executed.ToString()
+            });
+            await db.SaveChangesAsync(cancellationToken);
+            return Results.Ok(MapActionProposal(executingRun));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The provider may have accepted the message before cancellation. Leave the
+            // record in Executing so it cannot be retried and accidentally duplicate delivery.
+            throw;
+        }
+        catch (Exception)
+        {
+            executingRun.Status = AgentWorkflowStatus.ExecutionFailed;
+            executingRun.ErrorMessage = "Email delivery failed. Automatic retry is disabled to prevent duplicate messages.";
+            executingRun.ResultSummary = "Delivery failed; manual reconciliation is required before another attempt.";
+            executingRun.CompletedAt = DateTime.UtcNow;
+            executingRun.UpdatedAt = DateTime.UtcNow;
+            db.RbacAuditLogs.Add(new RbacAuditLog
+            {
+                TenantId = tenantId,
+                ActorUserId = currentUser.UserId ?? run.UserId,
+                Action = "AgentActionProposalExecutionFailed",
+                EntityType = "AgentWorkflowRun",
+                EntityId = run.Id.ToString(),
+                OldValue = AgentWorkflowStatus.Executing.ToString(),
+                NewValue = AgentWorkflowStatus.ExecutionFailed.ToString()
+            });
+            await db.SaveChangesAsync(cancellationToken);
+            return Results.Json(
+                new { error = "Email delivery failed. Automatic retry is disabled; review the execution history before taking further action." },
+                statusCode: StatusCodes.Status502BadGateway);
+        }
+    }
+
     private static AgentActionProposalDto MapActionProposal(AgentWorkflowRun run)
     {
         var payload = DeserializeProposalPayload(run.ProgressJson);
@@ -606,7 +798,8 @@ public static class AgentEndpoints
             CreatedAt = run.StartedAt,
             ExpiresAt = payload.ExpiresAt,
             DecisionComment = payload.DecisionComment,
-            DecidedAt = payload.DecidedAt
+            DecidedAt = payload.DecidedAt,
+            ExecutionMessage = run.ResultSummary ?? (run.Status == AgentWorkflowStatus.ExecutionFailed ? run.ErrorMessage : null)
         };
     }
 
