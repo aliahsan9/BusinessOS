@@ -3,6 +3,9 @@ using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Agents.DTOs;
 using BusinessOS.Application.Features.Agents.Services;
 using BusinessOS.Infrastructure.AI;
+using BusinessOS.Domain.Entities;
+using BusinessOS.Domain.Enums;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BusinessOS.API.Endpoints;
@@ -76,6 +79,29 @@ public static class AgentEndpoints
         group.MapPost("/onboarding/continue", ContinueOnboarding)
             .WithName("AgentContinueOnboarding")
             .Produces<AgentOnboardingResponse>(StatusCodes.Status200OK);
+
+        group.MapPost("/actions/proposals", CreateActionProposal)
+            .WithName("AgentCreateActionProposal")
+            .Produces<AgentActionProposalDto>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status403Forbidden);
+
+        group.MapGet("/actions/proposals", ListActionProposals)
+            .WithName("AgentListActionProposals")
+            .Produces<IReadOnlyList<AgentActionProposalDto>>(StatusCodes.Status200OK);
+
+        group.MapGet("/actions/proposals/{proposalId:guid}", GetActionProposal)
+            .WithName("AgentGetActionProposal")
+            .Produces<AgentActionProposalDto>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
+
+        group.MapPost("/actions/proposals/{proposalId:guid}/decision", DecideActionProposal)
+            .WithName("AgentDecideActionProposal")
+            .Produces<AgentActionProposalDto>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict);
 
         group.MapGet("/workflows", ListWorkflows)
             .WithName("AgentListWorkflows")
@@ -328,6 +354,250 @@ public static class AgentEndpoints
         return workflow is null
             ? Results.NotFound(new { error = "Workflow not found." })
             : Results.Ok(workflow);
+    }
+
+
+    private const string SalesAgentKey = "sales-assistant";
+    private static readonly HashSet<string> SupportedProposalActions =
+        new(StringComparer.Ordinal) { "SendCustomerFollowUp" };
+
+    private sealed class AgentActionProposalPayload
+    {
+        public AgentActionProposalPayload() { }
+        public string ActionType { get; init; } = string.Empty;
+        public string Summary { get; init; } = string.Empty;
+        public string PayloadJson { get; init; } = "{}";
+        public DateTime? ExpiresAt { get; init; }
+        public string? DecisionComment { get; init; }
+        public DateTime? DecidedAt { get; init; }
+    }
+
+    private static async Task<IResult> CreateActionProposal(
+        CreateAgentActionProposalRequest request,
+        IApplicationDbContext db,
+        ICurrentUserService currentUser,
+        CancellationToken cancellationToken)
+    {
+        if (currentUser.TenantId is not Guid tenantId || tenantId == Guid.Empty
+            || string.IsNullOrWhiteSpace(currentUser.UserId))
+            return Results.Forbid();
+
+        if (!SupportedProposalActions.Contains(request.ActionType))
+            return Results.BadRequest(new { error = "Unsupported proposal action type." });
+
+        if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Trim().Length > 120)
+            return Results.BadRequest(new { error = "Title is required and must be at most 120 characters." });
+
+        if (string.IsNullOrWhiteSpace(request.Summary) || request.Summary.Trim().Length > 1000)
+            return Results.BadRequest(new { error = "Summary is required and must be at most 1000 characters." });
+
+        if (string.IsNullOrWhiteSpace(request.PayloadJson) || request.PayloadJson.Length > 8000)
+            return Results.BadRequest(new { error = "Payload must be valid JSON and at most 8000 characters." });
+
+        try
+        {
+            using var payloadDocument = JsonDocument.Parse(request.PayloadJson);
+            if (payloadDocument.RootElement.ValueKind != JsonValueKind.Object)
+                return Results.BadRequest(new { error = "Proposal payload must be a JSON object." });
+        }
+        catch (JsonException)
+        {
+            return Results.BadRequest(new { error = "Proposal payload must be valid JSON." });
+        }
+
+        var now = DateTime.UtcNow;
+        if (request.ExpiresAt is DateTime expiresAt
+            && (expiresAt <= now || expiresAt > now.AddDays(30)))
+            return Results.BadRequest(new { error = "Expiry must be within the next 30 days." });
+
+        var run = new AgentWorkflowRun
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            UserId = currentUser.UserId,
+            AgentKey = SalesAgentKey,
+            Title = $"Approval: {request.Title.Trim()}",
+            Status = AgentWorkflowStatus.AwaitingApproval,
+            StartedAt = now,
+            ProgressJson = JsonSerializer.Serialize(new AgentActionProposalPayload
+            {
+                ActionType = request.ActionType,
+                Summary = request.Summary.Trim(),
+                PayloadJson = request.PayloadJson,
+                ExpiresAt = request.ExpiresAt
+            }, JsonOptions)
+        };
+
+        db.AgentWorkflowRuns.Add(run);
+        db.RbacAuditLogs.Add(new RbacAuditLog
+        {
+            TenantId = tenantId,
+            ActorUserId = currentUser.UserId,
+            Action = "AgentActionProposalCreated",
+            EntityType = "AgentWorkflowRun",
+            EntityId = run.Id.ToString(),
+            NewValue = request.ActionType
+        });
+        await db.SaveChangesAsync(cancellationToken);
+
+        return Results.Created($"/api/v1/agents/actions/proposals/{run.Id}",
+            MapActionProposal(run));
+    }
+
+    private static async Task<IResult> ListActionProposals(
+        IApplicationDbContext db,
+        ICurrentUserService currentUser,
+        [FromQuery] bool pendingOnly = true,
+        [FromQuery] int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        if (currentUser.TenantId is null || currentUser.TenantId == Guid.Empty)
+            return Results.Forbid();
+
+        var query = db.AgentWorkflowRuns.AsNoTracking()
+            .Where(run => run.AgentKey == SalesAgentKey);
+
+        var runs = await query.OrderByDescending(run => run.StartedAt)
+            .Take(Math.Clamp(limit, 1, 100))
+            .ToListAsync(cancellationToken);
+
+        var proposals = runs.Select(MapActionProposal);
+        if (pendingOnly)
+            proposals = proposals.Where(proposal => proposal.Status == AgentWorkflowStatus.AwaitingApproval);
+
+        return Results.Ok(proposals.ToList());
+    }
+
+    private static async Task<IResult> GetActionProposal(
+        Guid proposalId,
+        IApplicationDbContext db,
+        ICurrentUserService currentUser,
+        CancellationToken cancellationToken)
+    {
+        if (currentUser.TenantId is null || currentUser.TenantId == Guid.Empty)
+            return Results.Forbid();
+
+        var run = await db.AgentWorkflowRuns.AsNoTracking()
+            .FirstOrDefaultAsync(
+                item => item.Id == proposalId && item.AgentKey == SalesAgentKey,
+                cancellationToken);
+
+        return run is null
+            ? Results.NotFound(new { error = "Proposal was not found." })
+            : Results.Ok(MapActionProposal(run));
+    }
+
+    private static async Task<IResult> DecideActionProposal(
+        Guid proposalId,
+        DecideAgentActionProposalRequest request,
+        IApplicationDbContext db,
+        ICurrentUserService currentUser,
+        CancellationToken cancellationToken)
+    {
+        if (currentUser.TenantId is null || currentUser.TenantId == Guid.Empty)
+            return Results.Forbid();
+
+        var canApprove = currentUser.Roles.Any(role =>
+            string.Equals(role, "Owner", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, "Manager", StringComparison.OrdinalIgnoreCase));
+        if (!canApprove)
+            return Results.Forbid();
+
+        var decision = request.Decision?.Trim().ToLowerInvariant();
+        if (decision is not ("approved" or "rejected"))
+            return Results.BadRequest(new { error = "Decision must be 'approved' or 'rejected'." });
+
+        if (request.Comment?.Length > 500)
+            return Results.BadRequest(new { error = "Comment must be at most 500 characters." });
+
+        var run = await db.AgentWorkflowRuns.FirstOrDefaultAsync(
+            item => item.Id == proposalId && item.AgentKey == SalesAgentKey,
+            cancellationToken);
+        if (run is null)
+            return Results.NotFound(new { error = "Proposal was not found." });
+
+        if (run.Status != AgentWorkflowStatus.AwaitingApproval)
+            return Results.Conflict(new { error = "This proposal has already been decided or is no longer pending." });
+
+        var payload = DeserializeProposalPayload(run.ProgressJson);
+        if (payload.ExpiresAt is DateTime expiresAt && expiresAt <= DateTime.UtcNow)
+            return Results.Conflict(new { error = "This proposal has expired and cannot be approved." });
+
+        var now = DateTime.UtcNow;
+        run.Status = decision == "approved"
+            ? AgentWorkflowStatus.Approved
+            : AgentWorkflowStatus.Rejected;
+        run.CompletedAt = now;
+        run.UpdatedAt = now;
+        run.ProgressJson = JsonSerializer.Serialize(new AgentActionProposalPayload
+        {
+            ActionType = payload.ActionType,
+            Summary = payload.Summary,
+            PayloadJson = payload.PayloadJson,
+            ExpiresAt = payload.ExpiresAt,
+            DecisionComment = request.Comment?.Trim(),
+            DecidedAt = now
+        }, JsonOptions);
+
+        db.RbacAuditLogs.Add(new RbacAuditLog
+        {
+            TenantId = currentUser.TenantId,
+            ActorUserId = currentUser.UserId ?? run.UserId,
+            Action = decision == "approved"
+                ? "AgentActionProposalApproved"
+                : "AgentActionProposalRejected",
+            EntityType = "AgentWorkflowRun",
+            EntityId = run.Id.ToString(),
+            OldValue = AgentWorkflowStatus.AwaitingApproval.ToString(),
+            NewValue = run.Status.ToString()
+        });
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        // Approval records consent only. No external message or business mutation is executed here.
+        return Results.Ok(MapActionProposal(run));
+    }
+
+    private static AgentActionProposalDto MapActionProposal(AgentWorkflowRun run)
+    {
+        var payload = DeserializeProposalPayload(run.ProgressJson);
+        return new AgentActionProposalDto
+        {
+            Id = run.Id,
+            AgentKey = run.AgentKey,
+            ActionType = payload.ActionType,
+            Title = run.Title.StartsWith("Approval: ", StringComparison.Ordinal)
+                ? run.Title["Approval: ".Length..]
+                : run.Title,
+            Summary = payload.Summary,
+            PayloadJson = payload.PayloadJson,
+            Status = run.Status == AgentWorkflowStatus.AwaitingApproval
+                && payload.ExpiresAt is DateTime expiresAt
+                && expiresAt <= DateTime.UtcNow
+                    ? AgentWorkflowStatus.Expired
+                    : run.Status,
+            CreatedAt = run.StartedAt,
+            ExpiresAt = payload.ExpiresAt,
+            DecisionComment = payload.DecisionComment,
+            DecidedAt = payload.DecidedAt
+        };
+    }
+
+    private static AgentActionProposalPayload DeserializeProposalPayload(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return new AgentActionProposalPayload();
+
+        try
+        {
+            return JsonSerializer.Deserialize<AgentActionProposalPayload>(json, JsonOptions)
+                ?? new AgentActionProposalPayload();
+        }
+        catch (JsonException)
+        {
+            return new AgentActionProposalPayload();
+        }
     }
 
     private static async Task<IResult> GetAskSophiaSuggestions(
