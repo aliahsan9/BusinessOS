@@ -36,6 +36,7 @@ public sealed class AgentToolPermissionsDto
 {
     public string AgentKey { get; init; } = string.Empty;
     public IReadOnlyList<string> AllowedTools { get; init; } = [];
+    public IReadOnlyList<string> AvailableTools { get; init; } = [];
 }
 
 public sealed class UpdateAgentToolPermissionsRequest
