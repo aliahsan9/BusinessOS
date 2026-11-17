@@ -245,6 +245,25 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
         AgentToolExecutionRequest request,
         CancellationToken cancellationToken)
     {
+        // Retry/search fallback is a separate execution path, so it must repeat the
+        // authorization check instead of inheriting permission from the original tool.
+        var permission = _permissions.ValidateTool(request.ToolName);
+        if (!permission.Allowed)
+        {
+            return new AgentToolExecutionResult
+            {
+                PermissionDenied = true,
+                DenialReason = permission.DenialReason,
+                State = request.State,
+                ToolResult = new AiToolResult
+                {
+                    ToolName = request.ToolName.ToString(),
+                    Success = false,
+                    Summary = permission.DenialReason ?? "Permission denied."
+                }
+            };
+        }
+
         // Simplified path without nested self-correction to avoid infinite loops.
         var tool = _registry.AllTools.FirstOrDefault(t => t.ToolName == request.ToolName);
         if (tool is null)
