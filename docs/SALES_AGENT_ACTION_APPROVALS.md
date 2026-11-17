@@ -44,7 +44,7 @@ Creation and decision events are written to the existing RBAC audit log. The pro
 
 ## Important follow-up before production
 
-- Add database-backed expiry processing so stale pending proposals are visibly expired.
+- Add a scheduled expiry worker if expiry needs persisted lifecycle transitions and notifications; the API currently derives expiry from the proposal deadline when reading.
 - Add optimistic concurrency using a provider-supported concurrency token and test it against SQL Server before enabling concurrent reviewer decisions.
 - Add expiry processing so stale pending proposals are visibly expired.
 - Add a dedicated proposal entity/table if proposal volume or reporting needs outgrow workflow-run storage.
@@ -56,3 +56,7 @@ Creation and decision events are written to the existing RBAC audit log. The pro
 ## Concurrency limitation
 
 The current integration-test factory uses EF Core InMemory. Its provider does not support relational transactions or `ExecuteUpdateAsync`, so a relational compare-and-set implementation cannot be safely introduced and validated by the current test suite. The decision endpoint currently performs a normal tracked update; concurrent reviewer requests therefore remain a production-hardening item. Implement a concurrency token with a real SQL Server migration and provider-backed integration tests before relying on simultaneous reviewer decisions.
+
+## Proposal expiry
+
+The API derives `Expired` for a pending proposal whose `ExpiresAt` timestamp has passed. Expired proposals are excluded from the pending-only list and remain visible in the all-proposals list. The underlying workflow row is not mutated by a read; the decision endpoint independently rejects an expired proposal with HTTP 409. This avoids a background worker or migration in the first release.
