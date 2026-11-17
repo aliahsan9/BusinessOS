@@ -549,30 +549,24 @@ public static class AgentEndpoints
             DecidedAt = now
         }, JsonOptions);
 
-        // Compare-and-set the pending state inside a transaction. Only one concurrent
-        // reviewer can change AwaitingApproval to a terminal decision.
+        // Compare-and-set the pending state. Relational providers use one conditional UPDATE;
+        // the in-memory provider uses a tracked state transition for integration tests.
         await using var transaction = await db.BeginTransactionAsync(cancellationToken);
-        var affected = await db.AgentWorkflowRuns
-            .Where(item => item.Id == proposalId
-                && item.AgentKey == SalesAgentKey
-                && item.Status == AgentWorkflowStatus.AwaitingApproval)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(item => item.Status, newStatus)
-                .SetProperty(item => item.CompletedAt, now)
-                .SetProperty(item => item.UpdatedAt, now)
-                .SetProperty(item => item.ProgressJson, updatedPayload),
-                cancellationToken);
+        var transitioned = await db.TryTransitionAgentWorkflowStatusAsync(
+            proposalId,
+            tenantId,
+            AgentWorkflowStatus.AwaitingApproval,
+            newStatus,
+            now,
+            now,
+            updatedPayload,
+            cancellationToken);
 
-        if (affected == 0)
+        if (!transitioned)
         {
-            await transaction.RollbackAsync(cancellationToken);
+            if (transaction is not null)
+                await transaction.RollbackAsync(cancellationToken);
             return Results.Conflict(new { error = "This proposal has already been decided by another reviewer." });
-        }
-
-        if (affected != 1)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            return Results.Conflict(new { error = "The proposal decision could not be applied safely." });
         }
 
         db.RbacAuditLogs.Add(new RbacAuditLog
@@ -589,13 +583,9 @@ public static class AgentEndpoints
         });
 
         await db.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        if (transaction is not null)
+            await transaction.CommitAsync(cancellationToken);
 
-        // Keep the response aligned with the committed compare-and-set update.
-        run.Status = newStatus;
-        run.CompletedAt = now;
-        run.UpdatedAt = now;
-        run.ProgressJson = updatedPayload;
 
         // Approval records consent only. No external message or business mutation is executed here.
         return Results.Ok(MapActionProposal(run));
@@ -668,17 +658,17 @@ public static class AgentEndpoints
 
         var now = DateTime.UtcNow;
         await using var transaction = await db.BeginTransactionAsync(cancellationToken);
-        var claimed = await db.AgentWorkflowRuns
-            .Where(item => item.Id == proposalId
-                && item.TenantId == tenantId
-                && item.AgentKey == SalesAgentKey
-                && item.Status == AgentWorkflowStatus.Approved)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(item => item.Status, AgentWorkflowStatus.Executing)
-                .SetProperty(item => item.UpdatedAt, now),
-                cancellationToken);
+        var claimed = await db.TryTransitionAgentWorkflowStatusAsync(
+            proposalId,
+            tenantId,
+            AgentWorkflowStatus.Approved,
+            AgentWorkflowStatus.Executing,
+            now,
+            run.CompletedAt,
+            run.ProgressJson,
+            cancellationToken);
 
-        if (claimed != 1)
+        if (!claimed)
         {
             if (transaction is not null)
                 await transaction.RollbackAsync(cancellationToken);
