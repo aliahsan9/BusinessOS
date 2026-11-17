@@ -271,13 +271,15 @@ public class SaleOrderWorkflowTests
         result.Success.Should().BeTrue();
         result.Summary.Should().Contain("created successfully");
         result.Summary.Should().Contain("ORD-1001");
-        result.Summary.Should().Contain("2400.00");
+        // The request deliberately contains two identical lines of quantity 2.
+        // The tool merges identical products by summing their quantities.
+        result.Summary.Should().Contain("4800.00");
         var saved = await db.Orders.Include(order => order.OrderItems).SingleAsync();
         saved.OrderNumber.Should().Be("ORD-1001");
         saved.CustomerId.Should().Be(customer.Id);
-        saved.GrandTotal.Should().Be(2400);
+        saved.GrandTotal.Should().Be(4800);
         saved.OrderItems.Should().ContainSingle();
-        saved.OrderItems.Single().Quantity.Should().Be(2);
+        saved.OrderItems.Single().Quantity.Should().Be(4);
         saved.OrderItems.Single().ProductId.Should().Be(product.Id);
         mediator.Verify(m => m.Send(It.IsAny<CreateOrderCommand>(), It.IsAny<CancellationToken>()), Times.Once);
     }
