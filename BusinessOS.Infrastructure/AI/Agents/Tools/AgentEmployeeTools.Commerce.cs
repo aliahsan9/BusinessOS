@@ -148,6 +148,8 @@ public sealed class CreateSaleTool : AiToolBase
                         tax.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture));
                     var idempotencyKey = CanonicalRequestHasher.Hash("agent-sales.create.v1", draftKey);
                     IdempotencyRecord? staged = null;
+                    Guid persistentOrderId;
+                    var alreadyCreated = false;
 
                     try
                     {
@@ -159,50 +161,39 @@ public sealed class CreateSaleTool : AiToolBase
 
                         if (claim.Kind == IdempotencyOutcomeKind.Replay && claim.ResourceId is Guid replayedOrderId)
                         {
-                            await transaction.CommitAsync(cancellationToken);
-                            return await ReportOrderAsync(replayedOrderId, alreadyCreated: true, cancellationToken);
+                            persistentOrderId = replayedOrderId;
+                            alreadyCreated = true;
                         }
-
-                        if (claim.Kind == IdempotencyOutcomeKind.Conflict)
+                        else if (claim.Kind == IdempotencyOutcomeKind.Conflict)
                         {
                             await transaction.RollbackAsync(cancellationToken);
                             return Fail("This sale request key was already used for different order details. Start a new order request.");
                         }
-
-                        if (claim.Kind == IdempotencyOutcomeKind.InProgress)
+                        else if (claim.Kind == IdempotencyOutcomeKind.InProgress)
                         {
                             await transaction.RollbackAsync(cancellationToken);
                             return Fail("This sale is already being processed. Please wait and check the orders list before retrying.");
                         }
-
-                        staged = claim.Record
-                            ?? throw new InvalidOperationException("The sale idempotency claim did not return its record.");
-
-                        var persistentOrderId = await _mediator.Send(new CreateOrderCommand(
-                            customer.Value.Id,
-                            discount,
-                            tax,
-                            [new CreateOrderItemDto(product.Value.Id, quantity)]), cancellationToken);
-
-                        await _idempotency.CompleteCommittedAsync(
-                            staged.Id,
-                            201,
-                            System.Text.Json.JsonSerializer.Serialize(new { id = persistentOrderId }),
-                            persistentOrderId,
-                            cancellationToken);
-
-                        await transaction.CommitAsync(cancellationToken);
-
-                        if (context.ExecutionState is not null)
+                        else
                         {
-                            context.ExecutionState.OrderId = persistentOrderId;
-                            context.ExecutionState.CustomerId = customer.Value.Id;
-                            context.ExecutionState.CustomerName = customer.Value.Name;
-                            context.ExecutionState.ProductId = product.Value.Id;
-                            context.ExecutionState.ProductName = product.Value.Name;
+                            staged = claim.Record
+                                ?? throw new InvalidOperationException("The sale idempotency claim did not return its record.");
+
+                            persistentOrderId = await _mediator.Send(new CreateOrderCommand(
+                                customer.Value.Id,
+                                discount,
+                                tax,
+                                [new CreateOrderItemDto(product.Value.Id, quantity)]), cancellationToken);
+
+                            await _idempotency.CompleteCommittedAsync(
+                                staged.Id,
+                                201,
+                                System.Text.Json.JsonSerializer.Serialize(new { id = persistentOrderId }),
+                                persistentOrderId,
+                                cancellationToken);
                         }
 
-                        return await ReportOrderAsync(persistentOrderId, alreadyCreated: false, cancellationToken);
+                        await transaction.CommitAsync(cancellationToken);
                     }
                     catch
                     {
@@ -211,6 +202,17 @@ public sealed class CreateSaleTool : AiToolBase
                             _idempotency.Detach(staged);
                         throw;
                     }
+
+                    if (context.ExecutionState is not null)
+                    {
+                        context.ExecutionState.OrderId = persistentOrderId;
+                        context.ExecutionState.CustomerId = customer.Value.Id;
+                        context.ExecutionState.CustomerName = customer.Value.Name;
+                        context.ExecutionState.ProductId = product.Value.Id;
+                        context.ExecutionState.ProductName = product.Value.Name;
+                    }
+
+                    return await ReportOrderAsync(persistentOrderId, alreadyCreated, cancellationToken);
                 }
             }
 
