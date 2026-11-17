@@ -670,23 +670,6 @@ public static class AgentEndpoints
             await transaction.CommitAsync(cancellationToken);
 
         // Approval records consent only. No external message or business mutation is executed here.
-        db.RbacAuditLogs.Add(new RbacAuditLog
-        {
-            TenantId = tenantId,
-            ActorUserId = currentUser.UserId ?? run.UserId,
-            Action = decision == "approved"
-                ? "AgentActionProposalApproved"
-                : "AgentActionProposalRejected",
-            EntityType = "AgentWorkflowRun",
-            EntityId = run.Id.ToString(),
-            OldValue = AgentWorkflowStatus.AwaitingApproval.ToString(),
-            NewValue = newStatus.ToString()
-        });
-
-        await db.SaveChangesAsync(cancellationToken);
-        if (transaction is not null)
-            await transaction.CommitAsync(cancellationToken);
-        // Approval records consent only. No external message or business mutation is executed here.
         return Results.Ok(MapActionProposal(run));
     }
 
