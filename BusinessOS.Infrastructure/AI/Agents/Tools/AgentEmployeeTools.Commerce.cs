@@ -88,11 +88,10 @@ public sealed class CreateSaleTool : AiToolBase
             if (customer.Kind != SaleMatchKind.Unique || customer.Value is null)
                 return Fail(CustomerFailure(customer));
 
-            // The current command contract creates a single-line order. Never silently
-            // discard extra AI-generated lines and create a different order than requested.
-            if (args.TryGetProperty("items", out var requestedItems)
-                && requestedItems.ValueKind == JsonValueKind.Array
-                && requestedItems.GetArrayLength() > 1)
+            // The current agent draft supports one distinct product. Repeated identical
+            // lines can be safely collapsed by ReadSingleLine; distinct products must fail
+            // closed rather than silently creating an incomplete order.
+            if (HasMultipleDistinctProducts(args))
             {
                 return Fail("The order was not created. Multi-product sales are not supported by this agent action yet. Please create one product per order.");
             }
@@ -168,6 +167,33 @@ public sealed class CreateSaleTool : AiToolBase
         var total = order.GrandTotal.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
         var message = $"{lead} Order {order.OrderNumber}. Total {total}.";
         return Ok(message, "Order", order.Id, $"/orders/{order.Id}");
+    }
+
+    private static bool HasMultipleDistinctProducts(JsonElement args)
+    {
+        if (!args.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
+            return false;
+
+        var identities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in items.EnumerateArray())
+        {
+            var id = AgentToolArgHelpers.GuidVal(item, "productId");
+            var name = AgentToolArgHelpers.Str(item, "productName")
+                ?? AgentToolArgHelpers.Str(item, "sku");
+
+            // An item without a stable product identity cannot safely be merged with
+            // another line, so treat it as a distinct request.
+            var identity = id is Guid productId
+                ? $"id:{productId:N}|name:{name?.Trim()}"
+                : $"name:{name?.Trim()}";
+
+            if (!identities.Add(identity))
+                continue;
+            if (identities.Count > 1)
+                return true;
+        }
+
+        return false;
     }
 
     private static (Guid? ProductId, string? ProductName, decimal? Quantity) ReadSingleLine(JsonElement args)
