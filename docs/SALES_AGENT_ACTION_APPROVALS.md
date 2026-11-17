@@ -53,9 +53,16 @@ Creation and decision events are written to the existing RBAC audit log. The pro
 - Run backend build, unit/integration tests, and relational SQL Server tests before merging.
 
 
-## Concurrency limitation
+## Concurrent reviewer decisions
 
-The current integration-test factory uses EF Core InMemory. Its provider does not support relational transactions or `ExecuteUpdateAsync`, so a relational compare-and-set implementation cannot be safely introduced and validated by the current test suite. The decision endpoint currently performs a normal tracked update; concurrent reviewer requests therefore remain a production-hardening item. Implement a concurrency token with a real SQL Server migration and provider-backed integration tests before relying on simultaneous reviewer decisions.
+The decision endpoint uses a provider-aware compare-and-set transition constrained by proposal ID, tenant ID, and the expected `AwaitingApproval` state.
+
+- Relational providers use a single conditional `UPDATE`; only one reviewer can transition a pending proposal.
+- The status transition and RBAC audit insert share the same database transaction.
+- The EF Core InMemory test provider uses a process-wide semaphore and reloads the tracked row before deciding, so concurrent integration requests still exercise a single-winner state transition.
+- The integration suite includes a concurrent approve/reject test that expects one HTTP 200 and one HTTP 409.
+
+The concurrent integration test has been added but not executed here. Run it against both the InMemory test provider and SQL Server before production rollout.
 
 ## Proposal expiry
 
