@@ -169,11 +169,17 @@ public partial class BusinessOSDbContext
         await InMemoryAgentWorkflowTransitionLock.WaitAsync(cancellationToken);
         try
         {
-            var tracked = await AgentWorkflowRuns.FirstOrDefaultAsync(
-                run => run.Id == workflowRunId
-                    && run.TenantId == tenantId
-                    && !run.IsDeleted,
-                cancellationToken);
+            var trackedEntry = ChangeTracker.Entries<AgentWorkflowRun>()
+                .FirstOrDefault(entry => entry.Entity.Id == workflowRunId);
+            if (trackedEntry is not null)
+                await trackedEntry.ReloadAsync(cancellationToken);
+
+            var tracked = trackedEntry?.Entity
+                ?? await AgentWorkflowRuns.FirstOrDefaultAsync(
+                    run => run.Id == workflowRunId
+                        && run.TenantId == tenantId
+                        && !run.IsDeleted,
+                    cancellationToken);
 
             if (tracked is null || tracked.Status != expectedStatus)
                 return false;
