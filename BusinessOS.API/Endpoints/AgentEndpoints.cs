@@ -493,7 +493,7 @@ public static class AgentEndpoints
         ICurrentUserService currentUser,
         CancellationToken cancellationToken)
     {
-        if (currentUser.TenantId is null || currentUser.TenantId == Guid.Empty)
+        if (currentUser.TenantId is not Guid tenantId || tenantId == Guid.Empty)
             return Results.Forbid();
 
         var canApprove = currentUser.Roles.Any(role =>
@@ -520,16 +520,14 @@ public static class AgentEndpoints
             return Results.Conflict(new { error = "This proposal has already been decided or is no longer pending." });
 
         var payload = DeserializeProposalPayload(run.ProgressJson);
-        if (payload.ExpiresAt is DateTime expiresAt && expiresAt <= DateTime.UtcNow)
+        var now = DateTime.UtcNow;
+        if (payload.ExpiresAt is DateTime expiresAt && expiresAt <= now)
             return Results.Conflict(new { error = "This proposal has expired and cannot be approved." });
 
-        var now = DateTime.UtcNow;
-        run.Status = decision == "approved"
+        var newStatus = decision == "approved"
             ? AgentWorkflowStatus.Approved
             : AgentWorkflowStatus.Rejected;
-        run.CompletedAt = now;
-        run.UpdatedAt = now;
-        run.ProgressJson = JsonSerializer.Serialize(new AgentActionProposalPayload
+        var updatedPayload = JsonSerializer.Serialize(new AgentActionProposalPayload
         {
             ActionType = payload.ActionType,
             Summary = payload.Summary,
@@ -539,9 +537,35 @@ public static class AgentEndpoints
             DecidedAt = now
         }, JsonOptions);
 
+        // Compare-and-set the pending state inside a transaction. Only one concurrent
+        // reviewer can change AwaitingApproval to a terminal decision.
+        await using var transaction = await db.BeginTransactionAsync(cancellationToken);
+        var affected = await db.AgentWorkflowRuns
+            .Where(item => item.Id == proposalId
+                && item.AgentKey == SalesAgentKey
+                && item.Status == AgentWorkflowStatus.AwaitingApproval)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(item => item.Status, newStatus)
+                .SetProperty(item => item.CompletedAt, now)
+                .SetProperty(item => item.UpdatedAt, now)
+                .SetProperty(item => item.ProgressJson, updatedPayload),
+                cancellationToken);
+
+        if (affected == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return Results.Conflict(new { error = "This proposal has already been decided by another reviewer." });
+        }
+
+        if (affected != 1)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return Results.Conflict(new { error = "The proposal decision could not be applied safely." });
+        }
+
         db.RbacAuditLogs.Add(new RbacAuditLog
         {
-            TenantId = currentUser.TenantId,
+            TenantId = tenantId,
             ActorUserId = currentUser.UserId ?? run.UserId,
             Action = decision == "approved"
                 ? "AgentActionProposalApproved"
@@ -549,10 +573,17 @@ public static class AgentEndpoints
             EntityType = "AgentWorkflowRun",
             EntityId = run.Id.ToString(),
             OldValue = AgentWorkflowStatus.AwaitingApproval.ToString(),
-            NewValue = run.Status.ToString()
+            NewValue = newStatus.ToString()
         });
 
         await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        // Keep the response aligned with the committed compare-and-set update.
+        run.Status = newStatus;
+        run.CompletedAt = now;
+        run.UpdatedAt = now;
+        run.ProgressJson = updatedPayload;
 
         // Approval records consent only. No external message or business mutation is executed here.
         return Results.Ok(MapActionProposal(run));
