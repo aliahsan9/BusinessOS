@@ -1,5 +1,6 @@
 using BusinessOS.Application.Common.Concurrency;
 using BusinessOS.Domain.Entities;
+using BusinessOS.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace BusinessOS.Application.Common.Interfaces;
@@ -82,6 +83,16 @@ public interface IApplicationDbContext
         Guid purchaseId,
         string expectedStatus,
         string newStatus,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> TryTransitionAgentWorkflowStatusAsync(
+        Guid workflowRunId,
+        Guid tenantId,
+        AgentWorkflowStatus expectedStatus,
+        AgentWorkflowStatus newStatus,
+        DateTime updatedAt,
+        DateTime? completedAt,
+        string? progressJson,
         CancellationToken cancellationToken = default);
 
     Task<int> TryRefundPaymentAsync(

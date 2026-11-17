@@ -317,6 +317,17 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
     public async Task SalesActionProposal_IsTenantScoped_AndRequiresExplicitDecision()
     {
         var tenantA = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var enableFollowUp = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            "/api/v1/agents/employees/emma/permissions",
+            tenantA,
+            new UpdateAgentToolPermissionsRequest
+            {
+                AllowedTools = ["SendCustomerFollowUp"]
+            });
+        enableFollowUp.StatusCode.Should().Be(HttpStatusCode.OK);
+
         var tenantB = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
 
         var create = await IntegrationHttp.SendAuthorizedAsync(
@@ -392,6 +403,17 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
     {
         var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
 
+        var enableFollowUp = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            "/api/v1/agents/employees/emma/permissions",
+            auth,
+            new UpdateAgentToolPermissionsRequest
+            {
+                AllowedTools = ["SendCustomerFollowUp"]
+            });
+        enableFollowUp.StatusCode.Should().Be(HttpStatusCode.OK);
+
         var unsupported = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
@@ -427,4 +449,142 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
         var response = await Client.GetAsync("/api/v1/agents/actions/proposals");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
+    [Fact]
+    public async Task SalesActionProposal_ConcurrentDecisions_OnlyOneReviewerWins()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var enableFollowUp = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            "/api/v1/agents/employees/emma/permissions",
+            auth,
+            new UpdateAgentToolPermissionsRequest
+            {
+                AllowedTools = ["SendCustomerFollowUp"]
+            });
+        enableFollowUp.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var create = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/v1/agents/actions/proposals",
+            auth,
+            new CreateAgentActionProposalRequest
+            {
+                ActionType = "SendCustomerFollowUp",
+                Title = "Concurrency check",
+                Summary = "Only one reviewer may decide this proposal.",
+                PayloadJson = "{}"
+            });
+
+        create.StatusCode.Should().Be(HttpStatusCode.Created);
+        var proposal = await create.Content.ReadFromJsonAsync<AgentActionProposalDto>(JsonOptions);
+        proposal.Should().NotBeNull();
+
+        var approveTask = IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            $"/api/v1/agents/actions/proposals/{proposal!.Id}/decision",
+            auth,
+            new DecideAgentActionProposalRequest { Decision = "approved" });
+
+        var rejectTask = IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            $"/api/v1/agents/actions/proposals/{proposal.Id}/decision",
+            auth,
+            new DecideAgentActionProposalRequest { Decision = "rejected" });
+
+        var responses = await Task.WhenAll(approveTask, rejectTask);
+        responses.Select(response => response.StatusCode)
+            .Should().ContainSingle(status => status == HttpStatusCode.OK);
+        responses.Select(response => response.StatusCode)
+            .Should().ContainSingle(status => status == HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task SalesActionProposal_ExecutionRequiresApprovalAndActiveTenantCustomer()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var enableFollowUp = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            "/api/v1/agents/employees/emma/permissions",
+            auth,
+            new UpdateAgentToolPermissionsRequest
+            {
+                AllowedTools = ["SendCustomerFollowUp"]
+            });
+        enableFollowUp.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var create = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/v1/agents/actions/proposals",
+            auth,
+            new CreateAgentActionProposalRequest
+            {
+                ActionType = "SendCustomerFollowUp",
+                Title = "Follow up with a customer",
+                Summary = "Send a reviewed follow-up message.",
+                PayloadJson = "{\"customerId\":\"11111111-1111-1111-1111-111111111111\",\"message\":\"Hello, following up on your quotation.\"}"
+            });
+
+        create.StatusCode.Should().Be(HttpStatusCode.Created);
+        var proposal = await create.Content.ReadFromJsonAsync<AgentActionProposalDto>(JsonOptions);
+        proposal.Should().NotBeNull();
+
+        var beforeApproval = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            $"/api/v1/agents/actions/proposals/{proposal!.Id}/execute",
+            auth);
+        beforeApproval.StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        var approve = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            $"/api/v1/agents/actions/proposals/{proposal.Id}/decision",
+            auth,
+            new DecideAgentActionProposalRequest { Decision = "approved" });
+        approve.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // A missing customer is rejected before the one-time execution claim is acquired.
+        var execute = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            $"/api/v1/agents/actions/proposals/{proposal.Id}/execute",
+            auth);
+        execute.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var detail = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            $"/api/v1/agents/actions/proposals/{proposal.Id}",
+            auth);
+        var current = await detail.Content.ReadFromJsonAsync<AgentActionProposalDto>(JsonOptions);
+        current!.Status.Should().Be(AgentWorkflowStatus.Approved);
+    }
+
+    [Fact]
+    public async Task SalesActionProposal_RequiresExplicitEmployeeCapability()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/v1/agents/actions/proposals",
+            auth,
+            new CreateAgentActionProposalRequest
+            {
+                ActionType = "SendCustomerFollowUp",
+                Title = "Capability disabled",
+                Summary = "This action must be denied until the tenant enables it.",
+                PayloadJson = "{}"
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+
 }

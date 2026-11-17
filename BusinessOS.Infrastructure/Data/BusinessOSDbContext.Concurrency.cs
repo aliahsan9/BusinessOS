@@ -9,6 +9,8 @@ namespace BusinessOS.Infrastructure.Data;
 
 public partial class BusinessOSDbContext
 {
+    private static readonly SemaphoreSlim InMemoryAgentWorkflowTransitionLock = new(1, 1);
+
     public bool HasActiveTransaction => Database.CurrentTransaction is not null;
 
     public async Task<IApplicationTransaction?> BeginTransactionAsync(CancellationToken cancellationToken = default)
@@ -126,6 +128,74 @@ public partial class BusinessOSDbContext
         string newStatus,
         CancellationToken cancellationToken = default) =>
         TryTransitionStatusAsync(Purchases, purchaseId, expectedStatus, newStatus, cancellationToken);
+
+    public async Task<bool> TryTransitionAgentWorkflowStatusAsync(
+        Guid workflowRunId,
+        Guid tenantId,
+        AgentWorkflowStatus expectedStatus,
+        AgentWorkflowStatus newStatus,
+        DateTime updatedAt,
+        DateTime? completedAt,
+        string? progressJson,
+        CancellationToken cancellationToken = default)
+    {
+        if (tenantId == Guid.Empty || tenantId != _tenantId)
+            return false;
+
+        if (Database.IsRelational())
+        {
+            var rows = await AgentWorkflowRuns
+                .Where(run => run.Id == workflowRunId
+                    && run.TenantId == tenantId
+                    && !run.IsDeleted
+                    && run.Status == expectedStatus)
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(run => run.Status, newStatus)
+                        .SetProperty(run => run.UpdatedAt, updatedAt)
+                        .SetProperty(run => run.CompletedAt, completedAt)
+                        .SetProperty(run => run.ProgressJson, progressJson),
+                    cancellationToken);
+
+            if (rows == 1)
+                await ReloadIfTrackedAsync<AgentWorkflowRun>(workflowRunId, cancellationToken);
+
+            return rows == 1;
+        }
+
+        // The in-memory provider is used by integration tests and does not support
+        // ExecuteUpdate. Serialize transitions across DbContext instances and persist the
+        // state before releasing the gate so concurrent requests still observe one winner.
+        await InMemoryAgentWorkflowTransitionLock.WaitAsync(cancellationToken);
+        try
+        {
+            var trackedEntry = ChangeTracker.Entries<AgentWorkflowRun>()
+                .FirstOrDefault(entry => entry.Entity.Id == workflowRunId);
+            if (trackedEntry is not null)
+                await trackedEntry.ReloadAsync(cancellationToken);
+
+            var tracked = trackedEntry?.Entity
+                ?? await AgentWorkflowRuns.FirstOrDefaultAsync(
+                    run => run.Id == workflowRunId
+                        && run.TenantId == tenantId
+                        && !run.IsDeleted,
+                    cancellationToken);
+
+            if (tracked is null || tracked.Status != expectedStatus)
+                return false;
+
+            tracked.Status = newStatus;
+            tracked.UpdatedAt = updatedAt;
+            tracked.CompletedAt = completedAt;
+            tracked.ProgressJson = progressJson;
+            await SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        finally
+        {
+            InMemoryAgentWorkflowTransitionLock.Release();
+        }
+    }
 
     public async Task<bool> TryAcceptOrderPaymentAsync(
         Guid orderId,

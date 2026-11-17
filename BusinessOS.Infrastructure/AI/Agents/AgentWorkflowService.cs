@@ -292,7 +292,8 @@ public sealed class AgentWorkflowService : IAgentWorkflowService
         run.Status = status;
         run.UpdatedAt = DateTime.UtcNow;
         if (status is AgentWorkflowStatus.Completed or AgentWorkflowStatus.Failed or AgentWorkflowStatus.Cancelled
-            or AgentWorkflowStatus.Approved or AgentWorkflowStatus.Rejected)
+            or AgentWorkflowStatus.Approved or AgentWorkflowStatus.Rejected
+            or AgentWorkflowStatus.Executed or AgentWorkflowStatus.ExecutionFailed)
             run.CompletedAt ??= DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);

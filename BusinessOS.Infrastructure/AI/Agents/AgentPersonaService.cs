@@ -13,6 +13,8 @@ namespace BusinessOS.Infrastructure.AI.Agents;
 
 public sealed class AgentPersonaService : IAgentPersonaService
 {
+    private const string SalesFollowUpCapability = "SendCustomerFollowUp";
+
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUser;
     private readonly ILogger<AgentPersonaService> _logger;
@@ -194,8 +196,17 @@ public sealed class AgentPersonaService : IAgentPersonaService
         var normalized = new HashSet<string>(StringComparer.Ordinal);
         foreach (var raw in submitted)
         {
-            if (string.IsNullOrWhiteSpace(raw)
-                || !Enum.TryParse<AiToolName>(raw.Trim(), ignoreCase: false, out var parsed)
+            if (string.IsNullOrWhiteSpace(raw))
+                throw new ArgumentException("AI tool names cannot be empty.");
+
+            var toolName = raw.Trim();
+            if (string.Equals(toolName, SalesFollowUpCapability, StringComparison.Ordinal))
+            {
+                normalized.Add(SalesFollowUpCapability);
+                continue;
+            }
+
+            if (!Enum.TryParse<AiToolName>(toolName, ignoreCase: false, out var parsed)
                 || !Enum.IsDefined(parsed))
             {
                 throw new ArgumentException($"Unknown AI tool: {raw}.");
@@ -323,7 +334,7 @@ public sealed class AgentPersonaService : IAgentPersonaService
         {
             AgentKey = profile.Key,
             AllowedTools = allowed,
-            AvailableTools = Enum.GetNames<AiToolName>()
+            AvailableTools = Enum.GetNames<AiToolName>().Append(SalesFollowUpCapability).ToArray()
         };
     }
 
