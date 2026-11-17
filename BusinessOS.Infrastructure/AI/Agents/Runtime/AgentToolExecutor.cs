@@ -220,7 +220,8 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
                 correction = _corrector.Analyze(request.ToolName, result, exception, retryArgs, request.Language);
             }
         }
-        else if (!result.Success && correction is { ShouldRetry: true, FailureKind: AgentFailureKind.Transient })
+        else if (!result.Success && !AgentToolRiskClassifier.RequiresExplicitApproval(request.ToolName)
+            && correction is { ShouldRetry: true, FailureKind: AgentFailureKind.Transient })
         {
             retried = true;
             (result, exception) = await RunToolAsync(tool, execContext, args, cancellationToken);
