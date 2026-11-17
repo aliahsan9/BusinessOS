@@ -30,11 +30,66 @@ public sealed class AgentPersonaService : IAgentPersonaService
     {
         await EnsureDefaultProfilesAsync(cancellationToken);
 
-        var profiles = await LoadEffectiveProfilesAsync(cancellationToken);
+        var profiles = await LoadEffectiveProfilesAsync(cancellationToken, includeInactiveOverrides: true);
         if (profiles.Count == 0)
             return FallbackCatalog().Select(ToEmployeeDto).ToList();
 
         return profiles.Select(ToEmployeeDto).ToList();
+    }
+
+    public async Task<AgentEmployeeDto?> SetEmployeeActivationAsync(
+        string agentKey,
+        bool isActive,
+        CancellationToken cancellationToken = default)
+    {
+        if (_currentUser.TenantId is not Guid tenantId || tenantId == Guid.Empty)
+            throw new InvalidOperationException("A tenant context is required to manage AI employees.");
+
+        await EnsureDefaultProfilesAsync(cancellationToken);
+        var key = AgentKeys.Normalize(agentKey);
+        if (string.IsNullOrWhiteSpace(key))
+            return null;
+
+        var systemProfile = await _context.AgentProfiles
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.TenantId == null && p.Key == key && !p.IsDeleted, cancellationToken);
+        if (systemProfile is null)
+            return null;
+
+        // Keep the tenant's primary assistant available; a default-switch API is a separate operation.
+        if (systemProfile.IsDefault && !isActive)
+            throw new InvalidOperationException("The default AI employee cannot be deactivated. Select another default employee first.");
+
+        var tenantProfile = await _context.AgentProfiles
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.TenantId == tenantId && p.Key == key && !p.IsDeleted, cancellationToken);
+
+        if (tenantProfile is null)
+        {
+            tenantProfile = new AgentProfile
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                Key = systemProfile.Key,
+                DisplayName = systemProfile.DisplayName,
+                RoleTitle = systemProfile.RoleTitle,
+                Specialty = systemProfile.Specialty,
+                SystemPersonaPrompt = systemProfile.SystemPersonaPrompt,
+                DefaultLanguage = systemProfile.DefaultLanguage,
+                IsDefault = systemProfile.IsDefault,
+                IsActive = isActive
+            };
+            _context.AgentProfiles.Add(tenantProfile);
+        }
+        else
+        {
+            tenantProfile.IsActive = isActive;
+            tenantProfile.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+        return ToEmployeeDto(tenantProfile);
     }
 
     public async Task<AgentPersonaDto> ResolvePersonaAsync(
@@ -200,12 +255,13 @@ public sealed class AgentPersonaService : IAgentPersonaService
         await _context.SaveChangesAsync(cancellationToken);
     }
 
-    private async Task<List<AgentProfile>> LoadEffectiveProfilesAsync(CancellationToken cancellationToken)
+    private async Task<List<AgentProfile>> LoadEffectiveProfilesAsync(
+        CancellationToken cancellationToken,
+        bool includeInactiveOverrides = false)
     {
         var tenantId = _currentUser.TenantId;
         var all = await _context.AgentProfiles
             .AsNoTracking()
-            .Where(p => p.IsActive)
             .ToListAsync(cancellationToken);
 
         if (all.Count == 0)
@@ -222,7 +278,11 @@ public sealed class AgentPersonaService : IAgentPersonaService
                 byKey[tenantProfile.Key] = tenantProfile;
         }
 
-        return byKey.Values
+        var effective = byKey.Values;
+        if (!includeInactiveOverrides)
+            effective = effective.Where(p => p.IsActive);
+
+        return effective
             .OrderByDescending(p => p.IsDefault)
             .ThenBy(p => p.DisplayName)
             .ToList();
