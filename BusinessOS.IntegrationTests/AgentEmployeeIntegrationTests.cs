@@ -348,6 +348,13 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
         var tenantBProposals = await tenantBList.Content.ReadFromJsonAsync<List<AgentActionProposalDto>>(JsonOptions);
         tenantBProposals.Should().BeEmpty();
 
+        var crossTenantGet = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            $"/api/v1/agents/actions/proposals/{proposal.Id}",
+            tenantB);
+        crossTenantGet.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
         var crossTenantDecision = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
