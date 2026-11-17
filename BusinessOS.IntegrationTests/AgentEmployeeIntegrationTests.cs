@@ -358,4 +358,4 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
         var response = await Client.GetAsync("/api/v1/agents/actions/proposals");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
-
+}
