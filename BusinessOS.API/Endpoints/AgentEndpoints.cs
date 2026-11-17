@@ -90,6 +90,11 @@ public static class AgentEndpoints
             .WithName("AgentListActionProposals")
             .Produces<IReadOnlyList<AgentActionProposalDto>>(StatusCodes.Status200OK);
 
+        group.MapGet("/actions/proposals/{proposalId:guid}", GetActionProposal)
+            .WithName("AgentGetActionProposal")
+            .Produces<AgentActionProposalDto>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
+
         group.MapPost("/actions/proposals/{proposalId:guid}/decision", DecideActionProposal)
             .WithName("AgentDecideActionProposal")
             .Produces<AgentActionProposalDto>(StatusCodes.Status200OK)
@@ -459,6 +464,25 @@ public static class AgentEndpoints
             .ToListAsync(cancellationToken);
 
         return Results.Ok(runs.Select(MapActionProposal).ToList());
+    }
+
+    private static async Task<IResult> GetActionProposal(
+        Guid proposalId,
+        IApplicationDbContext db,
+        ICurrentUserService currentUser,
+        CancellationToken cancellationToken)
+    {
+        if (currentUser.TenantId is null || currentUser.TenantId == Guid.Empty)
+            return Results.Forbid();
+
+        var run = await db.AgentWorkflowRuns.AsNoTracking()
+            .FirstOrDefaultAsync(
+                item => item.Id == proposalId && item.AgentKey == SalesAgentKey,
+                cancellationToken);
+
+        return run is null
+            ? Results.NotFound(new { error = "Proposal was not found." })
+            : Results.Ok(MapActionProposal(run));
     }
 
     private static async Task<IResult> DecideActionProposal(
