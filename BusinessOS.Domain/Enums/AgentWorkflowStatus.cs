@@ -10,7 +10,8 @@ public enum AgentWorkflowStatus
     AwaitingApproval = 5,
     Approved = 6,
     Rejected = 7,
-    Executing = 8,
-    Executed = 9,
-    ExecutionFailed = 10
+    Expired = 8,
+    Executing = 9,
+    Executed = 10,
+    ExecutionFailed = 11
 }
