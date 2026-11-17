@@ -295,7 +295,12 @@ public sealed class AgentPersonaService : IAgentPersonaService
                 AiToolName.SearchDocuments, AiToolName.ShowProfit, AiToolName.SearchCustomer,
                 AiToolName.SearchProduct, AiToolName.SearchInvoice, AiToolName.SearchSupplier,
                 AiToolName.GetOutOfStock, AiToolName.GetInventoryHealth,
-                AiToolName.GetBusinessHealth, AiToolName.GetDailyPriorities, AiToolName.GetCustomerInsights
+                AiToolName.GetBusinessHealth, AiToolName.GetDailyPriorities, AiToolName.GetCustomerInsights,
+                AiToolName.CreateTask, AiToolName.CreateInvoice, AiToolName.CreateCustomer,
+                AiToolName.CreateProject, AiToolName.CreatePurchaseOrderDraft, AiToolName.CreateProduct,
+                AiToolName.UpdateCustomer, AiToolName.UpdateProduct, AiToolName.AdjustInventory,
+                AiToolName.ReceiveStock, AiToolName.CreateSale, AiToolName.CreatePurchaseOrder,
+                AiToolName.CreateSupplier, AiToolName.UpdateSupplier
             }
         };
 
