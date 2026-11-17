@@ -233,6 +233,69 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task AgentToolPermissions_AreTenantScoped_AndRejectUnknownTools()
+    {
+        var tenantA = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var tenantB = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+
+        var initial = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            "/api/v1/agents/employees/adam/permissions",
+            tenantA);
+        initial.StatusCode.Should().Be(HttpStatusCode.OK);
+        var initialPermissions = await initial.Content.ReadFromJsonAsync<AgentToolPermissionsDto>(JsonOptions);
+        initialPermissions.Should().NotBeNull();
+        initialPermissions!.AllowedTools.Should().Contain(nameof(BusinessOS.Application.Features.AI.Enums.AiToolName.GetLowStock));
+
+        var update = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            "/api/v1/agents/employees/adam/permissions",
+            tenantA,
+            new UpdateAgentToolPermissionsRequest
+            {
+                AllowedTools = [nameof(BusinessOS.Application.Features.AI.Enums.AiToolName.GetLowStock)]
+            });
+        update.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updated = await update.Content.ReadFromJsonAsync<AgentToolPermissionsDto>(JsonOptions);
+        updated!.AllowedTools.Should().Equal(nameof(BusinessOS.Application.Features.AI.Enums.AiToolName.GetLowStock));
+
+        var tenantBResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            "/api/v1/agents/employees/adam/permissions",
+            tenantB);
+        var tenantBPermissions = await tenantBResponse.Content.ReadFromJsonAsync<AgentToolPermissionsDto>(JsonOptions);
+        tenantBPermissions.Should().NotBeNull();
+        tenantBPermissions!.AllowedTools.Should().Contain(nameof(BusinessOS.Application.Features.AI.Enums.AiToolName.SearchProduct));
+
+        var invalid = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            "/api/v1/agents/employees/adam/permissions",
+            tenantA,
+            new UpdateAgentToolPermissionsRequest { AllowedTools = ["DropDatabase"] });
+        invalid.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task AgentToolPermissions_EmptyListMeansDenyAll()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var update = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            "/api/v1/agents/employees/emma/permissions",
+            auth,
+            new UpdateAgentToolPermissionsRequest { AllowedTools = [] });
+
+        update.StatusCode.Should().Be(HttpStatusCode.OK);
+        var saved = await update.Content.ReadFromJsonAsync<AgentToolPermissionsDto>(JsonOptions);
+        saved!.AllowedTools.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task AgentOnboardingStart_ReturnsWorkflowSteps()
     {
         var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
@@ -318,6 +381,46 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task SalesActionProposal_RejectsUnsupportedActionAndMalformedPayload()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+
+        var unsupported = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/v1/agents/actions/proposals",
+            auth,
+            new CreateAgentActionProposalRequest
+            {
+                ActionType = "DeleteCustomer",
+                Title = "Delete customer",
+                Summary = "This action is not enabled.",
+                PayloadJson = "{}"
+            });
+        unsupported.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var malformed = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/v1/agents/actions/proposals",
+            auth,
+            new CreateAgentActionProposalRequest
+            {
+                ActionType = "SendCustomerFollowUp",
+                Title = "Follow up",
+                Summary = "Prepare a message.",
+                PayloadJson = "{not-json}"
+            });
+        malformed.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task SalesActionProposal_RequiresAuthentication()
+    {
+        var response = await Client.GetAsync("/api/v1/agents/actions/proposals");
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+    [Fact]
     public async Task SalesActionProposal_ConcurrentDecisions_OnlyOneReviewerWins()
     {
         var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
@@ -357,47 +460,6 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
             .Should().ContainSingle(status => status == HttpStatusCode.OK);
         responses.Select(response => response.StatusCode)
             .Should().ContainSingle(status => status == HttpStatusCode.Conflict);
-    }
-
-    [Fact]
-    public async Task SalesActionProposal_RejectsUnsupportedActionAndMalformedPayload()
-    {
-        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
-
-        var unsupported = await IntegrationHttp.SendAuthorizedAsync(
-            Client,
-            HttpMethod.Post,
-            "/api/v1/agents/actions/proposals",
-            auth,
-            new CreateAgentActionProposalRequest
-            {
-                ActionType = "DeleteCustomer",
-                Title = "Delete customer",
-                Summary = "This action is not enabled.",
-                PayloadJson = "{}"
-            });
-        unsupported.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-
-        var malformed = await IntegrationHttp.SendAuthorizedAsync(
-            Client,
-            HttpMethod.Post,
-            "/api/v1/agents/actions/proposals",
-            auth,
-            new CreateAgentActionProposalRequest
-            {
-                ActionType = "SendCustomerFollowUp",
-                Title = "Follow up",
-                Summary = "Prepare a message.",
-                PayloadJson = "{not-json}"
-            });
-        malformed.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
-    public async Task SalesActionProposal_RequiresAuthentication()
-    {
-        var response = await Client.GetAsync("/api/v1/agents/actions/proposals");
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
@@ -452,6 +514,5 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
         var current = await detail.Content.ReadFromJsonAsync<AgentActionProposalDto>(JsonOptions);
         current!.Status.Should().Be(AgentWorkflowStatus.Approved);
     }
-
 
 }
