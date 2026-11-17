@@ -44,29 +44,36 @@ Creation and decision events are written to the existing RBAC audit log. The pro
 
 ## Important follow-up before production
 
-- Add database-backed expiry processing so stale pending proposals are visibly expired.
+- Add a scheduled expiry worker if expiry needs persisted lifecycle transitions and notifications; the API currently derives expiry from the proposal deadline when reading.
+- Add optimistic concurrency using a provider-supported concurrency token and test it against SQL Server before enabling concurrent reviewer decisions.
 - Add expiry processing so stale pending proposals are visibly expired.
 - Add a dedicated proposal entity/table if proposal volume or reporting needs outgrow workflow-run storage.
 - Add UI for review, diff/preview, and decision history.
 - Implement message delivery as a separate worker only after approval, with idempotency, provider status tracking, retries, and a second permission check at execution time.
 - Run backend build, unit/integration tests, and relational SQL Server tests before merging.
 
+
 ## Concurrent reviewer protection
 
-Decision updates use a database compare-and-set operation constrained to the `AwaitingApproval` state, inside the same transaction as the RBAC audit insert. If two reviewers submit at the same time, only the request that changes the pending row can commit; the other receives HTTP 409. An integration test exercises concurrent approve/reject requests. Run it against the production relational provider (SQL Server) before merge; EF InMemory does not provide equivalent relational concurrency semantics.
+Decision and execution transitions use a shared compare-and-set method. SQL Server uses a conditional `UPDATE` constrained by tenant, proposal ID, and expected status. The in-memory integration provider uses a serialized transition gate and persists the state before releasing it. A competing request receives HTTP 409 once the proposal has left its expected state. Run the concurrency integration test against SQL Server before production.
+
+## Proposal expiry
+
+The API derives `Expired` for a pending proposal whose `ExpiresAt` timestamp has passed. Expired proposals are excluded from the pending-only list and remain visible in the all-proposals list. The underlying workflow row is not mutated by a read; the decision endpoint independently rejects an expired proposal with HTTP 409. This avoids a background worker or migration in the first release.
+
 
 ## One-time email execution
 
-The next execution slice adds:
+The execution slice adds:
 
 - `POST /actions/proposals/{proposalId}/execute`
 - Only Owner, Admin, or Manager may request execution.
 - Only an `Approved` `SendCustomerFollowUp` proposal can be executed.
 - The customer is reloaded from the authenticated tenant and must still be active with a valid email address.
-- A conditional status transition claims the proposal as `Executing` before contacting SMTP. The proposal ID is the one-time execution key; subsequent requests cannot claim it again.
+- A conditional state transition claims the proposal as `Executing` before contacting SMTP. The proposal ID is the one-time execution key; subsequent requests cannot claim it again.
 - Delivery success becomes `Executed`; provider-disabled or failed delivery becomes `ExecutionFailed`.
-- Audit records are written for execution start, success, and failure.
+- Execution start, success, and failure are written to the existing RBAC audit log.
 
 SMTP is not an idempotent delivery provider. To avoid duplicate customer emails, automatic retries are intentionally disabled. If the process is interrupted after SMTP accepts a message but before the database records success, the proposal remains `Executing` for manual reconciliation. `Executed` means the configured SMTP provider accepted the message, not that the recipient opened or received it in their inbox.
 
-This endpoint is an explicit, authenticated execution request after approval; it is not yet an autonomous background worker. Before production, connect tenant-specific AI employee tool allow-lists, add provider-level idempotency where supported, and add a reconciliation dashboard for stuck executions.
+This is an explicit authenticated execution request after approval; it is not yet an autonomous background worker. Tenant-specific AI employee tool allow-lists must be enforced before production use. Add provider-level idempotency where supported and a reconciliation dashboard for stuck executions.
