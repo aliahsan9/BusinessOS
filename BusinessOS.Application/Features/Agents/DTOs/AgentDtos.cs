@@ -19,6 +19,13 @@ public sealed class AgentEmployeeDto
     public IReadOnlyList<string>? AllowedTools { get; init; }
 }
 
+/// <summary>Public catalog entry for a registered AI employee tool.</summary>
+public sealed class AgentToolCatalogItemDto
+{
+    public string Name { get; init; } = default!;
+    public string Description { get; init; } = default!;
+}
+
 public sealed class SetAgentActivationRequest
 {
     public bool IsActive { get; init; }
