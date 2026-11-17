@@ -336,10 +336,50 @@ public class SophiaSecurityTests
         reply.Should().NotContain("$");
     }
 
+    [Fact]
+    public async Task UnconfirmedMutatingTool_IsRecordedInAuditLog()
+    {
+        var user = DeniedUser();
+        user.Setup(u => u.HasPermission(It.IsAny<string>())).Returns(true);
+        var tool = new Mock<IAiTool>();
+        tool.SetupGet(t => t.ToolName).Returns(AiToolName.CreateProduct);
+        var registry = new Mock<IAiToolRegistry>();
+        registry.SetupGet(r => r.AllTools).Returns([tool.Object]);
+        var audit = new Mock<IAgentActionLogger>();
+        audit.Setup(l => l.LogAsync(It.IsAny<AgentActionLogEntry>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var result = await Executor(
+            registry.Object,
+            new AiPermissionValidator(user.Object),
+            actionLogger: audit.Object).ExecuteAsync(new AgentToolExecutionRequest
+        {
+            AgentKey = "sophia",
+            ToolName = AiToolName.CreateProduct,
+            Message = "Create a product",
+            Intent = AiCopilotIntent.ActionCreate
+        });
+
+        result.ToolResult.Success.Should().BeFalse();
+        result.ToolResult.Summary.Should().Contain("not confirmed");
+        audit.Verify(l => l.LogAsync(
+            It.Is<AgentActionLogEntry>(entry =>
+                entry.ToolName == nameof(AiToolName.CreateProduct)
+                && !entry.Success
+                && entry.FailureReason != null
+                && entry.FailureReason.Contains("confirmation")),
+            It.IsAny<CancellationToken>()), Times.Once);
+        tool.Verify(t => t.ExecuteWithArgsAsync(
+            It.IsAny<AiCopilotExecutionContext>(),
+            It.IsAny<JsonElement>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     private static AgentToolExecutor Executor(
         IAiToolRegistry registry,
         IAiPermissionValidator permissions,
-        IAgentPersonaService? personaService = null)
+        IAgentPersonaService? personaService = null,
+        IAgentActionLogger? actionLogger = null)
     {
         var corrector = new Mock<IAgentSelfCorrector>();
         corrector.Setup(c => c.Analyze(
@@ -366,7 +406,7 @@ public class SophiaSecurityTests
             permissions,
             Mock.Of<IAgentArgumentExtractor>(),
             corrector.Object,
-            logger.Object,
+            actionLogger ?? logger.Object,
             NullLogger<AgentToolExecutor>.Instance,
             personaService ?? defaultPersona.Object);
     }

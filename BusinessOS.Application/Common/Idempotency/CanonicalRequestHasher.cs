@@ -8,7 +8,11 @@ public static class IdempotencyOperations
 {
     public const string PaymentCreate = "payments.create";
     public const string PaymentRefund = "payments.refund";
+ reliability/agent-purchase-order-idempotency
     public const string AgentPurchaseOrderCreate = "agents.purchase-orders.create";
+=======
+    public const string AgentSaleCreate = "agents.sales.create";
+ master
     public const string BillingCheckout = "billing.checkout";
     public const string BillingRefund = "billing.refund";
 }
