@@ -18,6 +18,7 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
     private readonly IAgentSelfCorrector _corrector;
     private readonly IAgentActionLogger _logger;
     private readonly ILogger<AgentToolExecutor> _log;
+    private readonly IAgentPersonaService? _personaService;
 
     public AgentToolExecutor(
         IAiToolRegistry registry,
@@ -25,7 +26,8 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
         IAgentArgumentExtractor args,
         IAgentSelfCorrector corrector,
         IAgentActionLogger logger,
-        ILogger<AgentToolExecutor> log)
+        ILogger<AgentToolExecutor> log,
+        IAgentPersonaService? personaService = null)
     {
         _registry = registry;
         _permissions = permissions;
@@ -33,6 +35,7 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
         _corrector = corrector;
         _logger = logger;
         _log = log;
+        _personaService = personaService;
     }
 
     public async Task<AgentToolExecutionResult> ExecuteAsync(
@@ -40,8 +43,11 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
         CancellationToken cancellationToken = default)
     {
         var sw = Stopwatch.StartNew();
+        var employeeAllowed = _personaService is null
+            || (!string.IsNullOrWhiteSpace(request.AgentKey)
+                && await _personaService.IsToolAllowedAsync(request.AgentKey, request.ToolName, cancellationToken));
         var permission = _permissions.ValidateTool(request.ToolName);
-        if (!permission.Allowed)
+        if (!employeeAllowed || !permission.Allowed)
         {
             sw.Stop();
             await _logger.LogAsync(new AgentActionLogEntry
@@ -59,20 +65,20 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
             return new AgentToolExecutionResult
             {
                 PermissionDenied = true,
-                DenialReason = permission.DenialReason,
+                DenialReason = employeeAllowed ? permission.DenialReason : "This AI employee is not permitted to use that tool.",
                 DurationMs = sw.ElapsedMilliseconds,
                 State = request.State,
                 ToolResult = new AiToolResult
                 {
                     ToolName = request.ToolName.ToString(),
                     Success = false,
-                    Summary = permission.DenialReason ?? "Permission denied."
+                    Summary = employeeAllowed ? permission.DenialReason ?? "Permission denied." : "This AI employee is not permitted to use that tool."
                 },
                 Correction = new AgentSelfCorrectionResult
                 {
                     FailureKind = AgentFailureKind.PermissionDenied,
                     NeedsClarification = true,
-                    ClarificationMessage = permission.DenialReason
+                    ClarificationMessage = employeeAllowed ? permission.DenialReason : "This AI employee is not permitted to use that tool."
                 }
             };
         }
@@ -178,6 +184,7 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
             // Search then retry original once.
             var searchReq = new AgentToolExecutionRequest
             {
+                AgentKey = request.AgentKey,
                 ToolName = searchTool,
                 Message = request.Message,
                 Language = request.Language,
@@ -246,6 +253,25 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
         CancellationToken cancellationToken)
     {
         // Simplified path without nested self-correction to avoid infinite loops.
+        var employeeAllowed = _personaService is null
+            || (!string.IsNullOrWhiteSpace(request.AgentKey)
+                && await _personaService.IsToolAllowedAsync(request.AgentKey, request.ToolName, cancellationToken));
+        if (!employeeAllowed || !_permissions.ValidateTool(request.ToolName).Allowed)
+        {
+            return new AgentToolExecutionResult
+            {
+                PermissionDenied = true,
+                DenialReason = "This AI employee or user is not permitted to use the tool.",
+                State = request.State,
+                ToolResult = new AiToolResult
+                {
+                    ToolName = request.ToolName.ToString(),
+                    Success = false,
+                    Summary = "This AI employee or user is not permitted to use the tool."
+                }
+            };
+        }
+
         var tool = _registry.AllTools.FirstOrDefault(t => t.ToolName == request.ToolName);
         if (tool is null)
         {
