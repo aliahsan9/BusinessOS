@@ -651,6 +651,7 @@ public sealed class CreatePurchaseOrderTool : AiToolBase
 
             IdempotencyRecord? staged = null;
             Guid poId;
+            var alreadyCreated = false;
             try
             {
                 var claim = await _idempotency.ClaimCommittedAsync(
@@ -661,39 +662,39 @@ public sealed class CreatePurchaseOrderTool : AiToolBase
 
                 if (claim.Kind == IdempotencyOutcomeKind.Replay && claim.ResourceId is Guid replayedPurchaseId)
                 {
-                    await transaction.CommitAsync(cancellationToken);
-                    return await ReportPurchaseOrderAsync(replayedPurchaseId, items.Count, alreadyCreated: true, cancellationToken);
+                    poId = replayedPurchaseId;
+                    alreadyCreated = true;
                 }
-
-                if (claim.Kind == IdempotencyOutcomeKind.Conflict)
+                else if (claim.Kind == IdempotencyOutcomeKind.Conflict)
                 {
                     await transaction.RollbackAsync(cancellationToken);
                     return Fail("This purchase-order request key was already used for different details. Start a new request.");
                 }
-
-                if (claim.Kind == IdempotencyOutcomeKind.InProgress)
+                else if (claim.Kind == IdempotencyOutcomeKind.InProgress)
                 {
                     await transaction.RollbackAsync(cancellationToken);
                     return Fail("This purchase order is already being processed. Check the purchase orders list before retrying.");
                 }
+                else
+                {
+                    staged = claim.Record
+                        ?? throw new InvalidOperationException("The purchase-order idempotency claim did not return its record.");
 
-                staged = claim.Record
-                    ?? throw new InvalidOperationException("The purchase-order idempotency claim did not return its record.");
+                    poId = await _mediator.Send(new CreatePurchaseOrderCommand(
+                        supplierId.Value,
+                        DateTime.UtcNow,
+                        PurchaseOrderStatusNames.Draft,
+                        null,
+                        "Created by Navla",
+                        items), cancellationToken);
 
-                poId = await _mediator.Send(new CreatePurchaseOrderCommand(
-                    supplierId.Value,
-                    DateTime.UtcNow,
-                    PurchaseOrderStatusNames.Draft,
-                    null,
-                    "Created by Navla",
-                    items), cancellationToken);
-
-                await _idempotency.CompleteCommittedAsync(
-                    staged.Id,
-                    201,
-                    System.Text.Json.JsonSerializer.Serialize(new { id = poId }),
-                    poId,
-                    cancellationToken);
+                    await _idempotency.CompleteCommittedAsync(
+                        staged.Id,
+                        201,
+                        System.Text.Json.JsonSerializer.Serialize(new { id = poId }),
+                        poId,
+                        cancellationToken);
+                }
 
                 await transaction.CommitAsync(cancellationToken);
             }
@@ -708,7 +709,7 @@ public sealed class CreatePurchaseOrderTool : AiToolBase
             if (context.ExecutionState is not null)
                 context.ExecutionState.PurchaseOrderId = poId;
 
-            return await ReportPurchaseOrderAsync(poId, items.Count, alreadyCreated: false, cancellationToken);
+            return await ReportPurchaseOrderAsync(poId, items.Count, alreadyCreated, cancellationToken);
         }
         catch (Exception ex)
         {
