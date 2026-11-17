@@ -70,6 +70,11 @@ public static class AgentEndpoints
             .Produces(StatusCodes.Status403Forbidden)
             .Produces(StatusCodes.Status404NotFound);
 
+        group.MapGet("/audit-history", ListAgentAuditHistory)
+            .WithName("AgentListAuditHistory")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status403Forbidden);
+
         group.MapGet("/voice-preferences", GetVoicePreferences)
             .WithName("AgentGetVoicePreferences")
             .Produces<VoicePreferenceDto>(StatusCodes.Status200OK);
@@ -317,6 +322,42 @@ public static class AgentEndpoints
         currentUser.Roles.Any(role =>
             string.Equals(role, "Owner", StringComparison.OrdinalIgnoreCase)
             || string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase));
+
+    private static async Task<IResult> ListAgentAuditHistory(
+        IApplicationDbContext db,
+        ICurrentUserService currentUser,
+        [FromQuery] int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        if (currentUser.TenantId is not Guid tenantId || tenantId == Guid.Empty)
+            return Results.Forbid();
+
+        if (!CanManageAgents(currentUser))
+            return Results.Forbid();
+
+        var entries = await db.RbacAuditLogs
+            .AsNoTracking()
+            .Where(log => log.TenantId == tenantId
+                && (log.Action == "AgentToolPermissionsUpdated"
+                    || log.Action == "AgentActivationUpdated"
+                    || log.Action.StartsWith("AgentActionProposal")))
+            .OrderByDescending(log => log.CreatedAt)
+            .Take(Math.Clamp(limit, 1, 100))
+            .Select(log => new
+            {
+                log.Id,
+                log.ActorUserId,
+                log.Action,
+                log.EntityType,
+                log.EntityId,
+                log.OldValue,
+                log.NewValue,
+                log.CreatedAt
+            })
+            .ToListAsync(cancellationToken);
+
+        return Results.Ok(entries);
+    }
 
     private static async Task<IResult> GetVoicePreferences(
         IAgentEmployeeService agentService,
@@ -629,7 +670,11 @@ public static class AgentEndpoints
             DecidedAt = now
         }, JsonOptions);
 
+ ci/dotnet-agent-regression-pipeline
         // Compare-and-set the pending state. Only one concurrent reviewer can win.
+=======
+        // Compare-and-set the pending state so only one concurrent reviewer can win.
+ master
         await using var transaction = await db.BeginTransactionAsync(cancellationToken);
         var transitioned = await db.TryTransitionAgentWorkflowStatusAsync(
             proposalId,
@@ -648,12 +693,18 @@ public static class AgentEndpoints
             return Results.Conflict(new { error = "This proposal has already been decided by another reviewer." });
         }
 
+ ci/dotnet-agent-regression-pipeline
         // Keep the tracked instance aligned with the successful conditional update.
+=======
+ master
         run.Status = newStatus;
         run.CompletedAt = now;
         run.UpdatedAt = now;
         run.ProgressJson = updatedPayload;
+ ci/dotnet-agent-regression-pipeline
 
+=======
+ master
         db.RbacAuditLogs.Add(new RbacAuditLog
         {
             TenantId = tenantId,

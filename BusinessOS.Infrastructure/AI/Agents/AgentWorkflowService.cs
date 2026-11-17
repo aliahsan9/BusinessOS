@@ -30,8 +30,11 @@ public sealed class AgentWorkflowService : IAgentWorkflowService
         Guid? sessionId = null,
         CancellationToken cancellationToken = default)
     {
-        var tenantId = _currentUser.TenantId
-            ?? throw new InvalidOperationException("Tenant context is required.");
+        var tenantId = RequireTenantId();
+        var authenticatedUserId = _currentUser.UserId
+            ?? throw new InvalidOperationException("User context is required.");
+        if (!string.Equals(userId, authenticatedUserId, StringComparison.Ordinal))
+            throw new UnauthorizedAccessException("A workflow can only be created for the authenticated user.");
 
         var run = new AgentWorkflowRun
         {
@@ -86,10 +89,15 @@ public sealed class AgentWorkflowService : IAgentWorkflowService
         string? userId,
         CancellationToken cancellationToken)
     {
+        var tenantId = RequireTenantId();
+        if (!string.IsNullOrWhiteSpace(userId)
+            && !string.Equals(userId, _currentUser.UserId, StringComparison.Ordinal))
+            return null;
+
         var query = _context.AgentWorkflowRuns
             .AsNoTracking()
             .Include(r => r.Steps)
-            .Where(r => r.Id == workflowId);
+            .Where(r => r.TenantId == tenantId && r.Id == workflowId);
 
         if (!string.IsNullOrWhiteSpace(userId))
             query = query.Where(r => r.UserId == userId);
@@ -103,12 +111,16 @@ public sealed class AgentWorkflowService : IAgentWorkflowService
         int limit = 20,
         CancellationToken cancellationToken = default)
     {
+        var tenantId = RequireTenantId();
+        if (!string.Equals(userId, _currentUser.UserId, StringComparison.Ordinal))
+            throw new UnauthorizedAccessException("Workflow history can only be listed for the authenticated user.");
+
         var take = Math.Clamp(limit, 1, 100);
 
         var runs = await _context.AgentWorkflowRuns
             .AsNoTracking()
             .Include(r => r.Steps)
-            .Where(r => r.UserId == userId)
+            .Where(r => r.TenantId == tenantId && r.UserId == userId)
             .OrderByDescending(r => r.StartedAt)
             .Take(take)
             .ToListAsync(cancellationToken);
@@ -299,11 +311,19 @@ public sealed class AgentWorkflowService : IAgentWorkflowService
         await _context.SaveChangesAsync(cancellationToken);
     }
 
+    private Guid RequireTenantId() =>
+        _currentUser.TenantId is Guid tenantId && tenantId != Guid.Empty
+            ? tenantId
+            : throw new InvalidOperationException("Tenant context is required.");
+
     private async Task<AgentWorkflowRun> LoadTrackedAsync(Guid workflowId, CancellationToken cancellationToken)
     {
+        var tenantId = RequireTenantId();
         var run = await _context.AgentWorkflowRuns
             .Include(r => r.Steps)
-            .FirstOrDefaultAsync(r => r.Id == workflowId, cancellationToken);
+            .FirstOrDefaultAsync(
+                r => r.TenantId == tenantId && r.Id == workflowId,
+                cancellationToken);
 
         return run ?? throw new InvalidOperationException($"Workflow '{workflowId}' was not found.");
     }
