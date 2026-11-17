@@ -319,7 +319,12 @@ public sealed class AgentPersonaService : IAgentPersonaService
             allowed = [];
         }
 
-        return new AgentToolPermissionsDto { AgentKey = profile.Key, AllowedTools = allowed };
+        return new AgentToolPermissionsDto
+        {
+            AgentKey = profile.Key,
+            AllowedTools = allowed,
+            AvailableTools = Enum.GetNames<AiToolName>()
+        };
     }
 
     public async Task<AgentPersonaDto> ResolvePersonaAsync(
