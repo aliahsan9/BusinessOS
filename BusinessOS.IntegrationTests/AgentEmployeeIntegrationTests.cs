@@ -5,6 +5,9 @@ using System.Text.Json;
 using BusinessOS.Application.Features.Agents.DTOs;
 using BusinessOS.Application.Features.Auth.DTOs;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using BusinessOS.Infrastructure.Data;
 
 namespace BusinessOS.IntegrationTests;
 
@@ -281,6 +284,24 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
         updated.Should().NotBeNull();
         updated!.AllowedTools.Should().ContainSingle()
             .Which.Should().Be(nameof(BusinessOS.Application.Features.AI.Enums.AiToolName.GetInventorySummary));
+
+        // Permission changes must be auditable and attributed to the owning tenant.
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<BusinessOSDbContext>();
+            var audit = await dbContext.RbacAuditLogs
+                .IgnoreQueryFilters()
+                .Where(log => log.TenantId == tenantA.TenantId
+                    && log.Action == "AgentEmployeeToolPermissionsUpdated")
+                .OrderByDescending(log => log.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            audit.Should().NotBeNull();
+            audit!.EntityType.Should().Be("AgentProfile");
+            audit.ActorUserId.Should().NotBeNullOrWhiteSpace();
+            audit.OldValue.Should().BeNull();
+            audit.NewValue.Should().Contain(nameof(BusinessOS.Application.Features.AI.Enums.AiToolName.GetInventorySummary));
+        }
 
         var tenantAResponse = await IntegrationHttp.SendAuthorizedAsync(
             Client, HttpMethod.Get, "/api/v1/agents/employees", tenantA);
