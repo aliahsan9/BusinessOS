@@ -20,6 +20,11 @@ public interface IAgentPersonaService
         CancellationToken cancellationToken = default);
 
     /// <summary>Updates tenant-owned display metadata and language without exposing the system prompt.</summary>
+    Task<AgentEmployeeDto?> UpdateEmployeeToolPermissionsAsync(
+        string agentKey,
+        UpdateAgentToolPermissionsRequest request,
+        CancellationToken cancellationToken = default);
+
     Task<AgentEmployeeDto?> UpdateEmployeeConfigurationAsync(
         string agentKey,
         UpdateAgentConfigurationRequest request,
