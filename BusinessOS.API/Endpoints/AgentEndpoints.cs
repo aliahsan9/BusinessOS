@@ -629,12 +629,7 @@ public static class AgentEndpoints
             DecidedAt = now
         }, JsonOptions);
 
- fix/sales-proposal-concurrent-decisions
-        // Compare-and-set the pending state. Only one concurrent reviewer can win.
-=======
-        // Compare-and-set the pending state. Relational providers use one conditional UPDATE;
-        // the in-memory provider uses a tracked state transition for integration tests.
- master
+        // Compare-and-set the pending state so only one concurrent reviewer can win.
         await using var transaction = await db.BeginTransactionAsync(cancellationToken);
         var transitioned = await db.TryTransitionAgentWorkflowStatusAsync(
             proposalId,
@@ -653,15 +648,28 @@ public static class AgentEndpoints
             return Results.Conflict(new { error = "This proposal has already been decided by another reviewer." });
         }
 
- fix/sales-proposal-concurrent-decisions
-        // Keep the tracked instance aligned with the successful conditional update.
         run.Status = newStatus;
         run.CompletedAt = now;
         run.UpdatedAt = now;
         run.ProgressJson = updatedPayload;
+        await using var transaction = await db.BeginTransactionAsync(cancellationToken);
+        var transitioned = await db.TryTransitionAgentWorkflowStatusAsync(
+            proposalId,
+            tenantId,
+            AgentWorkflowStatus.AwaitingApproval,
+            newStatus,
+            now,
+            now,
+            updatedPayload,
+            cancellationToken);
 
-=======
- master
+        if (!transitioned)
+        {
+            if (transaction is not null)
+                await transaction.RollbackAsync(cancellationToken);
+            return Results.Conflict(new { error = "This proposal has already been decided by another reviewer." });
+        }
+
         db.RbacAuditLogs.Add(new RbacAuditLog
         {
             TenantId = tenantId,
@@ -678,11 +686,24 @@ public static class AgentEndpoints
         await db.SaveChangesAsync(cancellationToken);
         if (transaction is not null)
             await transaction.CommitAsync(cancellationToken);
- fix/sales-proposal-concurrent-decisions
-=======
 
- master
+        // Approval records consent only. No external message or business mutation is executed here.
+        db.RbacAuditLogs.Add(new RbacAuditLog
+        {
+            TenantId = tenantId,
+            ActorUserId = currentUser.UserId ?? run.UserId,
+            Action = decision == "approved"
+                ? "AgentActionProposalApproved"
+                : "AgentActionProposalRejected",
+            EntityType = "AgentWorkflowRun",
+            EntityId = run.Id.ToString(),
+            OldValue = AgentWorkflowStatus.AwaitingApproval.ToString(),
+            NewValue = newStatus.ToString()
+        });
 
+        await db.SaveChangesAsync(cancellationToken);
+        if (transaction is not null)
+            await transaction.CommitAsync(cancellationToken);
         // Approval records consent only. No external message or business mutation is executed here.
         return Results.Ok(MapActionProposal(run));
     }
