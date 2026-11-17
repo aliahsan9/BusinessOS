@@ -1,4 +1,5 @@
 using System.Text.Json;
+using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Agents.DTOs;
 using BusinessOS.Application.Features.Agents.Services;
 using BusinessOS.Infrastructure.AI;
@@ -34,6 +35,14 @@ public static class AgentEndpoints
         group.MapGet("/employees", ListEmployees)
             .WithName("AgentListEmployees")
             .Produces<IReadOnlyList<AgentEmployeeDto>>(StatusCodes.Status200OK);
+
+        group.MapPut("/employees/{agentKey}/activation", SetEmployeeActivation)
+            .WithName("AgentSetEmployeeActivation")
+            .Produces<AgentEmployeeDto>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict);
 
         group.MapGet("/voice-preferences", GetVoicePreferences)
             .WithName("AgentGetVoicePreferences")
@@ -119,6 +128,41 @@ public static class AgentEndpoints
     {
         var employees = await agentService.ListEmployeesAsync(cancellationToken);
         return Results.Ok(employees);
+    }
+
+    private static async Task<IResult> SetEmployeeActivation(
+        string agentKey,
+        SetAgentActivationRequest request,
+        IAgentPersonaService personaService,
+        ICurrentUserService currentUser,
+        CancellationToken cancellationToken)
+    {
+        if (currentUser.TenantId is null || currentUser.TenantId == Guid.Empty)
+            return Results.Forbid();
+
+        var canManageAgents = currentUser.Roles.Any(role =>
+            string.Equals(role, "Owner", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase));
+        if (!canManageAgents)
+            return Results.Forbid();
+
+        if (string.IsNullOrWhiteSpace(agentKey))
+            return Results.BadRequest(new { error = "Agent key is required." });
+
+        try
+        {
+            var employee = await personaService.SetEmployeeActivationAsync(
+                agentKey,
+                request.IsActive,
+                cancellationToken);
+            return employee is null
+                ? Results.NotFound(new { error = "AI employee was not found in the system catalog." })
+                : Results.Ok(employee);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new { error = ex.Message });
+        }
     }
 
     private static async Task<IResult> GetVoicePreferences(
