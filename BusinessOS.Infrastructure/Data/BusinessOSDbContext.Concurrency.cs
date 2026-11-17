@@ -127,6 +127,56 @@ public partial class BusinessOSDbContext
         CancellationToken cancellationToken = default) =>
         TryTransitionStatusAsync(Purchases, purchaseId, expectedStatus, newStatus, cancellationToken);
 
+    public async Task<bool> TryTransitionAgentWorkflowStatusAsync(
+        Guid workflowRunId,
+        Guid tenantId,
+        AgentWorkflowStatus expectedStatus,
+        AgentWorkflowStatus newStatus,
+        DateTime updatedAt,
+        DateTime? completedAt,
+        string? progressJson,
+        CancellationToken cancellationToken = default)
+    {
+        if (tenantId == Guid.Empty || tenantId != _tenantId)
+            return false;
+
+        if (Database.IsRelational())
+        {
+            var rows = await AgentWorkflowRuns
+                .Where(run => run.Id == workflowRunId
+                    && run.TenantId == tenantId
+                    && !run.IsDeleted
+                    && run.Status == expectedStatus)
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(run => run.Status, newStatus)
+                        .SetProperty(run => run.UpdatedAt, updatedAt)
+                        .SetProperty(run => run.CompletedAt, completedAt)
+                        .SetProperty(run => run.ProgressJson, progressJson),
+                    cancellationToken);
+
+            if (rows == 1)
+                await ReloadIfTrackedAsync<AgentWorkflowRun>(workflowRunId, cancellationToken);
+
+            return rows == 1;
+        }
+
+        var tracked = await AgentWorkflowRuns.FirstOrDefaultAsync(
+            run => run.Id == workflowRunId
+                && run.TenantId == tenantId
+                && !run.IsDeleted,
+            cancellationToken);
+
+        if (tracked is null || tracked.Status != expectedStatus)
+            return false;
+
+        tracked.Status = newStatus;
+        tracked.UpdatedAt = updatedAt;
+        tracked.CompletedAt = completedAt;
+        tracked.ProgressJson = progressJson;
+        return true;
+    }
+
     public async Task<bool> TryAcceptOrderPaymentAsync(
         Guid orderId,
         decimal amount,
