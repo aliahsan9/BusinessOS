@@ -232,6 +232,35 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task AgentTools_ReturnsRegisteredCatalogInStableOrder()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            "/api/v1/agents/tools",
+            auth);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var tools = await response.Content.ReadFromJsonAsync<List<AgentToolCatalogItemDto>>(JsonOptions);
+
+        tools.Should().NotBeNullOrEmpty();
+        tools!.Should().OnlyContain(tool =>
+            !string.IsNullOrWhiteSpace(tool.Name)
+            && !string.IsNullOrWhiteSpace(tool.Description));
+        tools.Select(tool => tool.Name).Should().BeInAscendingOrder(StringComparer.Ordinal);
+        tools.Should().Contain(tool => tool.Name == nameof(BusinessOS.Application.Features.AI.Enums.AiToolName.GetInventorySummary));
+    }
+
+    [Fact]
+    public async Task AgentTools_RequiresAuthentication()
+    {
+        var response = await Client.GetAsync("/api/v1/agents/tools");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
     public async Task AgentToolPermissions_AreTenantScoped_AndRejectUnknownTools()
     {
         var tenantA = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
