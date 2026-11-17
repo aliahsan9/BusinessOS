@@ -574,12 +574,21 @@ public sealed class CreatePurchaseOrderTool : AiToolBase
 {
     private readonly IMediator _mediator;
     private readonly IApplicationDbContext _db;
+    private readonly ITenantProvider _tenant;
+    private readonly IIdempotencyService _idempotency;
     private readonly ILogger<CreatePurchaseOrderTool> _logger;
 
-    public CreatePurchaseOrderTool(IMediator mediator, IApplicationDbContext db, ILogger<CreatePurchaseOrderTool> logger)
+    public CreatePurchaseOrderTool(
+        IMediator mediator,
+        IApplicationDbContext db,
+        ITenantProvider tenant,
+        IIdempotencyService idempotency,
+        ILogger<CreatePurchaseOrderTool> logger)
     {
         _mediator = mediator;
         _db = db;
+        _tenant = tenant;
+        _idempotency = idempotency;
         _logger = logger;
     }
 
@@ -697,33 +706,129 @@ public sealed class CreatePurchaseOrderTool : AiToolBase
                     "Which product should I order, and how many? Example: \"Create purchase order for Laptop quantity 5\" — or say \"draft purchase order from low stock\" to auto-fill from inventory.");
             }
 
-            var poId = await _mediator.Send(new CreatePurchaseOrderCommand(
-                supplierId.Value,
-                DateTime.UtcNow,
-                PurchaseOrderStatusNames.Draft,
-                null,
-                "Created by Navla",
-                items), cancellationToken);
+            // A retry of the same confirmed request must not create another purchasing
+            // document. The tenant-scoped idempotency record and purchase write share a
+            // relational transaction, including the handler's SaveChanges call.
+            var normalizedLines = items
+                .OrderBy(item => item.ProductId)
+                .ThenBy(item => item.Quantity)
+                .ThenBy(item => item.UnitPrice)
+                .ToList();
+            var hashFields = new List<string>
+            {
+                "agent-purchase-orders.create.v1",
+                _tenant.TenantId.ToString("D"),
+                context.SessionId.ToString("D"),
+                supplierId.Value.ToString("D"),
+                PurchaseOrderStatusNames.Draft
+            };
+            foreach (var item in normalizedLines)
+            {
+                hashFields.Add(item.ProductId.ToString("D"));
+                hashFields.Add(item.Quantity.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                hashFields.Add(item.UnitPrice.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture));
+            }
+
+            var requestHash = CanonicalRequestHasher.Hash(hashFields.ToArray());
+            var idempotencyKey = CanonicalRequestHasher.Hash(
+                "agent-purchase-orders.create.v1",
+                _tenant.TenantId.ToString("D"),
+                context.SessionId.ToString("D"),
+                requestHash);
+
+            await using var transaction = await _db.BeginTransactionAsync(cancellationToken);
+            if (transaction is null)
+            {
+                return Fail("The purchase order was not created because durable idempotency requires a relational database transaction.");
+            }
+
+            IdempotencyRecord? staged = null;
+            Guid poId;
+            var alreadyCreated = false;
+            try
+            {
+                var claim = await _idempotency.ClaimCommittedAsync(
+                    IdempotencyOperations.AgentPurchaseOrderCreate,
+                    idempotencyKey,
+                    requestHash,
+                    cancellationToken);
+
+                if (claim.Kind == IdempotencyOutcomeKind.Replay && claim.ResourceId is Guid replayedPurchaseId)
+                {
+                    poId = replayedPurchaseId;
+                    alreadyCreated = true;
+                }
+                else if (claim.Kind == IdempotencyOutcomeKind.Conflict)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    return Fail("This purchase-order request key was already used for different details. Start a new request.");
+                }
+                else if (claim.Kind == IdempotencyOutcomeKind.InProgress)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    return Fail("This purchase order is already being processed. Check the purchase orders list before retrying.");
+                }
+                else
+                {
+                    staged = claim.Record
+                        ?? throw new InvalidOperationException("The purchase-order idempotency claim did not return its record.");
+
+                    poId = await _mediator.Send(new CreatePurchaseOrderCommand(
+                        supplierId.Value,
+                        DateTime.UtcNow,
+                        PurchaseOrderStatusNames.Draft,
+                        null,
+                        "Created by Navla",
+                        items), cancellationToken);
+
+                    await _idempotency.CompleteCommittedAsync(
+                        staged.Id,
+                        201,
+                        System.Text.Json.JsonSerializer.Serialize(new { id = poId }),
+                        poId,
+                        cancellationToken);
+                }
+
+                await transaction.CommitAsync(cancellationToken);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                if (staged is not null)
+                    _idempotency.Detach(staged);
+                throw;
+            }
 
             if (context.ExecutionState is not null)
                 context.ExecutionState.PurchaseOrderId = poId;
 
-            var supplierLabel = await _db.Suppliers.AsNoTracking()
-                .Where(s => s.Id == supplierId.Value)
-                .Select(s => s.Name)
-                .FirstOrDefaultAsync(cancellationToken) ?? "supplier";
-
-            return Ok(
-                $"Purchase order draft created for {supplierLabel} with {items.Count} line(s).",
-                "PurchaseOrder",
-                poId,
-                $"/purchase-orders/{poId}");
+            return await ReportPurchaseOrderAsync(poId, items.Count, alreadyCreated, cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "CreatePurchaseOrder failed");
             return Fail(ex.Message);
         }
+    }
+
+    private async Task<AiToolResult> ReportPurchaseOrderAsync(
+        Guid purchaseOrderId,
+        int lineCount,
+        bool alreadyCreated,
+        CancellationToken cancellationToken)
+    {
+        var supplierLabel = await _db.Purchases.AsNoTracking()
+            .Where(purchase => purchase.Id == purchaseOrderId)
+            .Select(purchase => purchase.Supplier.Name)
+            .FirstOrDefaultAsync(cancellationToken) ?? "supplier";
+        var lead = alreadyCreated
+            ? "That purchase order was already created."
+            : "Purchase order draft created successfully.";
+        return Ok(
+            $"{lead} For {supplierLabel} with {lineCount} line(s).",
+            "PurchaseOrder",
+            purchaseOrderId,
+            $"/purchase-orders/{purchaseOrderId}");
     }
 
     private async Task<CreatePurchaseOrderLineItemDto?> ResolveLineAsync(JsonElement item, CancellationToken cancellationToken)
