@@ -208,15 +208,7 @@ public class SaleOrderWorkflowTests
         await db.SaveChangesAsync();
 
         var tool = CreateTool(db, tenantId, out var mediator);
-        using var document = JsonDocument.Parse($"""
-            {
-              "customerId": "{{customer.Id}}",
-              "items": [
-                { "productId": "{{firstProduct.Id}}", "productName": "HP Laptop Generation 5", "quantity": 1 },
-                { "productId": "{{secondProduct.Id}}", "productName": "Wireless Mouse", "quantity": 2 }
-              ]
-            }
-            """);
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(new { customerId = customer.Id, items = new[] { new { productId = firstProduct.Id, productName = "HP Laptop Generation 5", quantity = 1 }, new { productId = secondProduct.Id, productName = "Wireless Mouse", quantity = 2 } } }));
 
         var result = await tool.ExecuteWithArgsAsync(
             Context(Guid.NewGuid()), document.RootElement.Clone(), CancellationToken.None);
