@@ -82,7 +82,10 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
             };
         }
 
-        if (AgentActionClarifier.NeedsBrief(request.ToolName) && request.PreextractedArgs is null)
+        // Risk classification is the canonical server-side approval guard. A write may
+        // only reach this point with arguments produced by the explicit confirmation flow.
+        if (AgentToolRiskClassifier.RequiresExplicitApproval(request.ToolName)
+            && request.PreextractedArgs is null)
         {
             sw.Stop();
             return new AgentToolExecutionResult
@@ -177,7 +180,8 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
         var correction = _corrector.Analyze(request.ToolName, result, exception, args, request.Language);
         var retried = false;
 
-        if (!result.Success && correction.ShouldRetry && correction.AlternateTool is AiToolName searchTool
+        if (!result.Success && !AgentToolRiskClassifier.RequiresExplicitApproval(request.ToolName)
+            && correction.ShouldRetry && correction.AlternateTool is AiToolName searchTool
             && correction.FailureKind == AgentFailureKind.NotFound)
         {
             // Search then retry original once.
@@ -216,7 +220,8 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
                 correction = _corrector.Analyze(request.ToolName, result, exception, retryArgs, request.Language);
             }
         }
-        else if (!result.Success && correction is { ShouldRetry: true, FailureKind: AgentFailureKind.Transient })
+        else if (!result.Success && !AgentToolRiskClassifier.RequiresExplicitApproval(request.ToolName)
+            && correction is { ShouldRetry: true, FailureKind: AgentFailureKind.Transient })
         {
             retried = true;
             (result, exception) = await RunToolAsync(tool, execContext, args, cancellationToken);
@@ -251,7 +256,22 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
         AgentToolExecutionRequest request,
         CancellationToken cancellationToken)
     {
-        // Simplified path without nested self-correction to avoid infinite loops.
+        // Simplified path is used for automatic recovery only. It must never execute
+        // a mutating tool because it has no user-confirmed argument payload.
+        if (AgentToolRiskClassifier.RequiresExplicitApproval(request.ToolName))
+        {
+            return new AgentToolExecutionResult
+            {
+                State = request.State,
+                ToolResult = new AiToolResult
+                {
+                    ToolName = request.ToolName.ToString(),
+                    Success = false,
+                    Summary = "Automatic retry was blocked because this action requires explicit approval."
+                }
+            };
+        }
+
         var employeeAllowed = !string.IsNullOrWhiteSpace(request.AgentKey)
             && await _personaService.IsToolAllowedAsync(request.AgentKey, request.ToolName, cancellationToken);
         if (!employeeAllowed || !_permissions.ValidateTool(request.ToolName).Allowed)
