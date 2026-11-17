@@ -109,6 +109,63 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
         employees!.Should().Contain(e => e.Key == "sophia");
     }
 
+
+    [Fact]
+    public async Task AgentActivation_IsTenantScoped_AndDoesNotChangeSystemCatalog()
+    {
+        var tenantA = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var tenantB = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+
+        var deactivate = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            "/api/v1/agents/employees/adam/activation",
+            tenantA,
+            new SetAgentActivationRequest { IsActive = false });
+
+        deactivate.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var tenantAResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            "/api/v1/agents/employees",
+            tenantA);
+        var tenantAEmployees = await tenantAResponse.Content.ReadFromJsonAsync<List<AgentEmployeeDto>>(JsonOptions);
+        tenantAEmployees.Should().NotBeNull();
+        tenantAEmployees!.Should().Contain(e => e.Key == "adam" && !e.IsActive);
+
+        var tenantBResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            "/api/v1/agents/employees",
+            tenantB);
+        var tenantBEmployees = await tenantBResponse.Content.ReadFromJsonAsync<List<AgentEmployeeDto>>(JsonOptions);
+        tenantBEmployees.Should().NotBeNull();
+        tenantBEmployees!.Should().Contain(e => e.Key == "adam" && e.IsActive);
+
+        var reactivate = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            "/api/v1/agents/employees/adam/activation",
+            tenantA,
+            new SetAgentActivationRequest { IsActive = true });
+        reactivate.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task AgentActivation_CannotDeactivateDefaultEmployee()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            "/api/v1/agents/employees/sophia/activation",
+            auth,
+            new SetAgentActivationRequest { IsActive = false });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
     [Fact]
     public async Task AgentOnboardingStart_ReturnsWorkflowSteps()
     {
