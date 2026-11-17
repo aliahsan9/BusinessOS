@@ -291,8 +291,9 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
 
         // This fallback is intentionally read-only (search-then-retry). Keep the same
         // safety boundary here so future callers cannot use it to bypass confirmation.
-        if (AiToolSafetyGate.IsMutating(request.ToolName)
-            || AiToolSafetyGate.TryBlock(request.ToolName, request.Message, args, out var blocked))
+        var isMutating = AiToolSafetyGate.IsMutating(request.ToolName);
+        var blocked = string.Empty;
+        if (isMutating || AiToolSafetyGate.TryBlock(request.ToolName, request.Message, args, out blocked))
         {
             return new AgentToolExecutionResult
             {
@@ -301,7 +302,7 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
                 {
                     ToolName = request.ToolName.ToString(),
                     Success = false,
-                    Summary = AiToolSafetyGate.IsMutating(request.ToolName)
+                    Summary = isMutating
                         ? "This change requires the normal confirmation flow. I did not change any records."
                         : blocked
                 }
