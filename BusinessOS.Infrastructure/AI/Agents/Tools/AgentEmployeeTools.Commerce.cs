@@ -1,5 +1,6 @@
 using System.Text.Json;
 using BusinessOS.Application.Common.Authorization;
+using BusinessOS.Application.Common.Idempotency;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Enums;
@@ -32,6 +33,7 @@ public sealed class CreateSaleTool : AiToolBase
     private readonly IApplicationDbContext _db;
     private readonly ISaleOrderCatalog _catalog;
     private readonly ISaleOrderExecutionLedger _ledger;
+    private readonly IIdempotencyService? _idempotency;
     private readonly ITenantProvider _tenant;
     private readonly ILogger<CreateSaleTool> _logger;
 
@@ -41,13 +43,15 @@ public sealed class CreateSaleTool : AiToolBase
         ISaleOrderCatalog catalog,
         ISaleOrderExecutionLedger ledger,
         ITenantProvider tenant,
-        ILogger<CreateSaleTool> logger)
+        ILogger<CreateSaleTool> logger,
+        IIdempotencyService? idempotency = null)
     {
         _mediator = mediator;
         _db = db;
         _catalog = catalog;
         _ledger = ledger;
         _tenant = tenant;
+        _idempotency = idempotency;
         _logger = logger;
     }
 
@@ -121,6 +125,94 @@ public sealed class CreateSaleTool : AiToolBase
             var discount = AgentToolArgHelpers.Dec(args, "discount") ?? 0;
             var tax = AgentToolArgHelpers.Dec(args, "tax") ?? 0;
             var draftKey = $"{context.SessionId:N}:{customer.Value.Id:N}:{product.Value.Id:N}:{quantity}:{discount}:{tax}";
+
+            // SQL-backed idempotency is used in production. The claim and order write share
+            // one database transaction, so a crash cannot leave a committed order without
+            // its completed idempotency record. The in-memory ledger remains a fallback for
+            // non-relational test providers only.
+            if (_idempotency is not null)
+            {
+                await using var transaction = await _db.BeginTransactionAsync(cancellationToken);
+                if (transaction is not null)
+                {
+                    var tenantIdForKey = _tenant.TenantId;
+                    var requestHash = CanonicalRequestHasher.Hash(
+                        "agent-sales.create.v1",
+                        tenantIdForKey.ToString("D"),
+                        context.SessionId.ToString("D"),
+                        customer.Value.Id.ToString("D"),
+                        product.Value.Id.ToString("D"),
+                        quantity.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        discount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
+                        tax.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture));
+                    var idempotencyKey = CanonicalRequestHasher.Hash("agent-sales.create.v1", draftKey);
+                    IdempotencyRecord? staged = null;
+
+                    try
+                    {
+                        var claim = await _idempotency.ClaimCommittedAsync(
+                            IdempotencyOperations.AgentSaleCreate,
+                            idempotencyKey,
+                            requestHash,
+                            cancellationToken);
+
+                        if (claim.Kind == IdempotencyOutcomeKind.Replay && claim.ResourceId is Guid replayedOrderId)
+                        {
+                            await transaction.CommitAsync(cancellationToken);
+                            return await ReportOrderAsync(replayedOrderId, alreadyCreated: true, cancellationToken);
+                        }
+
+                        if (claim.Kind == IdempotencyOutcomeKind.Conflict)
+                        {
+                            await transaction.RollbackAsync(cancellationToken);
+                            return Fail("This sale request key was already used for different order details. Start a new order request.");
+                        }
+
+                        if (claim.Kind == IdempotencyOutcomeKind.InProgress)
+                        {
+                            await transaction.RollbackAsync(cancellationToken);
+                            return Fail("This sale is already being processed. Please wait and check the orders list before retrying.");
+                        }
+
+                        staged = claim.Record
+                            ?? throw new InvalidOperationException("The sale idempotency claim did not return its record.");
+
+                        var persistentOrderId = await _mediator.Send(new CreateOrderCommand(
+                            customer.Value.Id,
+                            discount,
+                            tax,
+                            [new CreateOrderItemDto(product.Value.Id, quantity)]), cancellationToken);
+
+                        await _idempotency.CompleteCommittedAsync(
+                            staged.Id,
+                            201,
+                            System.Text.Json.JsonSerializer.Serialize(new { id = persistentOrderId }),
+                            persistentOrderId,
+                            cancellationToken);
+
+                        await transaction.CommitAsync(cancellationToken);
+
+                        if (context.ExecutionState is not null)
+                        {
+                            context.ExecutionState.OrderId = persistentOrderId;
+                            context.ExecutionState.CustomerId = customer.Value.Id;
+                            context.ExecutionState.CustomerName = customer.Value.Name;
+                            context.ExecutionState.ProductId = product.Value.Id;
+                            context.ExecutionState.ProductName = product.Value.Name;
+                        }
+
+                        return await ReportOrderAsync(persistentOrderId, alreadyCreated: false, cancellationToken);
+                    }
+                    catch
+                    {
+                        await transaction.RollbackAsync(cancellationToken);
+                        if (staged is not null)
+                            _idempotency.Detach(staged);
+                        throw;
+                    }
+                }
+            }
+
             await using var lease = await _ledger.AcquireAsync(draftKey, cancellationToken);
             if (lease.ExistingOrderId is Guid existingId)
                 return await ReportOrderAsync(existingId, alreadyCreated: true, cancellationToken);
