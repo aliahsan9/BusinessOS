@@ -567,7 +567,7 @@ public static class AgentEndpoints
         ICurrentUserService currentUser,
         CancellationToken cancellationToken)
     {
-        if (currentUser.TenantId is null || currentUser.TenantId == Guid.Empty)
+        if (currentUser.TenantId is not Guid tenantId || tenantId == Guid.Empty)
             return Results.Forbid();
 
         var canApprove = currentUser.Roles.Any(role =>
@@ -584,10 +584,9 @@ public static class AgentEndpoints
         if (request.Comment?.Length > 500)
             return Results.BadRequest(new { error = "Comment must be at most 500 characters." });
 
-        var tenantId = currentUser.TenantId.Value;
         var run = await db.AgentWorkflowRuns.FirstOrDefaultAsync(
-            item => item.TenantId == tenantId
-                && item.Id == proposalId
+            item => item.Id == proposalId
+                && item.TenantId == tenantId
                 && item.AgentKey == SalesAgentKey,
             cancellationToken);
         if (run is null)
@@ -597,16 +596,14 @@ public static class AgentEndpoints
             return Results.Conflict(new { error = "This proposal has already been decided or is no longer pending." });
 
         var payload = DeserializeProposalPayload(run.ProgressJson);
-        if (payload.ExpiresAt is DateTime expiresAt && expiresAt <= DateTime.UtcNow)
+        var now = DateTime.UtcNow;
+        if (payload.ExpiresAt is DateTime expiresAt && expiresAt <= now)
             return Results.Conflict(new { error = "This proposal has expired and cannot be approved." });
 
-        var now = DateTime.UtcNow;
-        run.Status = decision == "approved"
+        var newStatus = decision == "approved"
             ? AgentWorkflowStatus.Approved
             : AgentWorkflowStatus.Rejected;
-        run.CompletedAt = now;
-        run.UpdatedAt = now;
-        run.ProgressJson = JsonSerializer.Serialize(new AgentActionProposalPayload
+        var updatedPayload = JsonSerializer.Serialize(new AgentActionProposalPayload
         {
             ActionType = payload.ActionType,
             Summary = payload.Summary,
@@ -616,9 +613,34 @@ public static class AgentEndpoints
             DecidedAt = now
         }, JsonOptions);
 
+        // Compare-and-set the pending state. Only one concurrent reviewer can win.
+        await using var transaction = await db.BeginTransactionAsync(cancellationToken);
+        var transitioned = await db.TryTransitionAgentWorkflowStatusAsync(
+            proposalId,
+            tenantId,
+            AgentWorkflowStatus.AwaitingApproval,
+            newStatus,
+            now,
+            now,
+            updatedPayload,
+            cancellationToken);
+
+        if (!transitioned)
+        {
+            if (transaction is not null)
+                await transaction.RollbackAsync(cancellationToken);
+            return Results.Conflict(new { error = "This proposal has already been decided by another reviewer." });
+        }
+
+        // Keep the tracked instance aligned with the successful conditional update.
+        run.Status = newStatus;
+        run.CompletedAt = now;
+        run.UpdatedAt = now;
+        run.ProgressJson = updatedPayload;
+
         db.RbacAuditLogs.Add(new RbacAuditLog
         {
-            TenantId = currentUser.TenantId,
+            TenantId = tenantId,
             ActorUserId = currentUser.UserId ?? run.UserId,
             Action = decision == "approved"
                 ? "AgentActionProposalApproved"
@@ -626,10 +648,12 @@ public static class AgentEndpoints
             EntityType = "AgentWorkflowRun",
             EntityId = run.Id.ToString(),
             OldValue = AgentWorkflowStatus.AwaitingApproval.ToString(),
-            NewValue = run.Status.ToString()
+            NewValue = newStatus.ToString()
         });
 
         await db.SaveChangesAsync(cancellationToken);
+        if (transaction is not null)
+            await transaction.CommitAsync(cancellationToken);
 
         // Approval records consent only. No external message or business mutation is executed here.
         return Results.Ok(MapActionProposal(run));
