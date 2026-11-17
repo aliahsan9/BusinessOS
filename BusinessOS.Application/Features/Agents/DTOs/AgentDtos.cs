@@ -32,18 +32,6 @@ public sealed class UpdateAgentConfigurationRequest
     public string DefaultLanguage { get; init; } = "en";
 }
 
-public sealed class AgentToolPermissionsDto
-{
-    public string AgentKey { get; init; } = string.Empty;
-    public IReadOnlyList<string> AllowedTools { get; init; } = [];
-    public IReadOnlyList<string> AvailableTools { get; init; } = [];
-}
-
-public sealed class UpdateAgentToolPermissionsRequest
-{
-    public IReadOnlyList<string> AllowedTools { get; init; } = [];
-}
-
 public sealed class AgentPersonaDto
 {
     public string Key { get; init; } = default!;
@@ -334,4 +322,5 @@ public sealed class AgentActionProposalDto
     public DateTime? ExpiresAt { get; init; }
     public string? DecisionComment { get; init; }
     public DateTime? DecidedAt { get; init; }
+    public string? ExecutionMessage { get; init; }
 }
