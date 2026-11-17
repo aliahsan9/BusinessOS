@@ -88,6 +88,18 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
             && request.PreextractedArgs is null)
         {
             sw.Stop();
+            await _logger.LogAsync(new AgentActionLogEntry
+            {
+                Intent = request.Intent,
+                ToolName = request.ToolName.ToString(),
+                ExecutionTimeMs = sw.ElapsedMilliseconds,
+                Success = false,
+                FailureReason = "Blocked: explicit user confirmation is required before this write can execute.",
+                SessionId = request.SessionId,
+                WorkflowId = request.WorkflowId,
+                StepKey = request.StepKey
+            }, cancellationToken);
+
             return new AgentToolExecutionResult
             {
                 DurationMs = sw.ElapsedMilliseconds,
