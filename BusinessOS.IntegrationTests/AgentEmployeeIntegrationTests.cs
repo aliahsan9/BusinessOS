@@ -317,6 +317,17 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
     public async Task SalesActionProposal_IsTenantScoped_AndRequiresExplicitDecision()
     {
         var tenantA = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var enableFollowUp = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            "/api/v1/agents/employees/emma/permissions",
+            tenantA,
+            new UpdateAgentToolPermissionsRequest
+            {
+                AllowedTools = ["SendCustomerFollowUp"]
+            });
+        enableFollowUp.StatusCode.Should().Be(HttpStatusCode.OK);
+
         var tenantB = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
 
         var create = await IntegrationHttp.SendAuthorizedAsync(
@@ -385,6 +396,17 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
     {
         var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
 
+        var enableFollowUp = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            "/api/v1/agents/employees/emma/permissions",
+            auth,
+            new UpdateAgentToolPermissionsRequest
+            {
+                AllowedTools = ["SendCustomerFollowUp"]
+            });
+        enableFollowUp.StatusCode.Should().Be(HttpStatusCode.OK);
+
         var unsupported = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
@@ -424,6 +446,17 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
     public async Task SalesActionProposal_ConcurrentDecisions_OnlyOneReviewerWins()
     {
         var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var enableFollowUp = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            "/api/v1/agents/employees/emma/permissions",
+            auth,
+            new UpdateAgentToolPermissionsRequest
+            {
+                AllowedTools = ["SendCustomerFollowUp"]
+            });
+        enableFollowUp.StatusCode.Should().Be(HttpStatusCode.OK);
+
         var create = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
@@ -466,6 +499,17 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
     public async Task SalesActionProposal_ExecutionRequiresApprovalAndActiveTenantCustomer()
     {
         var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var enableFollowUp = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            "/api/v1/agents/employees/emma/permissions",
+            auth,
+            new UpdateAgentToolPermissionsRequest
+            {
+                AllowedTools = ["SendCustomerFollowUp"]
+            });
+        enableFollowUp.StatusCode.Should().Be(HttpStatusCode.OK);
+
         var create = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,
@@ -514,5 +558,26 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
         var current = await detail.Content.ReadFromJsonAsync<AgentActionProposalDto>(JsonOptions);
         current!.Status.Should().Be(AgentWorkflowStatus.Approved);
     }
+
+    [Fact]
+    public async Task SalesActionProposal_RequiresExplicitEmployeeCapability()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/v1/agents/actions/proposals",
+            auth,
+            new CreateAgentActionProposalRequest
+            {
+                ActionType = "SendCustomerFollowUp",
+                Title = "Capability disabled",
+                Summary = "This action must be denied until the tenant enables it.",
+                PayloadJson = "{}"
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
 
 }
