@@ -184,7 +184,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         }
 
         // Conversational / help / dashboard / document search → existing copilot (preserves /api/ai parity).
-        if (!ShouldUseEmployeeRuntime(intent))
+        if (!ShouldUseEmployeeRuntime(intent) && persona.AllowedTools is null)
         {
             if (abandonPending)
                 await _memory.SetPendingActionAsync(sessionId, null, cancellationToken);
@@ -219,7 +219,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             yield break;
         }
 
-        if (_modelLoop.IsAvailable
+        if (persona.AllowedTools is null && _modelLoop.IsAvailable
             && intent.Intent is not (AiCopilotIntent.ActionCreate or AiCopilotIntent.Workflow or AiCopilotIntent.ReportGeneration or AiCopilotIntent.Onboarding)
             && !intent.SuggestedTools.Any(AiToolSafetyGate.IsMutating))
         {
@@ -475,7 +475,8 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
                     WorkflowId = workflow?.Id,
                     StepKey = stepKey,
                     StepTitle = title,
-                    PreextractedArgs = toolName == injectedTool ? injectedArgs : null
+                    PreextractedArgs = toolName == injectedTool ? injectedArgs : null,
+                    AllowedTools = persona.AllowedTools
                 }, cancellationToken);
             }
             catch (Exception ex)
@@ -725,7 +726,8 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
 
     private static bool ShouldUseEmployeeRuntime(AiIntentDetectionResult intent)
     {
-        if (intent.Intent is AiCopilotIntent.ActionCreate
+        if (intent.Intent is AiCopilotIntent.DocumentSearch
+            or AiCopilotIntent.ActionCreate
             or AiCopilotIntent.ActionRead
             or AiCopilotIntent.ReportGeneration
             or AiCopilotIntent.Workflow
