@@ -45,12 +45,14 @@ Creation and decision events are written to the existing RBAC audit log. The pro
 ## Important follow-up before production
 
 - Add database-backed expiry processing so stale pending proposals are visibly expired.
+- Add optimistic concurrency using a provider-supported concurrency token and test it against SQL Server before enabling concurrent reviewer decisions.
 - Add expiry processing so stale pending proposals are visibly expired.
 - Add a dedicated proposal entity/table if proposal volume or reporting needs outgrow workflow-run storage.
 - Add UI for review, diff/preview, and decision history.
 - Implement message delivery as a separate worker only after approval, with idempotency, provider status tracking, retries, and a second permission check at execution time.
 - Run backend build, unit/integration tests, and relational SQL Server tests before merging.
 
-## Concurrent reviewer protection
 
-Decision updates use a database compare-and-set operation constrained to the `AwaitingApproval` state, inside the same transaction as the RBAC audit insert. If two reviewers submit at the same time, only the request that changes the pending row can commit; the other receives HTTP 409. An integration test exercises concurrent approve/reject requests. Run it against the production relational provider (SQL Server) before merge; EF InMemory does not provide equivalent relational concurrency semantics.
+## Concurrency limitation
+
+The current integration-test factory uses EF Core InMemory. Its provider does not support relational transactions or `ExecuteUpdateAsync`, so a relational compare-and-set implementation cannot be safely introduced and validated by the current test suite. The decision endpoint currently performs a normal tracked update; concurrent reviewer requests therefore remain a production-hardening item. Implement a concurrency token with a real SQL Server migration and provider-backed integration tests before relying on simultaneous reviewer decisions.
