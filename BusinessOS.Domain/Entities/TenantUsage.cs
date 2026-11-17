@@ -17,6 +17,8 @@ public class TenantUsage : AuditableEntity
     public long AiOutputTokens { get; set; }
     public long AiTotalTokens { get; set; }
     public decimal EstimatedProviderCostUsd { get; set; }
+    public int AgentExecutionsUsed { get; set; }
+    public int AutomationRunsUsed { get; set; }
     public DateTime LastCalculatedAt { get; set; } = DateTime.UtcNow;
 
     public Tenant Tenant { get; set; } = default!;

@@ -97,8 +97,31 @@ public class BillingInvoice : AuditableEntity
     /// </summary>
     public string? Notes { get; set; }
 
+    public DateTime? DueDate { get; set; }
+
+    public string? ReceiptNumber { get; set; }
+
+    public string? BillToName { get; set; }
+
     /// <summary>
     /// Navigation property to the tenant being billed.
     /// </summary>
     public Tenant Tenant { get; set; } = default!;
+
+    public void MarkIssued(DateTime utcNow, string? billToName, bool paid)
+    {
+        DueDate ??= paid ? utcNow : utcNow.AddDays(14);
+        if (!string.IsNullOrWhiteSpace(billToName))
+            BillToName = billToName.Trim();
+        if (!paid)
+            return;
+
+        PaidAt ??= utcNow;
+        Status = Enums.BillingInvoiceStatus.Paid;
+        if (string.IsNullOrWhiteSpace(ReceiptNumber))
+        {
+            var suffix = InvoiceNumber.Length >= 8 ? InvoiceNumber[^8..] : InvoiceNumber;
+            ReceiptNumber = $"RCT-{utcNow:yyyyMMdd}-{suffix}";
+        }
+    }
 }

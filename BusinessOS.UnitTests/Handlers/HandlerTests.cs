@@ -100,10 +100,12 @@ public class CreateProductSuccessHandlerTests
         }.AsQueryable());
 
         var products = TestMockDbSet.CreateMockDbSet(new List<Product>().AsQueryable());
+        var priceHistory = TestMockDbSet.CreateMockDbSet(new List<PriceHistory>().AsQueryable());
 
         var context = new Mock<IApplicationDbContext>();
         context.Setup(x => x.Categories).Returns(categories.Object);
         context.Setup(x => x.Products).Returns(products.Object);
+        context.Setup(x => x.PriceHistories).Returns(priceHistory.Object);
         context.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
         var handler = new CreateProductCommandHandler(

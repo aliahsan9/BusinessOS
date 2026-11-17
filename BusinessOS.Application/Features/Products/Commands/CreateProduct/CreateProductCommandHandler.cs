@@ -52,6 +52,12 @@ public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand,
         };
 
         _context.Products.Add(product);
+        _context.PriceHistories.Add(new PriceHistory
+        {
+            ProductId = product.Id,
+            CostPrice = product.CostPrice,
+            SalePrice = product.SalePrice
+        });
         await _context.SaveChangesAsync(cancellationToken);
 
         await _inventoryService.CreateInventoryForProductAsync(product, cancellationToken);

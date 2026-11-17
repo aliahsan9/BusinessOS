@@ -42,6 +42,7 @@ public interface IBillingService
         string? country,
         CancellationToken cancellationToken = default);
     Task<byte[]> DownloadInvoiceAsync(Guid invoiceId, CancellationToken cancellationToken = default);
+    Task<byte[]> DownloadReceiptAsync(Guid invoiceId, CancellationToken cancellationToken = default);
     Task<CurrentPlanDto> SetEnterpriseContractAsync(
         SetEnterpriseContractRequest request,
         CancellationToken cancellationToken = default);
@@ -76,4 +77,11 @@ public static class FeatureFlags
     public const string PrioritySupport = "priority_support";
     public const string ApiAccess = "api_access";
     public const string MultiBranch = "multi_branch";
+    public const string Automations = "automations";
+    public const string Integrations = "integrations";
+    public const string ClientPortal = "client_portal";
+    public const string Storefront = "storefront";
+    public const string MultiAgent = "multi_agent";
+    public const string Finance = "finance";
+    public const string AdvancedSecurity = "advanced_security";
 }

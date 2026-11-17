@@ -119,7 +119,8 @@ public static class RbacSeeder
             [RoleNames.Accountant] = PermissionCodes.AccountantPermissions,
             [RoleNames.Sales] = PermissionCodes.SalesPermissions,
             [RoleNames.InventoryManager] = PermissionCodes.InventoryManagerPermissions,
-            [RoleNames.Viewer] = PermissionCodes.ViewOnly
+            [RoleNames.Viewer] = PermissionCodes.ViewOnly,
+            [RoleNames.Agent] = PermissionCodes.AgentPermissions
         };
 
         foreach (var (roleName, permissionCodes) in rolePermissionMap)
@@ -329,6 +330,7 @@ public static class RbacSeeder
             RoleNames.Sales => "Manages customers and orders.",
             RoleNames.InventoryManager => "Manages inventory and products.",
             RoleNames.Viewer => "Read-only access across modules.",
+            RoleNames.Agent => "Runs authorized AI agent operations without administrative access.",
             _ => roleName
         };
 }

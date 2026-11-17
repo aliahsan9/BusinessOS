@@ -19,6 +19,14 @@ public class Product : AuditableEntity
     public decimal ReorderLevel { get; set; }
 
     public bool IsActive { get; set; } = true;
+    public string Kind { get; set; } = "Physical";
+    public string? Barcode { get; set; }
+    public string? UnitOfMeasure { get; set; }
+    public string? ImageUrl { get; set; }
+    public string? PricingModel { get; set; }
+    public string? Duration { get; set; }
+    public string? DeliveryDetails { get; set; }
+    public Guid? DefaultTaxRateId { get; set; }
 
     public byte[] RowVersion { get; set; } = default!;
 

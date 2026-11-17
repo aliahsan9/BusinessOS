@@ -8,8 +8,7 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
 {
     public void Configure(EntityTypeBuilder<Product> builder)
     {
-        builder.ToTable("Products", table =>
-            table.HasCheckConstraint("CK_Products_CurrentStock_NonNegative", "[CurrentStock] >= 0"));
+        builder.ToTable("Products");
 
         builder.HasKey(x => x.Id);
 
@@ -20,6 +19,13 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(x => x.CurrentStock).AsMoney();
         builder.Property(x => x.ReorderLevel).AsMoney();
         builder.Property(x => x.RowVersion).IsRowVersion();
+        builder.Property(x => x.Kind).HasMaxLength(20).IsRequired();
+        builder.Property(x => x.Barcode).HasMaxLength(80);
+        builder.Property(x => x.UnitOfMeasure).HasMaxLength(40);
+        builder.Property(x => x.ImageUrl).HasMaxLength(500);
+        builder.Property(x => x.PricingModel).HasMaxLength(40);
+        builder.Property(x => x.Duration).HasMaxLength(80);
+        builder.Property(x => x.DeliveryDetails).HasMaxLength(500);
 
         builder.HasOne(x => x.Category)
             .WithMany(x => x.Products)

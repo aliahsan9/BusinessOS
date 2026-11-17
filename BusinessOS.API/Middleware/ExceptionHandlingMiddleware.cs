@@ -73,6 +73,13 @@ public sealed class ExceptionHandlingMiddleware
                 (Dictionary<string, string[]>?)null,
                 LogLevel.Warning),
 
+            ForbiddenException forbidden => (
+                StatusCodes.Status403Forbidden,
+                forbidden.Message,
+                "https://tools.ietf.org/html/rfc9110#section-15.5.4",
+                null,
+                LogLevel.Warning),
+
             UnauthorizedException unauthorized => (
                 StatusCodes.Status401Unauthorized,
                 unauthorized.Message,

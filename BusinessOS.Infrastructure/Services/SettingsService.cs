@@ -75,6 +75,16 @@ public sealed class SettingsService : ISettingsService
         settings.InvoiceNotificationsEnabled = request.InvoiceNotificationsEnabled;
         settings.CustomerNotificationsEnabled = request.CustomerNotificationsEnabled;
         settings.ProjectNotificationsEnabled = request.ProjectNotificationsEnabled;
+        if (TimeOnly.TryParse(request.WorkdayStart, out var start))
+            settings.WorkdayStart = start;
+        if (TimeOnly.TryParse(request.WorkdayEnd, out var end))
+            settings.WorkdayEnd = end;
+        if (request.LateGraceMinutes is not null)
+            settings.LateGraceMinutes = request.LateGraceMinutes.Value;
+        if (request.AllowNegativeStock is not null)
+            settings.AllowNegativeStock = request.AllowNegativeStock.Value;
+        if (request.OpeningCashBalance is not null)
+            settings.OpeningCashBalance = request.OpeningCashBalance.Value;
         settings.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
@@ -199,7 +209,12 @@ public sealed class SettingsService : ISettingsService
             TaskNotificationsEnabled = settings.TaskNotificationsEnabled,
             InvoiceNotificationsEnabled = settings.InvoiceNotificationsEnabled,
             CustomerNotificationsEnabled = settings.CustomerNotificationsEnabled,
-            ProjectNotificationsEnabled = settings.ProjectNotificationsEnabled
+            ProjectNotificationsEnabled = settings.ProjectNotificationsEnabled,
+            WorkdayStart = settings.WorkdayStart.ToString("HH:mm"),
+            WorkdayEnd = settings.WorkdayEnd.ToString("HH:mm"),
+            LateGraceMinutes = settings.LateGraceMinutes,
+            AllowNegativeStock = settings.AllowNegativeStock,
+            OpeningCashBalance = settings.OpeningCashBalance
         };
 
     private static BusinessProfileDto MapBusinessProfile(Tenant tenant, TenantSettings settings) =>

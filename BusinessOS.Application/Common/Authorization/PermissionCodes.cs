@@ -116,6 +116,34 @@ public static class PermissionCodes
 
     public const string UserManage = "Users.Manage";
 
+    public const string EmployeeView = "Employee.View";
+    public const string EmployeeManage = "Employee.Manage";
+    public const string EmployeeSalary = "Employee.Salary";
+    public const string AttendanceManage = "Attendance.Manage";
+    public const string LeaveManage = "Leave.Manage";
+    public const string AnnouncementView = "Announcement.View";
+    public const string AnnouncementManage = "Announcement.Manage";
+    public const string PerformanceView = "Performance.View";
+    public const string PerformanceManage = "Performance.Manage";
+    public const string LeadView = "Lead.View";
+    public const string LeadManage = "Lead.Manage";
+    public const string DealView = "Deal.View";
+    public const string DealManage = "Deal.Manage";
+    public const string WarehouseView = "Warehouse.View";
+    public const string WarehouseManage = "Warehouse.Manage";
+    public const string FulfillmentManage = "Fulfillment.Manage";
+    public const string ReturnManage = "Return.Manage";
+    public const string TimeView = "Time.View";
+    public const string TimeManage = "Time.Manage";
+    public const string PortalManage = "Portal.Manage";
+    public const string StorefrontView = "Storefront.View";
+    public const string StorefrontManage = "Storefront.Manage";
+
+    public const string AgentExecute = "Agent.Execute";
+    public const string NalvaView = "Nalva.View";
+    public const string NalvaManage = "Nalva.Manage";
+    public const string NalvaApprove = "Nalva.Approve";
+
     public static readonly IReadOnlyList<PermissionDefinition> All =
     [
         new("Create Category", CategoryCreate, "Create product categories", "Category"),
@@ -224,7 +252,34 @@ public static class PermissionCodes
         new("View Subscription", SubscriptionView, "View subscription details", "Subscription"),
         new("Manage Subscription", SubscriptionManage, "Manage subscription billing", "Subscription"),
 
-        new("Manage Users", UserManage, "Full user management access", "User")
+        new("Manage Users", UserManage, "Full user management access", "User"),
+        new("Execute AI Agent", AgentExecute, "Run explicitly authorized AI agent operations", "Agent"),
+        new("View Nalva Workforce", NalvaView, "View the Nalva.ai workforce, agents, and execution history", "Nalva"),
+        new("Manage Nalva Workforce", NalvaManage, "Activate, configure, and assign Nalva.ai agents and workflows", "Nalva"),
+        new("Approve Nalva Actions", NalvaApprove, "Approve or reject restricted actions requested by Nalva.ai agents", "Nalva"),
+
+        new("View Employees", EmployeeView, "View employee directory", "Employee"),
+        new("Manage Employees", EmployeeManage, "Manage employees, departments, and teams", "Employee"),
+        new("View Salaries", EmployeeSalary, "View and update employee salaries", "Employee"),
+        new("Manage Attendance", AttendanceManage, "Correct attendance and view company attendance", "Employee"),
+        new("Manage Leave", LeaveManage, "Approve or reject leave requests", "Employee"),
+        new("View Announcements", AnnouncementView, "Read company announcements", "Employee"),
+        new("Manage Announcements", AnnouncementManage, "Publish announcements", "Employee"),
+        new("View Performance", PerformanceView, "View own performance records", "Employee"),
+        new("Manage Performance", PerformanceManage, "Manage goals and reviews", "Employee"),
+        new("View Leads", LeadView, "View leads and pipeline", "CRM"),
+        new("Manage Leads", LeadManage, "Create and convert leads", "CRM"),
+        new("View Deals", DealView, "View deals", "CRM"),
+        new("Manage Deals", DealManage, "Manage deals and follow-ups", "CRM"),
+        new("View Warehouses", WarehouseView, "View warehouses and stock", "Inventory"),
+        new("Manage Warehouses", WarehouseManage, "Manage warehouses and transfers", "Inventory"),
+        new("Manage Fulfillment", FulfillmentManage, "Process order fulfillment", "Order"),
+        new("Manage Returns", ReturnManage, "Approve returns and restocking", "Order"),
+        new("View Time", TimeView, "View own time entries", "Project"),
+        new("Manage Time", TimeManage, "Approve timesheets", "Project"),
+        new("Manage Client Portal", PortalManage, "Invite clients to project portal", "Project"),
+        new("View Storefront", StorefrontView, "View the company storefront and public profile", "Storefront"),
+        new("Manage Storefront", StorefrontManage, "Publish the company profile, catalog, and reviews", "Storefront")
     ];
 
     public static readonly IReadOnlySet<string> ViewOnly = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -255,7 +310,15 @@ public static class PermissionCodes
         TeamView,
         OrganizationView,
         TenantView,
-        SubscriptionView
+        SubscriptionView,
+        EmployeeView,
+        AnnouncementView,
+        PerformanceView,
+        LeadView,
+        DealView,
+        WarehouseView,
+        TimeView,
+        StorefrontView
     };
 
     public static readonly IReadOnlySet<string> EmployeePermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -264,7 +327,11 @@ public static class PermissionCodes
         TaskView,
         TaskUpdate,
         ActivityView,
-        NotificationView
+        NotificationView,
+        EmployeeView,
+        AnnouncementView,
+        PerformanceView,
+        TimeView
     };
 
     public static readonly IReadOnlySet<string> ManagerPermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -276,7 +343,12 @@ public static class PermissionCodes
         ReportView,
         AnalyticsView,
         ActivityView,
-        NotificationView, NotificationUpdate
+        NotificationView, NotificationUpdate,
+        EmployeeView, EmployeeManage, AttendanceManage, LeaveManage,
+        AnnouncementView, AnnouncementManage, PerformanceView, PerformanceManage,
+        LeadView, DealView, TimeView, TimeManage,
+        NalvaView, NalvaManage, NalvaApprove,
+        StorefrontView, StorefrontManage
     };
 
     public static readonly IReadOnlySet<string> AccountantPermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -286,7 +358,8 @@ public static class PermissionCodes
         FinanceView, ReportView, AnalyticsView,
         InvoiceCreate, InvoiceView, InvoiceUpdate, InvoiceDelete,
         PaymentView, OrderView,
-        NotificationView, NotificationUpdate
+        NotificationView, NotificationUpdate,
+        EmployeeSalary
     };
 
     public static readonly IReadOnlySet<string> SalesPermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -295,7 +368,9 @@ public static class PermissionCodes
         OrderCreate, OrderView, OrderUpdate, OrderDelete,
         PaymentCreate, PaymentView, PaymentUpdate, PaymentDelete,
         InvoiceCreate, InvoiceView, InvoiceUpdate, InvoiceDelete,
-        QuotationCreate, QuotationView, QuotationUpdate, QuotationDelete
+        QuotationCreate, QuotationView, QuotationUpdate, QuotationDelete,
+        LeadView, LeadManage, DealView, DealManage, ReturnManage,
+        StorefrontView
     };
 
     public static readonly IReadOnlySet<string> InventoryManagerPermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -303,7 +378,17 @@ public static class PermissionCodes
         InventoryView, InventoryUpdate, InventoryAdjust,
         ProductCreate, ProductView, ProductUpdate, ProductDelete,
         SupplierCreate, SupplierView, SupplierUpdate, SupplierDelete,
-        PurchaseOrderCreate, PurchaseOrderView, PurchaseOrderUpdate, PurchaseOrderDelete
+        PurchaseOrderCreate, PurchaseOrderView, PurchaseOrderUpdate, PurchaseOrderDelete,
+        WarehouseView, WarehouseManage, FulfillmentManage
+    };
+
+    public static readonly IReadOnlySet<string> AgentPermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        AgentExecute,
+        NotificationView,
+        ActivityView,
+        TaskView,
+        ProjectView
     };
 
     public static IReadOnlySet<string> BuildOwnerPermissions()

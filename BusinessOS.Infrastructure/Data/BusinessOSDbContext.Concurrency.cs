@@ -38,6 +38,10 @@ public partial class BusinessOSDbContext
         var now = DateTime.UtcNow;
         DetachInventoryGraph(productId);
 
+        var allowNegative = quantityDelta < 0 && await TenantSettings.AsNoTracking()
+            .Select(s => (bool?)s.AllowNegativeStock)
+            .FirstOrDefaultAsync(cancellationToken) == true;
+
         if (Database.IsRelational())
         {
             var rowsQuery = Inventories.Where(i =>
@@ -45,7 +49,7 @@ public partial class BusinessOSDbContext
                 i.TenantId == _tenantId &&
                 !i.IsDeleted);
 
-            if (quantityDelta < 0)
+            if (quantityDelta < 0 && !allowNegative)
             {
                 var required = -quantityDelta;
                 rowsQuery = rowsQuery.Where(i => i.CurrentStock >= required);
@@ -98,7 +102,7 @@ public partial class BusinessOSDbContext
 
         var previous = inventory.CurrentStock;
         var updated = previous + quantityDelta;
-        if (updated < 0)
+        if (updated < 0 && !allowNegative)
             return StockAdjustmentResult.Rejected(previous);
 
         inventory.CurrentStock = updated;

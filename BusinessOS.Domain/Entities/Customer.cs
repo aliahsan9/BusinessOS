@@ -76,6 +76,14 @@ public class Customer : AuditableEntity
     /// </summary>
     public string? AssignedUserId { get; set; }
 
+    public string? CustomerCode { get; set; }
+    public string? Website { get; set; }
+    public string CustomerType { get; set; } = "Individual";
+    public string Status { get; set; } = "Active";
+    public string? Tags { get; set; }
+    public string? Industry { get; set; }
+    public Guid? SourceLeadId { get; set; }
+
     /// <summary>
     /// Collection of orders placed by this customer.
     /// </summary>

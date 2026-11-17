@@ -1,5 +1,6 @@
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Tenant.Services;
+using BusinessOS.Domain.Companies;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.Data;
@@ -39,12 +40,14 @@ public sealed class TenantRegistrationService : ITenantRegistrationService
             baseSlug,
             candidate => dbContext.Tenants.IgnoreQueryFilters().Any(x => x.Slug == candidate && !x.IsDeleted));
 
+        var modules = await ModulesForIndustryAsync(dbContext, options.Industry, cancellationToken);
+        var templateName = await TemplateNameAsync(dbContext, options.Industry, cancellationToken);
         var tenant = new Tenant
         {
             Id = options.TenantId,
             Name = options.BusinessName.Trim(),
             Slug = slug,
-            BusinessType = options.Industry.Trim(),
+            BusinessType = string.IsNullOrWhiteSpace(templateName) ? options.Industry.Trim() : templateName,
             Email = options.Email.Trim(),
             Phone = string.Empty,
             Address = string.Empty,
@@ -54,7 +57,9 @@ public sealed class TenantRegistrationService : ITenantRegistrationService
             SubscriptionPlanId = planId,
             SubscriptionPlan = planName,
             IsActive = true,
-            OwnerUserId = options.OwnerUserId
+            OwnerUserId = options.OwnerUserId,
+            Country = string.Empty,
+            EnabledModulesJson = modules
         };
 
         dbContext.Tenants.Add(tenant);
@@ -102,8 +107,38 @@ public sealed class TenantRegistrationService : ITenantRegistrationService
             null,
             RbacAuditService.Serialize(new { tenant.Name, tenant.Slug, Plan = planName }),
             options.OwnerUserId,
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         return tenant.Id;
+    }
+
+    private static async Task<string?> ModulesForIndustryAsync(
+        BusinessOSDbContext dbContext,
+        string industry,
+        CancellationToken cancellationToken)
+    {
+        var key = industry.Trim();
+        var stored = await dbContext.BusinessTypeTemplates.AsNoTracking()
+            .Where(x => x.IsActive && (x.Key == key || x.Name == key))
+            .Select(x => x.ModulesJson)
+            .FirstOrDefaultAsync(cancellationToken);
+        return stored ?? BusinessTypeCatalog.Defaults
+            .FirstOrDefault(x => x.Key.Equals(key, StringComparison.OrdinalIgnoreCase) || x.Name.Equals(key, StringComparison.OrdinalIgnoreCase))
+            ?.ModulesJson;
+    }
+
+    private static async Task<string?> TemplateNameAsync(
+        BusinessOSDbContext dbContext,
+        string industry,
+        CancellationToken cancellationToken)
+    {
+        var key = industry.Trim();
+        var stored = await dbContext.BusinessTypeTemplates.AsNoTracking()
+            .Where(x => x.IsActive && (x.Key == key || x.Name == key))
+            .Select(x => x.Name)
+            .FirstOrDefaultAsync(cancellationToken);
+        return stored ?? BusinessTypeCatalog.Defaults
+            .FirstOrDefault(x => x.Key.Equals(key, StringComparison.OrdinalIgnoreCase) || x.Name.Equals(key, StringComparison.OrdinalIgnoreCase))
+            ?.Name;
     }
 }

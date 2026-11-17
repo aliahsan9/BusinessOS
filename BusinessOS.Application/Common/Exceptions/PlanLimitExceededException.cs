@@ -28,6 +28,8 @@ public sealed class PlanLimitExceededException : AppException
         "task" or "tasks" => "Tasks",
         "ai" or "airequests" or "ai requests" => "AI requests",
         "storage" => "Storage",
+        "agent executions" or "agentexecutions" => "Agent executions",
+        "automation runs" or "automationruns" => "Automation runs",
         _ => resource.Trim()
     };
 
@@ -44,6 +46,8 @@ public sealed class PlanLimitExceededException : AppException
             "Tasks" => $"Your plan allows a maximum of {allowance} tasks. Upgrade your plan to add more tasks.",
             "Storage" => $"Your plan allows a maximum of {allowance} MB of storage. Upgrade your plan to upload more files.",
             "AI requests" => $"Your plan allows a maximum of {allowance} AI requests this period. Upgrade your plan to continue.",
+            "Agent executions" => $"Your plan allows a maximum of {allowance} agent executions this period. Existing results stay available.",
+            "Automation runs" => $"Your plan allows a maximum of {allowance} automation runs this period. Existing workflow history stays available.",
             _ => $"Your plan allows a maximum of {allowance} {name}. Upgrade your plan to continue."
         };
     }

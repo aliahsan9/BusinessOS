@@ -24,6 +24,7 @@ public class Category : AuditableEntity
     /// Optional description explaining the purpose or contents of this category.
     /// </summary>
     public string? Description { get; set; }
+    public Guid? ParentCategoryId { get; set; }
 
     /// <summary>
     /// Collection of products assigned to this category.

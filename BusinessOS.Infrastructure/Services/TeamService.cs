@@ -272,6 +272,9 @@ public sealed class TeamService : ITeamService
             Status = InvitationStatus.Pending,
             InvitedByUserId = currentUserId,
             ExpiresAt = DateTime.UtcNow.AddDays(7),
+            DepartmentId = request.DepartmentId,
+            CompanyTeamId = request.CompanyTeamId,
+            JobTitle = request.JobTitle,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -524,8 +527,7 @@ public sealed class TeamService : ITeamService
         var existingUser = await _userManager.FindByEmailAsync(invitation.Email);
         ApplicationUser user;
 
-        if (existingUser is not null && existingUser.TenantId != invitation.TenantId)
-            throw new ConflictException("This email is already registered with another organization.");
+        var joiningAnotherCompany = existingUser is not null && existingUser.TenantId != invitation.TenantId;
 
         // Accepting consumes the seat already reserved by this invitation, so the
         // invitation must leave Pending in the same save that activates the member.
@@ -533,7 +535,11 @@ public sealed class TeamService : ITeamService
         invitation.AcceptedAt = DateTime.UtcNow;
         invitation.UpdatedAt = DateTime.UtcNow;
 
-        if (existingUser is not null)
+        if (joiningAnotherCompany)
+        {
+            user = existingUser!;
+        }
+        else if (existingUser is not null)
         {
             user = existingUser;
             user.FirstName = request.FirstName.Trim();
@@ -571,11 +577,17 @@ public sealed class TeamService : ITeamService
             }
         }
 
-        await _userManager.AddToRoleAsync(user, invitation.Role.Name);
-        await _roleRepository.AssignRoleToUserAsync(user.Id, invitation.RoleId, cancellationToken);
-        if (existingUser is not null)
+        await EnsureCompanyMembershipAsync(user.Id, invitation.TenantId, invitation.Role.Name, cancellationToken);
+
+        if (!joiningAnotherCompany)
         {
-            await _sessions.RevokeAllAsync(user.Id, cancellationToken);
+            await _userManager.AddToRoleAsync(user, invitation.Role.Name);
+        await _roleRepository.AssignRoleToUserAsync(user.Id, invitation.RoleId, cancellationToken);
+        await EnsureEmployeeProfileAsync(invitation, user, cancellationToken);
+        if (existingUser is not null)
+            {
+                await _sessions.RevokeAllAsync(user.Id, cancellationToken);
+            }
         }
 
         await _auditService.LogAsync(
@@ -587,11 +599,73 @@ public sealed class TeamService : ITeamService
             cancellationToken);
     }
 
+    private async Task EnsureCompanyMembershipAsync(
+        string userId,
+        Guid tenantId,
+        string roleName,
+        CancellationToken cancellationToken)
+    {
+        var membership = await _context.CompanyMemberships
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(x => x.UserId == userId && x.TenantId == tenantId && !x.IsDeleted, cancellationToken);
+
+        if (membership is null)
+        {
+            _context.CompanyMemberships.Add(new CompanyMembership
+            {
+                TenantId = tenantId,
+                UserId = userId,
+                RoleName = roleName,
+                IsActive = true,
+                JoinedAt = DateTime.UtcNow
+            });
+        }
+        else
+        {
+            membership.IsActive = true;
+            membership.RoleName = roleName;
+            membership.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
     private static bool IsPendingInvitationCollision(DbUpdateException exception)
     {
         var message = exception.InnerException?.Message ?? exception.Message;
         return message.Contains("IX_TeamInvitations_OnePendingEmail", StringComparison.OrdinalIgnoreCase)
             || message.Contains("duplicate", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task EnsureEmployeeProfileAsync(
+        TeamInvitation invitation,
+        ApplicationUser user,
+        CancellationToken cancellationToken)
+    {
+        var existing = await _context.Employees
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(x => x.TenantId == invitation.TenantId && x.UserId == user.Id && !x.IsDeleted, cancellationToken);
+        if (existing is not null)
+            return;
+
+        _context.Employees.Add(new Employee
+        {
+            TenantId = invitation.TenantId,
+            UserId = user.Id,
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            Email = invitation.Email,
+            Phone = string.IsNullOrWhiteSpace(user.PhoneNumber) ? "Not provided" : user.PhoneNumber,
+            Designation = string.IsNullOrWhiteSpace(invitation.JobTitle) ? invitation.Role.Name : invitation.JobTitle,
+            EmployeeCode = $"EMP-{user.Id[..Math.Min(8, user.Id.Length)].ToUpperInvariant()}",
+            DepartmentId = invitation.DepartmentId,
+            TeamId = invitation.CompanyTeamId,
+            JoiningDate = DateTime.UtcNow,
+            IsActive = true,
+            EmploymentStatus = EmploymentStatuses.Active,
+            EmploymentType = EmploymentTypes.FullTime
+        });
+        await _context.SaveChangesAsync(cancellationToken);
     }
 
     private Guid RequireTenantId() =>

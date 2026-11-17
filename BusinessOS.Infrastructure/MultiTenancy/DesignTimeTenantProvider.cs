@@ -14,6 +14,10 @@ public class DesignTimeTenantProvider : ITenantProvider
     {
         // no-op for design time
     }
+
+    public void Clear()
+    {
+    }
     public Guid TenantId
     {
         get => Guid.Empty;   // design-time fallback

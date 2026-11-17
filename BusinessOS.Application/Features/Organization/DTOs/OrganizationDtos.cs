@@ -13,6 +13,7 @@ public class OrganizationDto
     public string? LogoUrl { get; set; }
     public string Currency { get; set; } = "USD";
     public string Timezone { get; set; } = "UTC";
+    public string? SocialLinks { get; set; }
     public string SubscriptionPlan { get; set; } = "Free";
     public bool IsActive { get; set; }
 }
@@ -27,4 +28,5 @@ public record UpdateOrganizationRequest(
     string? Description,
     string? LogoUrl,
     string Currency,
-    string Timezone);
+    string Timezone,
+    string? SocialLinks = null);

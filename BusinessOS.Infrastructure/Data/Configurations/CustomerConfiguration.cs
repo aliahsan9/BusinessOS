@@ -24,6 +24,12 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(x => x.Notes).HasMaxLength(2000);
         builder.Property(x => x.IsActive).IsRequired();
         builder.Property(x => x.AssignedUserId).HasMaxLength(450);
+        builder.Property(x => x.CustomerCode).HasMaxLength(40);
+        builder.Property(x => x.Website).HasMaxLength(500);
+        builder.Property(x => x.CustomerType).HasMaxLength(40).IsRequired();
+        builder.Property(x => x.Status).HasMaxLength(40).IsRequired();
+        builder.Property(x => x.Tags).HasMaxLength(500);
+        builder.Property(x => x.Industry).HasMaxLength(120);
 
         builder.HasMany(x => x.Orders)
             .WithOne(x => x.Customer)

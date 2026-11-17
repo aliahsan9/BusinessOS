@@ -13,8 +13,10 @@ public static class SubscriptionCatalog
     public static readonly Guid ProfessionalPlanId = Guid.Parse("33333333-3333-3333-3333-333333333333");
     public static readonly Guid EnterprisePlanId = Guid.Parse("44444444-4444-4444-4444-444444444444");
 
-    public static IReadOnlyList<SubscriptionPlan> CreatePlans() =>
-    [
+    public static IReadOnlyList<SubscriptionPlan> CreatePlans()
+    {
+        var plans = new List<SubscriptionPlan>
+        {
         Plan(FreePlanId, "Free", "free", "Get started with basic business management", 0, 0, 1, 25, 50, 3, 100, 512, 20,
             ai: true, analytics: false, pdf: false, reports: false, priority: false, api: false, branches: false,
             inventory: "Basic", sales: "Limited", trialDays: 0, custom: false, sort: 0),
@@ -27,7 +29,17 @@ public static class SubscriptionCatalog
         Plan(EnterprisePlanId, "Enterprise", "enterprise", "Custom contracts, unlimited scale, and priority support", 149, 1430, SubscriptionPlan.Unlimited, SubscriptionPlan.Unlimited, SubscriptionPlan.Unlimited, SubscriptionPlan.Unlimited, SubscriptionPlan.Unlimited, SubscriptionPlan.Unlimited, SubscriptionPlan.Unlimited,
             ai: true, analytics: true, pdf: true, reports: true, priority: true, api: true, branches: true,
             inventory: "Full", sales: "Full", trialDays: 14, custom: true, sort: 3)
-    ];
+        };
+        foreach (var plan in plans)
+        {
+            var quotas = CommercialFeatureCatalog.Quotas(plan.Slug);
+            plan.MaxAgentExecutions = quotas.AgentExecutions;
+            plan.MaxAutomationRuns = quotas.AutomationRuns;
+            plan.GracePeriodDays = quotas.GraceDays;
+        }
+
+        return plans;
+    }
 
     public static bool ShouldPreserveContract(SubscriptionStatus status, decimal monthlyPrice) =>
         monthlyPrice > 0 && status is SubscriptionStatus.Trial
@@ -48,6 +60,9 @@ public static class SubscriptionCatalog
         MaxTasks = plan.MaxTasks,
         MaxStorageMb = plan.MaxStorageMb,
         MaxAiRequests = plan.MaxAiRequests,
+        MaxAgentExecutions = plan.MaxAgentExecutions,
+        MaxAutomationRuns = plan.MaxAutomationRuns,
+        GracePeriodDays = plan.GracePeriodDays,
         HasAiAssistant = plan.HasAiAssistant,
         HasAdvancedAnalytics = plan.HasAdvancedAnalytics,
         HasPdfReports = plan.HasPdfReports,
@@ -73,6 +88,9 @@ public static class SubscriptionCatalog
         target.MaxTasks = source.MaxTasks;
         target.MaxStorageMb = source.MaxStorageMb;
         target.MaxAiRequests = source.MaxAiRequests;
+        target.MaxAgentExecutions = source.MaxAgentExecutions;
+        target.MaxAutomationRuns = source.MaxAutomationRuns;
+        target.GracePeriodDays = source.GracePeriodDays;
         target.HasAiAssistant = source.HasAiAssistant;
         target.HasAdvancedAnalytics = source.HasAdvancedAnalytics;
         target.HasPdfReports = source.HasPdfReports;
@@ -116,6 +134,20 @@ public static class SubscriptionCatalog
         features.Add(plan.HasAdvancedAnalytics ? "Advanced analytics" : "Basic analytics");
         if (plan.HasPdfReports) features.Add("PDF reports");
         features.Add(plan.IsCustomPricing ? "Custom AI requests" : $"{Format(plan.MaxAiRequests)} AI requests / month");
+        features.Add(plan.MaxAgentExecutions < 0 ? "Custom agent executions" : $"{Format(plan.MaxAgentExecutions)} agent executions / month");
+        features.Add(plan.MaxAutomationRuns < 0 ? "Custom automation runs" : $"{Format(plan.MaxAutomationRuns)} automation runs / month");
+        if (CommercialFeatureCatalog.DefaultEnabled(plan.Slug, CommercialFeatureKeys.Integrations))
+            features.Add("Integration access");
+        if (CommercialFeatureCatalog.DefaultEnabled(plan.Slug, CommercialFeatureKeys.ClientPortal))
+            features.Add("Client portal");
+        if (CommercialFeatureCatalog.DefaultEnabled(plan.Slug, CommercialFeatureKeys.Storefront))
+            features.Add("Public storefront");
+        if (CommercialFeatureCatalog.DefaultEnabled(plan.Slug, CommercialFeatureKeys.MultiAgent))
+            features.Add("Multi-agent execution");
+        if (CommercialFeatureCatalog.DefaultEnabled(plan.Slug, CommercialFeatureKeys.Finance))
+            features.Add("Finance");
+        if (plan.GracePeriodDays > 0)
+            features.Add($"{plan.GracePeriodDays}-day payment grace");
         if (plan.HasApiAccess) features.Add("API access");
         if (plan.HasMultiBranch) features.Add("Multi-branch");
         if (plan.HasPrioritySupport) features.Add("Priority support");

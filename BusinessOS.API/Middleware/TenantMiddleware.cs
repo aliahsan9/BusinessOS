@@ -148,7 +148,7 @@ public sealed class TenantMiddleware
                 return;
             }
 
-            if (!tenantContext.IsActive)
+            if (!tenantContext.IsActive && !IsAllowedWhileSuspended(context, path))
             {
                 await WriteProblemAsync(
                     context,
@@ -164,6 +164,30 @@ public sealed class TenantMiddleware
         {
             TenantContext.Clear();
         }
+    }
+
+    private static bool IsAllowedWhileSuspended(HttpContext context, string path)
+    {
+        var resource = ApiVersioningPaths.StripVersion(path);
+        if (resource.StartsWith("/api/billing", StringComparison.Ordinal) ||
+            resource.StartsWith("/api/companies", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (HttpMethods.IsGet(context.Request.Method) &&
+            resource is "/api/tenant" or "/api/tenant/usage" or "/api/tenant/dashboard" or "/api/tenant/settings" or "/api/tenant/announcements")
+        {
+            return true;
+        }
+
+        if (resource.StartsWith("/api/platform", StringComparison.Ordinal))
+        {
+            var admin = context.RequestServices.GetRequiredService<ISuperAdminContext>();
+            return admin.IsSuperAdmin;
+        }
+
+        return false;
     }
 
     private static bool TryGetHeaderTenant(HttpContext context, out Guid tenantId)

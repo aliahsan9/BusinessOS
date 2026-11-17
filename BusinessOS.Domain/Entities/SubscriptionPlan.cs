@@ -18,6 +18,9 @@ public class SubscriptionPlan : BaseEntity
     public int MaxTasks { get; set; } = 100;
     public long MaxStorageMb { get; set; } = 512;
     public int MaxAiRequests { get; set; } = 20;
+    public int MaxAgentExecutions { get; set; } = Unlimited;
+    public int MaxAutomationRuns { get; set; } = Unlimited;
+    public int GracePeriodDays { get; set; }
     public bool HasAiAssistant { get; set; }
     public bool HasAdvancedAnalytics { get; set; }
     public bool HasPdfReports { get; set; }

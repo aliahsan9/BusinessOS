@@ -86,6 +86,10 @@ public static class BillingEndpoints
             .RequirePermission(PermissionCodes.SubscriptionView)
             .WithName("DownloadBillingInvoice");
 
+        group.MapGet("/invoices/{id:guid}/receipt", DownloadReceipt)
+            .RequirePermission(PermissionCodes.SubscriptionView)
+            .WithName("DownloadBillingReceipt");
+
         group.MapPost("/upgrade", UpgradePlan)
             .RequirePermission(PermissionCodes.SubscriptionManage)
             .WithName("UpgradePlan")
@@ -358,6 +362,15 @@ public static class BillingEndpoints
     {
         var bytes = await billingService.DownloadInvoiceAsync(id, ct);
         return Results.File(bytes, "application/pdf", $"invoice-{id:N}.pdf");
+    }
+
+    private static async Task<IResult> DownloadReceipt(
+        Guid id,
+        IBillingService billingService,
+        CancellationToken ct)
+    {
+        var bytes = await billingService.DownloadReceiptAsync(id, ct);
+        return Results.File(bytes, "application/pdf", $"receipt-{id:N}.pdf");
     }
 
     private static async Task<IResult> HandleEasyPaisaWebhook(

@@ -23,6 +23,11 @@ public class TenantSettingsDto
     public bool InvoiceNotificationsEnabled { get; set; } = true;
     public bool CustomerNotificationsEnabled { get; set; } = true;
     public bool ProjectNotificationsEnabled { get; set; } = true;
+    public string WorkdayStart { get; set; } = "09:00";
+    public string WorkdayEnd { get; set; } = "17:00";
+    public int LateGraceMinutes { get; set; } = 15;
+    public bool AllowNegativeStock { get; set; }
+    public decimal OpeningCashBalance { get; set; }
 }
 
 public class BusinessProfileDto
@@ -59,7 +64,12 @@ public record UpdateTenantSettingsRequest(
     bool TaskNotificationsEnabled,
     bool InvoiceNotificationsEnabled,
     bool CustomerNotificationsEnabled,
-    bool ProjectNotificationsEnabled);
+    bool ProjectNotificationsEnabled,
+    string? WorkdayStart = null,
+    string? WorkdayEnd = null,
+    int? LateGraceMinutes = null,
+    bool? AllowNegativeStock = null,
+    decimal? OpeningCashBalance = null);
 
 public record UpdateBusinessProfileRequest(
     string Name,

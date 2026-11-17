@@ -16,6 +16,8 @@ public class WorkTaskConfiguration : IEntityTypeConfiguration<WorkTask>
         builder.Property(x => x.Description).HasMaxLength(2000);
         builder.Property(x => x.AssignedUserId).HasMaxLength(450);
         builder.Property(x => x.Status).IsRequired();
+        builder.Property(x => x.TaskKind).HasMaxLength(40).IsRequired();
+        builder.Property(x => x.Stage).HasMaxLength(80);
 
         builder.HasOne(x => x.Project)
             .WithMany(x => x.Tasks)

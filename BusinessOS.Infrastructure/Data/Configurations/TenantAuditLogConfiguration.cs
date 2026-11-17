@@ -16,6 +16,7 @@ public class TenantAuditLogConfiguration : IEntityTypeConfiguration<TenantAuditL
         builder.Property(x => x.EntityType).HasMaxLength(100);
         builder.Property(x => x.OldValue).HasMaxLength(4000);
         builder.Property(x => x.NewValue).HasMaxLength(4000);
+        builder.Property(x => x.IpAddress).HasMaxLength(64);
 
         builder.HasIndex(x => new { x.TenantId, x.CreatedAt });
 

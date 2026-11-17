@@ -1,6 +1,7 @@
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Billing.DTOs;
 using BusinessOS.Application.Features.Billing.Services;
+using BusinessOS.Domain.Billing;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -26,23 +27,45 @@ public sealed class BillingMetricsService : IBillingMetricsService
             .Include(x => x.Plan)
             .ToListAsync(cancellationToken);
 
-        var active = subscriptions.Where(x =>
-            x.Status is SubscriptionStatus.Active or SubscriptionStatus.Trial).ToList();
-
         decimal mrr = 0;
-        foreach (var sub in active)
+        decimal trial = 0;
+        decimal atRisk = 0;
+        foreach (var sub in subscriptions.Where(x => x.Plan is not null))
         {
-            mrr += sub.BillingInterval == BillingInterval.Yearly
-                ? sub.Plan.AnnualPrice / 12m
-                : sub.Plan.MonthlyPrice;
+            var monthly = SubscriptionRevenueMath.MonthlyRecurring(sub.Plan, sub);
+            if (SubscriptionRevenueMath.CountsAsRecurring(sub.Status))
+                mrr += monthly;
+            else if (SubscriptionRevenueMath.CountsAsTrialPipeline(sub.Status))
+                trial += monthly;
+            else if (SubscriptionRevenueMath.CountsAsAtRisk(sub.Status))
+                atRisk += monthly;
         }
 
-        var totalRevenue = await db.BillingTransactions
+        var collected = await db.BillingTransactions
             .IgnoreQueryFilters()
             .AsNoTracking()
-            .Where(x => x.Status == BillingTransactionStatus.Completed)
-            .SumAsync(x => x.Amount, cancellationToken);
+            .Where(x => !x.IsDeleted && x.Status == BillingTransactionStatus.Completed)
+            .SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0m;
 
+        var booked = await db.BillingInvoices
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted && x.Status != BillingInvoiceStatus.Void)
+            .SumAsync(x => (decimal?)x.TotalAmount, cancellationToken) ?? 0m;
+
+        var failed = await db.BillingTransactions
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .CountAsync(x => !x.IsDeleted && x.Status == BillingTransactionStatus.Failed, cancellationToken);
+
+        var ai = await db.AiUsageLedgers.IgnoreQueryFilters().AsNoTracking()
+            .Where(x => !x.IsDeleted)
+            .SumAsync(x => (decimal?)x.EstimatedProviderCostUsd, cancellationToken) ?? 0m;
+        var agent = await db.NalvaExecutions.IgnoreQueryFilters().AsNoTracking()
+            .Where(x => !x.IsDeleted)
+            .SumAsync(x => (decimal?)x.EstimatedCostUsd, cancellationToken) ?? 0m;
+
+        var monthStart = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
         var totalTenants = await db.Tenants.IgnoreQueryFilters().CountAsync(x => !x.IsDeleted, cancellationToken);
 
         return new BillingMetricsDto
@@ -52,7 +75,15 @@ public sealed class BillingMetricsService : IBillingMetricsService
             ActiveSubscriptions = subscriptions.Count(x => x.Status == SubscriptionStatus.Active),
             TrialSubscriptions = subscriptions.Count(x => x.Status == SubscriptionStatus.Trial),
             CancelledSubscriptions = subscriptions.Count(x => x.Status == SubscriptionStatus.Cancelled),
-            TotalRevenue = totalRevenue,
+            TotalRevenue = collected,
+            CollectedRevenue = collected,
+            BookedRevenue = booked,
+            TrialPipelineMonthly = trial,
+            AtRiskMonthly = atRisk,
+            EstimatedAiCostUsd = ai + agent,
+            FailedPayments = failed,
+            NewSubscriptionsThisMonth = subscriptions.Count(x => x.Status == SubscriptionStatus.Active && x.StartDate >= monthStart),
+            ChurnedThisMonth = subscriptions.Count(x => x.Status == SubscriptionStatus.Cancelled && x.EndDate >= monthStart),
             TotalTenants = totalTenants
         };
     }

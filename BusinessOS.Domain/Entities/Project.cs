@@ -12,6 +12,15 @@ public class Project : AuditableEntity
     public ProjectStatus Status { get; set; } = ProjectStatus.Planning;
     public string? AssignedUserId { get; set; }
     public Guid? CustomerId { get; set; }
+    public string? Code { get; set; }
+    public string? ManagerUserId { get; set; }
+    public DateTime? StartDate { get; set; }
+    public DateTime? Deadline { get; set; }
+    public decimal Budget { get; set; }
+    public int Priority { get; set; } = 2;
+    public string Visibility { get; set; } = "Internal";
+    public Guid? DealId { get; set; }
+    public string Workflow { get; set; } = "General";
 
     public Customer? Customer { get; set; }
     public ICollection<WorkTask> Tasks { get; set; } = new List<WorkTask>();

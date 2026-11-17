@@ -13,6 +13,9 @@ public class TeamInvitation : AuditableEntity
     public string InvitedByUserId { get; set; } = default!;
     public DateTime ExpiresAt { get; set; }
     public DateTime? AcceptedAt { get; set; }
+    public Guid? DepartmentId { get; set; }
+    public Guid? CompanyTeamId { get; set; }
+    public string? JobTitle { get; set; }
 
     public Role Role { get; set; } = default!;
 }

@@ -1,0 +1,38 @@
+using BusinessOS.API.Authorization;
+using BusinessOS.Application.Common.Authorization;
+using BusinessOS.Application.Features.Integrations;
+
+namespace BusinessOS.API.Endpoints;
+
+public static class IntegrationEndpoints
+{
+    public static void MapIntegrationEndpoints(this IEndpointRouteBuilder app)
+    {
+        var group = app.MapGroup("/integrations").WithTags("Integrations").RequireAuthorization().RequireRateLimiting("api");
+        group.MapGet("/marketplace", async (IIntegrationPlatform platform, CancellationToken ct) => Results.Ok(await platform.GetMarketplaceAsync(ct)));
+        group.MapGet("/connections", async (IIntegrationPlatform platform, CancellationToken ct) => Results.Ok(await platform.GetConnectionsAsync(ct)));
+        group.MapPost("/{provider}/authorize", async (string provider, IntegrationAuthorizeRequest request, IIntegrationPlatform platform, CancellationToken ct) =>
+            Results.Ok(await platform.BeginAuthorizeAsync(provider, request, ct))).RequirePermission(PermissionCodes.NalvaManage);
+        group.MapPost("/{provider}/callback", async (string provider, IntegrationCallbackRequest request, IIntegrationPlatform platform, CancellationToken ct) =>
+            Results.Ok(await platform.CompleteAuthorizeAsync(provider, request, ct))).RequirePermission(PermissionCodes.NalvaManage);
+        group.MapPost("/connections/{id:guid}/disconnect", async (Guid id, IIntegrationPlatform platform, CancellationToken ct) =>
+            Results.Ok(await platform.DisconnectAsync(id, ct))).RequirePermission(PermissionCodes.NalvaManage);
+        group.MapPost("/connections/{id:guid}/test", async (Guid id, IIntegrationPlatform platform, CancellationToken ct) =>
+            Results.Ok(await platform.TestAsync(id, ct))).RequirePermission(PermissionCodes.NalvaManage);
+        group.MapGet("/logs", async (Guid? connectionId, IIntegrationPlatform platform, CancellationToken ct) =>
+            Results.Ok(await platform.GetLogsAsync(connectionId, ct)));
+        group.MapPost("/webhooks/{provider}/{connectionId:guid}", async (string provider, Guid connectionId, HttpRequest request, IIntegrationPlatform platform, CancellationToken ct) =>
+        {
+            using var reader = new StreamReader(request.Body);
+            var body = await reader.ReadToEndAsync(ct);
+            var signature = request.Headers["X-Hub-Signature-256"].FirstOrDefault()
+                ?? request.Headers["Stripe-Signature"].FirstOrDefault()
+                ?? request.Headers["X-Shopify-Hmac-Sha256"].FirstOrDefault()
+                ?? request.Headers["X-CompanyOS-Signature"].FirstOrDefault();
+            var eventId = request.Headers["X-GitHub-Delivery"].FirstOrDefault()
+                ?? request.Headers["X-Event-Id"].FirstOrDefault();
+            var result = await platform.ReceiveWebhookAsync(provider, connectionId, body, signature, eventId, ct);
+            return Results.Json(new { message = result.Message }, statusCode: result.StatusCode);
+        }).AllowAnonymous();
+    }
+}

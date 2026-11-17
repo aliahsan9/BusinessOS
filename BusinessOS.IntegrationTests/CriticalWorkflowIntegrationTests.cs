@@ -313,6 +313,10 @@ public class CriticalWorkflowIntegrationTests : IntegrationTestBase
         var path = route.ToLowerInvariant();
         return path.Contains("/auth")
             || path.Contains("register-business")
+            || path.Contains("/business-types")
+            || path.Contains("/portal/")
+            || path.Contains("/public/")
+            || path.Contains("/supplier-portal/")
             || path.Contains("webhook")
             || path.Contains("/health")
             || path.Contains("openapi")

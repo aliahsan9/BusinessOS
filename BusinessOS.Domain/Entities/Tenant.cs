@@ -20,6 +20,10 @@ public class Tenant : AuditableEntity
     public string Address { get; set; } = default!;
     public string? Website { get; set; }
     public string? Description { get; set; }
+    public string Country { get; set; } = string.Empty;
+    public string? RegistrationNumber { get; set; }
+    public string? EnabledModulesJson { get; set; }
+    public string? SocialLinks { get; set; }
 
     public string SubscriptionPlan { get; set; } = "Free";
     public bool IsActive { get; set; } = true;

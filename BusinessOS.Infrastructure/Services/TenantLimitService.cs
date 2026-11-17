@@ -75,6 +75,11 @@ public sealed class TenantLimitService : ITenantLimitService
         int? outputTokens = null,
         int? totalTokens = null,
         decimal? estimatedProviderCostUsd = null,
+        string? model = null,
+        string? usageCategory = null,
+        string? agentKey = null,
+        string? userId = null,
+        decimal? actualProviderChargeUsd = null,
         CancellationToken cancellationToken = default)
     {
         if (!_tenantProvider.HasTenant())
@@ -119,6 +124,11 @@ public sealed class TenantLimitService : ITenantLimitService
                 OutputTokens = outputTokens ?? 0,
                 TotalTokens = totalTokens ?? ((inputTokens ?? 0) + (outputTokens ?? 0)),
                 EstimatedProviderCostUsd = estimatedProviderCostUsd ?? 0,
+                ActualProviderChargeUsd = actualProviderChargeUsd,
+                Model = string.IsNullOrWhiteSpace(model) ? null : model.Trim(),
+                AgentKey = string.IsNullOrWhiteSpace(agentKey) ? null : agentKey.Trim(),
+                UserId = string.IsNullOrWhiteSpace(userId) ? null : userId.Trim(),
+                UsageCategory = string.IsNullOrWhiteSpace(usageCategory) ? "chat" : usageCategory.Trim(),
                 ProviderFailed = false,
                 PeriodStart = usage.AiPeriodStart ?? DateTime.UtcNow,
                 CreatedAt = DateTime.UtcNow

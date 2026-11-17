@@ -25,6 +25,11 @@ public class TenantSettings : AuditableEntity
     public bool InvoiceNotificationsEnabled { get; set; } = true;
     public bool CustomerNotificationsEnabled { get; set; } = true;
     public bool ProjectNotificationsEnabled { get; set; } = true;
+    public TimeOnly WorkdayStart { get; set; } = new(9, 0);
+    public TimeOnly WorkdayEnd { get; set; } = new(17, 0);
+    public int LateGraceMinutes { get; set; } = 15;
+    public bool AllowNegativeStock { get; set; }
+    public decimal OpeningCashBalance { get; set; }
 
     public Tenant Tenant { get; set; } = default!;
 }

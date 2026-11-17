@@ -1,6 +1,7 @@
 using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -42,6 +43,7 @@ public sealed class UpdateProductCommandHandler : IRequestHandler<UpdateProductC
         if (!categoryExists)
             throw new BadRequestException("Invalid CategoryId. Category does not exist.");
 
+        var priceChanged = product.CostPrice != request.CostPrice || product.SalePrice != request.SalePrice;
         product.CategoryId = request.CategoryId;
         product.Name = request.Name;
         product.SKU = request.SKU;
@@ -50,6 +52,16 @@ public sealed class UpdateProductCommandHandler : IRequestHandler<UpdateProductC
         product.SalePrice = request.SalePrice;
         product.ReorderLevel = request.ReorderLevel;
         product.IsActive = request.IsActive;
+
+        if (priceChanged)
+        {
+            _context.PriceHistories.Add(new PriceHistory
+            {
+                ProductId = product.Id,
+                CostPrice = request.CostPrice,
+                SalePrice = request.SalePrice
+            });
+        }
 
         await _context.SaveChangesAsync(cancellationToken);
 

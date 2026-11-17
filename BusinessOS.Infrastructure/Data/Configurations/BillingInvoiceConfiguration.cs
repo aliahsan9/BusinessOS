@@ -23,6 +23,8 @@ public class BillingInvoiceConfiguration : IEntityTypeConfiguration<BillingInvoi
         builder.Property(x => x.PaymentMethod).HasMaxLength(100);
         builder.Property(x => x.ExternalInvoiceId).HasMaxLength(200);
         builder.Property(x => x.Notes).HasMaxLength(1000);
+        builder.Property(x => x.ReceiptNumber).HasMaxLength(40);
+        builder.Property(x => x.BillToName).HasMaxLength(200);
 
         builder.HasIndex(x => x.TenantId);
         builder.HasIndex(x => x.InvoiceNumber).IsUnique();

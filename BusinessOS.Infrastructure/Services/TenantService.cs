@@ -53,6 +53,14 @@ public sealed class TenantService : ITenantService
         tenant.Email = request.Email.Trim();
         tenant.Website = string.IsNullOrWhiteSpace(request.Website) ? null : request.Website.Trim();
         tenant.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+        if (request.Phone is not null)
+            tenant.Phone = request.Phone.Trim();
+        if (request.Address is not null)
+            tenant.Address = request.Address.Trim();
+        if (request.Country is not null)
+            tenant.Country = request.Country.Trim();
+        if (request.RegistrationNumber is not null)
+            tenant.RegistrationNumber = string.IsNullOrWhiteSpace(request.RegistrationNumber) ? null : request.RegistrationNumber.Trim();
         tenant.UpdatedAt = DateTime.UtcNow;
 
         var settings = await GetOrCreateSettingsAsync(tenant.Id, cancellationToken);
@@ -109,6 +117,10 @@ public sealed class TenantService : ITenantService
         tenant.Address = request.Address.Trim();
         tenant.Website = string.IsNullOrWhiteSpace(request.Website) ? null : request.Website.Trim();
         tenant.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+        if (request.Country is not null)
+            tenant.Country = request.Country.Trim();
+        if (request.RegistrationNumber is not null)
+            tenant.RegistrationNumber = string.IsNullOrWhiteSpace(request.RegistrationNumber) ? null : request.RegistrationNumber.Trim();
         tenant.UpdatedAt = DateTime.UtcNow;
 
         settings.LogoUrl = tenant.LogoUrl;
@@ -238,6 +250,11 @@ public sealed class TenantService : ITenantService
             Email = tenant.Email,
             Website = tenant.Website,
             Description = tenant.Description,
+            Phone = tenant.Phone,
+            Address = tenant.Address,
+            Country = tenant.Country,
+            RegistrationNumber = tenant.RegistrationNumber,
+            EnabledModulesJson = tenant.EnabledModulesJson,
             CreatedAt = tenant.CreatedAt,
             UpdatedAt = tenant.UpdatedAt
         };
@@ -256,6 +273,9 @@ public sealed class TenantService : ITenantService
             Address = tenant.Address,
             Website = tenant.Website,
             Description = tenant.Description,
+            Country = tenant.Country,
+            RegistrationNumber = tenant.RegistrationNumber,
+            EnabledModulesJson = tenant.EnabledModulesJson,
             Theme = settings.Theme
         };
 

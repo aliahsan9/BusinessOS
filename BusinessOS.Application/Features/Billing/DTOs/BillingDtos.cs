@@ -62,6 +62,8 @@ public class CurrentPlanDto
     public bool AutoRenew { get; set; }
     public string? PaymentMethodSummary { get; set; }
     public int CurrencyScale { get; set; } = 2;
+    public DateTime? GraceEndsAt { get; set; }
+    public string AccessMode { get; set; } = "Full";
     public PlanFeatureFlagsDto FeatureFlags { get; set; } = new();
 }
 
@@ -74,6 +76,14 @@ public class PlanFeatureFlagsDto
     public bool HasPrioritySupport { get; set; }
     public bool HasApiAccess { get; set; }
     public bool HasMultiBranch { get; set; }
+    public bool HasAutomations { get; set; }
+    public bool HasIntegrations { get; set; }
+    public bool HasClientPortal { get; set; }
+    public bool HasStorefront { get; set; }
+    public bool HasMultiAgent { get; set; }
+    public bool HasFinance { get; set; }
+    public bool HasAdvancedSecurity { get; set; }
+    public string AccessMode { get; set; } = "Full";
 }
 
 public class BillingUsageDto
@@ -114,6 +124,11 @@ public class BillingUsageDto
     public bool StorageOverLimit { get; set; }
     public bool AiRequestsOverLimit { get; set; }
     public string? SubscriptionStatus { get; set; }
+    public int AgentExecutionsUsed { get; set; }
+    public int MaxAgentExecutions { get; set; } = -1;
+    public int AutomationRunsUsed { get; set; }
+    public int MaxAutomationRuns { get; set; } = -1;
+    public string? QuotaMessage { get; set; }
 }
 
 public class BillingInvoiceDto
@@ -131,6 +146,9 @@ public class BillingInvoiceDto
     public DateTime PeriodStart { get; set; }
     public DateTime PeriodEnd { get; set; }
     public DateTime? PaidAt { get; set; }
+    public DateTime? DueDate { get; set; }
+    public string? ReceiptNumber { get; set; }
+    public string? BillToName { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 
@@ -246,7 +264,17 @@ public class BillingMetricsDto
     public int TrialSubscriptions { get; set; }
     public int CancelledSubscriptions { get; set; }
     public decimal TotalRevenue { get; set; }
+    public decimal CollectedRevenue { get; set; }
+    public decimal BookedRevenue { get; set; }
+    public decimal TrialPipelineMonthly { get; set; }
+    public decimal AtRiskMonthly { get; set; }
+    public decimal EstimatedAiCostUsd { get; set; }
+    public int FailedPayments { get; set; }
+    public int NewSubscriptionsThisMonth { get; set; }
+    public int ChurnedThisMonth { get; set; }
     public int TotalTenants { get; set; }
+    public string Definition { get; set; } =
+        "MRR counts active subscriptions at the contracted price. Trials are pipeline, past-due amounts are at risk, collected revenue is completed transactions, and booked revenue is invoices that are not void. Currencies are not converted. AI cost is an estimate, not a provider invoice.";
 }
 
 public record UpgradePlanRequest(Guid PlanId, string BillingInterval = "monthly", string Provider = "stripe");

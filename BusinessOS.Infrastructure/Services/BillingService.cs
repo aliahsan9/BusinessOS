@@ -110,6 +110,20 @@ public sealed partial class BillingService : IBillingService, IBillingPlanSyncSe
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.TenantId == tenantId, cancellationToken);
         var limits = EntitlementResolver.Resolve(tenant.Plan, subscription);
+        var access = CommercialEntitlementEvaluator.Evaluate(new CommercialEntitlementInput
+        {
+            Plan = tenant.Plan,
+            Status = subscription?.Status ?? SubscriptionStatus.Free,
+            CancelAtPeriodEnd = subscription?.CancelAtPeriodEnd ?? false,
+            CurrentPeriodEnd = subscription?.CurrentPeriodEnd,
+            GraceEndsAt = subscription?.GraceEndsAt,
+            PreserveContract = subscription?.PreserveContract ?? false,
+            Snapshot = EntitlementResolver.ReadSnapshot(subscription),
+            UtcNow = DateTime.UtcNow
+        });
+        var monthStart = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        var agentRuns = await _context.NalvaExecutions.CountAsync(x => x.StartedAt >= monthStart, cancellationToken);
+        var automationRuns = await _context.NalvaWorkflowRuns.CountAsync(x => x.StartedAt >= monthStart, cancellationToken);
         var unlimitedAi = PlanLimitHelper.IsUnlimited(limits.MaxAiRequests);
         var measured = _context is BusinessOSDbContext quotaDb
             ? await QuotaEnforcer.MeasureAsync(quotaDb, tenantId, cancellationToken)
@@ -160,7 +174,16 @@ public sealed partial class BillingService : IBillingService, IBillingPlanSyncSe
             AiRequestsAreCustom = tenant.Plan.IsCustomPricing && unlimitedAi,
             ResetDate = subscription?.CurrentPeriodEnd ?? usage.AiPeriodStart?.AddMonths(1),
             LastCalculatedAt = usage.LastCalculatedAt,
-            SubscriptionStatus = subscription?.Status.ToString()
+            SubscriptionStatus = subscription?.Status.ToString(),
+            AgentExecutionsUsed = agentRuns,
+            MaxAgentExecutions = access.AgentExecutionLimit,
+            AutomationRunsUsed = automationRuns,
+            MaxAutomationRuns = access.AutomationRunLimit,
+            QuotaMessage = access.Mode == CommercialAccessMode.Restricted
+                ? "Paid features are paused. Existing records stay available. New usage above the free allowance is blocked."
+                : access.Mode == CommercialAccessMode.Grace
+                    ? "Payment is past due. Access continues until the grace period ends. Quotas still apply."
+                    : null
         };
     }
 
@@ -862,9 +885,11 @@ public sealed partial class BillingService : IBillingService, IBillingPlanSyncSe
             PaymentProvider = provider,
             PeriodStart = now,
             PeriodEnd = periodEnd,
-            PaidAt = now,
             CreatedAt = now
         };
+        var billedTenant = await _context.Tenants.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == tenantId, cancellationToken);
+        invoice.MarkIssued(now, billedTenant?.Name, paid: true);
 
         _context.BillingInvoices.Add(invoice);
         await _context.SaveChangesAsync(cancellationToken);
@@ -1059,6 +1084,19 @@ public sealed partial class BillingService : IBillingService, IBillingPlanSyncSe
         if (plan?.MonthlyPrice == 0 && subscription.Status == SubscriptionStatus.Trial)
             subscription.Status = SubscriptionStatus.Free;
 
+        var evaluatedPlan = plan ?? new SubscriptionPlan { Slug = "free", Name = tenant.SubscriptionPlan };
+        var accessMode = CommercialEntitlementEvaluator.Evaluate(new CommercialEntitlementInput
+        {
+            Plan = evaluatedPlan,
+            Status = subscription.Status,
+            CancelAtPeriodEnd = subscription.CancelAtPeriodEnd,
+            CurrentPeriodEnd = subscription.CurrentPeriodEnd,
+            GraceEndsAt = subscription.GraceEndsAt,
+            PreserveContract = subscription.PreserveContract,
+            Snapshot = EntitlementResolver.ReadSnapshot(subscription),
+            UtcNow = DateTime.UtcNow
+        });
+
         return new CurrentPlanDto
         {
             PlanId = plan?.Id ?? tenant.SubscriptionPlanId,
@@ -1086,15 +1124,25 @@ public sealed partial class BillingService : IBillingService, IBillingPlanSyncSe
             AutoRenew = subscription.AutoRenewEnabled && !subscription.CancelAtPeriodEnd,
             PaymentMethodSummary = subscription.PaymentMethodSummary,
             CurrencyScale = CurrencyMath.Scale(currency),
+            GraceEndsAt = subscription.GraceEndsAt,
+            AccessMode = accessMode.Mode.ToString(),
             FeatureFlags = new PlanFeatureFlagsDto
             {
-                HasAiAssistant = plan?.HasAiAssistant ?? false,
-                HasAdvancedAnalytics = plan?.HasAdvancedAnalytics ?? false,
-                HasPdfReports = plan?.HasPdfReports ?? false,
-                HasAdvancedReports = plan?.HasAdvancedReports ?? false,
-                HasPrioritySupport = plan?.HasPrioritySupport ?? false,
-                HasApiAccess = plan?.HasApiAccess ?? false,
-                HasMultiBranch = plan?.HasMultiBranch ?? false
+                HasAiAssistant = accessMode.IsEnabled(CommercialFeatureKeys.AiAssistant),
+                HasAdvancedAnalytics = accessMode.IsEnabled(CommercialFeatureKeys.AdvancedAnalytics),
+                HasPdfReports = accessMode.IsEnabled(CommercialFeatureKeys.PdfReports),
+                HasAdvancedReports = accessMode.IsEnabled(CommercialFeatureKeys.AdvancedReports),
+                HasPrioritySupport = accessMode.IsEnabled(CommercialFeatureKeys.PrioritySupport),
+                HasApiAccess = accessMode.IsEnabled(CommercialFeatureKeys.ApiAccess),
+                HasMultiBranch = accessMode.IsEnabled(CommercialFeatureKeys.MultiBranch),
+                HasAutomations = accessMode.IsEnabled(CommercialFeatureKeys.Automations),
+                HasIntegrations = accessMode.IsEnabled(CommercialFeatureKeys.Integrations),
+                HasClientPortal = accessMode.IsEnabled(CommercialFeatureKeys.ClientPortal),
+                HasStorefront = accessMode.IsEnabled(CommercialFeatureKeys.Storefront),
+                HasMultiAgent = accessMode.IsEnabled(CommercialFeatureKeys.MultiAgent),
+                HasFinance = accessMode.IsEnabled(CommercialFeatureKeys.Finance),
+                HasAdvancedSecurity = accessMode.IsEnabled(CommercialFeatureKeys.AdvancedSecurity),
+                AccessMode = accessMode.Mode.ToString()
             }
         };
     }
@@ -1114,6 +1162,9 @@ public sealed partial class BillingService : IBillingService, IBillingPlanSyncSe
         PeriodStart = invoice.PeriodStart,
         PeriodEnd = invoice.PeriodEnd,
         PaidAt = invoice.PaidAt,
+        DueDate = invoice.DueDate,
+        ReceiptNumber = invoice.ReceiptNumber,
+        BillToName = invoice.BillToName,
         CreatedAt = invoice.CreatedAt
     };
 

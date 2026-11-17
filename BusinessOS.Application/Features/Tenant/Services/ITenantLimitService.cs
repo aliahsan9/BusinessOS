@@ -20,6 +20,11 @@ public interface ITenantLimitService
         int? outputTokens = null,
         int? totalTokens = null,
         decimal? estimatedProviderCostUsd = null,
+        string? model = null,
+        string? usageCategory = null,
+        string? agentKey = null,
+        string? userId = null,
+        decimal? actualProviderChargeUsd = null,
         CancellationToken cancellationToken = default);
 
     Task RecordAiProviderUsageAsync(

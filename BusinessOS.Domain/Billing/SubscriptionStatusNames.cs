@@ -12,6 +12,7 @@ public static class SubscriptionStatusNames
     public const string Expired = "Expired";
     public const string PendingPayment = "PendingPayment";
     public const string Incomplete = "Incomplete";
+    public const string Suspended = "Suspended";
 
     public static string ToApi(SubscriptionStatus status) => status switch
     {
@@ -23,6 +24,7 @@ public static class SubscriptionStatusNames
         SubscriptionStatus.Expired => Expired,
         SubscriptionStatus.PendingPayment => PendingPayment,
         SubscriptionStatus.Incomplete => Incomplete,
+        SubscriptionStatus.Suspended => Suspended,
         _ => status.ToString()
     };
 
@@ -61,6 +63,9 @@ public static class SubscriptionStatusNames
                 return true;
             case "incomplete":
                 status = SubscriptionStatus.Incomplete;
+                return true;
+            case "suspended":
+                status = SubscriptionStatus.Suspended;
                 return true;
             default:
                 return false;

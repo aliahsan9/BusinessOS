@@ -24,5 +24,9 @@ public sealed class CategoryConfiguration : IEntityTypeConfiguration<Category>
             .HasFilter("[IsDeleted] = 0");
 
         builder.HasIndex(x => new { x.TenantId, x.CreatedAt });
+        builder.HasOne<Category>()
+            .WithMany()
+            .HasForeignKey(x => x.ParentCategoryId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

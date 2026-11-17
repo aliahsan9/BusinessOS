@@ -96,6 +96,16 @@ try
                     QueueLimit = 0
                 }));
 
+        options.AddPolicy("public", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 30,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0
+                }));
+
         options.AddPolicy("ai", httpContext =>
             RateLimitPartition.GetFixedWindowLimiter(
                 httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value

@@ -60,6 +60,7 @@ public sealed class OrganizationService : IOrganizationService
         tenant.Address = request.Address.Trim();
         tenant.Website = string.IsNullOrWhiteSpace(request.Website) ? null : request.Website.Trim();
         tenant.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+        tenant.SocialLinks = string.IsNullOrWhiteSpace(request.SocialLinks) ? tenant.SocialLinks : request.SocialLinks.Trim();
         tenant.UpdatedAt = DateTime.UtcNow;
 
         settings.LogoUrl = string.IsNullOrWhiteSpace(request.LogoUrl) ? null : request.LogoUrl.Trim();
@@ -106,6 +107,7 @@ public sealed class OrganizationService : IOrganizationService
             LogoUrl = settings.LogoUrl,
             Currency = settings.Currency,
             Timezone = settings.Timezone,
+            SocialLinks = tenant.SocialLinks,
             SubscriptionPlan = tenant.SubscriptionPlan,
             IsActive = tenant.IsActive
         };

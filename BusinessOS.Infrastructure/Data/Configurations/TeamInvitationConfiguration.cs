@@ -15,6 +15,7 @@ public class TeamInvitationConfiguration : IEntityTypeConfiguration<TeamInvitati
         builder.Property(x => x.Email).HasMaxLength(256).IsRequired();
         builder.Property(x => x.Token).HasMaxLength(128).IsRequired();
         builder.Property(x => x.InvitedByUserId).HasMaxLength(450).IsRequired();
+        builder.Property(x => x.JobTitle).HasMaxLength(120);
         builder.Property(x => x.Status).IsRequired();
 
         builder.HasOne(x => x.Role)

@@ -32,6 +32,7 @@ public class TenantSubscription : AuditableEntity
     public string? PaymentMethodSummary { get; set; }
     public int? AiRequestAllowance { get; set; }
     public bool AutoRenewEnabled { get; set; }
+    public DateTime? GraceEndsAt { get; set; }
 
     public Tenant Tenant { get; set; } = default!;
     public SubscriptionPlan Plan { get; set; } = default!;

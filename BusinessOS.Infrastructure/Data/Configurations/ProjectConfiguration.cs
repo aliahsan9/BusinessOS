@@ -17,6 +17,11 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
         builder.Property(x => x.Tags).HasMaxLength(500);
         builder.Property(x => x.AssignedUserId).HasMaxLength(450);
         builder.Property(x => x.Status).IsRequired();
+        builder.Property(x => x.Code).HasMaxLength(40);
+        builder.Property(x => x.ManagerUserId).HasMaxLength(450);
+        builder.Property(x => x.Budget).AsMoney();
+        builder.Property(x => x.Visibility).HasMaxLength(40).IsRequired();
+        builder.Property(x => x.Workflow).HasMaxLength(40).IsRequired();
 
         builder.HasOne(x => x.Customer)
             .WithMany()

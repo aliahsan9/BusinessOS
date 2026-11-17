@@ -14,6 +14,8 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
 
         builder.Property(x => x.OrderNumber).HasMaxLength(50).IsRequired();
         builder.Property(x => x.Status).HasMaxLength(50).IsRequired();
+        builder.Property(x => x.PaymentStatus).HasMaxLength(40).IsRequired();
+        builder.Property(x => x.ShippingAddress).HasMaxLength(500);
         builder.Property(x => x.TotalAmount).AsMoney();
         builder.Property(x => x.Discount).AsMoney();
         builder.Property(x => x.Tax).AsMoney();

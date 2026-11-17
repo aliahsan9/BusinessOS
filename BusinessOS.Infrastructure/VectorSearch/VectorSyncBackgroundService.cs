@@ -1,6 +1,8 @@
 using BusinessOS.Application.Features.VectorSearch.Models;
 using BusinessOS.Application.Features.VectorSearch.Options;
 using BusinessOS.Application.Features.VectorSearch.Services;
+using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Domain.Companies;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.Data;
@@ -65,6 +67,7 @@ public sealed class VectorSyncBackgroundService : BackgroundService
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BusinessOSDbContext>();
+        var tenants = scope.ServiceProvider.GetRequiredService<ITenantProvider>();
         var store = scope.ServiceProvider.GetRequiredService<IVectorStore>();
         var embeddings = scope.ServiceProvider.GetRequiredService<IEmbeddingGenerator>();
         var registry = scope.ServiceProvider.GetRequiredService<IVectorEntityProjectorRegistry>();
@@ -111,6 +114,8 @@ public sealed class VectorSyncBackgroundService : BackgroundService
         {
             try
             {
+                TenantJobGuard.Require(message.TenantId);
+                tenants.SetTenantId(message.TenantId);
                 await ProcessMessageAsync(db, store, embeddings, registry, message, cancellationToken);
                 message.Status = VectorSyncStatus.Succeeded;
                 message.ProcessedAt = DateTime.UtcNow;
@@ -142,6 +147,10 @@ public sealed class VectorSyncBackgroundService : BackgroundService
                         message.Id,
                         message.AttemptCount);
                 }
+            }
+            finally
+            {
+                tenants.Clear();
             }
         }
 
@@ -232,7 +241,7 @@ public sealed class VectorSyncBackgroundService : BackgroundService
                 .FirstOrDefaultAsync(x => x.Id == entityId && x.TenantId == tenantId && !x.IsDeleted, cancellationToken);
         }
 
-        return await db.FindAsync(clrType, [entityId], cancellationToken);
+        throw new InvalidOperationException($"Vector sync has no tenant-scoped loader for {clrType.Name}.");
     }
 
     private static string Truncate(string text, int max)

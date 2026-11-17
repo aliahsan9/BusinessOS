@@ -11,6 +11,7 @@ using BusinessOS.Application.Features.Auth.DTOs;
 using BusinessOS.Application.Features.Auth.Services;
 using BusinessOS.Application.Features.Notifications.DTOs;
 using BusinessOS.Application.Features.Notifications.Services;
+using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -362,6 +363,20 @@ public sealed class AuthService : IAuthService
             .FirstAsync(x => x.Id == tenantId, cancellationToken);
 
         tenant.OwnerUserId = user.Id;
+        var hasMembership = await dbContext.CompanyMemberships
+            .IgnoreQueryFilters()
+            .AnyAsync(x => x.TenantId == tenantId && x.UserId == user.Id && !x.IsDeleted, cancellationToken);
+        if (!hasMembership)
+        {
+            dbContext.CompanyMemberships.Add(new CompanyMembership
+            {
+                TenantId = tenantId,
+                UserId = user.Id,
+                RoleName = RoleNames.Owner,
+                IsActive = true,
+                JoinedAt = DateTime.UtcNow
+            });
+        }
         await dbContext.SaveChangesAsync(cancellationToken);
 
         var roles = await _roleRepository.GetUserRoleNamesAsync(user.Id, cancellationToken);

@@ -133,6 +133,7 @@ public sealed partial class OpenAiChatClient
         CancellationToken cancellationToken)
     {
         const int maxAttempts = 3;
+        var model = await ResolveChatModelAsync(cancellationToken);
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -145,7 +146,7 @@ public sealed partial class OpenAiChatClient
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.OpenAiApiKey);
                 var body = new JsonObject
                 {
-                    ["model"] = _options.OpenAiModel,
+                    ["model"] = model,
                     ["temperature"] = 0.2,
                     ["messages"] = messages.DeepClone()
                 };

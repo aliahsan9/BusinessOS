@@ -40,6 +40,19 @@ public class Employee : AuditableEntity
     /// </summary>
     public string Designation { get; set; } = default!;
 
+    public string? EmployeeCode { get; set; }
+    public string? UserId { get; set; }
+    public string? ProfilePictureUrl { get; set; }
+    public Guid? DepartmentId { get; set; }
+    public Guid? TeamId { get; set; }
+    public Guid? ManagerEmployeeId { get; set; }
+    public string EmploymentStatus { get; set; } = "Active";
+    public string EmploymentType { get; set; } = "FullTime";
+    public string? Skills { get; set; }
+    public string? WorkLocation { get; set; }
+    public string? EmergencyContactName { get; set; }
+    public string? EmergencyContactPhone { get; set; }
+
     /// <summary>
     /// Current salary amount in the tenant's currency. Must be non-negative.
     /// </summary>

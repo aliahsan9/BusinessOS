@@ -83,6 +83,7 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
                 ProductId = item.ProductId,
                 Quantity = item.Quantity,
                 UnitPrice = product.SalePrice,
+                UnitCost = product.CostPrice,
                 Total = lineTotal
             });
 

@@ -1,6 +1,7 @@
 using BusinessOS.Application.Common.Authorization;
 using BusinessOS.Infrastructure.Data;
 using BusinessOS.Infrastructure.Identity;
+using BusinessOS.Infrastructure.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -39,6 +40,7 @@ public static class DbInitializer
         }
 
         await RbacSeeder.SeedAsync(context, roleManager, userManager, logger);
+        await CompanyOsSeeder.SeedAsync(context);
         await SubscriptionPlanSeeder.SeedAsync(context, logger);
         await ExpenseCategorySeeder.SeedAllTenantsAsync(context, logger);
 

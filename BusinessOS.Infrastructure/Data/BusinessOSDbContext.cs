@@ -1,4 +1,5 @@
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Domain.Common;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Infrastructure.Billing;
 using BusinessOS.Infrastructure.Data.Configurations;
@@ -81,6 +82,90 @@ public partial class BusinessOSDbContext
     public DbSet<SubscriptionHistory> SubscriptionHistories => Set<SubscriptionHistory>();
     public DbSet<BillingPaymentMethod> BillingPaymentMethods => Set<BillingPaymentMethod>();
     public DbSet<AiUsageLedger> AiUsageLedgers => Set<AiUsageLedger>();
+    public DbSet<PlanFeatureGrant> PlanFeatureGrants => Set<PlanFeatureGrant>();
+    public DbSet<CompanyFeatureOverride> CompanyFeatureOverrides => Set<CompanyFeatureOverride>();
+    public DbSet<AiModelPrice> AiModelPrices => Set<AiModelPrice>();
+    public DbSet<UsageAlert> UsageAlerts => Set<UsageAlert>();
+    public DbSet<CompanyMembership> CompanyMemberships => Set<CompanyMembership>();
+    public DbSet<BusinessTypeTemplate> BusinessTypeTemplates => Set<BusinessTypeTemplate>();
+    public DbSet<PlatformAnnouncement> PlatformAnnouncements => Set<PlatformAnnouncement>();
+    public DbSet<PlatformAnnouncementTarget> PlatformAnnouncementTargets => Set<PlatformAnnouncementTarget>();
+    public DbSet<PlatformSetting> PlatformSettings => Set<PlatformSetting>();
+    public DbSet<PlatformAuditLog> PlatformAuditLogs => Set<PlatformAuditLog>();
+    public DbSet<StoredFile> StoredFiles => Set<StoredFile>();
+
+    /// <summary>
+    /// Allows an authorized company switch to change the active company on the user account.
+    /// Business records still cannot move between companies.
+    /// </summary>
+    public bool AllowUserTenantReassignment { get; set; }
+    public DbSet<Department> Departments => Set<Department>();
+    public DbSet<CompanyTeam> CompanyTeams => Set<CompanyTeam>();
+    public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
+    public DbSet<LeaveType> LeaveTypes => Set<LeaveType>();
+    public DbSet<LeaveBalance> LeaveBalances => Set<LeaveBalance>();
+    public DbSet<LeaveRequest> LeaveRequests => Set<LeaveRequest>();
+    public DbSet<Announcement> Announcements => Set<Announcement>();
+    public DbSet<AnnouncementRead> AnnouncementReads => Set<AnnouncementRead>();
+    public DbSet<PerformanceGoal> PerformanceGoals => Set<PerformanceGoal>();
+    public DbSet<PerformanceReview> PerformanceReviews => Set<PerformanceReview>();
+    public DbSet<PipelineStage> PipelineStages => Set<PipelineStage>();
+    public DbSet<Lead> Leads => Set<Lead>();
+    public DbSet<Deal> Deals => Set<Deal>();
+    public DbSet<StageTransition> StageTransitions => Set<StageTransition>();
+    public DbSet<FollowUp> FollowUps => Set<FollowUp>();
+    public DbSet<CustomerSegment> CustomerSegments => Set<CustomerSegment>();
+    public DbSet<CustomerInteraction> CustomerInteractions => Set<CustomerInteraction>();
+    public DbSet<Warehouse> Warehouses => Set<Warehouse>();
+    public DbSet<WarehouseStock> WarehouseStocks => Set<WarehouseStock>();
+    public DbSet<StockTransfer> StockTransfers => Set<StockTransfer>();
+    public DbSet<StockTransferLine> StockTransferLines => Set<StockTransferLine>();
+    public DbSet<OrderFulfillment> OrderFulfillments => Set<OrderFulfillment>();
+    public DbSet<FulfillmentLine> FulfillmentLines => Set<FulfillmentLine>();
+    public DbSet<SalesReturn> SalesReturns => Set<SalesReturn>();
+    public DbSet<SalesReturnLine> SalesReturnLines => Set<SalesReturnLine>();
+    public DbSet<IncomeRecord> IncomeRecords => Set<IncomeRecord>();
+    public DbSet<PurchaseInvoice> PurchaseInvoices => Set<PurchaseInvoice>();
+    public DbSet<TaxRate> TaxRates => Set<TaxRate>();
+    public DbSet<OperationalSubscription> OperationalSubscriptions => Set<OperationalSubscription>();
+    public DbSet<PriceHistory> PriceHistories => Set<PriceHistory>();
+    public DbSet<ProjectMilestone> ProjectMilestones => Set<ProjectMilestone>();
+    public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
+    public DbSet<TimeEntry> TimeEntries => Set<TimeEntry>();
+    public DbSet<WorkTaskComment> WorkTaskComments => Set<WorkTaskComment>();
+    public DbSet<Sprint> Sprints => Set<Sprint>();
+    public DbSet<ProjectFile> ProjectFiles => Set<ProjectFile>();
+    public DbSet<ClientPortalAccess> ClientPortalAccesses => Set<ClientPortalAccess>();
+    public DbSet<NalvaCompanyAgent> NalvaCompanyAgents => Set<NalvaCompanyAgent>();
+    public DbSet<NalvaAgentRevision> NalvaAgentRevisions => Set<NalvaAgentRevision>();
+    public DbSet<NalvaTask> NalvaTasks => Set<NalvaTask>();
+    public DbSet<NalvaExecution> NalvaExecutions => Set<NalvaExecution>();
+    public DbSet<NalvaApproval> NalvaApprovals => Set<NalvaApproval>();
+    public DbSet<NalvaMemoryRecord> NalvaMemoryRecords => Set<NalvaMemoryRecord>();
+    public DbSet<NalvaKnowledgeSource> NalvaKnowledgeSources => Set<NalvaKnowledgeSource>();
+    public DbSet<NalvaWorkflowDefinition> NalvaWorkflowDefinitions => Set<NalvaWorkflowDefinition>();
+    public DbSet<NalvaWorkflowRun> NalvaWorkflowRuns => Set<NalvaWorkflowRun>();
+    public DbSet<NalvaCompanySettings> NalvaCompanySettings => Set<NalvaCompanySettings>();
+    public DbSet<NalvaWorkItem> NalvaWorkItems => Set<NalvaWorkItem>();
+    public DbSet<NalvaBusinessEvent> NalvaBusinessEvents => Set<NalvaBusinessEvent>();
+    public DbSet<CompanyIntegrationConnection> CompanyIntegrationConnections => Set<CompanyIntegrationConnection>();
+    public DbSet<IntegrationOAuthState> IntegrationOAuthStates => Set<IntegrationOAuthState>();
+    public DbSet<IntegrationActivityLog> IntegrationActivityLogs => Set<IntegrationActivityLog>();
+    public DbSet<CompanyStorefront> CompanyStorefronts => Set<CompanyStorefront>();
+    public DbSet<StorefrontSlugRedirect> StorefrontSlugRedirects => Set<StorefrontSlugRedirect>();
+    public DbSet<StorefrontOffering> StorefrontOfferings => Set<StorefrontOffering>();
+    public DbSet<StorefrontPackage> StorefrontPackages => Set<StorefrontPackage>();
+    public DbSet<StorefrontPortfolioItem> StorefrontPortfolioItems => Set<StorefrontPortfolioItem>();
+    public DbSet<StorefrontReview> StorefrontReviews => Set<StorefrontReview>();
+    public DbSet<StorefrontInquiry> StorefrontInquiries => Set<StorefrontInquiry>();
+    public DbSet<DashboardPreference> DashboardPreferences => Set<DashboardPreference>();
+    public DbSet<SupplierPortalAccess> SupplierPortalAccesses => Set<SupplierPortalAccess>();
+    public DbSet<AgencyWorkspace> AgencyWorkspaces => Set<AgencyWorkspace>();
+    public DbSet<EarlyAccessInvitation> EarlyAccessInvitations => Set<EarlyAccessInvitation>();
+    public DbSet<LaunchFeedback> LaunchFeedback => Set<LaunchFeedback>();
+    public DbSet<ProductUsageEvent> ProductUsageEvents => Set<ProductUsageEvent>();
+    public DbSet<ProductBacklogItem> ProductBacklogItems => Set<ProductBacklogItem>();
+    public DbSet<CompanyDataRequest> CompanyDataRequests => Set<CompanyDataRequest>();
 
     public override int SaveChanges() =>
         SaveChangesAsync(CancellationToken.None).GetAwaiter().GetResult();
@@ -131,6 +216,12 @@ public partial class BusinessOSDbContext
 
         foreach (var entry in ChangeTracker.Entries().ToList())
         {
+            if (entry.Entity is TenantAuditLog or EntityAuditLog or RbacAuditLog or AiCopilotAuditLog or PlatformAuditLog
+                && entry.State is EntityState.Modified or EntityState.Deleted)
+            {
+                throw new InvalidOperationException("Audit records cannot be modified or deleted.");
+            }
+
             // Assign TenantId automatically
             if (entry.State == EntityState.Added)
             {
@@ -157,7 +248,8 @@ public partial class BusinessOSDbContext
                 var tenantIdProp = entry.Properties
                     .FirstOrDefault(p => p.Metadata.Name == "TenantId");
 
-                if (tenantIdProp is not null && tenantIdProp.IsModified)
+                if (tenantIdProp is not null && tenantIdProp.IsModified
+                    && !(AllowUserTenantReassignment && entry.Entity is Identity.ApplicationUser))
                     tenantIdProp.CurrentValue = tenantIdProp.OriginalValue;
             }
 
@@ -329,6 +421,85 @@ public partial class BusinessOSDbContext
         builder.Entity<AgentWorkflowStep>()
             .HasQueryFilter(x => !x.IsDeleted && x.WorkflowRun.TenantId == _tenantId);
 
+        builder.Entity<StoredFile>()
+            .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);
+
+        // Company memberships are read by user id across companies. Callers must filter to the authenticated user.
         // Outbox is cross-tenant for background workers; filter by Status, not TenantId.
+
+        FilterTenant<Department>(builder);
+        FilterTenant<CompanyTeam>(builder);
+        FilterTenant<AttendanceRecord>(builder);
+        FilterTenant<LeaveType>(builder);
+        FilterTenant<LeaveBalance>(builder);
+        FilterTenant<LeaveRequest>(builder);
+        FilterTenant<Announcement>(builder);
+        FilterTenant<AnnouncementRead>(builder);
+        FilterTenant<PerformanceGoal>(builder);
+        FilterTenant<PerformanceReview>(builder);
+        FilterTenant<PipelineStage>(builder);
+        FilterTenant<Lead>(builder);
+        FilterTenant<Deal>(builder);
+        FilterTenant<StageTransition>(builder);
+        FilterTenant<FollowUp>(builder);
+        FilterTenant<CustomerSegment>(builder);
+        FilterTenant<CustomerInteraction>(builder);
+        FilterTenant<Warehouse>(builder);
+        FilterTenant<WarehouseStock>(builder);
+        FilterTenant<StockTransfer>(builder);
+        FilterTenant<StockTransferLine>(builder);
+        FilterTenant<OrderFulfillment>(builder);
+        FilterTenant<FulfillmentLine>(builder);
+        FilterTenant<SalesReturn>(builder);
+        FilterTenant<SalesReturnLine>(builder);
+        FilterTenant<IncomeRecord>(builder);
+        FilterTenant<PurchaseInvoice>(builder);
+        FilterTenant<TaxRate>(builder);
+        FilterTenant<OperationalSubscription>(builder);
+        FilterTenant<PriceHistory>(builder);
+        FilterTenant<ProjectMilestone>(builder);
+        FilterTenant<ProjectMember>(builder);
+        FilterTenant<TimeEntry>(builder);
+        FilterTenant<WorkTaskComment>(builder);
+        FilterTenant<Sprint>(builder);
+        FilterTenant<ProjectFile>(builder);
+        FilterTenant<ClientPortalAccess>(builder);
+        FilterTenant<NalvaCompanyAgent>(builder);
+        FilterTenant<NalvaAgentRevision>(builder);
+        FilterTenant<NalvaTask>(builder);
+        FilterTenant<NalvaExecution>(builder);
+        FilterTenant<NalvaApproval>(builder);
+        FilterTenant<NalvaMemoryRecord>(builder);
+        FilterTenant<NalvaKnowledgeSource>(builder);
+        FilterTenant<NalvaWorkflowDefinition>(builder);
+        FilterTenant<NalvaWorkflowRun>(builder);
+        FilterTenant<NalvaCompanySettings>(builder);
+        FilterTenant<NalvaWorkItem>(builder);
+        FilterTenant<NalvaBusinessEvent>(builder);
+        FilterTenant<CompanyIntegrationConnection>(builder);
+        FilterTenant<IntegrationOAuthState>(builder);
+        FilterTenant<IntegrationActivityLog>(builder);
+        FilterTenant<CompanyFeatureOverride>(builder);
+        FilterTenant<UsageAlert>(builder);
+        FilterTenant<CompanyStorefront>(builder);
+        FilterTenant<StorefrontSlugRedirect>(builder);
+        FilterTenant<StorefrontOffering>(builder);
+        FilterTenant<StorefrontPackage>(builder);
+        FilterTenant<StorefrontPortfolioItem>(builder);
+        FilterTenant<StorefrontReview>(builder);
+        FilterTenant<StorefrontInquiry>(builder);
+        FilterTenant<DashboardPreference>(builder);
+        FilterTenant<SupplierPortalAccess>(builder);
+        FilterTenant<AgencyWorkspace>(builder);
+        FilterTenant<LaunchFeedback>(builder);
+        FilterTenant<ProductUsageEvent>(builder);
+        FilterTenant<CompanyDataRequest>(builder);
+    }
+
+    private void FilterTenant<TEntity>(ModelBuilder builder)
+        where TEntity : AuditableEntity
+    {
+        builder.Entity<TEntity>().HasQueryFilter(x =>
+            EF.Property<Guid>(x, "TenantId") == _tenantId && !x.IsDeleted);
     }
 }

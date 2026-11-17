@@ -15,6 +15,7 @@ public class OrderItemConfiguration : IEntityTypeConfiguration<OrderItem>
         builder.Property(x => x.Quantity).AsMoney();
         builder.Property(x => x.UnitPrice).AsMoney();
         builder.Property(x => x.Total).AsMoney();
+        builder.Property(x => x.UnitCost).AsMoney();
 
         builder.HasOne(x => x.Order)
             .WithMany(o => o.OrderItems)

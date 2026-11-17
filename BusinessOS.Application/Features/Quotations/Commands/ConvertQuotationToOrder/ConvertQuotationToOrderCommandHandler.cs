@@ -89,6 +89,7 @@ public sealed class ConvertQuotationToOrderCommandHandler
                 ProductId = item.ProductId,
                 Quantity = item.Quantity,
                 UnitPrice = item.UnitPrice,
+                UnitCost = products[item.ProductId].CostPrice,
                 Total = lineTotal
             });
         }
@@ -115,6 +116,7 @@ public sealed class ConvertQuotationToOrderCommandHandler
             OrderNumber = await _orderNumberGenerator.GenerateNextAsync(cancellationToken),
             OrderDate = DateTime.UtcNow,
             Status = OrderStatusNames.Pending,
+            QuotationId = quotation.Id,
             TotalAmount = Math.Round(subTotal, 2, MidpointRounding.AwayFromZero),
             Discount = discount,
             Tax = tax,

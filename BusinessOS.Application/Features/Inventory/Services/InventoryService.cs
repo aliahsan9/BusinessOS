@@ -150,8 +150,18 @@ public sealed class InventoryService : IInventoryService
         IReadOnlyDictionary<Guid, decimal> productQuantities,
         CancellationToken cancellationToken = default)
     {
+        var productIds = productQuantities.Keys.ToList();
+        var serviceIds = await _context.Products.AsNoTracking()
+            .Where(product => productIds.Contains(product.Id) && product.Kind == ProductKinds.Service)
+            .Select(product => product.Id)
+            .ToListAsync(cancellationToken);
+        var services = serviceIds.ToHashSet();
+
         foreach (var (productId, quantity) in productQuantities)
         {
+            if (services.Contains(productId))
+                continue;
+
             var inventory = await _inventoryRepository.GetByProductIdAsync(productId, cancellationToken);
 
             if (inventory is null)
@@ -287,6 +297,13 @@ public sealed class InventoryService : IInventoryService
         if (quantityChange == 0)
             throw new BadRequestException("Quantity must be positive.");
 
+        var kind = await _context.Products.AsNoTracking()
+            .Where(product => product.Id == productId)
+            .Select(product => product.Kind)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (string.Equals(kind, ProductKinds.Service, StringComparison.OrdinalIgnoreCase))
+            return;
+
         var ownsTransaction = !_context.HasActiveTransaction;
         var transaction = ownsTransaction
             ? await _context.BeginTransactionAsync(cancellationToken)
@@ -323,6 +340,8 @@ public sealed class InventoryService : IInventoryService
                 Notes = notes,
                 UserId = _currentUserService.UserId
             });
+
+            await MirrorWarehouseAsync(productId, quantityChange, result.NewStock, cancellationToken);
 
             try
             {
@@ -375,6 +394,75 @@ public sealed class InventoryService : IInventoryService
             if (transaction is not null)
                 await transaction.DisposeAsync();
         }
+    }
+
+    private async Task MirrorWarehouseAsync(
+        Guid productId,
+        decimal quantityChange,
+        decimal companyNewStock,
+        CancellationToken cancellationToken)
+    {
+        var stocks = await _context.WarehouseStocks
+            .Where(stock => stock.ProductId == productId)
+            .ToListAsync(cancellationToken);
+
+        if (stocks.Count == 0)
+        {
+            var warehouse = await _context.Warehouses.FirstOrDefaultAsync(item => item.IsDefault, cancellationToken);
+            if (warehouse is null)
+            {
+                warehouse = new Warehouse
+                {
+                    Name = "Main",
+                    Code = "MAIN",
+                    IsDefault = true,
+                    IsActive = true
+                };
+                _context.Warehouses.Add(warehouse);
+            }
+
+            _context.WarehouseStocks.Add(new WarehouseStock
+            {
+                WarehouseId = warehouse.Id,
+                ProductId = productId,
+                OnHand = companyNewStock,
+                Reserved = 0
+            });
+            return;
+        }
+
+        if (quantityChange >= 0)
+        {
+            var defaultWarehouseId = await _context.Warehouses.AsNoTracking()
+                .Where(warehouse => warehouse.IsDefault)
+                .Select(warehouse => (Guid?)warehouse.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+            var target = stocks.FirstOrDefault(stock => stock.WarehouseId == defaultWarehouseId) ?? stocks[0];
+            target.OnHand += quantityChange;
+            return;
+        }
+
+        var remaining = -quantityChange;
+        var ordered = stocks.OrderByDescending(stock => stock.OnHand).ToList();
+        foreach (var stock in ordered)
+        {
+            if (remaining <= 0)
+                break;
+            var take = Math.Min(stock.OnHand, remaining);
+            stock.OnHand -= take;
+            remaining -= take;
+        }
+
+        if (remaining <= 0)
+            return;
+
+        var allowNegative = await _context.TenantSettings.AsNoTracking()
+            .Select(settings => (bool?)settings.AllowNegativeStock)
+            .FirstOrDefaultAsync(cancellationToken) == true;
+        if (!allowNegative)
+            throw new BadRequestException("Warehouse stock cannot go negative for this company.");
+
+        ordered[0].OnHand -= remaining;
     }
 
     private static IReadOnlyList<(Guid ProductId, decimal Quantity)> AggregateQuantities(IEnumerable<OrderItem> items) =>

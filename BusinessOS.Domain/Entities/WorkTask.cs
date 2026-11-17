@@ -13,6 +13,11 @@ public class WorkTask : AuditableEntity
     public string? AssignedUserId { get; set; }
     public int Priority { get; set; } = 1;
     public DateTime? DueDate { get; set; }
+    public Guid? ParentTaskId { get; set; }
+    public string TaskKind { get; set; } = "Task";
+    public string? Stage { get; set; }
+    public Guid? SprintId { get; set; }
+    public bool IsClientVisible { get; set; }
 
     public Project Project { get; set; } = default!;
 }

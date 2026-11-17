@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using BusinessOS.Application.Features.AI.DTOs;
+using BusinessOS.Application.Features.Platform;
 using BusinessOS.Application.Features.AI.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -16,16 +17,22 @@ public sealed partial class OpenAiChatClient : ILlmChatClient
     private readonly HttpClient _httpClient;
     private readonly AiOptions _options;
     private readonly ILogger<OpenAiChatClient> _logger;
+    private readonly IPlatformAiOverride? _overrides;
 
     public OpenAiChatClient(
         HttpClient httpClient,
         IOptions<AiOptions> options,
-        ILogger<OpenAiChatClient> logger)
+        ILogger<OpenAiChatClient> logger,
+        IPlatformAiOverride? overrides = null)
     {
         _httpClient = httpClient;
         _options = options.Value;
         _logger = logger;
+        _overrides = overrides;
     }
+
+    private async Task<string> ResolveChatModelAsync(CancellationToken cancellationToken) =>
+        _overrides is null ? _options.OpenAiModel : await _overrides.ChatModelAsync(_options.OpenAiModel, cancellationToken);
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_options.OpenAiApiKey);
 
@@ -47,11 +54,12 @@ public sealed partial class OpenAiChatClient : ILlmChatClient
         LastFailure = null;
         try
         {
+            var model = await ResolveChatModelAsync(cancellationToken);
             using var request = new HttpRequestMessage(HttpMethod.Post, "v1/chat/completions");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.OpenAiApiKey);
             request.Content = JsonContent.Create(new
             {
-                model = _options.OpenAiModel,
+                model,
                 temperature = 0.3,
                 messages = LlmHistoryFormatter.ToOpenAiMessages(systemPrompt, conversationHistory, userPrompt)
             });
@@ -94,11 +102,12 @@ public sealed partial class OpenAiChatClient : ILlmChatClient
             yield break;
 
         LastFailure = null;
+        var model = await ResolveChatModelAsync(cancellationToken);
         using var request = new HttpRequestMessage(HttpMethod.Post, "v1/chat/completions");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.OpenAiApiKey);
         request.Content = JsonContent.Create(new
         {
-            model = _options.OpenAiModel,
+            model,
             temperature = 0.3,
             stream = true,
             messages = LlmHistoryFormatter.ToOpenAiMessages(systemPrompt, conversationHistory, userPrompt)

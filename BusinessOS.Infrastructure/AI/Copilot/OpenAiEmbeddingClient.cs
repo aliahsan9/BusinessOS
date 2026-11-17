@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
+using BusinessOS.Application.Features.Platform;
 using BusinessOS.Infrastructure.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -12,15 +13,18 @@ public sealed class OpenAiEmbeddingClient
     private readonly HttpClient _httpClient;
     private readonly AiOptions _options;
     private readonly ILogger<OpenAiEmbeddingClient> _logger;
+    private readonly IPlatformAiOverride? _overrides;
 
     public OpenAiEmbeddingClient(
         HttpClient httpClient,
         IOptions<AiOptions> options,
-        ILogger<OpenAiEmbeddingClient> logger)
+        ILogger<OpenAiEmbeddingClient> logger,
+        IPlatformAiOverride? overrides = null)
     {
         _httpClient = httpClient;
         _options = options.Value;
         _logger = logger;
+        _overrides = overrides;
     }
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_options.OpenAiApiKey);
@@ -35,11 +39,14 @@ public sealed class OpenAiEmbeddingClient
 
         try
         {
+            var model = _overrides is null
+                ? _options.OpenAiEmbeddingModel
+                : await _overrides.EmbeddingModelAsync(_options.OpenAiEmbeddingModel, cancellationToken);
             using var request = new HttpRequestMessage(HttpMethod.Post, "v1/embeddings");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.OpenAiApiKey);
             request.Content = JsonContent.Create(new
             {
-                model = _options.OpenAiEmbeddingModel,
+                model,
                 input = text.Length > 8000 ? text[..8000] : text
             });
 

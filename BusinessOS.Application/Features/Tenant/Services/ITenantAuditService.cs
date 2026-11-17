@@ -9,5 +9,6 @@ public interface ITenantAuditService
         string? oldValue = null,
         string? newValue = null,
         string? actorUserId = null,
+        string? ipAddress = null,
         CancellationToken cancellationToken = default);
 }

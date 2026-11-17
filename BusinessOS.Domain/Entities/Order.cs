@@ -16,6 +16,10 @@ public class Order : AuditableEntity
     public decimal Discount { get; set; }
     public decimal Tax { get; set; }
     public decimal GrandTotal { get; set; }
+    public string PaymentStatus { get; set; } = "Unpaid";
+    public string? ShippingAddress { get; set; }
+    public Guid? QuotationId { get; set; }
+    public Guid? DealId { get; set; }
 
     public byte[] RowVersion { get; set; } = default!;
 

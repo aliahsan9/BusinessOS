@@ -84,7 +84,60 @@ public static class SubscriptionCatalogMigrator
 
         await SeedUsdPricesAsync(context, cancellationToken);
         await SeedProvidersAsync(context, logger, cancellationToken);
+        await SeedCommercialDefaultsAsync(context, logger, cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
+    }
+
+    private static async Task SeedCommercialDefaultsAsync(
+        BusinessOSDbContext context,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        const string marker = "commercial-quotas-v1";
+        var seeded = await context.PlatformSettings.AnyAsync(x => x.Key == marker, cancellationToken);
+        if (!seeded)
+        {
+            var plans = await context.SubscriptionPlans.ToListAsync(cancellationToken);
+            foreach (var plan in plans)
+            {
+                var quotas = CommercialFeatureCatalog.Quotas(plan.Slug);
+                if (plan.Slug is "free" or "starter" or "professional" or "enterprise")
+                {
+                    plan.MaxAgentExecutions = quotas.AgentExecutions;
+                    plan.MaxAutomationRuns = quotas.AutomationRuns;
+                    plan.GracePeriodDays = quotas.GraceDays;
+                }
+            }
+
+            context.PlatformSettings.Add(new PlatformSetting
+            {
+                Key = marker,
+                Value = "seeded",
+                UpdatedAt = DateTime.UtcNow
+            });
+            logger.LogInformation("Seeded commercial quotas for the public plans.");
+        }
+
+        if (!await context.AiModelPrices.AnyAsync(cancellationToken))
+        {
+            foreach (var price in Application.Features.Nalva.NalvaModelCatalog.Prices)
+            {
+                context.AiModelPrices.Add(new AiModelPrice
+                {
+                    Provider = "OpenAI",
+                    Model = price.Model,
+                    UsageCategory = price.Kind,
+                    InputUsdPerMillion = price.InputUsdPerMillion,
+                    OutputUsdPerMillion = price.OutputUsdPerMillion,
+                    PricingVersion = Application.Features.Nalva.NalvaLimits.PricingVersion,
+                    EffectiveFrom = DateTime.UtcNow,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            logger.LogInformation("Seeded configurable AI model prices from the default catalog.");
+        }
     }
 
     private static async Task SeedUsdPricesAsync(BusinessOSDbContext context, CancellationToken cancellationToken)

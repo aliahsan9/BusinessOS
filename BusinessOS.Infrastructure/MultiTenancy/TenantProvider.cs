@@ -24,6 +24,12 @@ public class TenantProvider : ITenantProvider
         AmbientTenantId.Value = tenantId;
     }
 
+    public void Clear()
+    {
+        _tenantId = null;
+        AmbientTenantId.Value = null;
+    }
+
     public bool HasTenant()
     {
         return _tenantId.HasValue || AmbientTenantId.Value.HasValue;

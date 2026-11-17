@@ -24,8 +24,12 @@ public class TenantConfiguration : IEntityTypeConfiguration<Tenant>
         builder.Property(x => x.Address).HasMaxLength(500).IsRequired();
         builder.Property(x => x.Website).HasMaxLength(500);
         builder.Property(x => x.Description).HasMaxLength(2000);
+        builder.Property(x => x.SocialLinks).HasMaxLength(2000);
         builder.Property(x => x.SubscriptionPlan).HasMaxLength(50).IsRequired();
         builder.Property(x => x.OwnerUserId).HasMaxLength(450).IsRequired();
+        builder.Property(x => x.Country).HasMaxLength(100).IsRequired();
+        builder.Property(x => x.RegistrationNumber).HasMaxLength(100);
+        builder.Property(x => x.EnabledModulesJson).HasMaxLength(2000);
 
         builder.HasIndex(x => x.Slug).IsUnique();
         builder.HasIndex(x => x.Domain).IsUnique().HasFilter("[Domain] IS NOT NULL");

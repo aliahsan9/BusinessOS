@@ -19,6 +19,7 @@ public class Expense : AuditableEntity
     public string Status { get; set; } = "Pending";
     public bool IsRecurring { get; set; }
     public string? RecurrencePattern { get; set; }
+    public Guid? PurchaseInvoiceId { get; set; }
 
     public ExpenseCategory ExpenseCategory { get; set; } = default!;
 }

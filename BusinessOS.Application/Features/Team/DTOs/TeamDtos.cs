@@ -67,7 +67,10 @@ public record InviteTeamMemberRequest(
     string Email,
     Guid RoleId,
     string? FirstName = null,
-    string? LastName = null);
+    string? LastName = null,
+    Guid? DepartmentId = null,
+    Guid? CompanyTeamId = null,
+    string? JobTitle = null);
 
 public record UpdateTeamMemberRequest(
     string FirstName,

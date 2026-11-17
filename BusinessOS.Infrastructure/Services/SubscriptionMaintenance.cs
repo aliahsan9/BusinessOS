@@ -39,7 +39,34 @@ public static class SubscriptionMaintenance
         foreach (var subscription in cancellations)
             await MoveToFreeAsync(db, subscription, free, "CancellationApplied", SubscriptionStatus.Cancelled, utcNow, cancellationToken);
 
-        if (trials.Count > 0 || cancellations.Count > 0)
+        var pastDue = await db.TenantSubscriptions.IgnoreQueryFilters()
+            .Include(x => x.Plan)
+            .Where(x => !x.IsDeleted && x.Status == SubscriptionStatus.PastDue)
+            .ToListAsync(cancellationToken);
+        foreach (var subscription in pastDue)
+        {
+            var days = Math.Max(0, subscription.Plan?.GracePeriodDays ?? 0);
+            subscription.GraceEndsAt ??= utcNow.AddDays(days);
+            if (subscription.GraceEndsAt > utcNow)
+                continue;
+
+            var from = SubscriptionStatusNames.ToApi(subscription.Status);
+            subscription.Status = SubscriptionStatus.Expired;
+            subscription.AutoRenewEnabled = false;
+            subscription.UpdatedAt = utcNow;
+            db.SubscriptionHistories.Add(new SubscriptionHistory
+            {
+                TenantId = subscription.TenantId,
+                SubscriptionPlanId = subscription.SubscriptionPlanId,
+                Action = "GraceExpired",
+                FromStatus = from,
+                ToStatus = SubscriptionStatusNames.Expired,
+                Notes = "Payment grace ended. Company data was not deleted. Paid features are paused until the subscription is reactivated.",
+                CreatedAt = utcNow
+            });
+        }
+
+        if (trials.Count > 0 || cancellations.Count > 0 || pastDue.Count > 0)
             await db.SaveChangesAsync(cancellationToken);
     }
 

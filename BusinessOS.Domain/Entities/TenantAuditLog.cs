@@ -10,6 +10,7 @@ public class TenantAuditLog : BaseEntity
     public string? EntityType { get; set; }
     public string? OldValue { get; set; }
     public string? NewValue { get; set; }
+    public string? IpAddress { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public Tenant Tenant { get; set; } = default!;

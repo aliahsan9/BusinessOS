@@ -16,6 +16,11 @@ public class TenantDto
     public string Email { get; set; } = default!;
     public string? Website { get; set; }
     public string? Description { get; set; }
+    public string? Phone { get; set; }
+    public string? Address { get; set; }
+    public string Country { get; set; } = string.Empty;
+    public string? RegistrationNumber { get; set; }
+    public string? EnabledModulesJson { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }
@@ -33,6 +38,9 @@ public class TenantSettingsDto
     public string Address { get; set; } = default!;
     public string? Website { get; set; }
     public string? Description { get; set; }
+    public string Country { get; set; } = string.Empty;
+    public string? RegistrationNumber { get; set; }
+    public string? EnabledModulesJson { get; set; }
     public string? Theme { get; set; }
 }
 
@@ -68,7 +76,11 @@ public record UpdateTenantRequest(
     string BusinessType,
     string Email,
     string? Website,
-    string? Description);
+    string? Description,
+    string? Phone = null,
+    string? Address = null,
+    string? Country = null,
+    string? RegistrationNumber = null);
 
 public record UpdateTenantSettingsRequest(
     string Name,
@@ -80,7 +92,9 @@ public record UpdateTenantSettingsRequest(
     string Phone,
     string Address,
     string? Website,
-    string? Description);
+    string? Description,
+    string? Country = null,
+    string? RegistrationNumber = null);
 
 public record RegisterBusinessRequest(
     string BusinessName,

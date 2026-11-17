@@ -26,6 +26,7 @@ public sealed class TenantAuditService : ITenantAuditService
         string? oldValue = null,
         string? newValue = null,
         string? actorUserId = null,
+        string? ipAddress = null,
         CancellationToken cancellationToken = default)
     {
         await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
@@ -38,6 +39,7 @@ public sealed class TenantAuditService : ITenantAuditService
             EntityType = entityType,
             OldValue = oldValue,
             NewValue = newValue,
+            IpAddress = ipAddress,
             CreatedAt = DateTime.UtcNow
         });
 

@@ -10,6 +10,7 @@ public static class RoleNames
     public const string Viewer = "Viewer";
     public const string Sales = "Sales";
     public const string InventoryManager = "InventoryManager";
+    public const string Agent = "Agent";
 
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
@@ -20,7 +21,8 @@ public static class RoleNames
         Accountant,
         Viewer,
         Sales,
-        InventoryManager
+        InventoryManager,
+        Agent
     };
 
     public static readonly IReadOnlySet<string> Protected = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -32,6 +34,7 @@ public static class RoleNames
         Accountant,
         Viewer,
         Sales,
-        InventoryManager
+        InventoryManager,
+        Agent
     };
 }

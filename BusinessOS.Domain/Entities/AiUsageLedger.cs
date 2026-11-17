@@ -13,6 +13,11 @@ public class AiUsageLedger : AuditableEntity
     public int OutputTokens { get; set; }
     public int TotalTokens { get; set; }
     public decimal EstimatedProviderCostUsd { get; set; }
+    public decimal? ActualProviderChargeUsd { get; set; }
+    public string? Model { get; set; }
+    public string? AgentKey { get; set; }
+    public string? UserId { get; set; }
+    public string UsageCategory { get; set; } = "chat";
     public bool ProviderFailed { get; set; }
     public DateTime PeriodStart { get; set; }
 

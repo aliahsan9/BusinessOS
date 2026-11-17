@@ -15,6 +15,9 @@ public sealed class ContractedEntitlement
     public int MaxTasks { get; set; }
     public long MaxStorageMb { get; set; }
     public int MaxAiRequests { get; set; }
+    public int? MaxAgentExecutions { get; set; }
+    public int? MaxAutomationRuns { get; set; }
+    public int? GracePeriodDays { get; set; }
     public bool HasAiAssistant { get; set; }
     public bool HasAdvancedAnalytics { get; set; }
     public bool HasPdfReports { get; set; }

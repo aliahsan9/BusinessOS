@@ -345,7 +345,25 @@ public sealed partial class BillingService
             .FirstOrDefaultAsync(x => x.Id == invoiceId && x.TenantId == tenantId, cancellationToken)
             ?? throw new NotFoundException("Invoice not found.");
 
-        return BillingInvoicePdf.Render(invoice);
+        return BillingInvoicePdf.Render(invoice, asReceipt: false);
+    }
+
+    public async Task<byte[]> DownloadReceiptAsync(Guid invoiceId, CancellationToken cancellationToken = default)
+    {
+        var tenantId = RequireTenantId();
+        var invoice = await _context.BillingInvoices
+            .FirstOrDefaultAsync(x => x.Id == invoiceId && x.TenantId == tenantId, cancellationToken)
+            ?? throw new NotFoundException("Invoice not found.");
+        if (invoice.Status != BillingInvoiceStatus.Paid)
+            throw new BadRequestException("A receipt is available after the invoice is paid.");
+
+        if (string.IsNullOrWhiteSpace(invoice.ReceiptNumber))
+        {
+            invoice.MarkIssued(invoice.PaidAt ?? DateTime.UtcNow, invoice.BillToName, paid: true);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        return BillingInvoicePdf.Render(invoice, asReceipt: true);
     }
 
     public async Task<CurrentPlanDto> SetEnterpriseContractAsync(
@@ -575,7 +593,7 @@ public sealed partial class BillingService
     {
         var now = DateTime.UtcNow;
         var rounded = CurrencyMath.Round(amount, currency);
-        _context.BillingInvoices.Add(new BillingInvoice
+        var invoice = new BillingInvoice
         {
             TenantId = tenantId,
             InvoiceNumber = $"INV-{now:yyyyMMdd}-{Guid.NewGuid().ToString()[..8].ToUpperInvariant()}",
@@ -585,15 +603,16 @@ public sealed partial class BillingService
             TaxAmount = 0,
             TotalAmount = rounded,
             Currency = currency,
-            Status = BillingInvoiceStatus.Paid,
             BillingInterval = interval,
             PaymentProvider = provider,
             PeriodStart = now,
             PeriodEnd = interval == BillingInterval.Yearly ? now.AddYears(1) : now.AddMonths(1),
-            PaidAt = now,
             CreatedAt = now
-        });
-        await Task.CompletedTask;
+        };
+        var billedTenant = await _context.Tenants.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == tenantId, cancellationToken);
+        invoice.MarkIssued(now, billedTenant?.Name, paid: true);
+        _context.BillingInvoices.Add(invoice);
     }
 
     private void AddHistory(
