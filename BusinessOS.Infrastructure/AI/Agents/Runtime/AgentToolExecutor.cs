@@ -289,6 +289,25 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
         var args = await _args.ExtractAsync(
             request.ToolName, schema, request.Message, request.State, request.Page, request.Language, cancellationToken);
 
+        // This fallback is intentionally read-only (search-then-retry). Keep the same
+        // safety boundary here so future callers cannot use it to bypass confirmation.
+        if (AiToolSafetyGate.IsMutating(request.ToolName)
+            || AiToolSafetyGate.TryBlock(request.ToolName, request.Message, args, out var blocked))
+        {
+            return new AgentToolExecutionResult
+            {
+                State = request.State,
+                ToolResult = new AiToolResult
+                {
+                    ToolName = request.ToolName.ToString(),
+                    Success = false,
+                    Summary = AiToolSafetyGate.IsMutating(request.ToolName)
+                        ? "This change requires the normal confirmation flow. I did not change any records."
+                        : blocked
+                }
+            };
+        }
+
         var execContext = new AiCopilotExecutionContext
         {
             Request = new AiChatRequest(request.Message, request.Page.Module, null,
