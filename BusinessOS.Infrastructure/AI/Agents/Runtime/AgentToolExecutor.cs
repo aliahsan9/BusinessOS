@@ -40,6 +40,30 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
         CancellationToken cancellationToken = default)
     {
         var sw = Stopwatch.StartNew();
+        if (!IsAllowedByAgentPolicy(request, request.ToolName))
+        {
+            const string denial = "This AI employee is not allowed to use the requested tool. Ask an Owner or Admin to update its permissions.";
+            return new AgentToolExecutionResult
+            {
+                PermissionDenied = true,
+                DenialReason = denial,
+                DurationMs = sw.ElapsedMilliseconds,
+                State = request.State,
+                ToolResult = new AiToolResult
+                {
+                    ToolName = request.ToolName.ToString(),
+                    Success = false,
+                    Summary = denial
+                },
+                Correction = new AgentSelfCorrectionResult
+                {
+                    FailureKind = AgentFailureKind.PermissionDenied,
+                    NeedsClarification = true,
+                    ClarificationMessage = denial
+                }
+            };
+        }
+
         var permission = _permissions.ValidateTool(request.ToolName);
         if (!permission.Allowed)
         {
@@ -187,9 +211,12 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
                 SessionId = request.SessionId,
                 State = request.State,
                 WorkflowId = request.WorkflowId,
-                StepKey = request.StepKey
+                StepKey = request.StepKey,
+                AllowedTools = request.AllowedTools
             };
             var searchResult = await ExecuteOnceAsync(searchReq, cancellationToken);
+            if (searchResult.PermissionDenied)
+                return searchResult;
             ApplyStateFromResult(request.State, searchResult.ToolResult);
 
             if (searchResult.ToolResult.Success)
@@ -245,8 +272,24 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
         AgentToolExecutionRequest request,
         CancellationToken cancellationToken)
     {
-        // Retry/search fallback is a separate execution path, so it must repeat the
-        // authorization check instead of inheriting permission from the original tool.
+        // Retry/search fallback repeats both the agent policy and user authorization checks.
+        if (!IsAllowedByAgentPolicy(request, request.ToolName))
+        {
+            const string denial = "This AI employee is not allowed to use the requested tool.";
+            return new AgentToolExecutionResult
+            {
+                PermissionDenied = true,
+                DenialReason = denial,
+                State = request.State,
+                ToolResult = new AiToolResult
+                {
+                    ToolName = request.ToolName.ToString(),
+                    Success = false,
+                    Summary = denial
+                }
+            };
+        }
+
         var permission = _permissions.ValidateTool(request.ToolName);
         if (!permission.Allowed)
         {
@@ -301,6 +344,10 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
         var (result, _) = await RunToolAsync(tool, execContext, args, cancellationToken);
         return new AgentToolExecutionResult { ToolResult = result, State = request.State };
     }
+
+    private static bool IsAllowedByAgentPolicy(AgentToolExecutionRequest request, AiToolName tool) =>
+        request.AllowedTools is null
+        || request.AllowedTools.Contains(tool.ToString(), StringComparer.Ordinal);
 
     private static async Task<(AiToolResult Result, Exception? Error)> RunToolAsync(
         IAiTool tool,

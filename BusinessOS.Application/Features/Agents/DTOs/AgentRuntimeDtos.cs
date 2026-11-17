@@ -67,6 +67,8 @@ public sealed class AgentToolExecutionRequest
     public string? StepKey { get; init; }
     public string? StepTitle { get; init; }
     public Guid? WorkflowId { get; init; }
+    /// <summary>Null preserves legacy catalog behavior; an empty list denies every tool.</summary>
+    public IReadOnlyList<string>? AllowedTools { get; init; }
 }
 
 public sealed class AgentToolExecutionResult

@@ -16,6 +16,14 @@ public sealed class AgentEmployeeDto
     public bool IsDefault { get; init; }
     public bool IsActive { get; init; } = true;
     public string? AvatarHint { get; init; }
+    public IReadOnlyList<string>? AllowedTools { get; init; }
+}
+
+/// <summary>Public catalog entry for a registered AI employee tool.</summary>
+public sealed class AgentToolCatalogItemDto
+{
+    public string Name { get; init; } = default!;
+    public string Description { get; init; } = default!;
 }
 
 public sealed class SetAgentActivationRequest
@@ -24,6 +32,11 @@ public sealed class SetAgentActivationRequest
 }
 
 /// <summary>Tenant-editable metadata. System prompts, keys, activation and permissions are not client-editable.</summary>
+public sealed class UpdateAgentToolPermissionsRequest
+{
+    public IReadOnlyList<string> AllowedTools { get; init; } = [];
+}
+
 public sealed class UpdateAgentConfigurationRequest
 {
     public string DisplayName { get; init; } = string.Empty;
@@ -41,6 +54,7 @@ public sealed class AgentPersonaDto
     public string SystemPersonaPrompt { get; init; } = default!;
     public string DefaultLanguage { get; init; } = "en";
     public bool IsDefault { get; init; }
+    public IReadOnlyList<string>? AllowedTools { get; init; }
 }
 
 // ── Chat with agent ───────────────────────────────────────────────────────────

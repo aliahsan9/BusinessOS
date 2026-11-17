@@ -2,6 +2,7 @@ using System.Text.Json;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Agents.DTOs;
 using BusinessOS.Application.Features.Agents.Services;
+using BusinessOS.Application.Features.AI.Services;
 using BusinessOS.Infrastructure.AI;
 using Microsoft.AspNetCore.Mvc;
 
@@ -36,6 +37,10 @@ public static class AgentEndpoints
             .WithName("AgentListEmployees")
             .Produces<IReadOnlyList<AgentEmployeeDto>>(StatusCodes.Status200OK);
 
+        group.MapGet("/tools", ListTools)
+            .WithName("AgentListTools")
+            .Produces<IReadOnlyList<AgentToolCatalogItemDto>>(StatusCodes.Status200OK);
+
         group.MapPut("/employees/{agentKey}/activation", SetEmployeeActivation)
             .WithName("AgentSetEmployeeActivation")
             .Produces<AgentEmployeeDto>(StatusCodes.Status200OK)
@@ -46,6 +51,13 @@ public static class AgentEndpoints
 
         group.MapPut("/employees/{agentKey}/configuration", UpdateEmployeeConfiguration)
             .WithName("AgentUpdateEmployeeConfiguration")
+            .Produces<AgentEmployeeDto>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound);
+
+        group.MapPut("/employees/{agentKey}/permissions", UpdateEmployeeToolPermissions)
+            .WithName("AgentUpdateEmployeeToolPermissions")
             .Produces<AgentEmployeeDto>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status403Forbidden)
@@ -129,6 +141,20 @@ public static class AgentEndpoints
         }
     }
 
+    private static IResult ListTools(IAiToolRegistry toolRegistry)
+    {
+        var tools = toolRegistry.AllTools
+            .OrderBy(tool => tool.ToolName.ToString(), StringComparer.Ordinal)
+            .Select(tool => new AgentToolCatalogItemDto
+            {
+                Name = tool.ToolName.ToString(),
+                Description = tool.Description
+            })
+            .ToArray();
+
+        return Results.Ok(tools);
+    }
+
     private static async Task<IResult> ListEmployees(
         IAgentEmployeeService agentService,
         CancellationToken cancellationToken)
@@ -194,6 +220,45 @@ public static class AgentEndpoints
         try
         {
             var employee = await personaService.UpdateEmployeeConfigurationAsync(
+                agentKey,
+                request,
+                cancellationToken);
+            return employee is null
+                ? Results.NotFound(new { error = "AI employee was not found in the system catalog." })
+                : Results.Ok(employee);
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new { error = ex.Message });
+        }
+    }
+
+    private static async Task<IResult> UpdateEmployeeToolPermissions(
+        string agentKey,
+        UpdateAgentToolPermissionsRequest request,
+        IAgentPersonaService personaService,
+        ICurrentUserService currentUser,
+        CancellationToken cancellationToken)
+    {
+        if (currentUser.TenantId is null || currentUser.TenantId == Guid.Empty)
+            return Results.Forbid();
+
+        var canManageAgents = currentUser.Roles.Any(role =>
+            string.Equals(role, "Owner", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase));
+        if (!canManageAgents)
+            return Results.Forbid();
+
+        if (string.IsNullOrWhiteSpace(agentKey))
+            return Results.BadRequest(new { error = "Agent key is required." });
+
+        try
+        {
+            var employee = await personaService.UpdateEmployeeToolPermissionsAsync(
                 agentKey,
                 request,
                 cancellationToken);

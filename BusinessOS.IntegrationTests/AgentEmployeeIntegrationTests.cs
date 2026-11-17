@@ -5,6 +5,9 @@ using System.Text.Json;
 using BusinessOS.Application.Features.Agents.DTOs;
 using BusinessOS.Application.Features.Auth.DTOs;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using BusinessOS.Infrastructure.Data;
 
 namespace BusinessOS.IntegrationTests;
 
@@ -227,6 +230,101 @@ public class AgentEmployeeIntegrationTests : IntegrationTestBase
                 Specialty = "Inventory management",
                 DefaultLanguage = "xx"
             });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task AgentTools_ReturnsRegisteredCatalogInStableOrder()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            "/api/v1/agents/tools",
+            auth);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var tools = await response.Content.ReadFromJsonAsync<List<AgentToolCatalogItemDto>>(JsonOptions);
+
+        tools.Should().NotBeNullOrEmpty();
+        tools!.Should().OnlyContain(tool =>
+            !string.IsNullOrWhiteSpace(tool.Name)
+            && !string.IsNullOrWhiteSpace(tool.Description));
+        tools.Select(tool => tool.Name).Should().BeInAscendingOrder(StringComparer.Ordinal);
+        tools.Should().Contain(tool => tool.Name == nameof(BusinessOS.Application.Features.AI.Enums.AiToolName.GetInventorySummary));
+    }
+
+    [Fact]
+    public async Task AgentTools_RequiresAuthentication()
+    {
+        var response = await Client.GetAsync("/api/v1/agents/tools");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task AgentToolPermissions_AreTenantScoped_AndRejectUnknownTools()
+    {
+        var tenantA = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var tenantB = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+
+        var update = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            "/api/v1/agents/employees/adam/permissions",
+            tenantA,
+            new UpdateAgentToolPermissionsRequest
+            {
+                AllowedTools = [nameof(BusinessOS.Application.Features.AI.Enums.AiToolName.GetInventorySummary)]
+            });
+
+        update.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updated = await update.Content.ReadFromJsonAsync<AgentEmployeeDto>(JsonOptions);
+        updated.Should().NotBeNull();
+        updated!.AllowedTools.Should().ContainSingle()
+            .Which.Should().Be(nameof(BusinessOS.Application.Features.AI.Enums.AiToolName.GetInventorySummary));
+
+        // Permission changes must be auditable and attributed to the owning tenant.
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<BusinessOSDbContext>();
+            var audit = await dbContext.RbacAuditLogs
+                .IgnoreQueryFilters()
+                .Where(log => log.TenantId == tenantA.TenantId
+                    && log.Action == "AgentEmployeeToolPermissionsUpdated")
+                .OrderByDescending(log => log.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            audit.Should().NotBeNull();
+            audit!.EntityType.Should().Be("AgentProfile");
+            audit.ActorUserId.Should().NotBeNullOrWhiteSpace();
+            audit.OldValue.Should().BeNull();
+            audit.NewValue.Should().Contain(nameof(BusinessOS.Application.Features.AI.Enums.AiToolName.GetInventorySummary));
+        }
+
+        var tenantAResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client, HttpMethod.Get, "/api/v1/agents/employees", tenantA);
+        var tenantAEmployees = await tenantAResponse.Content.ReadFromJsonAsync<List<AgentEmployeeDto>>(JsonOptions);
+        tenantAEmployees.Should().Contain(e =>
+            e.Key == "adam" && e.AllowedTools!.Contains(nameof(BusinessOS.Application.Features.AI.Enums.AiToolName.GetInventorySummary)));
+
+        var tenantBResponse = await IntegrationHttp.SendAuthorizedAsync(
+            Client, HttpMethod.Get, "/api/v1/agents/employees", tenantB);
+        var tenantBEmployees = await tenantBResponse.Content.ReadFromJsonAsync<List<AgentEmployeeDto>>(JsonOptions);
+        tenantBEmployees.Should().Contain(e => e.Key == "adam" && e.AllowedTools is null);
+    }
+
+    [Fact]
+    public async Task AgentToolPermissions_RejectsToolsOutsideTheRegisteredCatalog()
+    {
+        var auth = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Put,
+            "/api/v1/agents/employees/adam/permissions",
+            auth,
+            new UpdateAgentToolPermissionsRequest { AllowedTools = ["RunArbitraryCode"] });
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }

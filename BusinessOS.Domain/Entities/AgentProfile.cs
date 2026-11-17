@@ -46,6 +46,9 @@ public class AgentProfile : AuditableEntity
     /// </summary>
     public string DefaultLanguage { get; set; } = "en";
 
+    /// <summary>Tenant-defined tool allow-list. Null preserves legacy catalog behavior; [] denies all tools.</summary>
+    public string? AllowedToolsJson { get; set; }
+
     /// <summary>
     /// Indicates whether this profile is the default agent selection within its scope.
     /// </summary>

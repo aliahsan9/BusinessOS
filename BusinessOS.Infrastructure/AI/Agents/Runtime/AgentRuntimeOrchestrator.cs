@@ -103,6 +103,32 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         yield return Status("Planning…");
 
         var intent = _intentParser.Parse(request.Message, page, memory, language);
+
+        // With an explicit employee policy, never hand a no-tool conversational turn to
+        // the legacy Copilot pipeline, which has its own independent tool dispatcher.
+        if (persona.AllowedTools is not null
+            && intent.SuggestedTools.Count == 0
+            && intent.Intent is AiCopilotIntent.Conversational or AiCopilotIntent.Help)
+        {
+            var conversationalReply = AiNaturalReplyBuilder.BuildConversationalReply(request.Message, page);
+            var conversationalResponse = BuildResponse(
+                persona, agentKey, language, intent.Intent, sessionId, conversationalReply);
+            await _memory.CompleteTurnAsync(
+                sessionId,
+                chatRequest,
+                intent.Intent,
+                request.Message,
+                conversationalReply,
+                toolsUsed: [],
+                citations: null,
+                clientRequestId: request.ClientRequestId,
+                cancellationToken: cancellationToken,
+                preferredLanguage: language);
+            await foreach (var chunk in StreamText(conversationalReply, conversationalResponse, cancellationToken))
+                yield return chunk;
+            yield break;
+        }
+
         var storedPending = AgentActionClarifier.Read(memory.PendingActionJson);
         var abandonPending = false;
         var pending = storedPending;
@@ -184,7 +210,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         }
 
         // Conversational / help / dashboard / document search → existing copilot (preserves /api/ai parity).
-        if (!ShouldUseEmployeeRuntime(intent))
+        if (!ShouldUseEmployeeRuntime(intent) && persona.AllowedTools is null)
         {
             if (abandonPending)
                 await _memory.SetPendingActionAsync(sessionId, null, cancellationToken);
@@ -219,7 +245,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             yield break;
         }
 
-        if (_modelLoop.IsAvailable
+        if (persona.AllowedTools is null && _modelLoop.IsAvailable
             && intent.Intent is not (AiCopilotIntent.ActionCreate or AiCopilotIntent.Workflow or AiCopilotIntent.ReportGeneration or AiCopilotIntent.Onboarding)
             && !intent.SuggestedTools.Any(AiToolSafetyGate.IsMutating))
         {
@@ -475,7 +501,8 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
                     WorkflowId = workflow?.Id,
                     StepKey = stepKey,
                     StepTitle = title,
-                    PreextractedArgs = toolName == injectedTool ? injectedArgs : null
+                    PreextractedArgs = toolName == injectedTool ? injectedArgs : null,
+                    AllowedTools = persona.AllowedTools
                 }, cancellationToken);
             }
             catch (Exception ex)
@@ -725,7 +752,8 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
 
     private static bool ShouldUseEmployeeRuntime(AiIntentDetectionResult intent)
     {
-        if (intent.Intent is AiCopilotIntent.ActionCreate
+        if (intent.Intent is AiCopilotIntent.DocumentSearch
+            or AiCopilotIntent.ActionCreate
             or AiCopilotIntent.ActionRead
             or AiCopilotIntent.ReportGeneration
             or AiCopilotIntent.Workflow

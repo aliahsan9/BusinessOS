@@ -3,6 +3,9 @@ using BusinessOS.Application.Features.Agents.DTOs;
 using BusinessOS.Application.Features.Agents;
 using BusinessOS.Application.Features.Agents.Enums;
 using BusinessOS.Application.Features.Agents.Services;
+using BusinessOS.Application.Features.AI.Enums;
+using BusinessOS.Application.Features.AI.Services;
+using System.Text.Json;
 using BusinessOS.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -14,15 +17,21 @@ public sealed class AgentPersonaService : IAgentPersonaService
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUser;
     private readonly ILogger<AgentPersonaService> _logger;
+    private readonly IAiToolRegistry? _toolRegistry;
+    private readonly IRbacAuditService? _rbacAuditService;
 
     public AgentPersonaService(
         IApplicationDbContext context,
         ICurrentUserService currentUser,
-        ILogger<AgentPersonaService> logger)
+        ILogger<AgentPersonaService> logger,
+        IAiToolRegistry? toolRegistry = null,
+        IRbacAuditService? rbacAuditService = null)
     {
         _context = context;
         _currentUser = currentUser;
         _logger = logger;
+        _toolRegistry = toolRegistry;
+        _rbacAuditService = rbacAuditService;
     }
 
     public async Task<IReadOnlyList<AgentEmployeeDto>> ListEmployeesAsync(
@@ -76,6 +85,7 @@ public sealed class AgentPersonaService : IAgentPersonaService
                 RoleTitle = systemProfile.RoleTitle,
                 Specialty = systemProfile.Specialty,
                 SystemPersonaPrompt = systemProfile.SystemPersonaPrompt,
+                AllowedToolsJson = systemProfile.AllowedToolsJson,
                 DefaultLanguage = systemProfile.DefaultLanguage,
                 IsDefault = systemProfile.IsDefault,
                 IsActive = isActive
@@ -89,6 +99,96 @@ public sealed class AgentPersonaService : IAgentPersonaService
         }
 
         await _context.SaveChangesAsync(cancellationToken);
+        return ToEmployeeDto(tenantProfile);
+    }
+
+    public async Task<AgentEmployeeDto?> UpdateEmployeeToolPermissionsAsync(
+        string agentKey,
+        UpdateAgentToolPermissionsRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (_currentUser.TenantId is not Guid tenantId || tenantId == Guid.Empty)
+            throw new InvalidOperationException("A tenant context is required to configure AI employee permissions.");
+
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.AllowedTools is null || request.AllowedTools.Count > 100)
+            throw new ArgumentException("AllowedTools must contain no more than 100 registered tool names.");
+
+        var registered = _toolRegistry?.AllTools.Select(t => t.ToolName).ToHashSet()
+            ?? new HashSet<AiToolName>();
+        var normalized = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var name in request.AllowedTools)
+        {
+            if (!Enum.TryParse<AiToolName>(name, ignoreCase: false, out var tool)
+                || !Enum.IsDefined(tool)
+                || !registered.Contains(tool))
+            {
+                throw new ArgumentException($"Tool '{name}' is not registered and cannot be assigned.");
+            }
+            normalized.Add(tool.ToString());
+        }
+
+        var key = AgentKeys.Normalize(agentKey);
+        if (!AgentKeys.IsKnown(key))
+            return null;
+
+        await EnsureDefaultProfilesAsync(cancellationToken);
+        var systemProfile = await _context.AgentProfiles
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.TenantId == null && p.Key == key && !p.IsDeleted, cancellationToken);
+        if (systemProfile is null)
+            return null;
+
+        var tenantProfile = await _context.AgentProfiles
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.TenantId == tenantId && p.Key == key && !p.IsDeleted, cancellationToken);
+
+        var previousAllowedToolsJson = tenantProfile?.AllowedToolsJson;
+        var updatedAllowedTools = normalized.OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        var updatedAllowedToolsJson = JsonSerializer.Serialize(updatedAllowedTools);
+
+        if (tenantProfile is null)
+        {
+            tenantProfile = new AgentProfile
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                Key = systemProfile.Key,
+                DisplayName = systemProfile.DisplayName,
+                RoleTitle = systemProfile.RoleTitle,
+                Specialty = systemProfile.Specialty,
+                SystemPersonaPrompt = systemProfile.SystemPersonaPrompt,
+                DefaultLanguage = systemProfile.DefaultLanguage,
+                IsDefault = systemProfile.IsDefault,
+                IsActive = systemProfile.IsActive,
+                AllowedToolsJson = updatedAllowedToolsJson
+            };
+            _context.AgentProfiles.Add(tenantProfile);
+        }
+        else
+        {
+            tenantProfile.AllowedToolsJson = updatedAllowedToolsJson;
+            tenantProfile.UpdatedAt = DateTime.UtcNow;
+        }
+
+        if (_rbacAuditService is not null)
+        {
+            await _rbacAuditService.LogAsync(
+                action: "AgentEmployeeToolPermissionsUpdated",
+                entityType: "AgentProfile",
+                entityId: tenantProfile.Id.ToString(),
+                oldValue: previousAllowedToolsJson,
+                newValue: updatedAllowedToolsJson,
+                cancellationToken: cancellationToken);
+        }
+        else
+        {
+            // Preserve compatibility for isolated unit tests that construct this service
+            // without the optional audit dependency. Production DI registers IRbacAuditService.
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
         return ToEmployeeDto(tenantProfile);
     }
 
@@ -399,6 +499,22 @@ public sealed class AgentPersonaService : IAgentPersonaService
         }
     ];
 
+    private static IReadOnlyList<string>? ReadAllowedTools(string? json)
+    {
+        if (json is null)
+            return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<string[]>(json) ?? [];
+        }
+        catch (JsonException)
+        {
+            // A corrupt policy must fail closed at runtime; [] means no tools.
+            return [];
+        }
+    }
+
     private static AgentEmployeeDto ToEmployeeDto(AgentProfile p) => new()
     {
         Key = p.Key,
@@ -407,7 +523,8 @@ public sealed class AgentPersonaService : IAgentPersonaService
         Specialty = p.Specialty,
         DefaultLanguage = p.DefaultLanguage,
         IsDefault = p.IsDefault,
-        IsActive = p.IsActive
+        IsActive = p.IsActive,
+        AllowedTools = ReadAllowedTools(p.AllowedToolsJson)
     };
 
     private static AgentPersonaDto ToPersonaDto(AgentProfile p) => new()
@@ -418,6 +535,7 @@ public sealed class AgentPersonaService : IAgentPersonaService
         Specialty = p.Specialty,
         SystemPersonaPrompt = p.SystemPersonaPrompt,
         DefaultLanguage = p.DefaultLanguage,
-        IsDefault = p.IsDefault
+        IsDefault = p.IsDefault,
+        AllowedTools = ReadAllowedTools(p.AllowedToolsJson)
     };
 }
