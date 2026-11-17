@@ -2,6 +2,7 @@ using System.Text.Json;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Agents.DTOs;
 using BusinessOS.Application.Features.Agents.Services;
+using BusinessOS.Application.Features.AI.Services;
 using BusinessOS.Infrastructure.AI;
 using Microsoft.AspNetCore.Mvc;
 
@@ -35,6 +36,10 @@ public static class AgentEndpoints
         group.MapGet("/employees", ListEmployees)
             .WithName("AgentListEmployees")
             .Produces<IReadOnlyList<AgentEmployeeDto>>(StatusCodes.Status200OK);
+
+        group.MapGet("/tools", ListTools)
+            .WithName("AgentListTools")
+            .Produces<IReadOnlyList<AgentToolCatalogItemDto>>(StatusCodes.Status200OK);
 
         group.MapPut("/employees/{agentKey}/activation", SetEmployeeActivation)
             .WithName("AgentSetEmployeeActivation")
@@ -134,6 +139,20 @@ public static class AgentEndpoints
                 cancellationToken);
             await httpContext.Response.Body.FlushAsync(cancellationToken);
         }
+    }
+
+    private static IResult ListTools(IAiToolRegistry toolRegistry)
+    {
+        var tools = toolRegistry.AllTools
+            .OrderBy(tool => tool.ToolName.ToString(), StringComparer.Ordinal)
+            .Select(tool => new AgentToolCatalogItemDto
+            {
+                Name = tool.ToolName.ToString(),
+                Description = tool.Description
+            })
+            .ToArray();
+
+        return Results.Ok(tools);
     }
 
     private static async Task<IResult> ListEmployees(
