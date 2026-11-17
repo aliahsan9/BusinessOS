@@ -51,6 +51,13 @@ public static class AgentEndpoints
             .Produces(StatusCodes.Status403Forbidden)
             .Produces(StatusCodes.Status404NotFound);
 
+        group.MapPut("/employees/{agentKey}/permissions", UpdateEmployeeToolPermissions)
+            .WithName("AgentUpdateEmployeeToolPermissions")
+            .Produces<AgentEmployeeDto>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound);
+
         group.MapGet("/voice-preferences", GetVoicePreferences)
             .WithName("AgentGetVoicePreferences")
             .Produces<VoicePreferenceDto>(StatusCodes.Status200OK);
@@ -194,6 +201,45 @@ public static class AgentEndpoints
         try
         {
             var employee = await personaService.UpdateEmployeeConfigurationAsync(
+                agentKey,
+                request,
+                cancellationToken);
+            return employee is null
+                ? Results.NotFound(new { error = "AI employee was not found in the system catalog." })
+                : Results.Ok(employee);
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new { error = ex.Message });
+        }
+    }
+
+    private static async Task<IResult> UpdateEmployeeToolPermissions(
+        string agentKey,
+        UpdateAgentToolPermissionsRequest request,
+        IAgentPersonaService personaService,
+        ICurrentUserService currentUser,
+        CancellationToken cancellationToken)
+    {
+        if (currentUser.TenantId is null || currentUser.TenantId == Guid.Empty)
+            return Results.Forbid();
+
+        var canManageAgents = currentUser.Roles.Any(role =>
+            string.Equals(role, "Owner", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase));
+        if (!canManageAgents)
+            return Results.Forbid();
+
+        if (string.IsNullOrWhiteSpace(agentKey))
+            return Results.BadRequest(new { error = "Agent key is required." });
+
+        try
+        {
+            var employee = await personaService.UpdateEmployeeToolPermissionsAsync(
                 agentKey,
                 request,
                 cancellationToken);
