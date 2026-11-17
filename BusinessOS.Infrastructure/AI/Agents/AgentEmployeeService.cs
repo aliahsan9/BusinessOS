@@ -76,14 +76,16 @@ public sealed class AgentEmployeeService : IAgentEmployeeService
             request.AgentKey
             ?? voice.PreferredAgentKey
             ?? await _personaService.GetDefaultAgentKeyAsync(cancellationToken));
-        var voiceLanguage = AgentLanguages.Coalesce(voice.Language);
+        var persona = await _personaService.ResolvePersonaAsync(agentKey, cancellationToken);
+        var voiceLanguage = AgentLanguages.TryGetConcrete(voice.Language, out var savedVoiceLanguage)
+            ? savedVoiceLanguage
+            : persona.DefaultLanguage;
         var language = ConversationLanguage.ResolveTurn(
             request.Message,
             request.Language,
             memoryLanguage: null,
             voiceLanguage);
 
-        var persona = await _personaService.ResolvePersonaAsync(agentKey, cancellationToken);
 
         if (await ShouldRouteToOnboardingAsync(request, cancellationToken))
         {

@@ -23,6 +23,15 @@ public sealed class SetAgentActivationRequest
     public bool IsActive { get; init; }
 }
 
+/// <summary>Tenant-editable metadata. System prompts, keys, activation and permissions are not client-editable.</summary>
+public sealed class UpdateAgentConfigurationRequest
+{
+    public string DisplayName { get; init; } = string.Empty;
+    public string RoleTitle { get; init; } = string.Empty;
+    public string Specialty { get; init; } = string.Empty;
+    public string DefaultLanguage { get; init; } = "en";
+}
+
 public sealed class AgentPersonaDto
 {
     public string Key { get; init; } = default!;

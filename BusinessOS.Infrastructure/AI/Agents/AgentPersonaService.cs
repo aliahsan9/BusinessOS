@@ -92,6 +92,74 @@ public sealed class AgentPersonaService : IAgentPersonaService
         return ToEmployeeDto(tenantProfile);
     }
 
+    public async Task<AgentEmployeeDto?> UpdateEmployeeConfigurationAsync(
+        string agentKey,
+        UpdateAgentConfigurationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (_currentUser.TenantId is not Guid tenantId || tenantId == Guid.Empty)
+            throw new InvalidOperationException("A tenant context is required to configure AI employees.");
+
+        ArgumentNullException.ThrowIfNull(request);
+        var displayName = request.DisplayName?.Trim();
+        var roleTitle = request.RoleTitle?.Trim();
+        var specialty = request.Specialty?.Trim();
+
+        if (string.IsNullOrWhiteSpace(displayName) || displayName.Length > 100)
+            throw new ArgumentException("Display name is required and must be 100 characters or fewer.");
+        if (string.IsNullOrWhiteSpace(roleTitle) || roleTitle.Length > 150)
+            throw new ArgumentException("Role title is required and must be 150 characters or fewer.");
+        if (string.IsNullOrWhiteSpace(specialty) || specialty.Length > 300)
+            throw new ArgumentException("Specialty is required and must be 300 characters or fewer.");
+        if (!AgentLanguages.TryGetConcrete(request.DefaultLanguage, out var language))
+            throw new ArgumentException("Default language must be one of en, ur, ur-Latn, or ar.");
+
+        var key = AgentKeys.Normalize(agentKey);
+        if (!AgentKeys.IsKnown(key))
+            return null;
+
+        await EnsureDefaultProfilesAsync(cancellationToken);
+        var systemProfile = await _context.AgentProfiles
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.TenantId == null && p.Key == key && !p.IsDeleted, cancellationToken);
+        if (systemProfile is null)
+            return null;
+
+        var tenantProfile = await _context.AgentProfiles
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.TenantId == tenantId && p.Key == key && !p.IsDeleted, cancellationToken);
+
+        if (tenantProfile is null)
+        {
+            tenantProfile = new AgentProfile
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                Key = systemProfile.Key,
+                DisplayName = displayName,
+                RoleTitle = roleTitle,
+                Specialty = specialty,
+                SystemPersonaPrompt = systemProfile.SystemPersonaPrompt,
+                DefaultLanguage = language,
+                IsDefault = systemProfile.IsDefault,
+                IsActive = systemProfile.IsActive
+            };
+            _context.AgentProfiles.Add(tenantProfile);
+        }
+        else
+        {
+            tenantProfile.DisplayName = displayName;
+            tenantProfile.RoleTitle = roleTitle;
+            tenantProfile.Specialty = specialty;
+            tenantProfile.DefaultLanguage = language;
+            tenantProfile.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+        return ToEmployeeDto(tenantProfile);
+    }
+
     public async Task<AgentPersonaDto> ResolvePersonaAsync(
         string? agentKey,
         CancellationToken cancellationToken = default)
