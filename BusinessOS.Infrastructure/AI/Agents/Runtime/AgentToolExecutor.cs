@@ -18,7 +18,7 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
     private readonly IAgentSelfCorrector _corrector;
     private readonly IAgentActionLogger _logger;
     private readonly ILogger<AgentToolExecutor> _log;
-    private readonly IAgentPersonaService? _personaService;
+    private readonly IAgentPersonaService _personaService;
 
     public AgentToolExecutor(
         IAiToolRegistry registry,
@@ -27,7 +27,7 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
         IAgentSelfCorrector corrector,
         IAgentActionLogger logger,
         ILogger<AgentToolExecutor> log,
-        IAgentPersonaService? personaService = null)
+        IAgentPersonaService personaService)
     {
         _registry = registry;
         _permissions = permissions;
@@ -43,9 +43,8 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
         CancellationToken cancellationToken = default)
     {
         var sw = Stopwatch.StartNew();
-        var employeeAllowed = _personaService is null
-            || (!string.IsNullOrWhiteSpace(request.AgentKey)
-                && await _personaService.IsToolAllowedAsync(request.AgentKey, request.ToolName, cancellationToken));
+        var employeeAllowed = !string.IsNullOrWhiteSpace(request.AgentKey)
+            && await _personaService.IsToolAllowedAsync(request.AgentKey, request.ToolName, cancellationToken);
         var permission = _permissions.ValidateTool(request.ToolName);
         if (!employeeAllowed || !permission.Allowed)
         {
@@ -253,9 +252,8 @@ public sealed class AgentToolExecutor : IAgentToolExecutor
         CancellationToken cancellationToken)
     {
         // Simplified path without nested self-correction to avoid infinite loops.
-        var employeeAllowed = _personaService is null
-            || (!string.IsNullOrWhiteSpace(request.AgentKey)
-                && await _personaService.IsToolAllowedAsync(request.AgentKey, request.ToolName, cancellationToken));
+        var employeeAllowed = !string.IsNullOrWhiteSpace(request.AgentKey)
+            && await _personaService.IsToolAllowedAsync(request.AgentKey, request.ToolName, cancellationToken);
         if (!employeeAllowed || !_permissions.ValidateTool(request.ToolName).Allowed)
         {
             return new AgentToolExecutionResult
