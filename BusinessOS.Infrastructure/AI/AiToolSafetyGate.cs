@@ -33,7 +33,9 @@ public static class AiToolSafetyGate
         AiToolName.UpdateTaxDefaults,
         AiToolName.ApplyOnboardingProfile,
         AiToolName.CreateProject,
-        AiToolName.CreateTask
+        AiToolName.CreateTask,
+        AiToolName.CreateExpense,
+        AiToolName.UpdateOrderStatus
     ];
 
     public static bool IsMutating(AiToolName tool) => MutatingTools.Contains(tool);

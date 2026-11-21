@@ -21,6 +21,7 @@ using BusinessOS.Application.Features.Products.Commands.UpdateProduct;
 using BusinessOS.Application.Features.Products.Queries.GetAllProducts;
 using BusinessOS.Application.Features.Products.Queries.GetProductById;
 using BusinessOS.Application.Features.Products.Queries.GetProductsByCategory;
+using FluentAssertions;
 using FluentValidation.TestHelper;
 
 namespace BusinessOS.UnitTests.Validators;
@@ -103,11 +104,41 @@ public class ProductValidatorTests
             "Item",
             "SKU",
             null,
-            0,
+            -1,
             -1,
             0));
         result.ShouldHaveValidationErrorFor(x => x.CostPrice);
         result.ShouldHaveValidationErrorFor(x => x.SalePrice);
+    }
+
+    [Fact]
+    public void CreateProductValidator_RejectsSalePriceBelowCost()
+    {
+        var validator = new CreateProductCommandValidator();
+        var result = validator.TestValidate(new CreateProductCommand(
+            Guid.NewGuid(),
+            "Item",
+            "SKU",
+            null,
+            20,
+            10,
+            0));
+        result.Errors.Should().Contain(e => e.ErrorMessage.Contains("Sale price"));
+    }
+
+    [Fact]
+    public void CreateProductValidator_AllowsZeroCostWithPositiveSale()
+    {
+        var validator = new CreateProductCommandValidator();
+        var result = validator.TestValidate(new CreateProductCommand(
+            Guid.NewGuid(),
+            "Item",
+            "SKU",
+            null,
+            0,
+            10,
+            0));
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]

@@ -10,7 +10,7 @@ public sealed class DashboardDateRangeQueryValidator : AbstractValidator<Dashboa
         RuleFor(x => x.Period)
             .Must(DateRangePeriods.IsValid)
             .When(x => !string.IsNullOrWhiteSpace(x.Period))
-            .WithMessage("Invalid period. Valid values: today, week, month, year, all, custom.");
+            .WithMessage("Invalid period. Valid values: today, week, last7days, last30days, month, year, all, custom.");
 
         RuleFor(x => x)
             .Must(x => x.StartDate.HasValue && x.EndDate.HasValue)

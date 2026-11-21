@@ -31,6 +31,7 @@ public sealed class AuthorizationVersionService : IAuthorizationVersionService
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var userIds = await db.RbacUserRoles
             .AsNoTracking()
+            .IgnoreQueryFilters()
             .Where(x => x.RoleId == roleId)
             .Select(x => x.UserId)
             .Distinct()

@@ -19,6 +19,7 @@ public class FinancialDashboardResponse
 public class ProfitLossResponse
 {
     public decimal TotalRevenue { get; set; }
+    public decimal CostOfGoodsSold { get; set; }
     public decimal TotalExpenses { get; set; }
     public decimal GrossProfit { get; set; }
     public decimal NetProfit { get; set; }

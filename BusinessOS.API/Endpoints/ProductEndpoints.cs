@@ -41,7 +41,9 @@ public static class ProductEndpoints
             .RequirePermission(PermissionCodes.ProductView)
             .WithName("GetAllProducts")
             .WithSummary("List products")
-            .WithDescription("Returns a paginated, searchable, and sortable list of products.")
+            .WithDescription(
+                "Returns a paginated, searchable, and sortable list of products. " +
+                "Optional filters: categoryId, search, isActive.")
             .Produces<PagedResult<ProductDto>>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest);
 
@@ -74,7 +76,9 @@ public static class ProductEndpoints
             .RequirePermission(PermissionCodes.ProductDelete)
             .WithName("DeleteProduct")
             .WithSummary("Delete a product")
-            .WithDescription("Soft-deletes a product.")
+            .WithDescription(
+                "Safely removes a product. Products referenced by orders or stock history are deactivated " +
+                "instead of soft-deleted so historical records remain consistent.")
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound);
     }
@@ -91,6 +95,7 @@ public static class ProductEndpoints
     private static async Task<IResult> GetAllProducts(
         Guid? categoryId,
         string? search,
+        bool? isActive,
         int page,
         int pageSize,
         string? sortBy,
@@ -102,6 +107,7 @@ public static class ProductEndpoints
             new GetAllProductsQuery(
                 categoryId,
                 search,
+                isActive,
                 page,
                 pageSize,
                 sortBy,

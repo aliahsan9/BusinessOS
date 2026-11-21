@@ -11,6 +11,7 @@ using BusinessOS.Application.Features.AI.Enums;
 using BusinessOS.Application.Features.AI.Services;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.AI;
+using BusinessOS.Infrastructure.AI.Agents;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -103,6 +104,9 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         yield return Status("Planning…");
 
         var intent = _intentParser.Parse(request.Message, page, memory, language);
+        var specialistRoute = NavlaSpecialistRouter.Route(request.Message, intent);
+        intent = NavlaSpecialistRouter.Apply(intent, specialistRoute);
+        yield return Status($"Routing to {specialistRoute.DisplayLabel}…");
         var storedPending = AgentActionClarifier.Read(memory.PendingActionJson);
         var abandonPending = false;
         var pending = storedPending;
@@ -178,7 +182,9 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
                 intent.Intent,
                 sessionId,
                 permission.DenialReason ?? "Permission denied.",
-                permissionDenied: true);
+                permissionDenied: true,
+                specialists: specialistRoute.SpecialistKeys,
+                specialistLabel: specialistRoute.DisplayLabel);
             yield return new AgentStreamChunkDto { Type = "final", Content = denied.Reply, FinalResponse = denied };
             yield break;
         }
@@ -209,7 +215,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
                 request.ClientRequestId);
 
             var copilotResponse = await _copilot.ProcessAsync(copilotRequest, cancellationToken);
-            var mapped = MapCopilot(copilotResponse, persona, agentKey, language);
+            var mapped = MapCopilot(copilotResponse, persona, agentKey, language, specialistRoute);
             foreach (var word in mapped.Reply.Split(' ', StringSplitOptions.RemoveEmptyEntries))
             {
                 yield return new AgentStreamChunkDto { Type = "token", Content = word + " " };
@@ -260,7 +266,9 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
                     intent.Intent,
                     sessionId,
                     model.Reply,
-                    toolsUsed: model.ToolsUsed);
+                    toolsUsed: model.ToolsUsed,
+                    specialists: specialistRoute.SpecialistKeys,
+                    specialistLabel: specialistRoute.DisplayLabel);
                 await foreach (var chunk in StreamText(model.Reply, modelResponse, cancellationToken))
                     yield return chunk;
                 yield break;
@@ -323,7 +331,9 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
                     sessionId,
                     decision.Question,
                     suggestions: decision.Suggestions,
-                    confirmation: decision.Confirmation);
+                    confirmation: decision.Confirmation,
+                    specialists: specialistRoute.SpecialistKeys,
+                    specialistLabel: specialistRoute.DisplayLabel);
                 await foreach (var chunk in StreamText(decision.Question, held, cancellationToken))
                     yield return chunk;
                 yield break;
@@ -375,7 +385,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
                         request.CustomerId, request.OrderId, request.InvoiceId, request.ProjectId,
                         sessionId, false, agentKey, language, true, null, sessionId, request.ClientRequestId),
                     cancellationToken);
-                var mapped = MapCopilot(copilotResponse, persona, agentKey, language);
+                var mapped = MapCopilot(copilotResponse, persona, agentKey, language, specialistRoute);
                 yield return new AgentStreamChunkDto { Type = "final", Content = mapped.Reply, FinalResponse = mapped };
                 yield break;
             }
@@ -635,7 +645,9 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             PermissionDenied = clarification is not null && clarification.Contains("permission", StringComparison.OrdinalIgnoreCase),
             Language = language,
             TextDirection = AgentLanguages.IsRtl(language) ? "rtl" : "ltr",
-            PendingConfirmation = confirmationCard
+            PendingConfirmation = confirmationCard,
+            SpecialistAgents = specialistRoute.SpecialistKeys,
+            SpecialistLabel = specialistRoute.DisplayLabel
         };
 
         foreach (var word in reply.Split(' ', StringSplitOptions.RemoveEmptyEntries))
@@ -816,7 +828,9 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         bool permissionDenied = false,
         IReadOnlyList<AiSuggestionDto>? suggestions = null,
         IReadOnlyList<string>? toolsUsed = null,
-        AiPendingConfirmationDto? confirmation = null) =>
+        AiPendingConfirmationDto? confirmation = null,
+        IReadOnlyList<string>? specialists = null,
+        string? specialistLabel = null) =>
         new()
         {
             Reply = reply,
@@ -831,7 +845,9 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             ToolsUsed = toolsUsed ?? [],
             Language = language,
             TextDirection = AgentLanguages.IsRtl(language) ? "rtl" : "ltr",
-            PendingConfirmation = confirmation
+            PendingConfirmation = confirmation,
+            SpecialistAgents = specialists ?? [],
+            SpecialistLabel = specialistLabel
         };
 
     private static async IAsyncEnumerable<AgentStreamChunkDto> StreamText(
@@ -857,7 +873,8 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         AiCopilotChatResponse c,
         AgentPersonaDto persona,
         string agentKey,
-        string language)
+        string language,
+        NavlaSpecialistRoute? specialists = null)
     {
         var reply = c.Reply ?? "";
         if (!string.IsNullOrWhiteSpace(persona.DisplayName))
@@ -899,7 +916,9 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
             ActionResult = c.ActionResult,
             PermissionDenied = c.PermissionDenied,
             Language = language,
-            TextDirection = AgentLanguages.IsRtl(language) ? "rtl" : "ltr"
+            TextDirection = AgentLanguages.IsRtl(language) ? "rtl" : "ltr",
+            SpecialistAgents = specialists?.SpecialistKeys ?? [],
+            SpecialistLabel = specialists?.DisplayLabel
         };
     }
 

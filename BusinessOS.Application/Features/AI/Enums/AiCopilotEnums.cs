@@ -75,5 +75,17 @@ public enum AiToolName
     GetInventoryHealth,
     GetBusinessHealth,
     GetDailyPriorities,
-    GetCustomerInsights
+    GetCustomerInsights,
+
+    // Phase 3 specialist reads / writes (wrap existing business services)
+    GetOrders,
+    GetOrderDetails,
+    GetPendingOrders,
+    GetSaleDetails,
+    GetStockHistory,
+    GetCustomerPurchaseHistory,
+    GetFinancialSummary,
+    GetOutstandingPayments,
+    CreateExpense,
+    UpdateOrderStatus
 }

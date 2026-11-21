@@ -79,7 +79,8 @@ public static class DevSeeder
             context.RbacUserRoles.Add(new UserRole
             {
                 UserId = user.Id,
-                RoleId = adminRole.Id
+                RoleId = adminRole.Id,
+                TenantId = tenantId
             });
         }
 

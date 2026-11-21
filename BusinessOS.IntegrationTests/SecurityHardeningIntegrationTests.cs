@@ -208,6 +208,21 @@ public class SecurityHardeningIntegrationTests : IntegrationTestBase
         var other = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
         var email = $"staff_{Guid.NewGuid():N}@test.com";
 
+        // Free plan allows 1 seat; move to Starter so an additional user can be created.
+        var upgrade = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Post,
+            "/api/v1/billing/change-plan",
+            owner,
+            new
+            {
+                planId = BusinessOS.Domain.Billing.SubscriptionCatalog.StarterPlanId,
+                billingInterval = "monthly",
+                confirm = true,
+                startTrial = true
+            });
+        upgrade.EnsureSuccessStatusCode();
+
         var created = await IntegrationHttp.SendAuthorizedAsync(
             Client,
             HttpMethod.Post,

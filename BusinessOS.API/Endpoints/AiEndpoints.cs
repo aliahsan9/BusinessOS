@@ -48,6 +48,12 @@ public static class AiEndpoints
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound);
 
+        group.MapPatch("/conversations/{sessionId:guid}", RenameConversation)
+            .WithName("AiRenameConversation")
+            .Produces<AiConversationSessionDto>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status400BadRequest);
+
         group.MapGet("/insights", GetInsights)
             .WithName("AiInsights")
             .Produces<IReadOnlyList<AiProactiveInsightDto>>(StatusCodes.Status200OK);
@@ -174,6 +180,23 @@ public static class AiEndpoints
         var deleted = await aiService.DeleteConversationAsync(sessionId, cancellationToken);
         return deleted ? Results.NoContent() : Results.NotFound(new { error = "Conversation not found." });
     }
+
+    private static async Task<IResult> RenameConversation(
+        Guid sessionId,
+        RenameConversationRequest request,
+        IAiAssistantService aiService,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Title))
+            return Results.BadRequest(new { error = "Title is required." });
+
+        var renamed = await aiService.RenameConversationAsync(sessionId, request.Title, cancellationToken);
+        return renamed is null
+            ? Results.NotFound(new { error = "Conversation not found." })
+            : Results.Ok(renamed);
+    }
+
+    private sealed record RenameConversationRequest(string Title);
 
     private static async Task<IResult> GetInsights(
         IAiAssistantService aiService,

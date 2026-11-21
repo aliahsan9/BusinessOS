@@ -47,6 +47,7 @@ public class CustomerAnalyticsResponse
     public int TotalOrders { get; set; }
     public decimal TotalSpending { get; set; }
     public decimal AverageOrderValue { get; set; }
+    public decimal OutstandingBalance { get; set; }
     public DateTime? LastOrderDate { get; set; }
     public int TotalCompletedOrders { get; set; }
 }

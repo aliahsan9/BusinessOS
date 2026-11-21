@@ -1,5 +1,6 @@
 using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
+using BusinessOS.Application.Common.Idempotency;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Inventory.Services;
 using BusinessOS.Domain.Entities;
@@ -39,12 +40,18 @@ public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand,
         if (!categoryExists)
             throw new BadRequestException("Invalid CategoryId. Category does not exist.");
 
+        var sku = request.SKU.Trim();
+        var skuTaken = await _context.Products
+            .AnyAsync(x => x.SKU == sku, cancellationToken);
+        if (skuTaken)
+            throw new ConflictException("A product with this SKU already exists for this company.");
+
         var product = new Product
         {
             Id = Guid.NewGuid(),
             CategoryId = request.CategoryId,
             Name = request.Name,
-            SKU = request.SKU,
+            SKU = sku,
             Description = request.Description,
             CostPrice = request.CostPrice,
             SalePrice = request.SalePrice,
@@ -58,7 +65,15 @@ public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand,
             CostPrice = product.CostPrice,
             SalePrice = product.SalePrice
         });
-        await _context.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex) when (DbExceptionClassifier.IsUniqueViolation(ex))
+        {
+            throw new ConflictException("A product with this SKU already exists for this company.");
+        }
 
         await _inventoryService.CreateInventoryForProductAsync(product, cancellationToken);
 

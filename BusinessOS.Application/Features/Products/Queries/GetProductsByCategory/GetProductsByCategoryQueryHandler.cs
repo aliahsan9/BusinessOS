@@ -40,12 +40,13 @@ public sealed class GetProductsByCategoryQueryHandler
 
         return await _sender.Send(
             new Queries.GetAllProducts.GetAllProductsQuery(
-                request.CategoryId,
-                request.Search,
-                request.Page,
-                request.PageSize,
-                request.SortBy,
-                request.SortDirection),
+                CategoryId: request.CategoryId,
+                Search: request.Search,
+                IsActive: null,
+                Page: request.Page,
+                PageSize: request.PageSize,
+                SortBy: request.SortBy,
+                SortDirection: request.SortDirection),
             cancellationToken);
     }
 }

@@ -210,6 +210,7 @@ public class CreateOrderHandlerTests
         context.Setup(x => x.Products).Returns(TestMockDbSet.CreateMockDbSet(products.AsQueryable()).Object);
         context.Setup(x => x.Orders).Returns(TestMockDbSet.CreateMockDbSet(orders.AsQueryable()).Object);
         context.Setup(x => x.OrderItems).Returns(TestMockDbSet.CreateMockDbSet(new List<OrderItem>().AsQueryable()).Object);
+        context.Setup(x => x.TaxRates).Returns(TestMockDbSet.CreateMockDbSet(new List<TaxRate>().AsQueryable()).Object);
         context.Setup(x => x.BeginTransactionAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync((IApplicationTransaction?)null);
         context.SetupGet(x => x.HasActiveTransaction).Returns(false);
@@ -227,6 +228,7 @@ public class UpdateOrderHandlerTests
 
         var handler = new UpdateOrderCommandHandler(
             context.Object,
+            InventoryServiceTestHelper.CreateMock().Object,
             TestHandlerDependencies.CreateBusinessEvents(),
             TestHandlerDependencies.CreateCache(),
             Mock.Of<ITenantProvider>(),
@@ -311,8 +313,10 @@ public class UpdateOrderHandlerTests
 
         await db.SaveChangesAsync();
 
+        var inventory = InventoryServiceTestHelper.CreateMock();
         var handler = new UpdateOrderCommandHandler(
             db,
+            inventory.Object,
             TestHandlerDependencies.CreateBusinessEvents(),
             TestHandlerDependencies.CreateCache(),
             tenantProvider,
@@ -325,6 +329,18 @@ public class UpdateOrderHandlerTests
                 0,
                 [new CreateOrderItemDto(productId, 3)]),
             CancellationToken.None);
+
+        inventory.Verify(
+            x => x.EnsureStockAvailableAsync(
+                It.Is<IReadOnlyDictionary<Guid, decimal>>(d => d[productId] == 2),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        inventory.Verify(
+            x => x.DeductForOrderAsync(
+                It.IsAny<Order>(),
+                It.Is<IEnumerable<OrderItem>>(items => items.Single().Quantity == 2),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
 
         var updated = await db.Orders.FindAsync(orderId);
         updated!.TotalAmount.Should().Be(30);

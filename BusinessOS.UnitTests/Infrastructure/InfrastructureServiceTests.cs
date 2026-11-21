@@ -50,8 +50,8 @@ public class RepositoryTests
     [Fact]
     public async Task RoleRepository_AssignPermission_IsIdempotent()
     {
-        var (context, _, _) = InMemoryDbContextFactory.Create();
-        var role = TestDataFactory.CreateRole("Manager");
+        var (context, tenantId, _) = InMemoryDbContextFactory.Create();
+        var role = TestDataFactory.CreateRole("CustomManager", tenantId);
         var permission = TestDataFactory.CreatePermission(PermissionCodes.ProductView);
         context.RbacRoles.Add(role);
         context.Permissions.Add(permission);
@@ -67,13 +67,23 @@ public class RepositoryTests
     [Fact]
     public async Task RoleRepository_GetUserPermissionCodes_ReturnsDistinctCodes()
     {
-        var (context, _, _) = InMemoryDbContextFactory.Create();
-        var role = TestDataFactory.CreateRole(RoleNames.Admin);
+        var (context, tenantId, _) = InMemoryDbContextFactory.Create();
+        var role = TestDataFactory.CreateRole(RoleNames.Admin, isSystem: true);
         var permission = TestDataFactory.CreatePermission(PermissionCodes.ProductView);
+        context.Users.Add(new BusinessOS.Infrastructure.Identity.ApplicationUser
+        {
+            Id = "user-1",
+            UserName = "user-1",
+            Email = "user-1@test.com",
+            FirstName = "Test",
+            LastName = "User",
+            TenantId = tenantId,
+            IsActive = true
+        });
         context.RbacRoles.Add(role);
         context.Permissions.Add(permission);
-        context.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = permission.Id });
-        context.RbacUserRoles.Add(new UserRole { UserId = "user-1", RoleId = role.Id, Role = role });
+        context.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = permission.Id, TenantId = null });
+        context.RbacUserRoles.Add(new UserRole { UserId = "user-1", RoleId = role.Id, TenantId = tenantId, Role = role });
         await context.SaveChangesAsync();
 
         var repository = new RoleRepository(context);
@@ -85,12 +95,17 @@ public class RepositoryTests
     [Fact]
     public async Task RoleRepository_RemovePermission_RemovesAssignment()
     {
-        var (context, _, _) = InMemoryDbContextFactory.Create();
-        var role = TestDataFactory.CreateRole("Editor");
+        var (context, tenantId, _) = InMemoryDbContextFactory.Create();
+        var role = TestDataFactory.CreateRole("Editor", tenantId);
         var permission = TestDataFactory.CreatePermission(PermissionCodes.CategoryView);
         context.RbacRoles.Add(role);
         context.Permissions.Add(permission);
-        context.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = permission.Id });
+        context.RolePermissions.Add(new RolePermission
+        {
+            RoleId = role.Id,
+            PermissionId = permission.Id,
+            TenantId = tenantId
+        });
         await context.SaveChangesAsync();
 
         var repository = new RoleRepository(context);
@@ -102,15 +117,17 @@ public class RepositoryTests
     [Fact]
     public async Task RoleRepository_CreateAndGetRole_Works()
     {
-        var (context, _, _) = InMemoryDbContextFactory.Create();
+        var (context, tenantId, _) = InMemoryDbContextFactory.Create();
         var repository = new RoleRepository(context);
-        var role = TestDataFactory.CreateRole("Operations");
+        var role = TestDataFactory.CreateRole("Operations", tenantId);
 
         var created = await repository.CreateRoleAsync(role);
         var loaded = await repository.GetRoleByIdAsync(created.Id);
 
         loaded.Should().NotBeNull();
         loaded!.Name.Should().Be("Operations");
+        loaded.TenantId.Should().Be(tenantId);
+        loaded.IsSystem.Should().BeFalse();
     }
 
     [Fact]

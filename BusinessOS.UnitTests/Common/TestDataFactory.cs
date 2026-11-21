@@ -142,13 +142,15 @@ internal static class TestDataFactory
             Category = category
         };
 
-    public static Role CreateRole(string name = "CustomRole") =>
+    public static Role CreateRole(string name = "CustomRole", Guid? tenantId = null, bool isSystem = false) =>
         new()
         {
             Id = Guid.NewGuid(),
             Name = name,
             Description = $"{name} role",
-            IsActive = true
+            IsActive = true,
+            IsSystem = isSystem,
+            TenantId = isSystem ? null : tenantId
         };
 
     public static StockTransaction CreateStockTransaction(

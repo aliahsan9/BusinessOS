@@ -12,17 +12,22 @@ namespace BusinessOS.Infrastructure.Data;
 public partial class BusinessOSDbContext
     : IdentityDbContext<ApplicationUser, ApplicationRole, string>, IApplicationDbContext
 {
-    private readonly Guid _tenantId;
+    private readonly ITenantProvider _tenantProvider;
 
     public BusinessOSDbContext(
         DbContextOptions<BusinessOSDbContext> options,
         ITenantProvider tenantProvider)
         : base(options)
     {
-        _tenantId = tenantProvider.HasTenant()
-            ? tenantProvider.TenantId
-            : Guid.Empty;
+        _tenantProvider = tenantProvider;
     }
+
+    /// <summary>
+    /// Resolved at query/save time so auth can set tenant after the scoped DbContext is created
+    /// (e.g. login loads Identity before CreateSessionForUserAsync calls SetTenantId).
+    /// </summary>
+    private Guid _tenantId =>
+        _tenantProvider.HasTenant() ? _tenantProvider.TenantId : Guid.Empty;
 
     // DbSets
     public DbSet<Tenant> Tenants => Set<Tenant>();
@@ -225,12 +230,16 @@ public partial class BusinessOSDbContext
             // Assign TenantId automatically
             if (entry.State == EntityState.Added)
             {
+                // UserRole.TenantId is owned by application code (company switch / invitations).
+                if (entry.Entity is UserRole)
+                    continue;
+
                 var tenantIdProp = entry.Properties
                     .FirstOrDefault(p => p.Metadata.Name == "TenantId");
 
                 if (tenantIdProp is not null && _tenantId != Guid.Empty)
                 {
-                    // Guid? TenantId may be intentionally null (system-scoped rows such as AgentProfile).
+                    // Guid? TenantId may be intentionally null (system-scoped rows such as AgentProfile / system Roles).
                     if (tenantIdProp.Metadata.ClrType == typeof(Guid?))
                     {
                         var nullable = (Guid?)tenantIdProp.CurrentValue;
@@ -410,6 +419,17 @@ public partial class BusinessOSDbContext
         // Agent profiles: system defaults (TenantId null) + current tenant overrides.
         builder.Entity<AgentProfile>()
             .HasQueryFilter(x => !x.IsDeleted && (x.TenantId == null || x.TenantId == _tenantId));
+
+        // Shared immutable system roles (TenantId null + IsSystem) plus this company's custom roles.
+        builder.Entity<Role>()
+            .HasQueryFilter(x => (x.IsSystem && x.TenantId == null) || x.TenantId == _tenantId);
+
+        // System role permissions (TenantId null) plus this company's custom role permissions.
+        builder.Entity<RolePermission>()
+            .HasQueryFilter(x => x.TenantId == null || x.TenantId == _tenantId);
+
+        // UserRole is filtered in repositories by the user's active company so company switch
+        // can read/write assignments after TenantId changes on the same scoped DbContext.
 
         builder.Entity<VoicePreference>()
             .HasQueryFilter(x => x.TenantId == _tenantId && !x.IsDeleted);

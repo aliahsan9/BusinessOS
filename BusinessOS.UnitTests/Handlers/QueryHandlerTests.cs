@@ -73,6 +73,32 @@ public class QueryHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task GetAllProductsQueryHandler_FiltersByIsActive()
+    {
+        var inactive = _context.Products.First(x => x.Name == "Keyboard");
+        inactive.IsActive = false;
+        await _context.SaveChangesAsync();
+
+        var handler = new GetAllProductsQueryHandler(
+            _context,
+            TestHandlerDependencies.CreateCache(),
+            _tenantProvider,
+            TestHandlerDependencies.CreateCacheSettings(),
+            Mock.Of<ILogger<GetAllProductsQueryHandler>>());
+
+        var activeOnly = await handler.Handle(
+            new GetAllProductsQuery(IsActive: true, Page: 1, PageSize: 20),
+            CancellationToken.None);
+        var inactiveOnly = await handler.Handle(
+            new GetAllProductsQuery(IsActive: false, Page: 1, PageSize: 20),
+            CancellationToken.None);
+
+        activeOnly.Items.Should().OnlyContain(x => x.IsActive);
+        activeOnly.Items.Should().NotContain(x => x.Name == "Keyboard");
+        inactiveOnly.Items.Should().ContainSingle(x => x.Name == "Keyboard" && !x.IsActive);
+    }
+
+    [Fact]
     public async Task GetAllOrdersQueryHandler_ReturnsPagedFilteredResults()
     {
         var customerId = Guid.NewGuid();

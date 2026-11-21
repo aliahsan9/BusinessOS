@@ -50,7 +50,15 @@ public sealed partial class SophiaModelToolLoop
         AiToolName.GetInventoryHealth,
         AiToolName.GetBusinessHealth,
         AiToolName.GetDailyPriorities,
-        AiToolName.GetCustomerInsights
+        AiToolName.GetCustomerInsights,
+        AiToolName.GetOrders,
+        AiToolName.GetOrderDetails,
+        AiToolName.GetPendingOrders,
+        AiToolName.GetSaleDetails,
+        AiToolName.GetStockHistory,
+        AiToolName.GetCustomerPurchaseHistory,
+        AiToolName.GetFinancialSummary,
+        AiToolName.GetOutstandingPayments
     ];
 
     private readonly OpenAiChatClient _openAi;

@@ -47,7 +47,13 @@ public class AgencyLaunchTests
     public async Task Agency_setup_configures_modules_agents_workflows_and_queues_work()
     {
         var (db, sut, team, _) = Open();
-        db.RbacRoles.Add(new Role { Name = "Employee", IsActive = true });
+        db.RbacRoles.Add(new Role
+        {
+            Name = RoleNames.Employee,
+            IsActive = true,
+            IsSystem = true,
+            TenantId = null
+        });
         await db.SaveChangesAsync();
 
         await sut.SaveCompanyAsync(Company());

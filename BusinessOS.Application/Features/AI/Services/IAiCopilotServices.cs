@@ -103,6 +103,7 @@ public interface IAiMemoryService
     Task<IReadOnlyList<AiConversationMessageDto>> GetSessionMessagesAsync(Guid sessionId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<AiConversationMessageDto>> GetSessionMessagesAsync(Guid sessionId, int skip, int take, CancellationToken cancellationToken = default);
     Task<bool> DeleteSessionAsync(Guid sessionId, CancellationToken cancellationToken = default);
+    Task<AiConversationSessionDto?> RenameSessionAsync(Guid sessionId, string title, CancellationToken cancellationToken = default);
 }
 
 public sealed class AiConversationTurnLookupDto

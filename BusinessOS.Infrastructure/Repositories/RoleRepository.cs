@@ -19,7 +19,8 @@ public sealed class RoleRepository : IRoleRepository
             .AsNoTracking()
             .Include(x => x.RolePermissions)
             .ThenInclude(x => x.Permission)
-            .OrderBy(x => x.Name)
+            .OrderByDescending(x => x.IsSystem)
+            .ThenBy(x => x.Name)
             .ToListAsync(cancellationToken);
 
     public async Task<Role?> GetRoleByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
@@ -28,11 +29,17 @@ public sealed class RoleRepository : IRoleRepository
             .ThenInclude(x => x.Permission)
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
-    public async Task<Role?> GetRoleByNameAsync(string name, CancellationToken cancellationToken = default) =>
-        await _context.RbacRoles
+    public async Task<Role?> GetRoleByNameAsync(string name, CancellationToken cancellationToken = default)
+    {
+        var roles = await _context.RbacRoles
             .Include(x => x.RolePermissions)
             .ThenInclude(x => x.Permission)
-            .FirstOrDefaultAsync(x => x.Name == name, cancellationToken);
+            .Where(x => x.Name == name)
+            .ToListAsync(cancellationToken);
+
+        return roles.FirstOrDefault(x => x.IsSystem)
+            ?? roles.FirstOrDefault();
+    }
 
     public async Task<Role> CreateRoleAsync(Role role, CancellationToken cancellationToken = default)
     {
@@ -58,6 +65,10 @@ public sealed class RoleRepository : IRoleRepository
         Guid permissionId,
         CancellationToken cancellationToken = default)
     {
+        var role = await _context.RbacRoles
+            .FirstOrDefaultAsync(x => x.Id == roleId, cancellationToken)
+            ?? throw new InvalidOperationException($"Role '{roleId}' was not found.");
+
         var exists = await _context.RolePermissions
             .AnyAsync(x => x.RoleId == roleId && x.PermissionId == permissionId, cancellationToken);
 
@@ -69,7 +80,8 @@ public sealed class RoleRepository : IRoleRepository
         _context.RolePermissions.Add(new RolePermission
         {
             RoleId = roleId,
-            PermissionId = permissionId
+            PermissionId = permissionId,
+            TenantId = role.IsSystem ? null : role.TenantId
         });
 
         await _context.SaveChangesAsync(cancellationToken);
@@ -97,8 +109,16 @@ public sealed class RoleRepository : IRoleRepository
         Guid roleId,
         CancellationToken cancellationToken = default)
     {
+        var tenantId = await ResolveUserTenantIdAsync(userId, cancellationToken);
+        if (tenantId == Guid.Empty)
+        {
+            throw new InvalidOperationException($"User '{userId}' has no company context.");
+        }
+
         var exists = await _context.RbacUserRoles
-            .AnyAsync(x => x.UserId == userId && x.RoleId == roleId, cancellationToken);
+            .AnyAsync(
+                x => x.UserId == userId && x.RoleId == roleId && x.TenantId == tenantId,
+                cancellationToken);
 
         if (exists)
         {
@@ -108,7 +128,8 @@ public sealed class RoleRepository : IRoleRepository
         _context.RbacUserRoles.Add(new UserRole
         {
             UserId = userId,
-            RoleId = roleId
+            RoleId = roleId,
+            TenantId = tenantId
         });
 
         await _context.SaveChangesAsync(cancellationToken);
@@ -119,8 +140,12 @@ public sealed class RoleRepository : IRoleRepository
         Guid roleId,
         CancellationToken cancellationToken = default)
     {
+        var tenantId = await ResolveUserTenantIdAsync(userId, cancellationToken);
+
         var assignment = await _context.RbacUserRoles
-            .FirstOrDefaultAsync(x => x.UserId == userId && x.RoleId == roleId, cancellationToken);
+            .FirstOrDefaultAsync(
+                x => x.UserId == userId && x.RoleId == roleId && x.TenantId == tenantId,
+                cancellationToken);
 
         if (assignment is null)
         {
@@ -133,35 +158,53 @@ public sealed class RoleRepository : IRoleRepository
 
     public async Task<IReadOnlyList<string>> GetUserRoleNamesAsync(
         string userId,
-        CancellationToken cancellationToken = default) =>
-        await _context.RbacUserRoles
+        CancellationToken cancellationToken = default)
+    {
+        var tenantId = await ResolveUserTenantIdAsync(userId, cancellationToken);
+        return await _context.RbacUserRoles
             .AsNoTracking()
-            .Where(x => x.UserId == userId)
+            .Where(x => x.UserId == userId && x.TenantId == tenantId)
             .Select(x => x.Role.Name)
             .Distinct()
             .OrderBy(x => x)
             .ToListAsync(cancellationToken);
+    }
 
     public async Task<IReadOnlyList<string>> GetUserPermissionCodesAsync(
         string userId,
-        CancellationToken cancellationToken = default) =>
-        await _context.RbacUserRoles
+        CancellationToken cancellationToken = default)
+    {
+        var tenantId = await ResolveUserTenantIdAsync(userId, cancellationToken);
+        return await _context.RbacUserRoles
             .AsNoTracking()
-            .Where(x => x.UserId == userId && x.Role.IsActive)
+            .Where(x => x.UserId == userId && x.TenantId == tenantId && x.Role.IsActive)
             .SelectMany(x => x.Role.RolePermissions)
             .Select(x => x.Permission.Code)
             .Distinct()
             .OrderBy(x => x)
             .ToListAsync(cancellationToken);
+    }
 
     public async Task<IReadOnlyList<Role>> GetUserRolesAsync(
         string userId,
-        CancellationToken cancellationToken = default) =>
-        await _context.RbacUserRoles
+        CancellationToken cancellationToken = default)
+    {
+        var tenantId = await ResolveUserTenantIdAsync(userId, cancellationToken);
+        return await _context.RbacUserRoles
             .AsNoTracking()
-            .Where(x => x.UserId == userId)
+            .Where(x => x.UserId == userId && x.TenantId == tenantId)
             .Select(x => x.Role)
             .Distinct()
             .OrderBy(x => x.Name)
             .ToListAsync(cancellationToken);
+    }
+
+    private async Task<Guid> ResolveUserTenantIdAsync(string userId, CancellationToken cancellationToken)
+    {
+        return await _context.Users
+            .AsNoTracking()
+            .Where(x => x.Id == userId)
+            .Select(x => x.TenantId)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
 }

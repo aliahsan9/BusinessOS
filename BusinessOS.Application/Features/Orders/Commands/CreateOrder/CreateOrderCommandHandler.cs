@@ -90,15 +90,16 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
             totalAmount += lineTotal;
         }
 
-        var discount = Math.Round(request.Discount, 2);
-        var tax = Math.Round(request.Tax, 2);
+        var discount = Math.Round(Math.Max(0, request.Discount), 2);
+        if (discount > totalAmount)
+            throw new BadRequestException("Discount cannot exceed the line subtotal.");
+
+        // Never trust frontend tax when a company tax rate is configured.
+        var tax = await ResolveOrderTaxAsync(totalAmount, discount, request.Tax, cancellationToken);
         var grandTotal = Math.Round(totalAmount - discount + tax, 2);
 
         if (grandTotal < 0)
             throw new BadRequestException("Order grand total cannot be negative.");
-
-        if (discount > totalAmount)
-            throw new BadRequestException("Discount cannot exceed the line subtotal.");
 
         var stockRequirements = request.Items
             .GroupBy(x => x.ProductId)
@@ -174,6 +175,41 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
             cancellationToken);
 
         return order.Id;
+    }
+
+    private async Task<decimal> ResolveOrderTaxAsync(
+        decimal totalAmount,
+        decimal discount,
+        decimal requestedTax,
+        CancellationToken cancellationToken)
+    {
+        var taxableBase = Math.Max(0m, totalAmount - discount);
+        try
+        {
+            var taxRates = _context.TaxRates;
+            if (taxRates is not null)
+            {
+                var defaultRate = await taxRates
+                    .Where(rate => rate.IsActive && rate.IsDefault)
+                    .Select(rate => (decimal?)rate.RatePercent)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (defaultRate.HasValue)
+                {
+                    return Math.Round(
+                        taxableBase * (defaultRate.Value / 100m),
+                        2,
+                        MidpointRounding.AwayFromZero);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is NullReferenceException or InvalidOperationException or NotSupportedException)
+        {
+            _logger.LogDebug(ex, "Tax rate lookup unavailable; using requested tax amount.");
+        }
+
+        // Backward compatible: when no company tax rate exists, accept a non-negative requested tax.
+        return Math.Round(Math.Max(0m, requestedTax), 2, MidpointRounding.AwayFromZero);
     }
 
     private async Task PublishEventSafeAsync(

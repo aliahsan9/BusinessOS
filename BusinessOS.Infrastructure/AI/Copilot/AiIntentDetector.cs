@@ -188,6 +188,63 @@ public sealed class AiIntentDetector : IAiIntentDetector
             };
         }
 
+        if (ContainsAny(content, "pending order", "pending orders", "open orders", "orders pending"))
+        {
+            tools.Add(AiToolName.GetPendingOrders);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.ActionRead,
+                Confidence = 0.93,
+                SuggestedTools = tools
+            };
+        }
+
+        if (ContainsAny(content, "stock history", "stock movement", "inventory history", "stock movements"))
+        {
+            tools.Add(AiToolName.GetStockHistory);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.ActionRead,
+                Confidence = 0.92,
+                SuggestedTools = tools
+            };
+        }
+
+        if (ContainsAny(content, "financial summary", "finance summary", "how much did i earn", "books this month", "p&l"))
+        {
+            tools.Add(AiToolName.GetFinancialSummary);
+            tools.Add(AiToolName.GetRevenue);
+            tools.Add(AiToolName.GetExpenses);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.Analytics,
+                Confidence = 0.93,
+                SuggestedTools = tools
+            };
+        }
+
+        if (ContainsAny(content, "outstanding payment", "outstanding payments", "who owes", "receivables"))
+        {
+            tools.Add(AiToolName.GetOutstandingPayments);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.ActionRead,
+                Confidence = 0.93,
+                SuggestedTools = tools
+            };
+        }
+
+        if (ContainsAny(content, "purchase history", "customer history", "what did", "orders for customer"))
+        {
+            tools.Add(AiToolName.GetCustomerPurchaseHistory);
+            return new AiIntentDetectionResult
+            {
+                Intent = AiCopilotIntent.ActionRead,
+                Confidence = 0.9,
+                SuggestedTools = tools
+            };
+        }
+
         // A new question that names its subject is not a follow-up, even in a short chat.
         var domain = ClassifyBusinessQuestion(content);
         if (domain is not null)
@@ -258,6 +315,7 @@ public sealed class AiIntentDetector : IAiIntentDetector
             if (ContainsAny(content, "task")) tools.Add(AiToolName.CreateTask);
             if (ContainsAny(content, "invoice")) tools.Add(AiToolName.CreateInvoice);
             if (ContainsAny(content, "purchase order", "po ", "buy stock", "order stock")) tools.Add(AiToolName.CreatePurchaseOrder);
+            if (ContainsAny(content, "expense", "kharcha")) tools.Add(AiToolName.CreateExpense);
 
             if (tools.Count > 0)
             {

@@ -219,6 +219,23 @@ public static class AgentToolSchemas
               "invoicePrefix":{"type":"string"}
             }}
             """,
+        AiToolName.CreateExpense => """
+            {"type":"object","properties":{
+              "title":{"type":"string"},
+              "amount":{"type":"number"},
+              "expenseCategoryId":{"type":"string","format":"uuid"},
+              "categoryId":{"type":"string","format":"uuid"},
+              "paymentMethod":{"type":"string"},
+              "vendor":{"type":"string"},
+              "description":{"type":"string"}
+            },"required":["title","amount"]}
+            """,
+        AiToolName.UpdateOrderStatus => """
+            {"type":"object","properties":{
+              "orderId":{"type":"string","format":"uuid"},
+              "status":{"type":"string"}
+            },"required":["orderId","status"]}
+            """,
         _ => null
     };
 }

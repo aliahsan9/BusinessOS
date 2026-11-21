@@ -5,6 +5,8 @@ public sealed record RoleDto(
     string Name,
     string? Description,
     bool IsActive,
+    bool IsSystem,
+    Guid? TenantId,
     DateTime CreatedAt,
     IReadOnlyList<string> Permissions);
 

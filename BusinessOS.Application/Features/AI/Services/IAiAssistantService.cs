@@ -44,6 +44,11 @@ public interface IAiAssistantService
         Guid sessionId,
         CancellationToken cancellationToken = default);
 
+    Task<AiConversationSessionDto?> RenameConversationAsync(
+        Guid sessionId,
+        string title,
+        CancellationToken cancellationToken = default);
+
     Task<AiDashboardCopilotDto> GetDashboardCopilotAsync(CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<AiProactiveInsightDto>> GetInsightsAsync(CancellationToken cancellationToken = default);

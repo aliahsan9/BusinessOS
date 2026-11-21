@@ -18,10 +18,14 @@ public class CreateProductCommandValidator : AbstractValidator<CreateProductComm
             .MaximumLength(50);
 
         RuleFor(x => x.CostPrice)
-            .GreaterThan(0);
+            .GreaterThanOrEqualTo(0);
 
         RuleFor(x => x.SalePrice)
             .GreaterThan(0);
+
+        RuleFor(x => x)
+            .Must(x => x.SalePrice >= x.CostPrice)
+            .WithMessage("Sale price must be greater than or equal to cost price.");
 
         RuleFor(x => x.Description)
             .MaximumLength(2000).When(x => x.Description is not null);

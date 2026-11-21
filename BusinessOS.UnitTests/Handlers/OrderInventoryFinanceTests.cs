@@ -9,6 +9,7 @@ using BusinessOS.Application.Features.Orders.Commands.CreateOrder;
 using BusinessOS.Application.Features.Orders.Queries;
 using BusinessOS.Application.Features.Orders.Services;
 using BusinessOS.Application.Features.Products.Commands.CreateProduct;
+using BusinessOS.Application.Features.Products.Commands.DeleteProduct;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.Data;
@@ -70,15 +71,16 @@ public class OrderAndInventoryEdgeTests
     }
 
     [Fact]
-    public async Task CreateOrder_NegativeGrandTotal_DoesNotPersist()
+    public async Task CreateOrder_DiscountExceedingSubtotal_DoesNotPersist()
     {
         var (context, provider, customer, product, _) = await SeedShopAsync(stock: 10, salePrice: 5);
 
+        // Discount larger than line subtotal is rejected before grand-total math runs.
         var act = () => Orders(context, provider).Handle(
             new CreateOrderCommand(customer.Id, 100, 0, [new CreateOrderItemDto(product.Id, 1)]),
             CancellationToken.None);
 
-        await act.Should().ThrowAsync<BadRequestException>().WithMessage("*cannot be negative*");
+        await act.Should().ThrowAsync<BadRequestException>().WithMessage("*Discount cannot exceed*");
         (await context.Orders.CountAsync()).Should().Be(0);
     }
 
@@ -229,6 +231,137 @@ public class OrderAndInventoryEdgeTests
     }
 }
 
+public class ProductLifecycleTests
+{
+    [Fact]
+    public async Task DeleteProduct_WithStockHistory_DeactivatesInsteadOfSoftDelete()
+    {
+        var (context, provider, _, product, _) = await SeedShopForDeleteAsync();
+        context.StockTransactions.Add(new StockTransaction
+        {
+            Id = Guid.NewGuid(),
+            TenantId = provider.TenantId,
+            ProductId = product.Id,
+            TransactionType = StockTransactionTypeNames.Purchase,
+            Quantity = 5,
+            PreviousStock = 0,
+            NewStock = 5,
+            Notes = "seed"
+        });
+        await context.SaveChangesAsync();
+
+        await new DeleteProductCommandHandler(
+            context,
+            TestHandlerDependencies.CreateCache(),
+            provider,
+            TestHandlerDependencies.CreateLogger<DeleteProductCommandHandler>())
+            .Handle(new DeleteProductCommand(product.Id), CancellationToken.None);
+
+        var remaining = await context.Products.IgnoreQueryFilters()
+            .SingleAsync(x => x.Id == product.Id);
+        remaining.IsDeleted.Should().BeFalse();
+        remaining.IsActive.Should().BeFalse();
+        remaining.SKU.Should().NotContain("__deleted__");
+    }
+
+    [Fact]
+    public async Task DeleteProduct_WithoutHistory_SoftDeletesAndFreesSku()
+    {
+        var (context, provider, category, product, _) = await SeedShopForDeleteAsync();
+        var originalSku = product.SKU;
+
+        await new DeleteProductCommandHandler(
+            context,
+            TestHandlerDependencies.CreateCache(),
+            provider,
+            TestHandlerDependencies.CreateLogger<DeleteProductCommandHandler>())
+            .Handle(new DeleteProductCommand(product.Id), CancellationToken.None);
+
+        var deleted = await context.Products.IgnoreQueryFilters()
+            .SingleAsync(x => x.Id == product.Id);
+        deleted.IsDeleted.Should().BeTrue();
+        deleted.IsActive.Should().BeFalse();
+        deleted.SKU.Should().Contain("__deleted__");
+
+        var reusedId = await new CreateProductCommandHandler(
+            context,
+            TenantDatabase.Inventory(context),
+            TestHandlerDependencies.CreateCache(),
+            provider,
+            TestHandlerDependencies.CreateLogger<CreateProductCommandHandler>())
+            .Handle(new CreateProductCommand(category.Id, "Reuse", originalSku, null, 1, 2, 0), CancellationToken.None);
+
+        reusedId.Should().NotBe(product.Id);
+        (await context.Products.CountAsync(x => x.SKU == originalSku)).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task CreateOrder_UsesDefaultTaxRateInsteadOfRequestedTax()
+    {
+        var (context, provider, customer, product, _) = await Phase2ShopSeed.OpenAsync();
+        context.TaxRates.Add(new TaxRate
+        {
+            Id = Guid.NewGuid(),
+            TenantId = provider.TenantId,
+            Name = "GST",
+            RatePercent = 10m,
+            IsDefault = true,
+            IsActive = true
+        });
+        await context.SaveChangesAsync();
+
+        var numbers = new Mock<IOrderNumberGenerator>();
+        numbers.Setup(x => x.GenerateNextAsync(It.IsAny<CancellationToken>())).ReturnsAsync("ORD-TAX-1");
+        var id = await new CreateOrderCommandHandler(
+            context,
+            numbers.Object,
+            TenantDatabase.Inventory(context),
+            TestHandlerDependencies.CreateBusinessEvents(),
+            TestHandlerDependencies.CreateCache(),
+            provider,
+            TestHandlerDependencies.CreateLogger<CreateOrderCommandHandler>())
+            .Handle(
+                new CreateOrderCommand(customer.Id, 0, 99m, [new CreateOrderItemDto(product.Id, 1)]),
+                CancellationToken.None);
+
+        var order = await context.Orders.SingleAsync(x => x.Id == id);
+        order.Tax.Should().Be(Math.Round(product.SalePrice * 0.10m, 2));
+        order.GrandTotal.Should().Be(product.SalePrice + order.Tax);
+    }
+
+    private static async Task<(BusinessOSDbContext Context, TenantProvider Provider, Category Category, Product Product, Product Second)> SeedShopForDeleteAsync()
+    {
+        var (context, provider, customer, first, second) = await Phase2ShopSeed.OpenAsync();
+        var category = await context.Categories.FirstAsync();
+        _ = customer;
+        return (context, provider, category, first, second);
+    }
+}
+
+internal static class Phase2ShopSeed
+{
+    public static async Task<(BusinessOSDbContext Context, TenantProvider Provider, Customer Customer, Product First, Product Second)> OpenAsync(
+        decimal stock = 10,
+        decimal salePrice = 20,
+        decimal reorderLevel = 5)
+    {
+        var (context, _, provider) = TenantDatabase.Open();
+        var category = TestDataFactory.CreateCategory(provider.TenantId);
+        var customer = TestDataFactory.CreateCustomer(provider.TenantId, $"{Guid.NewGuid():N}@test.com");
+        var first = TestDataFactory.CreateProduct(provider.TenantId, category.Id, "First", $"SKU-{Guid.NewGuid():N}", salePrice: salePrice, stock: stock, reorderLevel: reorderLevel);
+        var second = TestDataFactory.CreateProduct(provider.TenantId, category.Id, "Second", $"SKU-{Guid.NewGuid():N}", salePrice: salePrice, stock: stock, reorderLevel: reorderLevel);
+        context.AddRange(
+            category,
+            customer,
+            first,
+            second,
+            TestDataFactory.CreateInventory(provider.TenantId, first.Id, stock, reorderLevel),
+            TestDataFactory.CreateInventory(provider.TenantId, second.Id, stock, reorderLevel));
+        await context.SaveChangesAsync();
+        return (context, provider, customer, first, second);
+    }
+}
+
 public class ProductCreationTests
 {
     [Fact]
@@ -351,6 +484,48 @@ public class FinanceCalculationTests
         dashboard.CompletedOrders.Should().Be(2);
         dashboard.TotalRevenue.Should().NotBe(5_000m);
         tenantId.Should().NotBe(Guid.Empty);
+    }
+
+    [Fact]
+    public async Task ProfitLoss_SubtractsCogsFromGrossProfit()
+    {
+        var (context, _, _) = TenantDatabase.Open();
+        var when = new DateTime(2026, 4, 10, 12, 0, 0, DateTimeKind.Utc);
+        var category = new ExpenseCategory { Id = Guid.NewGuid(), Name = "Ops", IsActive = true };
+        context.ExpenseCategories.Add(category);
+
+        var order = CompletedOrder(100m, when);
+        order.OrderItems.Add(new OrderItem
+        {
+            Id = Guid.NewGuid(),
+            OrderId = order.Id,
+            ProductId = Guid.NewGuid(),
+            Quantity = 2,
+            UnitPrice = 50,
+            UnitCost = 20,
+            Total = 100
+        });
+        context.Orders.Add(order);
+        context.Expenses.Add(new Expense
+        {
+            Id = Guid.NewGuid(),
+            Title = "Ads",
+            Amount = 15m,
+            ExpenseDate = when,
+            ExpenseCategoryId = category.Id,
+            PaymentMethod = PaymentMethodNames.Cash,
+            Status = ExpenseStatusNames.Paid
+        });
+        await context.SaveChangesAsync();
+
+        var report = await new FinanceService(context, new DashboardDateRangeResolver())
+            .GetProfitLossAsync(when.Date, when.Date.AddDays(1), "custom", "month");
+
+        report.TotalRevenue.Should().Be(100m);
+        report.CostOfGoodsSold.Should().Be(40m);
+        report.GrossProfit.Should().Be(60m);
+        report.TotalExpenses.Should().Be(15m);
+        report.NetProfit.Should().Be(45m);
     }
 
     [Fact]

@@ -10,10 +10,13 @@ public sealed class UserRoleConfiguration : IEntityTypeConfiguration<UserRole>
     {
         builder.ToTable("UserRoles");
 
-        builder.HasKey(x => new { x.UserId, x.RoleId });
+        builder.HasKey(x => new { x.UserId, x.TenantId, x.RoleId });
 
         builder.Property(x => x.UserId)
             .HasMaxLength(450)
+            .IsRequired();
+
+        builder.Property(x => x.TenantId)
             .IsRequired();
 
         builder.HasOne(x => x.Role)
@@ -23,5 +26,6 @@ public sealed class UserRoleConfiguration : IEntityTypeConfiguration<UserRole>
 
         builder.HasIndex(x => x.UserId);
         builder.HasIndex(x => x.RoleId);
+        builder.HasIndex(x => new { x.UserId, x.TenantId });
     }
 }

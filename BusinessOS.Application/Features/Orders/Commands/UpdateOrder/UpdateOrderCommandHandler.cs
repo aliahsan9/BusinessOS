@@ -2,6 +2,7 @@ using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Activities.DTOs;
+using BusinessOS.Application.Features.Inventory.Services;
 using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Application.Features.Orders.Services;
 using BusinessOS.Domain.Entities;
@@ -15,6 +16,7 @@ namespace BusinessOS.Application.Features.Orders.Commands.UpdateOrder;
 public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
+    private readonly IInventoryService _inventoryService;
     private readonly IBusinessEventService _businessEvents;
     private readonly ICacheService _cache;
     private readonly ITenantProvider _tenantProvider;
@@ -22,12 +24,14 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
 
     public UpdateOrderCommandHandler(
         IApplicationDbContext context,
+        IInventoryService inventoryService,
         IBusinessEventService businessEvents,
         ICacheService cache,
         ITenantProvider tenantProvider,
         ILogger<UpdateOrderCommandHandler> logger)
     {
         _context = context;
+        _inventoryService = inventoryService;
         _businessEvents = businessEvents;
         _cache = cache;
         _tenantProvider = tenantProvider;
@@ -52,6 +56,10 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
                 $"Order in '{order.Status}' status cannot be updated.");
         }
 
+        var previousQuantities = order.OrderItems
+            .GroupBy(x => x.ProductId)
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.Quantity));
+
         var productIds = request.Items.Select(x => x.ProductId).Distinct().ToList();
 
         var products = await _context.Products
@@ -68,6 +76,43 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
                 throw new BadRequestException($"Product '{product.Name}' is not active.");
         }
 
+        var nextQuantities = request.Items
+            .GroupBy(x => x.ProductId)
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.Quantity));
+
+        var stockIncreases = new Dictionary<Guid, decimal>();
+        var stockRestores = new List<OrderItem>();
+        var stockDeductions = new List<OrderItem>();
+
+        foreach (var productId in previousQuantities.Keys.Union(nextQuantities.Keys))
+        {
+            previousQuantities.TryGetValue(productId, out var previousQty);
+            nextQuantities.TryGetValue(productId, out var nextQty);
+            var delta = nextQty - previousQty;
+            if (delta > 0)
+            {
+                stockIncreases[productId] = delta;
+                stockDeductions.Add(new OrderItem
+                {
+                    Id = Guid.NewGuid(),
+                    ProductId = productId,
+                    Quantity = delta
+                });
+            }
+            else if (delta < 0)
+            {
+                stockRestores.Add(new OrderItem
+                {
+                    Id = Guid.NewGuid(),
+                    ProductId = productId,
+                    Quantity = -delta
+                });
+            }
+        }
+
+        if (stockIncreases.Count > 0)
+            await _inventoryService.EnsureStockAvailableAsync(stockIncreases, cancellationToken);
+
         var requestedProductIds = request.Items.Select(x => x.ProductId).ToHashSet();
         decimal totalAmount = 0;
 
@@ -83,6 +128,7 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
             {
                 existingItem.Quantity = reqItem.Quantity;
                 existingItem.UnitPrice = product.SalePrice;
+                existingItem.UnitCost = product.CostPrice;
                 existingItem.Total = lineTotal;
             }
             else
@@ -93,6 +139,7 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
                     ProductId = reqItem.ProductId,
                     Quantity = reqItem.Quantity,
                     UnitPrice = product.SalePrice,
+                    UnitCost = product.CostPrice,
                     Total = lineTotal
                 });
             }
@@ -103,31 +150,55 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
         foreach (var item in order.OrderItems.Where(x => !requestedProductIds.Contains(x.ProductId)).ToList())
             _context.OrderItems.Remove(item);
 
-        var discount = Math.Round(request.Discount, 2);
-        var tax = Math.Round(request.Tax, 2);
+        var discount = Math.Round(Math.Max(0, request.Discount), 2);
+        if (discount > totalAmount)
+            throw new BadRequestException("Discount cannot exceed the line subtotal.");
+
+        var tax = await ResolveOrderTaxAsync(totalAmount, discount, request.Tax, cancellationToken);
         var grandTotal = Math.Round(totalAmount - discount + tax, 2);
 
         if (grandTotal < 0)
             throw new BadRequestException("Order grand total cannot be negative.");
-
-        if (discount > totalAmount)
-            throw new BadRequestException("Discount cannot exceed the line subtotal.");
 
         order.TotalAmount = totalAmount;
         order.Discount = discount;
         order.Tax = tax;
         order.GrandTotal = grandTotal;
 
+        var transaction = await _context.BeginTransactionAsync(cancellationToken);
         try
         {
             await _context.SaveChangesAsync(cancellationToken);
+
+            if (stockDeductions.Count > 0)
+                await _inventoryService.DeductForOrderAsync(order, stockDeductions, cancellationToken);
+
+            if (stockRestores.Count > 0)
+                await _inventoryService.RestoreForCancelledOrderAsync(order, stockRestores, cancellationToken);
+
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException ex)
         {
+            if (transaction is not null)
+                await transaction.RollbackAsync(cancellationToken);
+
             _logger.LogWarning(ex, "Concurrency conflict while updating order {OrderId}", order.Id);
             throw new ConflictException(
                 "This order was changed by someone else. Refresh and try again.",
                 ErrorCodes.ConcurrencyConflict);
+        }
+        catch
+        {
+            if (transaction is not null)
+                await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+        finally
+        {
+            if (transaction is not null)
+                await transaction.DisposeAsync();
         }
 
         await EntityCacheInvalidator.InvalidateOrderAsync(
@@ -150,6 +221,40 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
             cancellationToken);
 
         return Unit.Value;
+    }
+
+    private async Task<decimal> ResolveOrderTaxAsync(
+        decimal totalAmount,
+        decimal discount,
+        decimal requestedTax,
+        CancellationToken cancellationToken)
+    {
+        var taxableBase = Math.Max(0m, totalAmount - discount);
+        try
+        {
+            var taxRates = _context.TaxRates;
+            if (taxRates is not null)
+            {
+                var defaultRate = await taxRates
+                    .Where(rate => rate.IsActive && rate.IsDefault)
+                    .Select(rate => (decimal?)rate.RatePercent)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (defaultRate.HasValue)
+                {
+                    return Math.Round(
+                        taxableBase * (defaultRate.Value / 100m),
+                        2,
+                        MidpointRounding.AwayFromZero);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is NullReferenceException or InvalidOperationException or NotSupportedException)
+        {
+            _logger.LogDebug(ex, "Tax rate lookup unavailable; using requested tax amount.");
+        }
+
+        return Math.Round(Math.Max(0m, requestedTax), 2, MidpointRounding.AwayFromZero);
     }
 
     private async Task PublishEventSafeAsync(

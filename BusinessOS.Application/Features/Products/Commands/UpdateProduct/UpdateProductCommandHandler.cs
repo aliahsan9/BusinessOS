@@ -1,5 +1,6 @@
 using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
+using BusinessOS.Application.Common.Idempotency;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Domain.Entities;
 using MediatR;
@@ -43,10 +44,16 @@ public sealed class UpdateProductCommandHandler : IRequestHandler<UpdateProductC
         if (!categoryExists)
             throw new BadRequestException("Invalid CategoryId. Category does not exist.");
 
+        var sku = request.SKU.Trim();
+        var skuTaken = await _context.Products
+            .AnyAsync(x => x.SKU == sku && x.Id != product.Id, cancellationToken);
+        if (skuTaken)
+            throw new ConflictException("A product with this SKU already exists for this company.");
+
         var priceChanged = product.CostPrice != request.CostPrice || product.SalePrice != request.SalePrice;
         product.CategoryId = request.CategoryId;
         product.Name = request.Name;
-        product.SKU = request.SKU;
+        product.SKU = sku;
         product.Description = request.Description;
         product.CostPrice = request.CostPrice;
         product.SalePrice = request.SalePrice;
@@ -63,7 +70,14 @@ public sealed class UpdateProductCommandHandler : IRequestHandler<UpdateProductC
             });
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex) when (DbExceptionClassifier.IsUniqueViolation(ex))
+        {
+            throw new ConflictException("A product with this SKU already exists for this company.");
+        }
 
         await EntityCacheInvalidator.InvalidateProductAsync(
             _cache,

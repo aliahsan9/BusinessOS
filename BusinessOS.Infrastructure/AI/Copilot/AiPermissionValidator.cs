@@ -172,6 +172,14 @@ public sealed class AiPermissionValidator : IAiPermissionValidator
         AiToolName.UpdateSupplier => [PermissionCodes.SupplierUpdate],
         AiToolName.DeleteSupplier => [PermissionCodes.SupplierDelete],
         AiToolName.ShowProfit => [PermissionCodes.FinanceView],
+        AiToolName.GetOrders or AiToolName.GetOrderDetails or AiToolName.GetPendingOrders
+            or AiToolName.GetSaleDetails => [PermissionCodes.OrderView],
+        AiToolName.GetStockHistory => [PermissionCodes.InventoryView],
+        AiToolName.GetCustomerPurchaseHistory => [PermissionCodes.CustomerView],
+        AiToolName.GetFinancialSummary => [PermissionCodes.FinanceView],
+        AiToolName.GetOutstandingPayments => [PermissionCodes.InvoiceView],
+        AiToolName.CreateExpense => [PermissionCodes.ExpenseCreate],
+        AiToolName.UpdateOrderStatus => [PermissionCodes.OrderUpdate],
         AiToolName.UpdateCompanyProfile or AiToolName.UpdateTaxDefaults => [PermissionCodes.SettingsManage],
         _ => []
     };

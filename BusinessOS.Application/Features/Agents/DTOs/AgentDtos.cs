@@ -76,6 +76,13 @@ public sealed class AgentChatResponse
     /// Present only when a write is waiting for the user. Displaying this does not execute the action.
     /// </summary>
     public AiPendingConfirmationDto? PendingConfirmation { get; init; }
+
+    /// <summary>
+    /// Domain specialists selected for this turn (inventory, sales, finance, …).
+    /// </summary>
+    public IReadOnlyList<string> SpecialistAgents { get; init; } = [];
+
+    public string? SpecialistLabel { get; init; }
 }
 
 public sealed class AiPendingConfirmationDto

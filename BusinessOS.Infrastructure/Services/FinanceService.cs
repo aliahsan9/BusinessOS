@@ -101,13 +101,22 @@ public sealed class FinanceService : IFinanceService
                 && x.Status == OrderStatusNames.Completed)
             .SumAsync(x => x.GrandTotal, cancellationToken);
 
+        var costOfGoodsSold = await (
+            from item in _context.OrderItems.AsNoTracking()
+            join order in _context.Orders.AsNoTracking() on item.OrderId equals order.Id
+            where order.OrderDate >= range.StartDate
+                && order.OrderDate <= range.EndDate
+                && order.Status == OrderStatusNames.Completed
+            select (decimal?)(item.UnitCost * item.Quantity)
+        ).SumAsync(cancellationToken) ?? 0m;
+
         var totalExpenses = await _context.Expenses
             .AsNoTracking()
             .Where(x => x.ExpenseDate >= range.StartDate && x.ExpenseDate <= range.EndDate)
             .SumAsync(x => x.Amount, cancellationToken);
 
-        var grossProfit = totalRevenue;
-        var netProfit = totalRevenue - totalExpenses;
+        var grossProfit = totalRevenue - costOfGoodsSold;
+        var netProfit = grossProfit - totalExpenses;
 
         var periodBreakdown = normalizedGroupBy == "year"
             ? await BuildYearlyProfitLossAsync(range, cancellationToken)
@@ -116,6 +125,7 @@ public sealed class FinanceService : IFinanceService
         return new ProfitLossResponse
         {
             TotalRevenue = Math.Round(totalRevenue, 2),
+            CostOfGoodsSold = Math.Round(costOfGoodsSold, 2),
             TotalExpenses = Math.Round(totalExpenses, 2),
             GrossProfit = Math.Round(grossProfit, 2),
             NetProfit = Math.Round(netProfit, 2),

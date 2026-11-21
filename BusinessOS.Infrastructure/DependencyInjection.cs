@@ -299,6 +299,16 @@ public static class DependencyInjection
         services.AddScoped<IAiTool, ShowProfitTool>();
         services.AddScoped<IAiTool, UpdateCompanyProfileTool>();
         services.AddScoped<IAiTool, UpdateTaxDefaultsTool>();
+        services.AddScoped<IAiTool, GetOrdersTool>();
+        services.AddScoped<IAiTool, GetOrderDetailsTool>();
+        services.AddScoped<IAiTool, GetPendingOrdersTool>();
+        services.AddScoped<IAiTool, GetSaleDetailsTool>();
+        services.AddScoped<IAiTool, GetStockHistoryTool>();
+        services.AddScoped<IAiTool, GetCustomerPurchaseHistoryTool>();
+        services.AddScoped<IAiTool, GetFinancialSummaryTool>();
+        services.AddScoped<IAiTool, GetOutstandingPaymentsTool>();
+        services.AddScoped<IAiTool, CreateExpenseTool>();
+        services.AddScoped<IAiTool, UpdateOrderStatusTool>();
         services.AddScoped<IAiToolRegistry, AiToolRegistry>();
         services.AddScoped<IHelpService, HelpService>();
         services.AddScoped<ITeamService, TeamService>();
@@ -415,6 +425,8 @@ public static class DependencyInjection
 
         services.AddHealthChecks()
             .AddCheck<DatabaseHealthCheck>("database")
-            .AddCheck<QdrantHealthCheck>("qdrant");
+            .AddCheck<QdrantHealthCheck>("qdrant")
+            .AddCheck<OpenAiHealthCheck>("openai")
+            .AddCheck<StripeHealthCheck>("stripe");
     }
 }

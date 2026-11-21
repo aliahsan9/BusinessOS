@@ -36,6 +36,16 @@ public sealed class DashboardDateRangeResolver : IDashboardDateRangeResolver
                 utcNow,
                 DateRangePeriods.Week),
 
+            DateRangePeriods.Last7Days => CreateRange(
+                utcNow.Date.AddDays(-6),
+                utcNow,
+                DateRangePeriods.Last7Days),
+
+            DateRangePeriods.Last30Days => CreateRange(
+                utcNow.Date.AddDays(-29),
+                utcNow,
+                DateRangePeriods.Last30Days),
+
             DateRangePeriods.Month => CreateRange(
                 new DateTime(utcNow.Year, utcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc),
                 utcNow,
@@ -54,7 +64,7 @@ public sealed class DashboardDateRangeResolver : IDashboardDateRangeResolver
             null => CreateRange(DateTime.UnixEpoch, utcNow, DateRangePeriods.All),
 
             _ => throw new Application.Common.Exceptions.BadRequestException(
-                $"Invalid period '{period}'. Valid values: today, week, month, year, all, custom.")
+                $"Invalid period '{period}'. Valid values: today, week, last7days, last30days, month, year, all, custom.")
         };
     }
 

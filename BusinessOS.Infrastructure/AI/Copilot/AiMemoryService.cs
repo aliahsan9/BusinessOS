@@ -527,6 +527,36 @@ public sealed class AiMemoryService : IAiMemoryService
         return true;
     }
 
+    public async Task<AiConversationSessionDto?> RenameSessionAsync(
+        Guid sessionId,
+        string title,
+        CancellationToken cancellationToken = default)
+    {
+        var identity = RequireIdentity();
+        var trimmed = (title ?? string.Empty).Trim();
+        if (trimmed.Length is < 1 or > 120)
+            return null;
+
+        var session = await _context.AiConversationSessions
+            .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == identity.UserId && s.IsActive, cancellationToken);
+        if (session is null)
+            return null;
+
+        session.Title = trimmed;
+        session.UpdatedAt = DateTime.UtcNow;
+        session.LastActivityAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return new AiConversationSessionDto
+        {
+            Id = session.Id,
+            Title = session.Title,
+            LastActivityAt = session.LastActivityAt,
+            MessageCount = await _context.AiMessages.CountAsync(m => m.ConversationId == session.Id, cancellationToken),
+            Summary = session.Summary
+        };
+    }
+
     internal async Task<IReadOnlyList<AiMemoryTurnDto>> LoadChronologicalMessagesAsync(
         Guid conversationId,
         string userId,

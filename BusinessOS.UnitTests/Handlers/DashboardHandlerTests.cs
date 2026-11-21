@@ -192,6 +192,19 @@ public class AnalyticsServiceTests
         range.StartDate.Date.Should().Be(DateTime.UtcNow.Date);
     }
 
+    [Fact]
+    public void DashboardDateRangeResolver_Last7And30Days_UseRollingWindows()
+    {
+        var resolver = new DashboardDateRangeResolver();
+        var last7 = resolver.Resolve(null, null, DateRangePeriods.Last7Days);
+        var last30 = resolver.Resolve(null, null, DateRangePeriods.Last30Days);
+
+        last7.Period.Should().Be(DateRangePeriods.Last7Days);
+        last7.StartDate.Date.Should().Be(DateTime.UtcNow.Date.AddDays(-6));
+        last30.Period.Should().Be(DateRangePeriods.Last30Days);
+        last30.StartDate.Date.Should().Be(DateTime.UtcNow.Date.AddDays(-29));
+    }
+
     private static async Task<BusinessOSDbContext> CreateOrderContextAsync(Guid tenantId)
     {
         var options = new DbContextOptionsBuilder<BusinessOSDbContext>()

@@ -50,6 +50,11 @@ public class BusinessOSWebApplicationFactory : WebApplicationFactory<Program>
             .GetAwaiter()
             .GetResult();
 
+        // Billing usage and quota enforcement require the catalog plans to exist.
+        SubscriptionPlanSeeder.SeedAsync(context, NullLogger.Instance)
+            .GetAwaiter()
+            .GetResult();
+
         _seeded = true;
     }
 }

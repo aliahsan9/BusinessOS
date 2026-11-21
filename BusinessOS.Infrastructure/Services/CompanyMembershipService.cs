@@ -109,10 +109,10 @@ public sealed class CompanyMembershipService : ICompanyMembershipService
             {
                 user.TenantId = companyId;
                 user.SecurityVersion++;
-                await ReplaceActiveRoleAsync(user, membership.RoleName, cancellationToken);
                 var update = await _users.UpdateAsync(user);
                 if (!update.Succeeded)
                     throw new BadRequestException(string.Join(", ", update.Errors.Select(x => x.Description)));
+                await ReplaceActiveRoleAsync(user, membership.RoleName, companyId, cancellationToken);
             }
             finally
             {
@@ -190,7 +190,7 @@ public sealed class CompanyMembershipService : ICompanyMembershipService
             if (actor.TenantId == companyId)
             {
                 actor.SecurityVersion++;
-                await ReplaceActiveRoleAsync(actor, RoleNames.Admin, cancellationToken);
+                await ReplaceActiveRoleAsync(actor, RoleNames.Admin, companyId, cancellationToken);
                 var actorUpdate = await _users.UpdateAsync(actor);
                 if (!actorUpdate.Succeeded)
                     throw new BadRequestException(string.Join(", ", actorUpdate.Errors.Select(x => x.Description)));
@@ -199,7 +199,7 @@ public sealed class CompanyMembershipService : ICompanyMembershipService
             if (target.TenantId == companyId)
             {
                 target.SecurityVersion++;
-                await ReplaceActiveRoleAsync(target, RoleNames.Owner, cancellationToken);
+                await ReplaceActiveRoleAsync(target, RoleNames.Owner, companyId, cancellationToken);
                 var targetUpdate = await _users.UpdateAsync(target);
                 if (!targetUpdate.Succeeded)
                     throw new BadRequestException(string.Join(", ", targetUpdate.Errors.Select(x => x.Description)));
@@ -270,7 +270,11 @@ public sealed class CompanyMembershipService : ICompanyMembershipService
         return membership;
     }
 
-    private async Task ReplaceActiveRoleAsync(ApplicationUser user, string roleName, CancellationToken cancellationToken)
+    private async Task ReplaceActiveRoleAsync(
+        ApplicationUser user,
+        string roleName,
+        Guid companyId,
+        CancellationToken cancellationToken)
     {
         if (!RoleNames.All.Contains(roleName))
             throw new BadRequestException("That company role is not recognized.");
@@ -291,13 +295,21 @@ public sealed class CompanyMembershipService : ICompanyMembershipService
                 throw new BadRequestException(string.Join(", ", added.Errors.Select(x => x.Description)));
         }
 
-        var current = await _db.RbacUserRoles.Where(x => x.UserId == user.Id).ToListAsync(cancellationToken);
+        // Only rewrite assignments for the company being activated; leave other companies intact.
+        var current = await _db.RbacUserRoles
+            .Where(x => x.UserId == user.Id && x.TenantId == companyId)
+            .ToListAsync(cancellationToken);
         if (current.Count > 0)
             _db.RbacUserRoles.RemoveRange(current);
 
         var role = await _roles.GetRoleByNameAsync(roleName, cancellationToken)
             ?? throw new BadRequestException($"Role {roleName} is not configured.");
-        _db.RbacUserRoles.Add(new UserRole { UserId = user.Id, RoleId = role.Id });
+        _db.RbacUserRoles.Add(new UserRole
+        {
+            UserId = user.Id,
+            RoleId = role.Id,
+            TenantId = companyId
+        });
         await _db.SaveChangesAsync(cancellationToken);
     }
 

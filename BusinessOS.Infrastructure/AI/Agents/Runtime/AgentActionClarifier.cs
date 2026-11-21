@@ -99,7 +99,8 @@ public static class AgentActionClarifier
         or AiToolName.CreatePurchaseOrder or AiToolName.CreatePurchaseOrderDraft
         or AiToolName.ApprovePurchaseOrder or AiToolName.ReceivePurchase
         or AiToolName.UpdateCompanyProfile or AiToolName.UpdateTaxDefaults
-        or AiToolName.CreateProject or AiToolName.CreateTask;
+        or AiToolName.CreateProject or AiToolName.CreateTask
+        or AiToolName.CreateExpense or AiToolName.UpdateOrderStatus;
 
     public static AgentPendingAction? Read(string? json)
     {
@@ -732,6 +733,15 @@ public static class AgentActionClarifier
                 if (!Has(slots, "salePrice")) missing.Add("salePrice");
                 if (!Has(slots, "costPrice")) missing.Add("costPrice");
                 break;
+            case AiToolName.CreateExpense:
+                if (!Has(slots, "title") && !Has(slots, "name")) missing.Add("title");
+                if (!Has(slots, "amount")) missing.Add("amount");
+                break;
+            case AiToolName.UpdateOrderStatus:
+                if (!Has(slots, "orderId") && !Has(slots, "orderNumber") && state.OrderId is null)
+                    missing.Add("order");
+                if (!Has(slots, "status")) missing.Add("status");
+                break;
             case AiToolName.CreateSupplier:
                 if (!Has(slots, "name")) missing.Add("supplierName");
                 if (!Has(slots, "phone")) missing.Add("phone");
@@ -862,26 +872,92 @@ public static class AgentActionClarifier
 
     private static ConfirmCopy ConfirmationCopy(AiToolName tool, Dictionary<string, string?> slots)
     {
-        if (tool != AiToolName.CreateProduct)
-            return new ConfirmCopy(Confirmation(tool, slots), null);
+        var text = Confirmation(tool, slots);
+        var fields = ConfirmationFields(tool, slots);
+        if (fields.Count == 0)
+            return new ConfirmCopy(text, null);
 
-        var name = Get(slots, "name") ?? "";
-        var sku = Get(slots, "sku") ?? "";
-        var cost = Money(Get(slots, "costPrice"));
-        var sale = Money(Get(slots, "salePrice"));
         return new ConfirmCopy(
-            ProductConfirmationText(slots),
+            text,
             new AiPendingConfirmationDto
             {
-                Action = "Create product",
-                Fields =
-                [
-                    new AiConfirmationFieldDto { Label = "Product name", Value = name },
-                    new AiConfirmationFieldDto { Label = "SKU", Value = sku },
-                    new AiConfirmationFieldDto { Label = "Cost price", Value = cost },
-                    new AiConfirmationFieldDto { Label = "Sale price", Value = sale }
-                ]
+                Action = ConfirmationAction(tool),
+                Fields = fields
             });
+    }
+
+    private static string ConfirmationAction(AiToolName tool) => tool switch
+    {
+        AiToolName.CreateProduct => "Create product",
+        AiToolName.CreateCustomer => "Create customer",
+        AiToolName.CreateSale => "Create sale order",
+        AiToolName.AdjustInventory => "Adjust stock",
+        AiToolName.ReceiveStock => "Receive stock",
+        AiToolName.CreateExpense => "Create expense",
+        AiToolName.UpdateOrderStatus => "Update order status",
+        AiToolName.CreateSupplier => "Create supplier",
+        AiToolName.DeleteProduct or AiToolName.DeleteCustomer or AiToolName.DeleteSupplier => "Delete record",
+        AiToolName.CreatePurchaseOrder or AiToolName.CreatePurchaseOrderDraft => "Create purchase order",
+        _ => "Confirm operation"
+    };
+
+    private static IReadOnlyList<AiConfirmationFieldDto> ConfirmationFields(
+        AiToolName tool,
+        Dictionary<string, string?> slots)
+    {
+        var fields = new List<AiConfirmationFieldDto>();
+        void Add(string label, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                fields.Add(new AiConfirmationFieldDto { Label = label, Value = value });
+        }
+
+        switch (tool)
+        {
+            case AiToolName.CreateProduct:
+                Add("Product name", Get(slots, "name"));
+                Add("SKU", Get(slots, "sku"));
+                Add("Cost price", Money(Get(slots, "costPrice")));
+                Add("Sale price", Money(Get(slots, "salePrice")));
+                break;
+            case AiToolName.CreateCustomer:
+                Add("Name", DisplayPerson(slots));
+                Add("Phone", Get(slots, "phone"));
+                Add("Email", Get(slots, "email"));
+                Add("City", Get(slots, "city") ?? Get(slots, "address"));
+                break;
+            case AiToolName.CreateSale:
+                Add("Customer", DisplayCustomer(slots));
+                Add("Product", Get(slots, "productName"));
+                Add("Quantity", Get(slots, "quantity"));
+                break;
+            case AiToolName.AdjustInventory:
+            case AiToolName.ReceiveStock:
+                Add("Product", Get(slots, "productName"));
+                Add("Quantity", Get(slots, "quantity"));
+                break;
+            case AiToolName.CreateExpense:
+                Add("Title", Get(slots, "title") ?? Get(slots, "name"));
+                Add("Amount", Money(Get(slots, "amount")));
+                Add("Category", Get(slots, "categoryName"));
+                break;
+            case AiToolName.UpdateOrderStatus:
+                Add("Order", Get(slots, "orderNumber") ?? Get(slots, "orderId"));
+                Add("New status", Get(slots, "status"));
+                break;
+            case AiToolName.CreateSupplier:
+                Add("Name", Get(slots, "name"));
+                Add("Phone", Get(slots, "phone"));
+                Add("Email", Get(slots, "email"));
+                break;
+            case AiToolName.CreatePurchaseOrder:
+                Add("Product", Get(slots, "productName"));
+                Add("Quantity", Get(slots, "quantity"));
+                Add("Supplier", Get(slots, "supplierName"));
+                break;
+        }
+
+        return fields;
     }
 
     private static string ProductConfirmationText(Dictionary<string, string?> slots) =>
@@ -939,6 +1015,10 @@ public static class AgentActionClarifier
                 return "I'll create that project. This can reserve stock on a new order.\nShould I go ahead?";
             case AiToolName.CreateTask:
                 return "I'll create that task.\nShould I go ahead?";
+            case AiToolName.CreateExpense:
+                return $"I'll record expense '{Get(slots, "title") ?? Get(slots, "name")}' for {Money(Get(slots, "amount"))}.\nShould I go ahead?";
+            case AiToolName.UpdateOrderStatus:
+                return $"I'll update order {Get(slots, "orderNumber") ?? Get(slots, "orderId")} to status {Get(slots, "status")}.\nShould I go ahead?";
             default:
                 return "I have what I need for this change.\nShould I go ahead?";
         }

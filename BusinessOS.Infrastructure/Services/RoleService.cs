@@ -41,6 +41,7 @@ public sealed class RoleService : IRoleService
         CreateRoleRequest request,
         CancellationToken cancellationToken = default)
     {
+        var tenantId = RequireCurrentTenantId();
         var requestedName = request.Name.Trim();
         if (RoleNames.All.Contains(requestedName))
             throw new BadRequestException($"System role '{requestedName}' is reserved.");
@@ -56,6 +57,8 @@ public sealed class RoleService : IRoleService
             Name = requestedName,
             Description = request.Description,
             IsActive = request.IsActive,
+            IsSystem = false,
+            TenantId = tenantId,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -67,7 +70,7 @@ public sealed class RoleService : IRoleService
             nameof(Role),
             role.Id.ToString(),
             null,
-            RbacAuditService.Serialize(new { role.Name, role.Description, role.IsActive }),
+            RbacAuditService.Serialize(new { role.Name, role.Description, role.IsActive, role.TenantId }),
             cancellationToken);
 
         return MapRole(role);
@@ -81,7 +84,8 @@ public sealed class RoleService : IRoleService
         var role = await _roleRepository.GetRoleByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException($"Role '{id}' was not found.");
 
-        EnsureTenantRoleCanChange(role, "changed");
+        EnsureCustomRoleOwnedByCurrentTenant(role);
+        EnsureRoleCanChange(role, "changed");
 
         var requestedName = request.Name.Trim();
         if (RoleNames.All.Contains(requestedName)
@@ -96,7 +100,7 @@ public sealed class RoleService : IRoleService
             throw new ConflictException($"Role '{request.Name}' already exists.");
         }
 
-        var oldValue = RbacAuditService.Serialize(new { role.Name, role.Description, role.IsActive });
+        var oldValue = RbacAuditService.Serialize(new { role.Name, role.Description, role.IsActive, role.TenantId });
 
         role.Name = requestedName;
         role.Description = request.Description;
@@ -109,7 +113,7 @@ public sealed class RoleService : IRoleService
             nameof(Role),
             role.Id.ToString(),
             oldValue,
-            RbacAuditService.Serialize(new { role.Name, role.Description, role.IsActive }),
+            RbacAuditService.Serialize(new { role.Name, role.Description, role.IsActive, role.TenantId }),
             cancellationToken);
 
         return MapRole(role);
@@ -120,9 +124,10 @@ public sealed class RoleService : IRoleService
         var role = await _roleRepository.GetRoleByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException($"Role '{id}' was not found.");
 
-        EnsureTenantRoleCanChange(role, "deleted");
+        EnsureCustomRoleOwnedByCurrentTenant(role);
+        EnsureRoleCanChange(role, "deleted");
 
-        var oldValue = RbacAuditService.Serialize(new { role.Name, role.Description, role.IsActive });
+        var oldValue = RbacAuditService.Serialize(new { role.Name, role.Description, role.IsActive, role.TenantId });
         await _authorizationVersions.BumpUsersWithRoleAsync(role.Id, cancellationToken);
         await _roleRepository.DeleteRoleAsync(role, cancellationToken);
 
@@ -160,7 +165,8 @@ public sealed class RoleService : IRoleService
         var permission = await _permissionRepository.GetPermissionByIdAsync(permissionId, cancellationToken)
             ?? throw new NotFoundException($"Permission '{permissionId}' was not found.");
 
-        EnsureTenantRoleCanChange(role, "changed");
+        EnsureCustomRoleOwnedByCurrentTenant(role);
+        EnsureRoleCanChange(role, "changed");
         EnsureCanGrant(permission);
 
         await _roleRepository.AssignPermissionAsync(roleId, permissionId, cancellationToken);
@@ -171,7 +177,7 @@ public sealed class RoleService : IRoleService
             nameof(RolePermission),
             $"{roleId}:{permissionId}",
             null,
-            RbacAuditService.Serialize(new { role.Name, permission.Code }),
+            RbacAuditService.Serialize(new { role.Name, permission.Code, role.TenantId }),
             cancellationToken);
     }
 
@@ -186,7 +192,8 @@ public sealed class RoleService : IRoleService
         var permission = await _permissionRepository.GetPermissionByIdAsync(permissionId, cancellationToken)
             ?? throw new NotFoundException($"Permission '{permissionId}' was not found.");
 
-        EnsureTenantRoleCanChange(role, "changed");
+        EnsureCustomRoleOwnedByCurrentTenant(role);
+        EnsureRoleCanChange(role, "changed");
         EnsureCanGrant(permission);
 
         await _roleRepository.RemovePermissionAsync(roleId, permissionId, cancellationToken);
@@ -196,7 +203,7 @@ public sealed class RoleService : IRoleService
             "PermissionRemoved",
             nameof(RolePermission),
             $"{roleId}:{permissionId}",
-            RbacAuditService.Serialize(new { role.Name, permission.Code }),
+            RbacAuditService.Serialize(new { role.Name, permission.Code, role.TenantId }),
             null,
             cancellationToken);
     }
@@ -208,6 +215,8 @@ public sealed class RoleService : IRoleService
     {
         var role = await _roleRepository.GetRoleByIdAsync(roleId, cancellationToken)
             ?? throw new NotFoundException($"Role '{roleId}' was not found.");
+
+        EnsureRoleAssignableInCurrentTenant(role);
 
         var user = await _userManager.FindByIdAsync(userId)
             ?? throw new NotFoundException($"User '{userId}' was not found.");
@@ -225,7 +234,7 @@ public sealed class RoleService : IRoleService
             nameof(UserRole),
             $"{userId}:{roleId}",
             null,
-            RbacAuditService.Serialize(new { userId, role.Name }),
+            RbacAuditService.Serialize(new { userId, role.Name, TenantId = user.TenantId }),
             cancellationToken);
     }
 
@@ -236,6 +245,8 @@ public sealed class RoleService : IRoleService
     {
         var role = await _roleRepository.GetRoleByIdAsync(roleId, cancellationToken)
             ?? throw new NotFoundException($"Role '{roleId}' was not found.");
+
+        EnsureRoleAssignableInCurrentTenant(role);
 
         var user = await _userManager.FindByIdAsync(userId)
             ?? throw new NotFoundException($"User '{userId}' was not found.");
@@ -251,7 +262,7 @@ public sealed class RoleService : IRoleService
             "UserRoleRemoved",
             nameof(UserRole),
             $"{userId}:{roleId}",
-            RbacAuditService.Serialize(new { userId, role.Name }),
+            RbacAuditService.Serialize(new { userId, role.Name, TenantId = user.TenantId }),
             null,
             cancellationToken);
     }
@@ -266,9 +277,37 @@ public sealed class RoleService : IRoleService
         CancellationToken cancellationToken = default) =>
         _roleRepository.GetUserRoleNamesAsync(userId, cancellationToken);
 
-    private void EnsureTenantRoleCanChange(Role role, string action)
+    private Guid RequireCurrentTenantId()
     {
-        if (RoleNames.Protected.Contains(role.Name))
+        if (_currentUser.TenantId is Guid tenantId && tenantId != Guid.Empty)
+            return tenantId;
+
+        throw new BadRequestException("Company context is required to manage roles.");
+    }
+
+    private void EnsureCustomRoleOwnedByCurrentTenant(Role role)
+    {
+        if (role.IsSystem || role.TenantId is null)
+            return;
+
+        var tenantId = RequireCurrentTenantId();
+        if (role.TenantId != tenantId)
+            throw new NotFoundException($"Role '{role.Id}' was not found.");
+    }
+
+    private void EnsureRoleAssignableInCurrentTenant(Role role)
+    {
+        if (role.IsSystem && role.TenantId is null)
+            return;
+
+        var tenantId = RequireCurrentTenantId();
+        if (role.TenantId != tenantId)
+            throw new NotFoundException($"Role '{role.Id}' was not found.");
+    }
+
+    private static void EnsureRoleCanChange(Role role, string action)
+    {
+        if (role.IsSystem || RoleNames.Protected.Contains(role.Name))
             throw new BadRequestException($"System role '{role.Name}' cannot be {action}.");
     }
 
@@ -307,6 +346,8 @@ public sealed class RoleService : IRoleService
             role.Name,
             role.Description,
             role.IsActive,
+            role.IsSystem,
+            role.TenantId,
             role.CreatedAt,
             role.RolePermissions
                 .Select(x => x.Permission.Code)

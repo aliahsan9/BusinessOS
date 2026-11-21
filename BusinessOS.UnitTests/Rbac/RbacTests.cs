@@ -4,7 +4,6 @@ using BusinessOS.API.Authorization;
 using BusinessOS.Application.Common.Authorization;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Roles.DTOs;
-using BusinessOS.Application.Features.Roles.Services;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Infrastructure.Identity;
 using BusinessOS.Infrastructure.Services;
@@ -20,9 +19,11 @@ public class RoleServiceTests
     private readonly Mock<IRoleRepository> _roleRepository = new();
     private readonly Mock<IPermissionRepository> _permissionRepository = new();
     private readonly Mock<IRbacAuditService> _auditService = new();
+    private readonly Mock<ICurrentUserService> _currentUser = new();
     private readonly Mock<UserManager<ApplicationUser>> _userManager;
     private readonly Mock<RoleManager<ApplicationRole>> _roleManager;
     private readonly RoleService _sut;
+    private readonly Guid _tenantId = Guid.NewGuid();
 
     public RoleServiceTests()
     {
@@ -34,6 +35,8 @@ public class RoleServiceTests
         _roleManager = new Mock<RoleManager<ApplicationRole>>(
             Mock.Of<IRoleStore<ApplicationRole>>(), null!, null!, null!, null!);
 
+        _currentUser.SetupGet(x => x.TenantId).Returns(_tenantId);
+
         var versions = new Mock<IAuthorizationVersionService>();
         versions.Setup(x => x.BumpUserAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -44,7 +47,7 @@ public class RoleServiceTests
             _roleRepository.Object,
             _permissionRepository.Object,
             _auditService.Object,
-            Mock.Of<ICurrentUserService>(),
+            _currentUser.Object,
             _userManager.Object,
             _roleManager.Object,
             versions.Object);
@@ -66,6 +69,11 @@ public class RoleServiceTests
         var result = await _sut.CreateRoleAsync(new CreateRoleRequest("Auditor", "Audit access"));
 
         result.Name.Should().Be("Auditor");
+        result.IsSystem.Should().BeFalse();
+        result.TenantId.Should().Be(_tenantId);
+        _roleRepository.Verify(x => x.CreateRoleAsync(
+            It.Is<Role>(role => role.TenantId == _tenantId && !role.IsSystem),
+            It.IsAny<CancellationToken>()), Times.Once);
         _auditService.Verify(x => x.LogAsync(
             "RoleCreated",
             nameof(Role),
@@ -82,7 +90,7 @@ public class RoleServiceTests
         var permissionId = Guid.NewGuid();
 
         _roleRepository.Setup(x => x.GetRoleByIdAsync(roleId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Role { Id = roleId, Name = "Auditor" });
+            .ReturnsAsync(new Role { Id = roleId, Name = "Auditor", IsSystem = false, TenantId = _tenantId });
 
         _permissionRepository.Setup(x => x.GetPermissionByIdAsync(permissionId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Permission { Id = permissionId, Code = PermissionCodes.ProductView });
@@ -106,7 +114,7 @@ public class RoleServiceTests
         var permissionId = Guid.NewGuid();
 
         _roleRepository.Setup(x => x.GetRoleByIdAsync(roleId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Role { Id = roleId, Name = "Auditor" });
+            .ReturnsAsync(new Role { Id = roleId, Name = "Auditor", IsSystem = false, TenantId = _tenantId });
 
         _permissionRepository.Setup(x => x.GetPermissionByIdAsync(permissionId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Permission { Id = permissionId, Code = PermissionCodes.ProductView });
@@ -130,10 +138,17 @@ public class RoleServiceTests
         const string userId = "user-1";
 
         _roleRepository.Setup(x => x.GetRoleByIdAsync(roleId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Role { Id = roleId, Name = RoleNames.Sales });
+            .ReturnsAsync(new Role { Id = roleId, Name = RoleNames.Sales, IsSystem = true, TenantId = null });
 
         _userManager.Setup(x => x.FindByIdAsync(userId))
-            .ReturnsAsync(new ApplicationUser { Id = userId, Email = "sales@test.com" });
+            .ReturnsAsync(new ApplicationUser
+            {
+                Id = userId,
+                Email = "sales@test.com",
+                TenantId = _tenantId,
+                FirstName = "Sales",
+                LastName = "User"
+            });
 
         _roleManager.Setup(x => x.RoleExistsAsync(RoleNames.Sales)).ReturnsAsync(true);
         _userManager.Setup(x => x.AddToRoleAsync(It.IsAny<ApplicationUser>(), RoleNames.Sales))

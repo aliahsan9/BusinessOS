@@ -101,6 +101,13 @@ public sealed partial class BillingService : IBillingService, IBillingPlanSyncSe
             .Include(x => x.Plan)
             .FirstAsync(x => x.Id == tenantId, cancellationToken);
 
+        var plan = tenant.Plan
+            ?? await _context.SubscriptionPlans.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == tenant.SubscriptionPlanId, cancellationToken)
+            ?? await _context.SubscriptionPlans.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Slug == "free", cancellationToken)
+            ?? throw new NotFoundException("Subscription plan not found for tenant.");
+
         var usage = await _context.TenantUsages
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.TenantId == tenantId, cancellationToken)
@@ -109,10 +116,10 @@ public sealed partial class BillingService : IBillingService, IBillingPlanSyncSe
         var subscription = await _context.TenantSubscriptions
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.TenantId == tenantId, cancellationToken);
-        var limits = EntitlementResolver.Resolve(tenant.Plan, subscription);
+        var limits = EntitlementResolver.Resolve(plan, subscription);
         var access = CommercialEntitlementEvaluator.Evaluate(new CommercialEntitlementInput
         {
-            Plan = tenant.Plan,
+            Plan = plan,
             Status = subscription?.Status ?? SubscriptionStatus.Free,
             CancelAtPeriodEnd = subscription?.CancelAtPeriodEnd ?? false,
             CurrentPeriodEnd = subscription?.CurrentPeriodEnd,
@@ -170,8 +177,8 @@ public sealed partial class BillingService : IBillingService, IBillingPlanSyncSe
             MaxAiRequests = limits.MaxAiRequests,
             AiRequestsRemaining = unlimitedAi ? SubscriptionPlan.Unlimited : Math.Max(0, limits.MaxAiRequests - aiUsed),
             AiRequestsOverLimit = !unlimitedAi && limits.MaxAiRequests >= 0 && aiUsed > limits.MaxAiRequests,
-            UsersAreCustom = tenant.Plan.IsCustomPricing && PlanLimitHelper.IsUnlimited(limits.MaxUsers),
-            AiRequestsAreCustom = tenant.Plan.IsCustomPricing && unlimitedAi,
+            UsersAreCustom = plan.IsCustomPricing && PlanLimitHelper.IsUnlimited(limits.MaxUsers),
+            AiRequestsAreCustom = plan.IsCustomPricing && unlimitedAi,
             ResetDate = subscription?.CurrentPeriodEnd ?? usage.AiPeriodStart?.AddMonths(1),
             LastCalculatedAt = usage.LastCalculatedAt,
             SubscriptionStatus = subscription?.Status.ToString(),

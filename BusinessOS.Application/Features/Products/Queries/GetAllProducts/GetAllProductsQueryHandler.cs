@@ -58,7 +58,8 @@ public sealed class GetAllProductsQueryHandler
             request.CategoryId,
             request.Search,
             request.SortBy,
-            request.SortDirection.ToString());
+            request.SortDirection.ToString(),
+            request.IsActive);
 
         return await _cache.GetOrSetAsync(
             key,
@@ -69,6 +70,11 @@ public sealed class GetAllProductsQueryHandler
                 if (request.CategoryId.HasValue)
                 {
                     query = query.Where(x => x.CategoryId == request.CategoryId.Value);
+                }
+
+                if (request.IsActive.HasValue)
+                {
+                    query = query.Where(x => x.IsActive == request.IsActive.Value);
                 }
 
                 if (!string.IsNullOrWhiteSpace(request.Search))

@@ -12,6 +12,8 @@ public static class DateRangePeriods
 {
     public const string Today = "today";
     public const string Week = "week";
+    public const string Last7Days = "last7days";
+    public const string Last30Days = "last30days";
     public const string Month = "month";
     public const string Year = "year";
     public const string All = "all";
@@ -21,6 +23,8 @@ public static class DateRangePeriods
     {
         Today,
         Week,
+        Last7Days,
+        Last30Days,
         Month,
         Year,
         All,

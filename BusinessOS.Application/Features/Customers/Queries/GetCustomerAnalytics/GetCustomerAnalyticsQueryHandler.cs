@@ -55,17 +55,25 @@ public sealed class GetCustomerAnalyticsQueryHandler
                     .ToListAsync(ct);
 
                 var totalOrders = orders.Count;
-                var totalSpending = orders.Sum(x => x.GrandTotal);
-                var completedOrders = orders.Count(x =>
-                    x.Status.Equals(OrderStatusNames.Completed, StringComparison.OrdinalIgnoreCase));
+                var completed = orders
+                    .Where(x => x.Status.Equals(OrderStatusNames.Completed, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                var totalSpending = completed.Sum(x => x.GrandTotal);
+                var completedOrders = completed.Count;
+
+                var outstandingBalance = await _context.Invoices
+                    .AsNoTracking()
+                    .Where(x => x.CustomerId == request.CustomerId && x.OutstandingAmount > 0)
+                    .SumAsync(x => (decimal?)x.OutstandingAmount, ct) ?? 0m;
 
                 return new CustomerAnalyticsResponse
                 {
                     TotalOrders = totalOrders,
-                    TotalSpending = totalSpending,
-                    AverageOrderValue = totalOrders > 0
-                        ? Math.Round(totalSpending / totalOrders, 2)
+                    TotalSpending = Math.Round(totalSpending, 2),
+                    AverageOrderValue = completedOrders > 0
+                        ? Math.Round(totalSpending / completedOrders, 2)
                         : 0,
+                    OutstandingBalance = Math.Round(outstandingBalance, 2),
                     LastOrderDate = orders.Count > 0
                         ? orders.Max(x => x.OrderDate)
                         : null,

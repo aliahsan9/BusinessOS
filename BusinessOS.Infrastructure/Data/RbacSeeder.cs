@@ -78,7 +78,11 @@ public static class RbacSeeder
                 logger.LogInformation("Seeded identity role {Role}", roleName);
             }
 
-            var role = await context.RbacRoles.FirstOrDefaultAsync(x => x.Name == roleName, cancellationToken);
+            // Role names are globally unique (IX_Roles_Name). Look up by name only, then
+            // promote any legacy/custom row into the shared system role shape.
+            var role = await context.RbacRoles
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(x => x.Name == roleName, cancellationToken);
             if (role is null)
             {
                 role = new Role
@@ -86,12 +90,24 @@ public static class RbacSeeder
                     Name = roleName,
                     Description = GetDefaultRoleDescription(roleName),
                     IsActive = true,
+                    IsSystem = true,
+                    TenantId = null,
                     CreatedAt = DateTime.UtcNow
                 };
 
                 context.RbacRoles.Add(role);
                 await context.SaveChangesAsync(cancellationToken);
                 logger.LogInformation("Seeded RBAC role {Role}", roleName);
+            }
+            else if (!role.IsSystem || role.TenantId is not null || !role.IsActive)
+            {
+                role.IsSystem = true;
+                role.TenantId = null;
+                role.IsActive = true;
+                if (string.IsNullOrWhiteSpace(role.Description))
+                    role.Description = GetDefaultRoleDescription(roleName);
+                await context.SaveChangesAsync(cancellationToken);
+                logger.LogInformation("Repaired RBAC role {Role} into shared system role", roleName);
             }
 
             roleMap[roleName] = role;
@@ -152,7 +168,8 @@ public static class RbacSeeder
                 context.RolePermissions.Add(new RolePermission
                 {
                     RoleId = role.Id,
-                    PermissionId = permission.Id
+                    PermissionId = permission.Id,
+                    TenantId = null
                 });
 
                 logger.LogInformation("Assigned permission {Permission} to role {Role}", code, roleName);
@@ -232,15 +249,23 @@ public static class RbacSeeder
                     continue;
                 }
 
+                if (user.TenantId == Guid.Empty)
+                {
+                    continue;
+                }
+
                 var exists = await context.RbacUserRoles
-                    .AnyAsync(x => x.UserId == user.Id && x.RoleId == role.Id, cancellationToken);
+                    .AnyAsync(
+                        x => x.UserId == user.Id && x.RoleId == role.Id && x.TenantId == user.TenantId,
+                        cancellationToken);
 
                 if (!exists)
                 {
                     context.RbacUserRoles.Add(new UserRole
                     {
                         UserId = user.Id,
-                        RoleId = role.Id
+                        RoleId = role.Id,
+                        TenantId = user.TenantId
                     });
                 }
             }
@@ -292,7 +317,9 @@ public static class RbacSeeder
                 if (adminRbac is not null)
                 {
                     var adminAssignment = await context.RbacUserRoles
-                        .FirstOrDefaultAsync(x => x.UserId == owner.Id && x.RoleId == adminRbac.Id, cancellationToken);
+                        .FirstOrDefaultAsync(
+                            x => x.UserId == owner.Id && x.RoleId == adminRbac.Id && x.TenantId == tenant.Id,
+                            cancellationToken);
 
                     if (adminAssignment is not null)
                     {
@@ -304,14 +331,17 @@ public static class RbacSeeder
             await userManager.AddToRoleAsync(owner, RoleNames.Owner);
 
             var exists = await context.RbacUserRoles
-                .AnyAsync(x => x.UserId == owner.Id && x.RoleId == ownerRole.Id, cancellationToken);
+                .AnyAsync(
+                    x => x.UserId == owner.Id && x.RoleId == ownerRole.Id && x.TenantId == tenant.Id,
+                    cancellationToken);
 
             if (!exists)
             {
                 context.RbacUserRoles.Add(new UserRole
                 {
                     UserId = owner.Id,
-                    RoleId = ownerRole.Id
+                    RoleId = ownerRole.Id,
+                    TenantId = tenant.Id
                 });
             }
         }

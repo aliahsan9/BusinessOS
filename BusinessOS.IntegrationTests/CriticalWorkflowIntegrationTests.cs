@@ -317,6 +317,7 @@ public class CriticalWorkflowIntegrationTests : IntegrationTestBase
             || path.Contains("/portal/")
             || path.Contains("/public/")
             || path.Contains("/supplier-portal/")
+            || path.Contains("/launch/notice")
             || path.Contains("webhook")
             || path.Contains("/health")
             || path.Contains("openapi")

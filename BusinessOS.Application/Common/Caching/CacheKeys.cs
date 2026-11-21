@@ -18,8 +18,9 @@ public static class CacheKeys
         Guid? categoryId,
         string? search,
         string? sortBy,
-        string? sortDirection) =>
-        $"{TenantRoot(tenantId)}Products_All_p{page}_s{pageSize}_c{categoryId?.ToString() ?? "all"}_q{Normalize(search)}_sb{Normalize(sortBy)}_sd{Normalize(sortDirection)}";
+        string? sortDirection,
+        bool? isActive = null) =>
+        $"{TenantRoot(tenantId)}Products_All_p{page}_s{pageSize}_c{categoryId?.ToString() ?? "all"}_q{Normalize(search)}_sb{Normalize(sortBy)}_sd{Normalize(sortDirection)}_a{(isActive.HasValue ? isActive.Value.ToString() : "all")}";
 
     public static string ProductById(Guid tenantId, Guid id) =>
         $"{TenantRoot(tenantId)}Product_{id}";

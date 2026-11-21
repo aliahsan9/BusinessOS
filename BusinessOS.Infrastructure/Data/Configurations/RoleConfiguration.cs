@@ -19,9 +19,26 @@ public sealed class RoleConfiguration : IEntityTypeConfiguration<Role>
         builder.Property(x => x.Description)
             .HasMaxLength(500);
 
+        builder.Property(x => x.IsSystem)
+            .IsRequired()
+            .HasDefaultValue(false);
+
+        builder.HasOne(x => x.Tenant)
+            .WithMany()
+            .HasForeignKey(x => x.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Shared system roles: unique name while TenantId is null.
         builder.HasIndex(x => x.Name)
-            .IsUnique();
+            .IsUnique()
+            .HasFilter("[TenantId] IS NULL");
+
+        // Custom roles: unique name per company.
+        builder.HasIndex(x => new { x.TenantId, x.Name })
+            .IsUnique()
+            .HasFilter("[TenantId] IS NOT NULL");
 
         builder.HasIndex(x => x.IsActive);
+        builder.HasIndex(x => x.IsSystem);
     }
 }

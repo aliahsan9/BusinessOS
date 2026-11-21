@@ -23,5 +23,6 @@ public sealed class RolePermissionConfiguration : IEntityTypeConfiguration<RoleP
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(x => x.PermissionId);
+        builder.HasIndex(x => x.TenantId);
     }
 }
