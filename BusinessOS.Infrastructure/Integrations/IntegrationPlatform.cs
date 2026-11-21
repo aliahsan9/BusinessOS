@@ -28,6 +28,8 @@ public sealed class IntegrationPlatform : IIntegrationPlatform
     private readonly IDataProtector _protector;
     private readonly IntegrationPlatformOptions _options;
     private readonly IServiceScopeFactory _scopes;
+    private readonly IIntegrationProviderRegistry _providers;
+    private readonly IIntegrationWebhookIdempotencyStore _webhookIds;
 
     public IntegrationPlatform(
         BusinessOSDbContext db,
@@ -36,7 +38,9 @@ public sealed class IntegrationPlatform : IIntegrationPlatform
         IHttpClientFactory http,
         IDataProtectionProvider dataProtection,
         IOptions<IntegrationPlatformOptions> options,
-        IServiceScopeFactory scopes)
+        IServiceScopeFactory scopes,
+        IIntegrationProviderRegistry providers,
+        IIntegrationWebhookIdempotencyStore webhookIds)
     {
         _db = db;
         _tenant = tenant;
@@ -45,6 +49,8 @@ public sealed class IntegrationPlatform : IIntegrationPlatform
         _protector = dataProtection.CreateProtector("BusinessOS.IntegrationTokens.v1");
         _options = options.Value;
         _scopes = scopes;
+        _providers = providers;
+        _webhookIds = webhookIds;
     }
 
     public async Task<IReadOnlyList<IntegrationProviderDto>> GetMarketplaceAsync(CancellationToken cancellationToken = default)
@@ -248,19 +254,28 @@ public sealed class IntegrationPlatform : IIntegrationPlatform
         if (write && !approved)
             return new IntegrationCallResult { Performed = false, ApprovalRequired = true, Status = "approval_required", Message = "A person must approve this external change." };
 
-        var connection = await _db.CompanyIntegrationConnections.FirstOrDefaultAsync(x => x.ProviderKey == provider.Key && x.Status == "Connected", cancellationToken);
+        var connection = await _db.CompanyIntegrationConnections.FirstOrDefaultAsync(
+            x => x.ProviderKey == provider.Key && (x.Status == IntegrationConnectionStatuses.Connected || x.Status == IntegrationConnectionStatuses.NeedsReauth),
+            cancellationToken);
         if (connection?.AccessTokenProtected is null)
             return new IntegrationCallResult { Performed = false, Status = "not_connected", Message = "This company has not connected that provider." };
+        if (connection.Status == IntegrationConnectionStatuses.NeedsReauth)
+            return new IntegrationCallResult { Performed = false, Status = "needs_reauth", Message = "This connection needs reauthorization before another provider call." };
+
+        if (!_providers.TryGet(provider.Key, out var executor) || executor is null)
+            return new IntegrationCallResult { Performed = false, Status = "unknown_provider", Message = "That provider is not registered." };
 
         var started = DateTime.UtcNow;
         try
         {
             var token = await AccessTokenAsync(connection, provider.Key, cancellationToken);
-            var result = await IntegrationApi.ExecuteAsync(_http.CreateClient("Integrations"), provider, operation, token, argumentsJson, connection.MetadataJson, cancellationToken);
+            var result = await executor.ExecuteAsync(_http.CreateClient("Integrations"), operation, token, argumentsJson, connection.MetadataJson, cancellationToken);
             connection.LastSuccessAt = result.Performed ? DateTime.UtcNow : connection.LastSuccessAt;
             connection.LastError = result.Performed ? null : NalvaGuard.Clip(result.Message, 300);
             if (!result.Performed && result.Status == "permission")
-                connection.Status = "Error";
+                connection.Status = IntegrationConnectionStatuses.Error;
+            if (!result.Performed && result.Status is "rate_limit" or "provider_error")
+                await DeadLetterAsync(connection.Id, provider.Key, operation, result.Message, argumentsJson, cancellationToken);
             await _db.SaveChangesAsync(cancellationToken);
             await LogAsync(connection.Id, provider.Key, operation, result.Performed, (int)(DateTime.UtcNow - started).TotalMilliseconds, result.Performed ? null : result.Message, cancellationToken);
             return result;
@@ -268,10 +283,37 @@ public sealed class IntegrationPlatform : IIntegrationPlatform
         catch (Exception ex) when (ex is InvalidOperationException or CryptographicException)
         {
             connection.LastError = "The provider request was rejected before it was sent.";
+            if (ex.Message.Contains("refreshed", StringComparison.OrdinalIgnoreCase))
+                connection.Status = IntegrationConnectionStatuses.NeedsReauth;
             await _db.SaveChangesAsync(cancellationToken);
             await LogAsync(connection.Id, provider.Key, operation, false, (int)(DateTime.UtcNow - started).TotalMilliseconds, ex.Message, cancellationToken);
-            return new IntegrationCallResult { Performed = false, Status = "validation", Message = ex.Message };
+            return new IntegrationCallResult { Performed = false, Status = connection.Status == IntegrationConnectionStatuses.NeedsReauth ? "needs_reauth" : "validation", Message = ex.Message };
         }
+    }
+
+    public async Task<(int StatusCode, string? Challenge)> VerifyWebhookSubscriptionAsync(
+        string providerKey,
+        Guid connectionId,
+        string? mode,
+        string? verifyToken,
+        string? challenge,
+        CancellationToken cancellationToken = default)
+    {
+        if (!string.Equals(mode, "subscribe", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(challenge) || string.IsNullOrWhiteSpace(verifyToken))
+            return (400, null);
+
+        var connection = await _db.CompanyIntegrationConnections.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(x => x.Id == connectionId && x.ProviderKey == providerKey && !x.IsDeleted, cancellationToken);
+        if (connection is null || string.IsNullOrWhiteSpace(connection.WebhookSecretProtected))
+            return (404, null);
+
+        var secret = _protector.Unprotect(connection.WebhookSecretProtected);
+        var expected = Encoding.UTF8.GetBytes(secret);
+        var supplied = Encoding.UTF8.GetBytes(verifyToken);
+        if (expected.Length != supplied.Length || !CryptographicOperations.FixedTimeEquals(expected, supplied))
+            return (403, null);
+
+        return (200, challenge);
     }
 
     public async Task<IntegrationConnectionDto> SetWebhookSecretAsync(Guid connectionId, IntegrationWebhookSecretRequest request, CancellationToken cancellationToken = default)
@@ -324,32 +366,67 @@ public sealed class IntegrationPlatform : IIntegrationPlatform
     {
         var connection = await _db.CompanyIntegrationConnections.IgnoreQueryFilters()
             .FirstOrDefaultAsync(x => x.Id == connectionId && x.ProviderKey == providerKey && !x.IsDeleted, cancellationToken);
-        if (connection is null || connection.Status != "Connected")
+        if (connection is null || connection.Status != IntegrationConnectionStatuses.Connected)
             return (404, "Connection was not found.");
         _tenant.SetTenantId(connection.TenantId);
         if (string.IsNullOrWhiteSpace(connection.WebhookSecretProtected))
             return (400, "A webhook secret is not stored for this connection.");
         var secret = _protector.Unprotect(connection.WebhookSecretProtected);
-        if (!SignatureMatches(providerKey, secret, body, signature))
+        if (!_providers.TryGet(providerKey, out var provider) || provider is null || !provider.VerifyWebhookSignature(secret, body, signature))
             return (401, "The webhook signature is not valid.");
-        var key = "webhook:" + providerKey + ":" + (string.IsNullOrWhiteSpace(eventId) ? Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(body))) : eventId);
-        var name = providerKey == "stripe" && body.Contains("payment_intent.succeeded", StringComparison.Ordinal) ? NalvaEventNames.PaymentReceived : "company.integration_webhook";
-        using var scope = _scopes.CreateScope();
-        var tenant = scope.ServiceProvider.GetRequiredService<ITenantProvider>();
-        tenant.SetTenantId(connection.TenantId);
-        var outbox = scope.ServiceProvider.GetRequiredService<INalvaEventOutbox>();
-        await outbox.EnqueueAsync(name, JsonSerializer.Serialize(new { provider = providerKey, eventId = eventId ?? key }), key, cancellationToken);
-        var logs = scope.ServiceProvider.GetRequiredService<BusinessOSDbContext>();
-        logs.IntegrationActivityLogs.Add(new IntegrationActivityLog
+
+        var eventKey = string.IsNullOrWhiteSpace(eventId)
+            ? Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(body)))
+            : eventId.Trim();
+        var claim = await _webhookIds.TryBeginAsync(providerKey, eventKey, connection.TenantId, cancellationToken);
+        if (claim is IntegrationWebhookClaim.Duplicate)
+            return (200, "Duplicate event ignored.");
+        if (claim is IntegrationWebhookClaim.Busy)
+            return (409, "Event is already being processed.");
+        if (claim is not IntegrationWebhookClaim.Started startedClaim)
+            return (500, "Webhook claim failed.");
+
+        try
         {
-            ConnectionId = connection.Id,
-            ProviderKey = providerKey,
-            Operation = "webhook",
-            Success = true,
-            DurationMs = 0
-        });
-        await logs.SaveChangesAsync(cancellationToken);
-        return (200, "Accepted.");
+            using var scope = _scopes.CreateScope();
+            var tenant = scope.ServiceProvider.GetRequiredService<ITenantProvider>();
+            tenant.SetTenantId(connection.TenantId);
+            var scopedDb = scope.ServiceProvider.GetRequiredService<BusinessOSDbContext>();
+            var scopedRegistry = scope.ServiceProvider.GetRequiredService<IIntegrationProviderRegistry>();
+            scopedRegistry.TryGet(providerKey, out var scopedProvider);
+
+            var handled = scopedProvider is null
+                ? null
+                : await scopedProvider.HandleWebhookAsync(connection.TenantId, connection.Id, body, eventKey, connection.MetadataJson, cancellationToken);
+
+            var outbox = scope.ServiceProvider.GetRequiredService<INalvaEventOutbox>();
+            var name = providerKey == "stripe" && body.Contains("payment_intent.succeeded", StringComparison.Ordinal)
+                ? NalvaEventNames.PaymentReceived
+                : "company.integration_webhook";
+            await outbox.EnqueueAsync(
+                name,
+                JsonSerializer.Serialize(new { provider = providerKey, eventId = eventKey, handled = handled?.Handled }),
+                "webhook:" + providerKey + ":" + eventKey,
+                cancellationToken);
+
+            scopedDb.IntegrationActivityLogs.Add(new IntegrationActivityLog
+            {
+                ConnectionId = connection.Id,
+                ProviderKey = providerKey,
+                Operation = "webhook",
+                Success = true,
+                DurationMs = 0
+            });
+            await scopedDb.SaveChangesAsync(cancellationToken);
+            await _webhookIds.CompleteAsync(startedClaim.ReceiptId, cancellationToken);
+            return (200, handled?.Message ?? "Accepted.");
+        }
+        catch (Exception ex)
+        {
+            await _webhookIds.DeadLetterAsync(startedClaim.ReceiptId, ex.Message, cancellationToken);
+            await DeadLetterAsync(connection.Id, providerKey, "webhook", ex.Message, body, cancellationToken);
+            return (500, "Webhook processing failed and was dead-lettered.");
+        }
     }
 
     private async Task<string> AccessTokenAsync(CompanyIntegrationConnection connection, string providerKey, CancellationToken cancellationToken)
@@ -378,8 +455,8 @@ public sealed class IntegrationPlatform : IIntegrationPlatform
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode || !TryReadToken(body, out var next, out var nextRefresh, out var nextExpires, out _, out _))
         {
-            connection.Status = "Error";
-            connection.LastError = "Token refresh failed.";
+            connection.Status = IntegrationConnectionStatuses.NeedsReauth;
+            connection.LastError = "Token refresh failed. Reauthorize this connection.";
             await _db.SaveChangesAsync(cancellationToken);
             throw new InvalidOperationException("The provider token could not be refreshed.");
         }
@@ -418,37 +495,19 @@ public sealed class IntegrationPlatform : IIntegrationPlatform
         }
     }
 
-    private static bool SignatureMatches(string provider, string secret, string body, string? signature)
+    private async Task DeadLetterAsync(Guid? connectionId, string provider, string operation, string error, string? payload, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(signature))
-            return false;
-        if (provider == "stripe")
-            return StripeSignature(secret, body, signature);
-        var supplied = signature.StartsWith("sha256=", StringComparison.OrdinalIgnoreCase) ? signature[7..] : signature;
-        byte[] expected = provider == "shopify"
-            ? HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), Encoding.UTF8.GetBytes(body))
-            : HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), Encoding.UTF8.GetBytes(body));
-        byte[] candidate;
-        try
+        _db.IntegrationDeadLetters.Add(new IntegrationDeadLetter
         {
-            candidate = provider == "shopify" ? Convert.FromBase64String(supplied.Trim()) : Convert.FromHexString(supplied.Trim());
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
-        return candidate.Length == expected.Length && CryptographicOperations.FixedTimeEquals(expected, candidate);
-    }
-
-    private static bool StripeSignature(string secret, string body, string signature)
-    {
-        var parts = signature.Split(',', StringSplitOptions.RemoveEmptyEntries);
-        var timestamp = parts.Select(part => part.Split('=', 2)).FirstOrDefault(part => part.Length == 2 && part[0] == "t") is { } time ? time[1] : null;
-        var v1 = parts.Select(part => part.Split('=', 2)).Where(part => part.Length == 2 && part[0] == "v1").Select(part => part[1]).ToList();
-        if (timestamp is null || v1.Count == 0)
-            return false;
-        var expected = Convert.ToHexString(HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), Encoding.UTF8.GetBytes(timestamp + "." + body))).ToLowerInvariant();
-        return v1.Any(value => value.Length == expected.Length && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(expected), Encoding.UTF8.GetBytes(value.ToLowerInvariant())));
+            ConnectionId = connectionId,
+            ProviderKey = provider,
+            Operation = operation,
+            ErrorRedacted = NalvaGuard.Redact(NalvaGuard.Clip(error, 500)),
+            PayloadRedacted = payload is null ? null : NalvaGuard.Redact(NalvaGuard.Clip(payload, 1000)),
+            Attempts = 1,
+            Status = "Open"
+        });
+        await _db.SaveChangesAsync(cancellationToken);
     }
 
     private async Task LogAsync(Guid? connectionId, string provider, string operation, bool success, int duration, string? error, CancellationToken cancellationToken)

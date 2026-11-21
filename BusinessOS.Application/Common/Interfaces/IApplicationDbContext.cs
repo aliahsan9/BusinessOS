@@ -16,6 +16,13 @@ public interface IApplicationDbContext
     DbSet<ProcurementAgentSettings> ProcurementAgentSettings { get; }
     DbSet<ProcurementRecommendation> ProcurementRecommendations { get; }
     DbSet<PurchaseReceivingEvent> PurchaseReceivingEvents { get; }
+    DbSet<FinanceAgentSettings> FinanceAgentSettings { get; }
+    DbSet<FinanceBudget> FinanceBudgets { get; }
+    DbSet<FinancePaymentReminder> FinancePaymentReminders { get; }
+    DbSet<FinanceBankImportBatch> FinanceBankImportBatches { get; }
+    DbSet<FinanceBankStatementLine> FinanceBankStatementLines { get; }
+    DbSet<FinanceAgentActivity> FinanceAgentActivities { get; }
+    DbSet<PredictionAccuracyLog> PredictionAccuracyLogs { get; }
     DbSet<Order> Orders { get; }
     DbSet<OrderItem> OrderItems { get; }
     DbSet<Payment> Payments { get; }
@@ -128,6 +135,11 @@ public interface IApplicationDbContext
     DbSet<CompanyIntegrationConnection> CompanyIntegrationConnections { get; }
     DbSet<IntegrationOAuthState> IntegrationOAuthStates { get; }
     DbSet<IntegrationActivityLog> IntegrationActivityLogs { get; }
+    DbSet<IntegrationWebhookReceipt> IntegrationWebhookReceipts { get; }
+    DbSet<IntegrationDeadLetter> IntegrationDeadLetters { get; }
+    DbSet<IntegrationConversation> IntegrationConversations { get; }
+    DbSet<IntegrationConversationMessage> IntegrationConversationMessages { get; }
+    DbSet<CompanyPaymentRecord> CompanyPaymentRecords { get; }
     DbSet<CompanyStorefront> CompanyStorefronts { get; }
     DbSet<StorefrontSlugRedirect> StorefrontSlugRedirects { get; }
     DbSet<StorefrontOffering> StorefrontOfferings { get; }

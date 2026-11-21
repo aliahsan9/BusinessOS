@@ -119,8 +119,12 @@ public class NalvaWorkflowDefinitionConfiguration : IEntityTypeConfiguration<Nal
         builder.Property(x => x.TriggerEvent).HasMaxLength(80);
         builder.Property(x => x.LastScheduleWindow).HasMaxLength(80);
         builder.Property(x => x.TimeZoneId).HasMaxLength(80);
+        builder.Property(x => x.RecurrenceKind).HasMaxLength(32).HasDefaultValue("Interval");
+        builder.Property(x => x.LocalTimeOfDay).HasMaxLength(8);
+        builder.Property(x => x.DaysOfWeek).HasMaxLength(64);
+        builder.Property(x => x.LastFailure).HasMaxLength(2000);
         builder.HasIndex(x => new { x.TenantId, x.Key }).IsUnique();
-        builder.HasIndex(x => new { x.TenantId, x.TriggerKind, x.IsActive });
+        builder.HasIndex(x => new { x.TenantId, x.TriggerKind, x.IsActive, x.IsPaused, x.NextRunAt });
     }
 }
 
@@ -147,6 +151,7 @@ public class NalvaCompanySettingsConfiguration : IEntityTypeConfiguration<NalvaC
         builder.Property(x => x.EmbeddingModel).HasMaxLength(80);
         builder.Property(x => x.Temperature).HasPrecision(4, 2);
         builder.Property(x => x.MonthlyBudgetUsd).HasPrecision(18, 2);
+        builder.Property(x => x.ExtraApprovalToolsJson).HasMaxLength(4000);
         builder.HasIndex(x => x.TenantId).IsUnique();
     }
 }

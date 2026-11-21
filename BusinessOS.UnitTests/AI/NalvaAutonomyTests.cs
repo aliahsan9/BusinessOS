@@ -53,6 +53,16 @@ public class NalvaAutonomyTests
     }
 
     [Fact]
+    public void Schedule_OnceDoesNotRepeat()
+    {
+        var now = new DateTime(2026, 11, 21, 8, 0, 0, DateTimeKind.Utc);
+        var spec = new NalvaScheduleSpec("UTC", NalvaRecurrenceKinds.Once, null, null, null, null, null, null);
+        NalvaSchedule.TryDue(spec, now, null, out var window, out _).Should().BeTrue();
+        window.Should().Be("once");
+        NalvaSchedule.TryDue(spec, now.AddDays(30), window, out _, out _).Should().BeFalse();
+    }
+
+    [Fact]
     public void WorkflowGraph_GroupsOnlyReadOnlySteps()
     {
         var steps = new List<NalvaWorkflowStepWrite>

@@ -1,11 +1,13 @@
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Services;
+using BusinessOS.Application.Features.Audit.Services;
 using BusinessOS.Application.Features.Integrations;
 using BusinessOS.Application.Features.Nalva;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.AI.Nalva;
+using BusinessOS.Infrastructure.AI.Nalva.Suppliers;
 using BusinessOS.Infrastructure.Data;
 using BusinessOS.Infrastructure.Services;
 using BusinessOS.UnitTests.Common;
@@ -42,7 +44,8 @@ public class NalvaPhase5WorkforceTests
     {
         NalvaWorkflowCatalog.TryGet("overdue-payment-followup", out var template).Should().BeTrue();
         template!.TriggerEvent.Should().Be(NalvaEventNames.InvoiceOverdue);
-        template.Steps.SelectMany(x => x.Tools).Should().Contain("SendExternalEmail");
+        template.Steps.SelectMany(x => x.Tools).Should().Contain("SubmitPaymentReminder");
+        template.Steps.SelectMany(x => x.Tools).Should().Contain("PreparePaymentReminder");
         template.Steps.SelectMany(x => x.Tools).Should().Contain("GetOutstandingReceivables");
     }
 
@@ -180,6 +183,48 @@ public class NalvaPhase5WorkforceTests
     public async Task OverduePaymentWorkflow_ReachesApproval()
     {
         var harness = Harness.Open();
+        var customerId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var invoiceId = Guid.NewGuid();
+        harness.Db.Customers.Add(new Customer
+        {
+            Id = customerId,
+            FirstName = "Overdue",
+            LastName = "Buyer",
+            Email = "overdue@example.com",
+            PhoneNumber = "555-0199",
+            Address = "Street 1",
+            City = "Lahore",
+            Country = "Pakistan",
+            PostalCode = "54000"
+        });
+        harness.Db.Orders.Add(new Order
+        {
+            Id = orderId,
+            CustomerId = customerId,
+            OrderNumber = "ORD-OVERDUE",
+            OrderDate = DateTime.UtcNow.AddDays(-40),
+            Status = OrderStatusNames.Completed,
+            GrandTotal = 250m,
+            TotalAmount = 250m,
+            RowVersion = Guid.NewGuid().ToByteArray()[..8]
+        });
+        harness.Db.Invoices.Add(new Invoice
+        {
+            Id = invoiceId,
+            InvoiceNumber = "INV-OVERDUE",
+            OrderId = orderId,
+            CustomerId = customerId,
+            InvoiceDate = DateTime.UtcNow.AddDays(-35),
+            DueDate = DateTime.UtcNow.AddDays(-5),
+            Status = InvoiceStatusNames.Sent,
+            SubTotal = 250m,
+            GrandTotal = 250m,
+            AmountPaid = 0m,
+            OutstandingAmount = 250m
+        });
+        await harness.Db.SaveChangesAsync();
+
         await harness.Service.ActivateAsync("finance");
         await harness.Service.ActivateAsync("sales");
         await harness.Service.ActivateAsync("ceo");
@@ -187,10 +232,11 @@ public class NalvaPhase5WorkforceTests
         var overdue = workflows.Single(x => x.Key == "overdue-payment-followup");
         await harness.Service.SetWorkflowActiveAsync(overdue.Id, true);
 
-        var run = await harness.Service.RunWorkflowAsync(overdue.Id, "{\"invoiceId\":\"00000000-0000-0000-0000-000000000001\"}");
+        var run = await harness.Service.RunWorkflowAsync(overdue.Id, $"{{\"invoiceId\":\"{invoiceId}\"}}");
 
-        run.Status.Should().Be(NalvaStatuses.AwaitingApproval);
-        harness.Db.NalvaApprovals.Should().Contain(x => x.Action == "SendExternalEmail");
+        run.Status.Should().Be(NalvaStatuses.AwaitingApproval, because: (run.Error ?? "") + " " + (run.Summary ?? ""));
+        harness.Db.NalvaApprovals.Should().Contain(x =>
+            x.Action == "SendPaymentReminder" || x.ToolName == "SubmitPaymentReminder");
     }
 
     private sealed class Harness
@@ -226,7 +272,12 @@ public class NalvaPhase5WorkforceTests
             user.SetupGet(x => x.UserId).Returns("user-1");
             user.SetupGet(x => x.TenantId).Returns(tenantId);
             user.Setup(x => x.HasPermission(It.IsAny<string>())).Returns(true);
-            var gateway = new NalvaToolGateway(db, provider, new CrmOperationsService(db, user.Object));
+            var audit = new EntityAuditService(db, user.Object);
+            var finance = new FinanceAgentService(db, provider, user.Object, audit, NullLogger<FinanceAgentService>.Instance);
+            var procurement = new InventoryProcurementAgentService(
+                db, provider, user.Object, TenantDatabase.Inventory(db), new UnavailableSupplierResearchProvider(), audit,
+                NullLogger<InventoryProcurementAgentService>.Instance);
+            var gateway = new NalvaToolGateway(db, provider, new CrmOperationsService(db, user.Object), procurement: procurement, finance: finance);
             var engine = new NalvaExecutionEngine(db, provider, user.Object, gateway, new SilentModel(), NullLogger<NalvaExecutionEngine>.Instance);
             var service = new NalvaWorkforceService(db, user.Object, engine, new NalvaWorkflowEngine(db, engine));
             return new Harness { Db = db, Service = service, Engine = engine };

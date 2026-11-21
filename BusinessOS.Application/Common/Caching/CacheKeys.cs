@@ -133,6 +133,9 @@ public static class CacheKeys
     public static string Dashboard(Guid tenantId, string suffix) =>
         $"{TenantRoot(tenantId)}Dashboard_{suffix}";
 
+    public static string BusinessIntelligence(Guid tenantId, string suffix) =>
+        $"{TenantRoot(tenantId)}BI_{suffix}";
+
     // ── Reports ───────────────────────────────────────────────────────────
     public static string ReportsPrefix(Guid tenantId) => $"{TenantRoot(tenantId)}Report";
 

@@ -34,9 +34,13 @@ public static class NalvaEndpoints
         group.MapGet("/workflows/runs", async (INalvaWorkforceService service, CancellationToken ct) => Results.Ok(await service.GetWorkflowRunsAsync(ct)));
         group.MapPost("/events", async (NalvaEventRequest request, INalvaWorkforceService service, CancellationToken ct) => Results.Ok(new { started = await service.PublishEventAsync(request, ct) })).RequirePermission(PermissionCodes.NalvaManage);
         group.MapGet("/approvals", async (string? status, INalvaWorkforceService service, CancellationToken ct) => Results.Ok(await service.GetApprovalsAsync(status, ct)));
-        group.MapPost("/approvals/{id:guid}/approve", async (Guid id, NalvaApprovalDecisionRequest? request, INalvaWorkforceService service, CancellationToken ct) => Results.Ok(await service.DecideApprovalAsync(id, "approve", request?.Note, ct))).RequirePermission(PermissionCodes.NalvaApprove);
-        group.MapPost("/approvals/{id:guid}/reject", async (Guid id, NalvaApprovalDecisionRequest? request, INalvaWorkforceService service, CancellationToken ct) => Results.Ok(await service.DecideApprovalAsync(id, "reject", request?.Note, ct))).RequirePermission(PermissionCodes.NalvaApprove);
-        group.MapPost("/approvals/{id:guid}/changes", async (Guid id, NalvaApprovalDecisionRequest? request, INalvaWorkforceService service, CancellationToken ct) => Results.Ok(await service.DecideApprovalAsync(id, "changes", request?.Note, ct))).RequirePermission(PermissionCodes.NalvaApprove);
+        group.MapPost("/approvals/{id:guid}/approve", async (Guid id, NalvaApprovalDecisionRequest? request, INalvaWorkforceService service, CancellationToken ct) =>
+            Results.Ok(await service.DecideApprovalAsync(id, "approve", request?.Note, request?.ModifiedArgsJson, ct))).RequirePermission(PermissionCodes.NalvaApprove);
+        group.MapPost("/approvals/{id:guid}/reject", async (Guid id, NalvaApprovalDecisionRequest? request, INalvaWorkforceService service, CancellationToken ct) =>
+            Results.Ok(await service.DecideApprovalAsync(id, "reject", request?.Note, request?.ModifiedArgsJson, ct))).RequirePermission(PermissionCodes.NalvaApprove);
+        group.MapPost("/approvals/{id:guid}/changes", async (Guid id, NalvaApprovalDecisionRequest? request, INalvaWorkforceService service, CancellationToken ct) =>
+            Results.Ok(await service.DecideApprovalAsync(id, "changes", request?.Note, request?.ModifiedArgsJson, ct))).RequirePermission(PermissionCodes.NalvaApprove);
+        group.MapGet("/reliability", async (INalvaWorkforceService service, CancellationToken ct) => Results.Ok(await service.GetReliabilitySnapshotAsync(ct)));
         group.MapGet("/knowledge", async (string? agentKey, INalvaWorkforceService service, CancellationToken ct) => Results.Ok(await service.GetKnowledgeAsync(agentKey, ct)));
         group.MapPost("/knowledge", async (NalvaKnowledgeWriteRequest request, INalvaWorkforceService service, CancellationToken ct) => Results.Ok(await service.AddKnowledgeAsync(request, ct))).RequirePermission(PermissionCodes.NalvaManage);
         group.MapDelete("/knowledge/{id:guid}", async (Guid id, INalvaWorkforceService service, CancellationToken ct) => { await service.DeleteKnowledgeAsync(id, ct); return Results.NoContent(); }).RequirePermission(PermissionCodes.NalvaManage);
@@ -51,5 +55,58 @@ public static class NalvaEndpoints
         group.MapGet("/settings", async (INalvaWorkforceService service, CancellationToken ct) => Results.Ok(await service.GetSettingsAsync(ct)));
         group.MapPut("/settings", async (NalvaSettingsWriteRequest request, INalvaWorkforceService service, CancellationToken ct) => Results.Ok(await service.SaveSettingsAsync(request, ct))).RequirePermission(PermissionCodes.NalvaManage);
         group.MapGet("/models", async (INalvaWorkforceService service, CancellationToken ct) => Results.Ok(await service.GetModelsAsync(ct)));
+
+        // Phase 6A — intelligent scheduling & recurring automation
+        group.MapGet("/automation/dashboard", async (INalvaAutomationService automation, CancellationToken ct) =>
+            Results.Ok(await automation.GetDashboardAsync(ct)));
+        group.MapGet("/automation/schedules", async (INalvaAutomationService automation, CancellationToken ct) =>
+            Results.Ok(await automation.GetSchedulesAsync(ct)));
+        group.MapPost("/automation/schedules", async (NalvaScheduleWriteRequest request, INalvaAutomationService automation, CancellationToken ct) =>
+            Results.Ok(await automation.SaveScheduleAsync(request, ct))).RequirePermission(PermissionCodes.NalvaManage);
+        group.MapPost("/automation/schedules/{id:guid}/pause", async (Guid id, INalvaAutomationService automation, CancellationToken ct) =>
+            Results.Ok(await automation.PauseScheduleAsync(id, ct))).RequirePermission(PermissionCodes.NalvaManage);
+        group.MapPost("/automation/schedules/{id:guid}/resume", async (Guid id, INalvaAutomationService automation, CancellationToken ct) =>
+            Results.Ok(await automation.ResumeScheduleAsync(id, ct))).RequirePermission(PermissionCodes.NalvaManage);
+        group.MapPost("/automation/schedules/{id:guid}/cancel", async (Guid id, INalvaAutomationService automation, CancellationToken ct) =>
+            Results.Ok(await automation.CancelScheduleAsync(id, ct))).RequirePermission(PermissionCodes.NalvaManage);
+        group.MapGet("/automation/rules", async (INalvaAutomationService automation, CancellationToken ct) =>
+            Results.Ok(await automation.GetRulesAsync(ct)));
+        group.MapPost("/automation/rules", async (NalvaAutomationRuleWriteRequest request, INalvaAutomationService automation, CancellationToken ct) =>
+            Results.Ok(await automation.SaveRuleAsync(request, ct))).RequirePermission(PermissionCodes.NalvaManage);
+        group.MapPost("/automation/rules/{id:guid}/enable", async (Guid id, INalvaAutomationService automation, CancellationToken ct) =>
+            Results.Ok(await automation.SetRuleEnabledAsync(id, true, ct))).RequirePermission(PermissionCodes.NalvaManage);
+        group.MapPost("/automation/rules/{id:guid}/disable", async (Guid id, INalvaAutomationService automation, CancellationToken ct) =>
+            Results.Ok(await automation.SetRuleEnabledAsync(id, false, ct))).RequirePermission(PermissionCodes.NalvaManage);
+        group.MapGet("/automation/history", async (string? status, int? take, INalvaAutomationService automation, CancellationToken ct) =>
+            Results.Ok(await automation.GetExecutionHistoryAsync(status, take ?? 50, ct)));
+        group.MapGet("/automation/failed", async (INalvaAutomationService automation, CancellationToken ct) =>
+            Results.Ok(await automation.GetFailedAsync(ct)));
+        group.MapGet("/automation/agents", async (INalvaAutomationService automation, CancellationToken ct) =>
+            Results.Ok(await automation.GetAgentActivityAsync(ct)));
+        group.MapGet("/automation/approval-policy", async (INalvaAutomationService automation, CancellationToken ct) =>
+            Results.Ok(await automation.GetApprovalPolicyAsync(ct)));
+        group.MapPut("/automation/approval-policy", async (NalvaApprovalPolicyWriteRequest request, INalvaAutomationService automation, CancellationToken ct) =>
+            Results.Ok(await automation.SaveApprovalPolicyAsync(request, ct))).RequirePermission(PermissionCodes.NalvaManage);
+        group.MapGet("/automation/agent-activity", async (INalvaAutomationService automation, CancellationToken ct) =>
+            Results.Ok(await automation.GetAgentActivityAsync(ct)));
+        group.MapPost("/automation/approvals/expire", async (INalvaAutomationService automation, CancellationToken ct) =>
+            Results.Ok(new { expired = await automation.ExpireApprovalsAsync(ct) })).RequirePermission(PermissionCodes.NalvaManage);
+
+        // Phase 5F — multi-agent collaboration / Navla objective orchestration
+        group.MapGet("/workforce/board", async (INalvaCollaborationService collab, CancellationToken ct) =>
+            Results.Ok(await collab.GetWorkforceBoardAsync(ct)));
+        group.MapPost("/objectives/plan", async (NalvaObjectivePlanRequest request, INalvaCollaborationService collab, CancellationToken ct) =>
+            Results.Ok(await collab.PlanObjectiveAsync(request, ct)));
+        group.MapPost("/objectives/start", async (NalvaObjectivePlanRequest request, INalvaCollaborationService collab, CancellationToken ct) =>
+        {
+            request.StartImmediately = true;
+            return Results.Ok(await collab.StartObjectiveAsync(request, ct));
+        }).RequirePermission(PermissionCodes.NalvaManage);
+        group.MapGet("/workflows/runs/{id:guid}", async (Guid id, INalvaCollaborationService collab, CancellationToken ct) =>
+            Results.Ok(await collab.GetWorkflowDetailAsync(id, ct)));
+        group.MapGet("/shared-context", async (string? kind, INalvaCollaborationService collab, CancellationToken ct) =>
+            Results.Ok(await collab.GetSharedContextAsync(kind, ct)));
+        group.MapPost("/shared-context", async (NalvaKnowledgeWriteRequest request, INalvaCollaborationService collab, CancellationToken ct) =>
+            Results.Ok(await collab.StoreSharedDecisionAsync(request.Title, request.Content, null, ct))).RequirePermission(PermissionCodes.NalvaManage);
     }
 }

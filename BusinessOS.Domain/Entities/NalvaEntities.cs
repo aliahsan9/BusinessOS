@@ -160,6 +160,23 @@ public class NalvaWorkflowDefinition : AuditableEntity
     public DateTime? ScheduleEndUtc { get; set; }
     public DateTime? NextRunAt { get; set; }
     public string? LastScheduleWindow { get; set; }
+    /// <summary>Once | Daily | Weekly | Monthly | Custom | Interval</summary>
+    public string RecurrenceKind { get; set; } = "Interval";
+    /// <summary>Local wall-clock time HH:mm in TimeZoneId.</summary>
+    public string? LocalTimeOfDay { get; set; }
+    /// <summary>Comma-separated day names or 0-6 (Sun-Sat), used by Weekly/Custom.</summary>
+    public string? DaysOfWeek { get; set; }
+    /// <summary>1-28 for Monthly schedules.</summary>
+    public int? DayOfMonth { get; set; }
+    /// <summary>Paused schedules stay configured but are skipped by the processor.</summary>
+    public bool IsPaused { get; set; }
+    /// <summary>Max concurrent Running runs for this definition (1–4).</summary>
+    public int MaxConcurrentRuns { get; set; } = 1;
+    public Guid? ClaimToken { get; set; }
+    public int ConsecutiveFailures { get; set; }
+    public string? LastFailure { get; set; }
+    public DateTime? LastRunAt { get; set; }
+    public DateTime? CancelledAt { get; set; }
 }
 
 public class NalvaWorkflowRun : AuditableEntity
@@ -194,6 +211,12 @@ public class NalvaCompanySettings : AuditableEntity
     public int AlertThresholdPercent { get; set; } = 80;
     public bool CostAlert { get; set; }
     public int AutonomyCeiling { get; set; } = 3;
+    public int ApprovalExpiryDays { get; set; } = 7;
+    public bool NotifyPendingApprovals { get; set; } = true;
+    public bool AutoExpireApprovals { get; set; } = true;
+    public bool RequireApprovalForExternalActions { get; set; } = true;
+    /// <summary>JSON array of tool names that always require approval (union with catalog rules).</summary>
+    public string ExtraApprovalToolsJson { get; set; } = "[]";
 }
 
 public class NalvaWorkItem : AuditableEntity

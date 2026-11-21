@@ -31,6 +31,9 @@ public static class NavlaSpecialistCatalog
             [NavlaSpecialistKeys.BusinessAssistant] =
             [
                 AiToolName.GetBusinessHealth,
+                AiToolName.GetExecutiveDecisionBrief,
+                AiToolName.GetBusinessRisks,
+                AiToolName.ForecastSalesRevenue,
                 AiToolName.GetDailyPriorities,
                 AiToolName.GetBusinessSettings,
                 AiToolName.GetNotificationsSummary,
@@ -73,6 +76,8 @@ public static class NavlaSpecialistCatalog
                 AiToolName.GetRevenue,
                 AiToolName.GetBestSellingProducts,
                 AiToolName.GetSalesTrends,
+                AiToolName.ForecastSalesRevenue,
+                AiToolName.GetExecutiveDecisionBrief,
                 AiToolName.GenerateSalesReport,
                 AiToolName.CreateSale
             ],
@@ -105,6 +110,9 @@ public static class NavlaSpecialistCatalog
                 AiToolName.GetOutstandingPayments,
                 AiToolName.GetInvoices,
                 AiToolName.ShowProfit,
+                AiToolName.ForecastSalesRevenue,
+                AiToolName.GetExecutiveDecisionBrief,
+                AiToolName.GetBusinessRisks,
                 AiToolName.SearchInvoice,
                 AiToolName.CreateExpense,
                 AiToolName.CreateInvoice,

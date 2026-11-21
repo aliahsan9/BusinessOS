@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -7,6 +8,8 @@ using BusinessOS.Application.Features.AI.Services;
 using BusinessOS.Application.Features.Nalva;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Application.Features.Billing.Services;
+using BusinessOS.Application.Features.Notifications.DTOs;
+using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Infrastructure.Billing;
 using BusinessOS.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -16,12 +19,16 @@ namespace BusinessOS.Infrastructure.AI.Nalva;
 
 public sealed class NalvaExecutionEngine : INalvaExecutionEngine
 {
+    /// <summary>Serializes InMemory / non-ExecuteUpdate claim fallbacks across workers in-process.</summary>
+    private static readonly ConcurrentDictionary<Guid, object> ClaimGates = new();
+
     private readonly BusinessOSDbContext _db;
     private readonly ITenantProvider _tenant;
     private readonly ICurrentUserService _user;
     private readonly INalvaToolGateway _tools;
     private readonly ILlmChatClient _llm;
     private readonly ILogger<NalvaExecutionEngine> _logger;
+    private readonly INotificationService? _notifications;
 
     public NalvaExecutionEngine(
         BusinessOSDbContext db,
@@ -29,7 +36,8 @@ public sealed class NalvaExecutionEngine : INalvaExecutionEngine
         ICurrentUserService user,
         INalvaToolGateway tools,
         ILlmChatClient llm,
-        ILogger<NalvaExecutionEngine> logger)
+        ILogger<NalvaExecutionEngine> logger,
+        INotificationService? notifications = null)
     {
         _db = db;
         _tenant = tenant;
@@ -37,16 +45,46 @@ public sealed class NalvaExecutionEngine : INalvaExecutionEngine
         _tools = tools;
         _llm = llm;
         _logger = logger;
+        _notifications = notifications;
     }
 
     public async Task RunQueuedTaskAsync(Guid taskId, CancellationToken cancellationToken = default)
     {
         var claim = Guid.NewGuid();
-        var claimed = await _db.NalvaTasks
-            .Where(x => x.Id == taskId && x.Status == NalvaStatuses.Queued && (x.NextAttemptAt == null || x.NextAttemptAt <= DateTime.UtcNow))
-            .ExecuteUpdateAsync(
-                setters => setters.SetProperty(x => x.Status, NalvaStatuses.Running).SetProperty(x => x.ClaimToken, claim),
-                cancellationToken);
+        var claimedAt = DateTime.UtcNow;
+        var claimed = 0;
+        try
+        {
+            claimed = await _db.NalvaTasks
+                .Where(x => x.Id == taskId && x.Status == NalvaStatuses.Queued && (x.NextAttemptAt == null || x.NextAttemptAt <= DateTime.UtcNow))
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(x => x.Status, NalvaStatuses.Running)
+                        .SetProperty(x => x.ClaimToken, claim)
+                        .SetProperty(x => x.UpdatedAt, claimedAt),
+                    cancellationToken);
+        }
+        catch (InvalidOperationException)
+        {
+            // InMemory (and some providers) lack ExecuteUpdate — fall back to a gated tracked claim.
+            var gate = ClaimGates.GetOrAdd(taskId, static _ => new object());
+            lock (gate)
+            {
+                var candidate = _db.NalvaTasks.FirstOrDefault(
+                    x => x.Id == taskId && x.Status == NalvaStatuses.Queued && (x.NextAttemptAt == null || x.NextAttemptAt <= DateTime.UtcNow));
+                if (candidate is not null)
+                {
+                    candidate.Status = NalvaStatuses.Running;
+                    candidate.ClaimToken = claim;
+                    candidate.UpdatedAt = claimedAt;
+                    _db.SaveChanges();
+                    claimed = 1;
+                }
+            }
+
+            ClaimGates.TryRemove(taskId, out _);
+        }
+
         if (claimed == 0)
             return;
 
@@ -309,6 +347,10 @@ public sealed class NalvaExecutionEngine : INalvaExecutionEngine
                 break;
             }
 
+            var extraApprovalTools = NalvaJson.Strings(settings?.ExtraApprovalToolsJson);
+            var forceApproval = extraApprovalTools.Contains(step.Name, StringComparer.OrdinalIgnoreCase)
+                || ((settings?.RequireApprovalForExternalActions ?? true) && definitionTool.ExternalEffect);
+
             foreach (var permission in definitionTool.Permissions)
             {
                 if (!await CallerHasAsync(permission, execution.InitiatorUserId, cancellationToken))
@@ -335,12 +377,45 @@ public sealed class NalvaExecutionEngine : INalvaExecutionEngine
                     throw new ForbiddenException("Approval was withdrawn before the action ran.");
             }
 
-            if (request.DryRun && (definitionTool.IsWrite || definitionTool.ExternalEffect || definitionTool.RequiresApproval))
+            if (request.DryRun && (definitionTool.IsWrite || definitionTool.ExternalEffect || definitionTool.RequiresApproval || forceApproval))
             {
                 log.Add(new JsonObject { ["tool"] = step.Name, ["success"] = true, ["dryRun"] = true, ["summary"] = "Dry run. The action was not performed." });
                 results.Add(new JsonObject { ["tool"] = step.Name, ["dryRun"] = true, ["performed"] = false });
                 execution.ToolCallCount += 1;
                 goto NextTool;
+            }
+
+            // Company policy can force approval without relying on catalog RequiresApproval alone.
+            if (forceApproval && !grantedHere && !definitionTool.RequiresApproval)
+            {
+                var redactedArgs = NalvaGuard.Redact(step.ArgsJson);
+                var context = new JsonObject
+                {
+                    ["argsFingerprint"] = NalvaCollaborationService.Fingerprint(redactedArgs),
+                    ["workflowRunId"] = execution.WorkflowRunId?.ToString(),
+                    ["taskObjective"] = execution.Objective,
+                    ["policyForced"] = true
+                };
+                var record = new NalvaApproval
+                {
+                    ExecutionId = execution.Id,
+                    AgentKey = companyAgent.AgentKey,
+                    Action = definitionTool.ApprovalAction ?? step.Name,
+                    ToolName = step.Name,
+                    Risk = definitionTool.Risk,
+                    ArgsJson = redactedArgs,
+                    ContextJson = context.ToJsonString(),
+                    RequestedByUserId = execution.InitiatorUserId,
+                    Status = NalvaStatuses.Pending,
+                    ExpiresAt = DateTime.UtcNow.AddDays(Math.Clamp(settings?.ApprovalExpiryDays ?? 7, 1, 30))
+                };
+                _db.NalvaApprovals.Add(record);
+                execution.ApprovalCount += 1;
+                execution.Status = NalvaStatuses.AwaitingApproval;
+                approvalRecordId = record.Id;
+                stoppedForApproval = true;
+                log.Add(new JsonObject { ["tool"] = step.Name, ["success"] = true, ["approval"] = true, ["summary"] = "Waiting for company policy approval." });
+                break;
             }
 
             NalvaToolOutcome outcome;
@@ -388,6 +463,15 @@ public sealed class NalvaExecutionEngine : INalvaExecutionEngine
 
             if (outcome.ApprovalRequired)
             {
+                if (NalvaCollaborationProtocol.MaySelfApprove(companyAgent.AgentKey, outcome.ApprovalAction ?? step.Name))
+                    throw new ForbiddenException("Agents cannot approve their own actions.");
+
+                var redactedArgs = NalvaGuard.Redact(step.ArgsJson);
+                var context = JsonNode.Parse(NalvaGuard.Redact(outcome.Data.ToJsonString())) as JsonObject ?? new JsonObject();
+                context["argsFingerprint"] = NalvaCollaborationService.Fingerprint(redactedArgs);
+                context["workflowRunId"] = execution.WorkflowRunId?.ToString();
+                context["taskObjective"] = execution.Objective;
+                var expiryDays = Math.Clamp(settings?.ApprovalExpiryDays ?? 7, 1, 30);
                 var record = new NalvaApproval
                 {
                     ExecutionId = execution.Id,
@@ -395,17 +479,18 @@ public sealed class NalvaExecutionEngine : INalvaExecutionEngine
                     Action = outcome.ApprovalAction ?? step.Name,
                     ToolName = step.Name,
                     Risk = outcome.Risk,
-                    ArgsJson = NalvaGuard.Redact(step.ArgsJson),
-                    ContextJson = NalvaGuard.Redact(outcome.Data.ToJsonString()),
+                    ArgsJson = redactedArgs,
+                    ContextJson = context.ToJsonString(),
                     RequestedByUserId = execution.InitiatorUserId,
                     Status = NalvaStatuses.Pending,
-                    ExpiresAt = DateTime.UtcNow.AddDays(7)
+                    ExpiresAt = DateTime.UtcNow.AddDays(expiryDays)
                 };
                 _db.NalvaApprovals.Add(record);
                 execution.ApprovalCount += 1;
                 execution.Status = NalvaStatuses.AwaitingApproval;
                 approvalRecordId = record.Id;
                 stoppedForApproval = true;
+                await NotifyPendingApprovalAsync(record, settings, cancellationToken);
                 break;
             }
 
@@ -478,7 +563,6 @@ public sealed class NalvaExecutionEngine : INalvaExecutionEngine
             }
         }
 
-        execution.ResultJson = structured.ToJsonString();
         execution.Summary = error
             ?? (stoppedForApproval ? "Waiting for a person to approve the next action." : "Completed with recorded tool results.");
         execution.Error = error;
@@ -487,12 +571,7 @@ public sealed class NalvaExecutionEngine : INalvaExecutionEngine
         if (execution.Status == NalvaStatuses.Completed)
             await RememberAsync(companyAgent.AgentKey, execution, cancellationToken);
 
-        var monthSpend = spent + execution.EstimatedCostUsd;
-        if (settings is not null && budget > 0 && monthSpend >= budget * settings.AlertThresholdPercent / 100m)
-            settings.CostAlert = true;
-
-        await _db.SaveChangesAsync(cancellationToken);
-        return new NalvaExecutionResult
+        var provisional = new NalvaExecutionResult
         {
             ExecutionId = execution.Id,
             Status = execution.Status,
@@ -505,11 +584,54 @@ public sealed class NalvaExecutionEngine : INalvaExecutionEngine
             CostIsEstimate = true,
             PricingVersion = execution.PricingVersion,
             Tools = plan.Select(x => x.Name).ToArray(),
-            ResultJson = execution.ResultJson,
+            ResultJson = structured.ToJsonString(),
             Error = execution.Error,
             ErrorClass = errorClass,
             IdempotentRetryAllowed = errorClass != NalvaErrorClass.Uncertain
         };
+        var envelope = NalvaCollaborationProtocol.FromExecution(
+            execution.TaskId ?? execution.Id,
+            execution.WorkflowRunId,
+            provisional,
+            structured,
+            limitations: BuildLimitations(provisional, stoppedForApproval));
+        execution.ResultJson = NalvaCollaborationProtocol.Serialize(envelope);
+
+        var monthSpend = spent + execution.EstimatedCostUsd;
+        if (settings is not null && budget > 0 && monthSpend >= budget * settings.AlertThresholdPercent / 100m)
+            settings.CostAlert = true;
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return new NalvaExecutionResult
+        {
+            ExecutionId = provisional.ExecutionId,
+            Status = provisional.Status,
+            AgentKey = provisional.AgentKey,
+            Summary = provisional.Summary,
+            ApprovalId = provisional.ApprovalId,
+            EstimatedCostUsd = provisional.EstimatedCostUsd,
+            InputTokens = provisional.InputTokens,
+            OutputTokens = provisional.OutputTokens,
+            CostIsEstimate = provisional.CostIsEstimate,
+            PricingVersion = provisional.PricingVersion,
+            Tools = provisional.Tools,
+            ResultJson = execution.ResultJson,
+            Error = provisional.Error,
+            ErrorClass = provisional.ErrorClass,
+            IdempotentRetryAllowed = provisional.IdempotentRetryAllowed
+        };
+    }
+
+    private static IReadOnlyList<string> BuildLimitations(NalvaExecutionResult result, bool awaitingApproval)
+    {
+        var list = new List<string>();
+        if (awaitingApproval)
+            list.Add("Execution paused for human approval.");
+        if (!string.IsNullOrWhiteSpace(result.Error))
+            list.Add(result.Error);
+        if (result.CostIsEstimate)
+            list.Add("Token cost is an estimate.");
+        return list;
     }
 
     private async Task<NalvaExecutionResult> HandleDelegationAsync(NalvaExecution parent, JsonObject data, string argsJson, CancellationToken ct)
@@ -653,5 +775,34 @@ public sealed class NalvaExecutionEngine : INalvaExecutionEngine
             false,
             row.DefinitionVersion,
             true);
+    }
+
+    private async Task NotifyPendingApprovalAsync(NalvaApproval record, NalvaCompanySettings? settings, CancellationToken cancellationToken)
+    {
+        if (_notifications is null || settings is { NotifyPendingApprovals: false })
+            return;
+
+        var recipients = new HashSet<string>(StringComparer.Ordinal);
+        if (!string.IsNullOrWhiteSpace(record.RequestedByUserId))
+            recipients.Add(record.RequestedByUserId);
+        if (!string.IsNullOrWhiteSpace(_user.UserId))
+            recipients.Add(_user.UserId);
+
+        foreach (var userId in recipients)
+        {
+            try
+            {
+                await _notifications.CreateNotificationAsync(new CreateNotificationRequest(
+                    userId,
+                    "Approval required",
+                    $"{record.AgentKey} needs approval for {record.Action}.",
+                    "NalvaApproval",
+                    "/nalva/approvals"), cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Could not notify user {UserId} about pending approval {ApprovalId}.", userId, record.Id);
+            }
+        }
     }
 }

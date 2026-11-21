@@ -61,6 +61,8 @@ public sealed class NalvaRunRequest
     public string? IdempotencyKey { get; set; }
     public DateTime? Deadline { get; set; }
     public Guid? ParentTaskId { get; set; }
+    /// <summary>When set, a completed task enqueues the next occurrence after this many minutes.</summary>
+    public int? IntervalMinutes { get; set; }
 }
 
 public sealed class NalvaConfigureAgentRequest
@@ -96,6 +98,12 @@ public sealed class NalvaWorkflowWriteRequest
     public string? TimeZoneId { get; set; }
     public DateTime? ScheduleStartUtc { get; set; }
     public DateTime? ScheduleEndUtc { get; set; }
+    public string? RecurrenceKind { get; set; }
+    public string? LocalTimeOfDay { get; set; }
+    public string? DaysOfWeek { get; set; }
+    public int? DayOfMonth { get; set; }
+    public int? MaxConcurrentRuns { get; set; }
+    public bool? IsPaused { get; set; }
     public List<NalvaWorkflowStepWrite> Steps { get; set; } = [];
 }
 
@@ -127,11 +135,18 @@ public sealed class NalvaSettingsWriteRequest
     public int? DailyExecutionLimit { get; set; }
     public int? AlertThresholdPercent { get; set; }
     public int? AutonomyCeiling { get; set; }
+    public int? ApprovalExpiryDays { get; set; }
+    public bool? NotifyPendingApprovals { get; set; }
+    public bool? AutoExpireApprovals { get; set; }
+    public bool? RequireApprovalForExternalActions { get; set; }
+    public List<string>? ExtraApprovalTools { get; set; }
 }
 
 public sealed class NalvaApprovalDecisionRequest
 {
     public string? Note { get; set; }
+    /// <summary>Optional replacement args JSON. Bound into the approval fingerprint before approve/execute.</summary>
+    public string? ModifiedArgsJson { get; set; }
 }
 
 public sealed class NalvaEventRequest
@@ -167,6 +182,8 @@ public interface INalvaWorkforceService
     Task<int> PublishEventAsync(NalvaEventRequest request, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<NalvaApprovalDto>> GetApprovalsAsync(string? status, CancellationToken cancellationToken = default);
     Task<NalvaExecutionResult> DecideApprovalAsync(Guid id, string decision, string? note, CancellationToken cancellationToken = default);
+    Task<NalvaExecutionResult> DecideApprovalAsync(Guid id, string decision, string? note, string? modifiedArgsJson, CancellationToken cancellationToken = default);
+    Task<NalvaReliabilitySnapshotDto> GetReliabilitySnapshotAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<NalvaKnowledgeDto>> GetKnowledgeAsync(string? agentKey, CancellationToken cancellationToken = default);
     Task<NalvaKnowledgeDto> AddKnowledgeAsync(NalvaKnowledgeWriteRequest request, CancellationToken cancellationToken = default);
     Task DeleteKnowledgeAsync(Guid id, CancellationToken cancellationToken = default);
@@ -290,7 +307,35 @@ public sealed record NalvaWorkflowDto(
     bool IsActive,
     IReadOnlyList<NalvaWorkflowStepWrite> Steps,
     int Version = 1,
-    string? TimeZoneId = null);
+    string? TimeZoneId = null,
+    string RecurrenceKind = "Interval",
+    string? LocalTimeOfDay = null,
+    string? DaysOfWeek = null,
+    int? DayOfMonth = null,
+    bool IsPaused = false,
+    int MaxConcurrentRuns = 1,
+    DateTime? NextRunAt = null,
+    DateTime? ScheduleStartUtc = null,
+    DateTime? ScheduleEndUtc = null,
+    DateTime? LastRunAt = null,
+    bool IsCancelled = false,
+    int ConsecutiveFailures = 0,
+    string? LastFailure = null);
+
+public sealed record NalvaReliabilitySnapshotDto(
+    int QueuedTasks,
+    int RunningTasks,
+    int DeadLetterTasks,
+    int FailedTasks,
+    int PendingApprovals,
+    int ExpiredApprovals,
+    int PendingEvents,
+    int DeadLetterEvents,
+    int StuckRunningTasks,
+    int StuckRunningExecutions,
+    int StuckRunningEvents,
+    int FailedWorkflowRunsToday,
+    DateTime GeneratedAtUtc);
 
 public sealed record NalvaWorkflowRunDto(
     Guid Id,
@@ -304,7 +349,9 @@ public sealed record NalvaWorkflowRunDto(
     DateTime? CompletedAt,
     string TriggerSource = "Manual",
     bool IsDryRun = false,
-    decimal EstimatedCostUsd = 0);
+    decimal EstimatedCostUsd = 0,
+    string? CorrelationId = null,
+    string? WorkflowKey = null);
 
 public sealed record NalvaApprovalDto(
     Guid Id,
@@ -320,7 +367,16 @@ public sealed record NalvaApprovalDto(
     string? ApproverUserId,
     DateTime? DecidedAt,
     string? DecisionNote,
-    string? ExecutionResult);
+    string? ExecutionResult,
+    Guid? WorkflowRunId = null,
+    string? WorkflowName = null,
+    string? TaskObjective = null,
+    string? RelatedEntitySummary = null,
+    string? AmountSummary = null,
+    string? RiskSummary = null,
+    DateTime? ExpiresAt = null,
+    string? ArgsFingerprint = null,
+    string? ExactActionParametersJson = null);
 
 public sealed record NalvaKnowledgeDto(Guid Id, string? AgentKey, string Title, string Excerpt, DateTime CreatedAt);
 
@@ -375,7 +431,12 @@ public sealed record NalvaSettingsDto(
     int AutonomyCeiling,
     int TokensUsedThisMonth,
     decimal EstimatedSpendThisMonthUsd,
-    string PricingVersion);
+    string PricingVersion,
+    int ApprovalExpiryDays = 7,
+    bool NotifyPendingApprovals = true,
+    bool AutoExpireApprovals = true,
+    bool RequireApprovalForExternalActions = true,
+    IReadOnlyList<string>? ExtraApprovalTools = null);
 
 public sealed record NalvaModelDto(
     string Model,

@@ -38,6 +38,10 @@ public sealed class NalvaTaskProcessor : BackgroundService
 
     private async Task ProcessOnceAsync(CancellationToken cancellationToken)
     {
+        using var recoveryScope = _scopes.CreateScope();
+        var recovery = recoveryScope.ServiceProvider.GetRequiredService<INalvaReliabilityService>();
+        await recovery.RecoverStalledWorkAsync(cancellationToken);
+
         using var lookup = _scopes.CreateScope();
         var db = lookup.ServiceProvider.GetRequiredService<BusinessOSDbContext>();
         var now = DateTime.UtcNow;

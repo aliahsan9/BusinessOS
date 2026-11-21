@@ -141,12 +141,14 @@ public sealed class EmailSupportChannelAdapter : ISupportChannelAdapter
         if (string.IsNullOrWhiteSpace(ticket.CustomerEmail))
             return (false, SupportDeliveryStatuses.Failed, null, "Customer email is missing, so nothing was sent.", "validation");
 
-        var raw = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(
-            $"To: {ticket.CustomerEmail}\r\nSubject: Re: {ticket.Subject}\r\n\r\n{body}"));
+        var raw = BusinessOS.Infrastructure.Integrations.GmailMime.EncodeRawMessage(
+            ticket.CustomerEmail,
+            "Re: " + ticket.Subject,
+            body);
         var result = await _integrations.ExecuteAsync(
             "gmail",
             "send",
-            $"{{\"raw\":\"{raw}\",\"to\":\"{ticket.CustomerEmail}\",\"body\":{System.Text.Json.JsonSerializer.Serialize(body)}}}",
+            System.Text.Json.JsonSerializer.Serialize(new { raw, to = ticket.CustomerEmail, body, subject = "Re: " + ticket.Subject }),
             true,
             cancellationToken);
 
@@ -189,12 +191,21 @@ public sealed class WhatsAppSupportChannelAdapter : ISupportChannelAdapter
         if (status.Status != SupportChannelConnectionStatuses.Connected || _integrations is null)
             return (false, SupportDeliveryStatuses.Failed, null, "WhatsApp is disconnected. No message was sent.", "not_connected");
 
-        var result = await _integrations.ExecuteAsync(
-            "whatsapp",
-            "sendTemplate",
-            $"{{\"body\":{System.Text.Json.JsonSerializer.Serialize(body)},\"ticketNumber\":{System.Text.Json.JsonSerializer.Serialize(ticket.TicketNumber)}}}",
-            true,
-            cancellationToken);
+        var to = ticket.ExternalThreadId;
+        if (string.IsNullOrWhiteSpace(to))
+            return (false, SupportDeliveryStatuses.Failed, null, "Customer WhatsApp thread/phone is missing on the ticket, so nothing was sent.", "validation");
+
+        var payload = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            to,
+            phone = to,
+            templateName = "support_update",
+            language = "en_US",
+            body,
+            ticketNumber = ticket.TicketNumber,
+            idempotencyKey = $"support-wa:{ticket.Id:N}"
+        });
+        var result = await _integrations.ExecuteAsync("whatsapp", "sendTemplate", payload, true, cancellationToken);
 
         if (!result.Performed)
             return (false, SupportDeliveryStatuses.Failed, null, result.Message, result.Status);

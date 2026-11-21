@@ -46,7 +46,7 @@ namespace BusinessOS.Infrastructure.Migrations
                     CampaignId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     Provider = table.Column<string>(type: "nvarchar(40)", maxLength: 40, nullable: false),
                     ExternalPostId = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
-                    MetricsJson = table.Column<string>(type: "nvarchar(8000)", maxLength: 8000, nullable: true),
+                    MetricsJson = table.Column<string>(type: "nvarchar(max)", maxLength: 8000, nullable: true),
                     SyncedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     DataSource = table.Column<string>(type: "nvarchar(80)", maxLength: 80, nullable: false),
                     UnavailableMetricsJson = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: false),

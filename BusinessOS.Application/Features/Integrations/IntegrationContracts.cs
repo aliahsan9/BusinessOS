@@ -9,8 +9,8 @@ public static class IntegrationProviderCatalog
 
     public static readonly IReadOnlyList<IntegrationProviderDefinition> All =
     [
-        Provider("gmail", "Gmail", "Communication", "Read, search, draft, and send approved mail through a connected Google account.", Implemented, true, true,
-            ["list", "get", "draft"], ["send"], ["https://www.googleapis.com/auth/gmail.modify"]),
+        Provider("gmail", "Gmail", "Communication", "Read, search, draft, sync inbound, and send approved mail through a connected Google account.", Implemented, true, true,
+            ["list", "get", "draft", "history", "syncInbound"], ["send"], ["https://www.googleapis.com/auth/gmail.modify"]),
         Provider("google-calendar", "Google Calendar", "Scheduling", "Read calendars and create or update events on a connected calendar.", Implemented, true, false,
             ["list", "freebusy"], ["create", "update", "delete"], ["https://www.googleapis.com/auth/calendar.events"]),
         Provider("google-drive", "Google Drive", "Documents", "List, search, and read files the company explicitly connected. Uploads require approval.", Implemented, true, false,
@@ -21,16 +21,16 @@ public static class IntegrationProviderCatalog
             ["channels"], ["post"], ["channels:read", "chat:write"]),
         Provider("microsoft-teams", "Microsoft Teams", "Communication", "Read joined teams and post a channel message only after approval.", Implemented, true, false,
             ["teams"], ["post"], ["Team.ReadBasic.All", "ChannelMessage.Send"]),
-        Provider("whatsapp", "WhatsApp Business", "Communication", "Send an approved template message through the WhatsApp Business Cloud API.", Partial, true, true,
-            ["status"], ["sendTemplate"], ["whatsapp_business_messaging", "whatsapp_business_management"]),
-        Provider("stripe", "Stripe", "Payments", "Company payment connection, separate from CompanyOS subscription billing. Refunds require approval.", Implemented, true, true,
-            ["balance", "payment"], ["refund"], ["read_write"]),
+        Provider("whatsapp", "WhatsApp Business", "Communication", "Receive inbound messages, maintain conversation history, and send approved templates or in-window text via WhatsApp Cloud API.", Partial, true, true,
+            ["status", "conversations", "messages"], ["sendTemplate", "sendText"], ["whatsapp_business_messaging", "whatsapp_business_management"]),
+        Provider("stripe", "Stripe", "Payments", "Company payment connection (tenant customers), separate from CompanyOS subscription billing. Refunds require approval. No card data is handled.", Implemented, true, true,
+            ["balance", "payment", "payments"], ["refund"], ["read_write"]),
         Provider("paypal", "PayPal", "Payments", "Read an order and refund only after approval. Region support follows the connected PayPal account.", Partial, true, true,
             ["order"], ["refund"], ["openid"]),
         Provider("linkedin", "LinkedIn", "Marketing", "Read authorized organization information. Page publish and messaging are BLOCKED until LinkedIn write scopes are verified. WriteOperations remain empty.", Partial, true, false,
             ["organization"], [], ["r_organization_social"]),
-        Provider("meta", "Meta", "Marketing", "Read Facebook Pages, publish an approved feed post when pageId metadata and pages_manage_posts are present, and read post insights when externalPostId is present. Instagram/TikTok/YouTube publishing is not implemented here.", Partial, true, false,
-            ["pages", "insights"], ["publish"], ["pages_show_list", "pages_read_engagement", "pages_manage_posts", "pages_read_user_content"]),
+        Provider("meta", "Meta", "Marketing", "Read Facebook Pages, publish approved feed posts, read insights, and publish Instagram content when instagramBusinessAccountId metadata and scopes are present.", Partial, true, false,
+            ["pages", "insights", "instagramAccount"], ["publish", "publishInstagram"], ["pages_show_list", "pages_read_engagement", "pages_manage_posts", "pages_read_user_content", "instagram_basic", "instagram_content_publish"]),
         Provider("google-analytics", "Google Analytics", "Analytics", "Read a configured GA4 property. The property id is metadata, not a secret.", Partial, true, false,
             ["report"], [], ["https://www.googleapis.com/auth/analytics.readonly"]),
         Provider("google-ads", "Google Ads", "Advertising", "Read campaign metrics for a configured customer id. Budget and campaign changes are not enabled.", Partial, true, false,
@@ -164,6 +164,7 @@ public interface IIntegrationPlatform
     Task<IReadOnlyList<IntegrationLogDto>> GetLogsAsync(Guid? connectionId, CancellationToken cancellationToken = default);
     Task<IntegrationCallResult> ExecuteAsync(string providerKey, string operation, string argumentsJson, bool approved, CancellationToken cancellationToken = default);
     Task<(int StatusCode, string Message)> ReceiveWebhookAsync(string providerKey, Guid connectionId, string body, string? signature, string? eventId, CancellationToken cancellationToken = default);
+    Task<(int StatusCode, string? Challenge)> VerifyWebhookSubscriptionAsync(string providerKey, Guid connectionId, string? mode, string? verifyToken, string? challenge, CancellationToken cancellationToken = default);
     Task<IntegrationConnectionDto> SetWebhookSecretAsync(Guid connectionId, IntegrationWebhookSecretRequest request, CancellationToken cancellationToken = default);
     Task<IntegrationConnectionDto> UpdateConnectionMetadataAsync(Guid connectionId, IntegrationConnectionMetadataRequest request, CancellationToken cancellationToken = default);
 }

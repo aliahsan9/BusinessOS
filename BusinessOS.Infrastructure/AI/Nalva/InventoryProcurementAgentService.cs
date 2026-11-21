@@ -230,13 +230,17 @@ public sealed class InventoryProcurementAgentService : IInventoryProcurementAgen
             var monthly = decimal.Round(daily * 30m, 2);
             var cover = daily > 0 ? decimal.Round((row.CurrentStock + inbound) / daily, 1) : (decimal?)null;
             DateTime? stockout = cover is > 0 ? DateTime.UtcNow.Date.AddDays((double)Math.Floor(cover.Value)) : null;
-            var suggested = CalculateReorder(row.CurrentStock, row.ReorderLevel, row.MaximumStockLevel, daily, inbound);
+            var leadDays = await EstimateLeadTimeDaysAsync(row.ProductId, cancellationToken);
+            var suggested = CalculateReorder(row.CurrentStock, row.ReorderLevel, row.MaximumStockLevel, daily, inbound, leadDays);
             var confidence = orderDays >= 45 ? "high" : "medium";
+            var leadNote = leadDays is > 0
+                ? $" Historical PO→receive lead time ~{leadDays} day(s) included in reorder cover."
+                : " No verified supplier lead-time history; default 14-day cover used.";
 
             insights.Add(new DemandInsightDto(
                 row.ProductId, row.ProductName, row.Sku, u30, u90, daily, monthly,
                 row.CurrentStock, cover, stockout, suggested, confidence,
-                $"Assumes last-30-day completed non-cancelled order rate continues; inbound {inbound:0.##} counted toward cover.",
+                $"Assumes last-30-day completed non-cancelled order rate continues; inbound {inbound:0.##} counted toward cover.{leadNote}",
                 true));
         }
 
@@ -907,15 +911,31 @@ public sealed class InventoryProcurementAgentService : IInventoryProcurementAgen
         decimal reorderLevel,
         decimal maximum,
         decimal? dailyDemand,
-        decimal inbound)
+        decimal inbound,
+        int? leadTimeDays = null)
     {
+        var coverDays = leadTimeDays is > 0 ? leadTimeDays.Value + 7 : 14;
         var target = maximum > 0
             ? maximum
-            : Math.Max(reorderLevel * 2m, reorderLevel + (dailyDemand is > 0 ? dailyDemand.Value * 14m : 0m));
+            : Math.Max(reorderLevel * 2m, reorderLevel + (dailyDemand is > 0 ? dailyDemand.Value * coverDays : 0m));
         var need = target - (current + inbound);
         if (need <= 0 && current <= reorderLevel)
             need = Math.Max(reorderLevel - current - inbound, 1);
         return decimal.Round(Math.Max(need, 0), 2);
+    }
+
+    private async Task<int?> EstimateLeadTimeDaysAsync(Guid productId, CancellationToken ct)
+    {
+        var events = await _db.PurchaseReceivingEvents.AsNoTracking()
+            .Where(x => x.Purchase != null && x.Purchase.PurchaseItems.Any(i => i.ProductId == productId && !i.IsDeleted))
+            .OrderByDescending(x => x.CreatedAt)
+            .Select(x => new { x.CreatedAt, PurchaseDate = x.Purchase!.PurchaseDate })
+            .Take(10)
+            .ToListAsync(ct);
+        if (events.Count == 0)
+            return null;
+        var avg = events.Average(x => Math.Max(0, (x.CreatedAt.Date - x.PurchaseDate.Date).TotalDays));
+        return (int)Math.Round(avg);
     }
 
     private static SupplierOptionDto? PickPreferred(IReadOnlyList<SupplierOptionDto> options, string criterion)

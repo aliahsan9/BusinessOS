@@ -1,11 +1,11 @@
-using System.Net.Http.Headers;
-using System.Text;
 using System.Text.Json.Nodes;
 using BusinessOS.Application.Features.Integrations;
-using BusinessOS.Application.Features.Nalva;
 
 namespace BusinessOS.Infrastructure.Integrations;
 
+/// <summary>
+/// Shared request builders for catalog providers. Prefer <see cref="IIntegrationProvider"/> for execution.
+/// </summary>
 public static class IntegrationApi
 {
     public static async Task<IntegrationCallResult> ExecuteAsync(
@@ -30,68 +30,25 @@ public static class IntegrationApi
             };
         }
 
-        using var request = new HttpRequestMessage(method, url);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        if (provider.Key == "github")
-            request.Headers.UserAgent.ParseAdd("CompanyOS");
-        if (body is not null)
-            request.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
-
-        using var response = await http.SendAsync(request, cancellationToken);
-        var text = await response.Content.ReadAsStringAsync(cancellationToken);
-        var redacted = NalvaGuard.Redact(NalvaGuard.Clip(text, 2000));
-        if (!response.IsSuccessStatusCode)
-        {
-            var errorClass = (int)response.StatusCode == 429
-                ? "rate_limit"
-                : (int)response.StatusCode is 401 or 403 ? "permission" : "provider_error";
-            return new IntegrationCallResult
-            {
-                Performed = false,
-                Status = errorClass,
-                Message = $"The provider returned {(int)response.StatusCode}.",
-                Data = new JsonObject { ["statusCode"] = (int)response.StatusCode, ["body"] = redacted }
-            };
-        }
-
-        JsonNode? payload = null;
-        try
-        {
-            payload = JsonNode.Parse(string.IsNullOrWhiteSpace(text) ? "{}" : text);
-        }
-        catch (System.Text.Json.JsonException)
-        {
-            payload = new JsonObject { ["body"] = redacted };
-        }
-
-        return new IntegrationCallResult
-        {
-            Performed = true,
-            Status = "completed",
-            Message = "The provider accepted the request.",
-            Data = new JsonObject
-            {
-                ["operation"] = operation,
-                ["provider"] = provider.Key,
-                ["response"] = payload
-            }
-        };
+        return await IntegrationHttpExecutor.SendAsync(
+            http, provider.Key, operation, method, url, accessToken, body, cancellationToken);
     }
 
-    private static (HttpMethod Method, string? Url, JsonObject? Body) Build(string provider, string operation, JsonObject args, JsonObject metadata)
+    public static (HttpMethod Method, string? Url, JsonObject? Body) Build(string provider, string operation, JsonObject args, JsonObject metadata)
     {
         var shop = Text(metadata, "shop");
         var site = Text(metadata, "site");
         var property = Text(metadata, "propertyId");
         var customer = Text(metadata, "customerId");
         var phoneNumberId = Text(metadata, "phoneNumberId");
+        var igAccount = Text(metadata, "instagramBusinessAccountId");
         return (provider, operation) switch
         {
-            ("gmail", "list") => (HttpMethod.Get, "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=10&q=" + Uri.EscapeDataString(Text(args, "query") ?? ""), null),
-            ("gmail", "get") => (HttpMethod.Get, "https://gmail.googleapis.com/gmail/v1/users/me/messages/" + Required(args, "id"), null),
-            ("gmail", "draft") => (HttpMethod.Post, "https://gmail.googleapis.com/gmail/v1/users/me/drafts", new JsonObject { ["message"] = new JsonObject { ["raw"] = Text(args, "raw") ?? "" } }),
-            ("gmail", "send") => (HttpMethod.Post, "https://gmail.googleapis.com/gmail/v1/users/me/messages/send", new JsonObject { ["raw"] = Text(args, "raw") ?? "" }),
+            ("gmail", "list") => (HttpMethod.Get, "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=" + (Text(args, "maxResults") ?? "10") + "&q=" + Uri.EscapeDataString(Text(args, "query") ?? ""), null),
+            ("gmail", "get") => (HttpMethod.Get, "https://gmail.googleapis.com/gmail/v1/users/me/messages/" + Required(args, "id") + "?format=full", null),
+            ("gmail", "history") => (HttpMethod.Get, "https://gmail.googleapis.com/gmail/v1/users/me/history?startHistoryId=" + Uri.EscapeDataString(Text(args, "startHistoryId") ?? Text(metadata, "historyId") ?? "1"), null),
+            ("gmail", "draft") => (HttpMethod.Post, "https://gmail.googleapis.com/gmail/v1/users/me/drafts", new JsonObject { ["message"] = new JsonObject { ["raw"] = ResolveGmailRaw(args) } }),
+            ("gmail", "send") => (HttpMethod.Post, "https://gmail.googleapis.com/gmail/v1/users/me/messages/send", new JsonObject { ["raw"] = ResolveGmailRaw(args) }),
             ("google-calendar", "list") => (HttpMethod.Get, "https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=10", null),
             ("google-calendar", "freebusy") => (HttpMethod.Post, "https://www.googleapis.com/calendar/v3/freeBusy", args),
             ("google-calendar", "create") => (HttpMethod.Post, "https://www.googleapis.com/calendar/v3/calendars/primary/events", args),
@@ -110,9 +67,11 @@ public static class IntegrationApi
             ("microsoft-teams", "teams") => (HttpMethod.Get, "https://graph.microsoft.com/v1.0/me/joinedTeams", null),
             ("microsoft-teams", "post") => (HttpMethod.Post, "https://graph.microsoft.com/v1.0/teams/" + Required(args, "teamId") + "/channels/" + Required(args, "channelId") + "/messages", new JsonObject { ["body"] = new JsonObject { ["content"] = Text(args, "text") ?? "" } }),
             ("whatsapp", "status") => (HttpMethod.Get, "https://graph.facebook.com/v21.0/" + Required(metadata, "phoneNumberId"), null),
-            ("whatsapp", "sendTemplate") => (HttpMethod.Post, "https://graph.facebook.com/v21.0/" + (phoneNumberId ?? Required(args, "phoneNumberId")) + "/messages", args),
+            ("whatsapp", "sendTemplate") => WhatsAppSendTemplate(args, metadata, phoneNumberId),
+            ("whatsapp", "sendText") => WhatsAppSendText(args, metadata, phoneNumberId),
             ("stripe", "balance") => (HttpMethod.Get, "https://api.stripe.com/v1/balance", null),
             ("stripe", "payment") => (HttpMethod.Get, "https://api.stripe.com/v1/payment_intents/" + Required(args, "paymentIntentId"), null),
+            ("stripe", "payments") => (HttpMethod.Get, "https://api.stripe.com/v1/payment_intents?limit=" + (Text(args, "limit") ?? "10"), null),
             ("stripe", "refund") => (HttpMethod.Post, "https://api.stripe.com/v1/refunds", new JsonObject { ["payment_intent"] = Text(args, "paymentIntentId") ?? "" }),
             ("paypal", "order") => (HttpMethod.Get, "https://api-m.paypal.com/v2/checkout/orders/" + Required(args, "orderId"), null),
             ("paypal", "refund") => (HttpMethod.Post, "https://api-m.paypal.com/v2/payments/captures/" + Required(args, "captureId") + "/refund", new JsonObject()),
@@ -120,6 +79,8 @@ public static class IntegrationApi
             ("meta", "pages") => (HttpMethod.Get, "https://graph.facebook.com/v21.0/me/accounts", null),
             ("meta", "insights") => MetaInsights(args, metadata),
             ("meta", "publish") => MetaPublish(args, metadata),
+            ("meta", "instagramAccount") => (HttpMethod.Get, "https://graph.facebook.com/v21.0/" + Required(metadata, "pageId") + "?fields=instagram_business_account", null),
+            ("meta", "publishInstagram") => InstagramPublish(args, metadata, igAccount),
             ("google-analytics", "report") => (HttpMethod.Post, "https://analyticsdata.googleapis.com/v1beta/properties/" + (property ?? Required(args, "propertyId")) + ":runReport", args),
             ("google-ads", "report") => (HttpMethod.Post, "https://googleads.googleapis.com/v18/customers/" + (customer ?? Required(args, "customerId")) + "/googleAds:search", args),
             ("shopify", "products") => (HttpMethod.Get, $"https://{shop}.myshopify.com/admin/api/2024-10/products.json?limit=10", null),
@@ -129,6 +90,52 @@ public static class IntegrationApi
             ("wordpress", "draft") => (HttpMethod.Post, "https://public-api.wordpress.com/rest/v1.1/sites/" + Uri.EscapeDataString(site ?? Required(args, "site")) + "/posts/new", args),
             _ => (HttpMethod.Get, null, null)
         };
+    }
+
+    private static string ResolveGmailRaw(JsonObject args)
+    {
+        var raw = Text(args, "raw");
+        if (!string.IsNullOrWhiteSpace(raw))
+            return raw;
+        var to = Text(args, "to") ?? "";
+        var subject = Text(args, "subject") ?? "";
+        var body = Text(args, "body") ?? Text(args, "text") ?? "";
+        if (string.IsNullOrWhiteSpace(to))
+            throw new InvalidOperationException("A valid to address or raw MIME payload is required.");
+        return GmailMime.EncodeRawMessage(to, subject, body, Text(args, "from"), Text(args, "inReplyTo"), Text(args, "references"));
+    }
+
+    private static (HttpMethod Method, string? Url, JsonObject? Body) WhatsAppSendTemplate(JsonObject args, JsonObject metadata, string? phoneNumberId)
+    {
+        var to = Text(args, "to") ?? Text(args, "phone") ?? "";
+        var template = Text(args, "templateName") ?? Text(args, "template") ?? "hello_world";
+        var language = Text(args, "language") ?? "en_US";
+        var body = new JsonObject
+        {
+            ["messaging_product"] = "whatsapp",
+            ["to"] = to,
+            ["type"] = "template",
+            ["template"] = new JsonObject
+            {
+                ["name"] = template,
+                ["language"] = new JsonObject { ["code"] = language }
+            }
+        };
+        return (HttpMethod.Post, "https://graph.facebook.com/v21.0/" + (phoneNumberId ?? Required(args, "phoneNumberId")) + "/messages", body);
+    }
+
+    private static (HttpMethod Method, string? Url, JsonObject? Body) WhatsAppSendText(JsonObject args, JsonObject metadata, string? phoneNumberId)
+    {
+        var to = Text(args, "to") ?? Text(args, "phone") ?? "";
+        var text = Text(args, "body") ?? Text(args, "text") ?? "";
+        var body = new JsonObject
+        {
+            ["messaging_product"] = "whatsapp",
+            ["to"] = to,
+            ["type"] = "text",
+            ["text"] = new JsonObject { ["body"] = text }
+        };
+        return (HttpMethod.Post, "https://graph.facebook.com/v21.0/" + (phoneNumberId ?? Required(args, "phoneNumberId")) + "/messages", body);
     }
 
     private static (HttpMethod Method, string? Url, JsonObject? Body) MetaPublish(JsonObject args, JsonObject metadata)
@@ -141,6 +148,25 @@ public static class IntegrationApi
         return (HttpMethod.Post, "https://graph.facebook.com/v21.0/" + Required(metadata, "pageId") + "/feed", body);
     }
 
+    private static (HttpMethod Method, string? Url, JsonObject? Body) InstagramPublish(JsonObject args, JsonObject metadata, string? igAccount)
+    {
+        var account = igAccount ?? Text(args, "instagramBusinessAccountId");
+        if (string.IsNullOrWhiteSpace(account))
+            return (HttpMethod.Post, null, null);
+        var imageUrl = Text(args, "imageUrl") ?? Text(args, "mediaUrl");
+        var caption = Text(args, "caption") ?? Text(args, "message") ?? "";
+        if (string.IsNullOrWhiteSpace(imageUrl))
+            return (HttpMethod.Post, null, null);
+        // Container create; publish step is a separate follow-up when creation id is returned.
+        var body = new JsonObject
+        {
+            ["image_url"] = imageUrl,
+            ["caption"] = caption,
+            ["access_token_placeholder"] = false
+        };
+        return (HttpMethod.Post, "https://graph.facebook.com/v21.0/" + Uri.EscapeDataString(account) + "/media", body);
+    }
+
     private static (HttpMethod Method, string? Url, JsonObject? Body) MetaInsights(JsonObject args, JsonObject metadata)
     {
         var postId = Text(args, "externalPostId") ?? Text(args, "postId") ?? Text(args, "id");
@@ -150,10 +176,10 @@ public static class IntegrationApi
         return (HttpMethod.Get, "https://graph.facebook.com/v21.0/" + Uri.EscapeDataString(postId) + "/insights?metric=" + Uri.EscapeDataString(metrics), null);
     }
 
-    private static string? Text(JsonObject obj, string name) =>
+    public static string? Text(JsonObject obj, string name) =>
         obj[name]?.GetValue<string>();
 
-    private static string Required(JsonObject obj, string name)
+    public static string Required(JsonObject obj, string name)
     {
         var value = Text(obj, name);
         if (string.IsNullOrWhiteSpace(value) || value.Contains('/') || value.Contains('\\') || value.Contains(".."))

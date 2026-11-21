@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using BusinessOS.Application.Common.Authorization;
 using BusinessOS.Application.Common.Exceptions;
@@ -244,8 +245,15 @@ public sealed partial class NalvaWorkforceService : INalvaWorkforceService
             throw new BadRequestException("Activate the agent before assigning work.");
         if (!string.IsNullOrWhiteSpace(request.IdempotencyKey))
         {
+            var idempotencyKey = request.IdempotencyKey.Trim();
             var existing = await _db.NalvaTasks.AsNoTracking().FirstOrDefaultAsync(
-                x => x.IdempotencyKey == request.IdempotencyKey && x.Status == NalvaStatuses.Completed, cancellationToken);
+                x => x.IdempotencyKey == idempotencyKey
+                     && (x.Status == NalvaStatuses.Completed
+                         || x.Status == NalvaStatuses.Queued
+                         || x.Status == NalvaStatuses.Running
+                         || x.Status == NalvaStatuses.AwaitingApproval
+                         || x.Status == NalvaStatuses.Paused),
+                cancellationToken);
             if (existing is not null)
                 return MapTask(existing);
         }
@@ -259,6 +267,7 @@ public sealed partial class NalvaWorkforceService : INalvaWorkforceService
             Deadline = request.Deadline,
             ParentTaskId = request.ParentTaskId,
             IdempotencyKey = request.IdempotencyKey,
+            IntervalMinutes = request.IntervalMinutes is int interval and > 0 ? Math.Clamp(interval, 5, 43_200) : null,
             InitiatorUserId = _user.UserId,
             ToolPlanJson = request.Tools is null ? null : JsonSerializer.Serialize(request.Tools),
             ArgumentsJson = request.ArgumentsJson
@@ -336,6 +345,18 @@ public sealed partial class NalvaWorkforceService : INalvaWorkforceService
         row.TimeZoneId = string.IsNullOrWhiteSpace(request.TimeZoneId) ? row.TimeZoneId ?? "UTC" : request.TimeZoneId.Trim();
         row.ScheduleStartUtc = request.ScheduleStartUtc;
         row.ScheduleEndUtc = request.ScheduleEndUtc;
+        row.RecurrenceKind = request.TriggerKind == "Scheduled"
+            ? NalvaRecurrenceKinds.Normalize(request.RecurrenceKind)
+            : NalvaRecurrenceKinds.Interval;
+        row.LocalTimeOfDay = string.IsNullOrWhiteSpace(request.LocalTimeOfDay) ? row.LocalTimeOfDay : request.LocalTimeOfDay.Trim();
+        row.DaysOfWeek = string.IsNullOrWhiteSpace(request.DaysOfWeek) ? row.DaysOfWeek : request.DaysOfWeek.Trim();
+        row.DayOfMonth = request.DayOfMonth is int day ? Math.Clamp(day, 1, 28) : row.DayOfMonth;
+        if (request.MaxConcurrentRuns is int concurrency)
+            row.MaxConcurrentRuns = Math.Clamp(concurrency, 1, 4);
+        if (request.IsPaused is bool paused)
+            row.IsPaused = paused;
+        if (row.TriggerKind == "Scheduled" && row.CancelledAt is not null)
+            row.CancelledAt = null;
         if (!string.Equals(row.TimeZoneId, "UTC", StringComparison.OrdinalIgnoreCase))
         {
             try
@@ -346,6 +367,12 @@ public sealed partial class NalvaWorkforceService : INalvaWorkforceService
             {
                 throw new BadRequestException("That timezone is not recognized.");
             }
+        }
+        if (row.TriggerKind == "Scheduled")
+        {
+            var spec = new NalvaScheduleSpec(row.TimeZoneId, row.RecurrenceKind, row.IntervalMinutes, row.ScheduleStartUtc, row.ScheduleEndUtc, row.LocalTimeOfDay, row.DaysOfWeek, row.DayOfMonth);
+            _ = NalvaSchedule.TryDue(spec, DateTime.UtcNow, row.LastScheduleWindow, out _, out var next);
+            row.NextRunAt = next;
         }
         var stepsJson = JsonSerializer.Serialize(request.Steps, JsonOptions);
         if (_db.Entry(row).State != EntityState.Added && !string.Equals(row.StepsJson, stepsJson, StringComparison.Ordinal))
@@ -415,7 +442,10 @@ public sealed partial class NalvaWorkforceService : INalvaWorkforceService
         return rows.Select(MapApproval).ToList();
     }
 
-    public async Task<NalvaExecutionResult> DecideApprovalAsync(Guid id, string decision, string? note, CancellationToken cancellationToken = default)
+    public Task<NalvaExecutionResult> DecideApprovalAsync(Guid id, string decision, string? note, CancellationToken cancellationToken = default) =>
+        DecideApprovalAsync(id, decision, note, modifiedArgsJson: null, cancellationToken);
+
+    public async Task<NalvaExecutionResult> DecideApprovalAsync(Guid id, string decision, string? note, string? modifiedArgsJson, CancellationToken cancellationToken = default)
     {
         Require(PermissionCodes.NalvaApprove);
         if (string.IsNullOrWhiteSpace(_user.UserId))
@@ -433,6 +463,45 @@ public sealed partial class NalvaWorkforceService : INalvaWorkforceService
         approval.ApproverUserId = _user.UserId;
         approval.DecisionNote = NalvaGuard.Clip(note, 500);
         approval.DecidedAt = DateTime.UtcNow;
+
+        if (!string.IsNullOrWhiteSpace(modifiedArgsJson))
+        {
+            if (NalvaGuard.RejectsArguments(modifiedArgsJson, out var rejected))
+                throw new BadRequestException(rejected);
+            var redacted = NalvaGuard.Redact(modifiedArgsJson);
+            approval.ArgsJson = redacted;
+            var fingerprint = NalvaCollaborationService.Fingerprint(redacted);
+            try
+            {
+                var context = JsonNode.Parse(string.IsNullOrWhiteSpace(approval.ContextJson) ? "{}" : approval.ContextJson) as JsonObject
+                              ?? new JsonObject();
+                context["argsFingerprint"] = fingerprint;
+                context["modifiedByUserId"] = _user.UserId;
+                context["modifiedAt"] = DateTime.UtcNow;
+                approval.ContextJson = context.ToJsonString();
+            }
+            catch (JsonException)
+            {
+                approval.ContextJson = new JsonObject
+                {
+                    ["argsFingerprint"] = fingerprint,
+                    ["modifiedByUserId"] = _user.UserId
+                }.ToJsonString();
+            }
+
+            var executionForPlan = await _db.NalvaExecutions.FirstOrDefaultAsync(x => x.Id == approval.ExecutionId, cancellationToken);
+            if (executionForPlan is not null)
+            {
+                var plan = JsonSerializer.Deserialize<List<NalvaPlannedTool>>(executionForPlan.PlanJson) ?? [];
+                for (var i = 0; i < plan.Count; i++)
+                {
+                    if (string.Equals(plan[i].Name, approval.ToolName, StringComparison.OrdinalIgnoreCase))
+                        plan[i] = plan[i] with { ArgsJson = redacted };
+                }
+                executionForPlan.PlanJson = JsonSerializer.Serialize(plan);
+            }
+        }
+
         if (decision == "reject")
         {
             approval.Status = NalvaStatuses.Rejected;
@@ -450,10 +519,36 @@ public sealed partial class NalvaWorkforceService : INalvaWorkforceService
         if (decision == "changes")
         {
             approval.Status = NalvaStatuses.ChangesRequested;
-            approval.ExecutionResult = "Changes requested. The action was not executed.";
+            approval.ExecutionResult = string.IsNullOrWhiteSpace(modifiedArgsJson)
+                ? "Changes requested. The action was not executed."
+                : "Changes requested with modified parameters. Approve again to execute.";
+            approval.DecidedAt = null;
             await _db.SaveChangesAsync(cancellationToken);
             return new NalvaExecutionResult { ExecutionId = approval.ExecutionId, Status = NalvaStatuses.AwaitingApproval, AgentKey = approval.AgentKey, Summary = approval.ExecutionResult, ApprovalId = approval.Id };
         }
+
+        // Bind approval to exact args fingerprint; material changes invalidate it unless this decision supplied ModifiedArgsJson.
+        var currentFingerprint = NalvaCollaborationService.Fingerprint(approval.ArgsJson);
+        try
+        {
+            using var contextDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(approval.ContextJson) ? "{}" : approval.ContextJson);
+            if (contextDoc.RootElement.TryGetProperty("argsFingerprint", out var stored)
+                && stored.GetString() is string expected
+                && !string.Equals(expected, currentFingerprint, StringComparison.OrdinalIgnoreCase))
+            {
+                approval.Status = NalvaStatuses.Expired;
+                approval.ExecutionResult = "Approval invalidated because the proposed action parameters changed.";
+                await _db.SaveChangesAsync(cancellationToken);
+                throw new BadRequestException("Approval was invalidated because the proposed action parameters changed.");
+            }
+        }
+        catch (JsonException)
+        {
+            // Older approvals without fingerprint still proceed; new ones always store one.
+        }
+
+        if (string.Equals(approval.ApproverUserId, approval.AgentKey, StringComparison.OrdinalIgnoreCase))
+            throw new ForbiddenException("Agents cannot approve their own actions.");
 
         approval.Status = NalvaStatuses.Approved;
         await _db.SaveChangesAsync(cancellationToken);
@@ -469,6 +564,43 @@ public sealed partial class NalvaWorkforceService : INalvaWorkforceService
         if (executionRow.WorkflowRunId is Guid workflowRunId)
             await _workflows.ContinueAfterAsync(workflowRunId, result.Status, cancellationToken);
         return result;
+    }
+
+    public async Task<NalvaReliabilitySnapshotDto> GetReliabilitySnapshotAsync(CancellationToken cancellationToken = default)
+    {
+        Require(PermissionCodes.NalvaView);
+        var now = DateTime.UtcNow;
+        var leaseCutoff = now.AddSeconds(-NalvaLimits.ClaimLeaseSeconds);
+        var today = now.Date;
+        var tasks = await _db.NalvaTasks.AsNoTracking()
+            .Select(x => new { x.Status, x.UpdatedAt, x.CreatedAt })
+            .ToListAsync(cancellationToken);
+        var executions = await _db.NalvaExecutions.AsNoTracking()
+            .Where(x => x.Status == NalvaStatuses.Running)
+            .Select(x => x.StartedAt)
+            .ToListAsync(cancellationToken);
+        var events = await _db.NalvaBusinessEvents.AsNoTracking()
+            .Select(x => new { x.Status, x.UpdatedAt, x.OccurredAt })
+            .ToListAsync(cancellationToken);
+        var pendingApprovals = await _db.NalvaApprovals.AsNoTracking().CountAsync(x => x.Status == NalvaStatuses.Pending, cancellationToken);
+        var expiredApprovals = await _db.NalvaApprovals.AsNoTracking().CountAsync(x => x.Status == NalvaStatuses.Expired, cancellationToken);
+        var failedRunsToday = await _db.NalvaWorkflowRuns.AsNoTracking()
+            .CountAsync(x => x.StartedAt >= today && x.Status == NalvaStatuses.Failed, cancellationToken);
+
+        return new NalvaReliabilitySnapshotDto(
+            tasks.Count(x => x.Status == NalvaStatuses.Queued),
+            tasks.Count(x => x.Status == NalvaStatuses.Running),
+            tasks.Count(x => x.Status == NalvaStatuses.DeadLetter),
+            tasks.Count(x => x.Status == NalvaStatuses.Failed),
+            pendingApprovals,
+            expiredApprovals,
+            events.Count(x => x.Status == "Pending"),
+            events.Count(x => x.Status == "DeadLetter"),
+            tasks.Count(x => x.Status == NalvaStatuses.Running && (x.UpdatedAt ?? x.CreatedAt) < leaseCutoff),
+            executions.Count(x => x < leaseCutoff),
+            events.Count(x => x.Status == "Running" && (x.UpdatedAt ?? x.OccurredAt) < leaseCutoff),
+            failedRunsToday,
+            now);
     }
 
     public async Task<IReadOnlyList<NalvaKnowledgeDto>> GetKnowledgeAsync(string? agentKey, CancellationToken cancellationToken = default)
@@ -777,6 +909,16 @@ public sealed partial class NalvaWorkforceService : INalvaWorkforceService
             row.AlertThresholdPercent = Math.Clamp(percent, 1, 100);
         if (request.AutonomyCeiling is int ceiling)
             row.AutonomyCeiling = Math.Clamp(ceiling, 1, 4);
+        if (request.ApprovalExpiryDays is int expiry)
+            row.ApprovalExpiryDays = Math.Clamp(expiry, 1, 30);
+        if (request.NotifyPendingApprovals is bool notify)
+            row.NotifyPendingApprovals = notify;
+        if (request.AutoExpireApprovals is bool autoExpire)
+            row.AutoExpireApprovals = autoExpire;
+        if (request.RequireApprovalForExternalActions is bool requireExternal)
+            row.RequireApprovalForExternalActions = requireExternal;
+        if (request.ExtraApprovalTools is not null)
+            row.ExtraApprovalToolsJson = JsonSerializer.Serialize(request.ExtraApprovalTools.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Take(40).ToList(), JsonOptions);
         await _db.SaveChangesAsync(cancellationToken);
         return await MapSettingsAsync(row, cancellationToken);
     }
@@ -857,7 +999,24 @@ public sealed partial class NalvaWorkforceService : INalvaWorkforceService
         var month = MonthStart();
         var usage = await _db.NalvaExecutions.AsNoTracking().Where(x => x.StartedAt >= month)
             .Select(x => new { x.InputTokens, x.OutputTokens, x.EstimatedCostUsd }).ToListAsync(ct);
-        return new NalvaSettingsDto(row.DefaultModel, row.EmbeddingModel, row.Temperature, row.MonthlyTokenBudget, row.MonthlyBudgetUsd, row.DailyExecutionLimit, row.AlertThresholdPercent, row.CostAlert, row.AutonomyCeiling, usage.Sum(x => x.InputTokens + x.OutputTokens), usage.Sum(x => x.EstimatedCostUsd), NalvaLimits.PricingVersion);
+        return new NalvaSettingsDto(
+            row.DefaultModel,
+            row.EmbeddingModel,
+            row.Temperature,
+            row.MonthlyTokenBudget,
+            row.MonthlyBudgetUsd,
+            row.DailyExecutionLimit,
+            row.AlertThresholdPercent,
+            row.CostAlert,
+            row.AutonomyCeiling,
+            usage.Sum(x => x.InputTokens + x.OutputTokens),
+            usage.Sum(x => x.EstimatedCostUsd),
+            NalvaLimits.PricingVersion,
+            row.ApprovalExpiryDays,
+            row.NotifyPendingApprovals,
+            row.AutoExpireApprovals,
+            row.RequireApprovalForExternalActions,
+            NalvaJson.Strings(row.ExtraApprovalToolsJson));
     }
 
     private async Task<NalvaAgentCardDto> CardAsync(string key, string name, string description, string role, string category, IReadOnlyList<string> responsibilities, bool custom, bool core, NalvaCompanyAgent? row, CancellationToken ct)
@@ -971,11 +1130,111 @@ public sealed partial class NalvaWorkforceService : INalvaWorkforceService
     private static NalvaWorkflowDto MapWorkflow(NalvaWorkflowDefinition row)
     {
         var steps = JsonSerializer.Deserialize<List<NalvaWorkflowStepWrite>>(row.StepsJson, JsonOptions) ?? [];
-        return new NalvaWorkflowDto(row.Id, row.Key, row.Name, row.Description, row.TriggerKind, row.TriggerEvent, row.IntervalMinutes, row.IsActive, steps, row.Version, row.TimeZoneId);
+        return new NalvaWorkflowDto(
+            row.Id,
+            row.Key,
+            row.Name,
+            row.Description,
+            row.TriggerKind,
+            row.TriggerEvent,
+            row.IntervalMinutes,
+            row.IsActive,
+            steps,
+            row.Version,
+            row.TimeZoneId,
+            row.RecurrenceKind,
+            row.LocalTimeOfDay,
+            row.DaysOfWeek,
+            row.DayOfMonth,
+            row.IsPaused,
+            row.MaxConcurrentRuns,
+            row.NextRunAt,
+            row.ScheduleStartUtc,
+            row.ScheduleEndUtc,
+            row.LastRunAt,
+            row.CancelledAt is not null,
+            row.ConsecutiveFailures,
+            row.LastFailure);
     }
 
-    private static NalvaApprovalDto MapApproval(NalvaApproval row) =>
-        new(row.Id, row.ExecutionId, row.AgentKey, row.Action, row.ToolName, row.Risk, row.ContextJson, row.Status, row.RequestedAt, row.RequestedByUserId, row.ApproverUserId, row.DecidedAt, row.DecisionNote, row.ExecutionResult);
+    private NalvaApprovalDto MapApproval(NalvaApproval row)
+    {
+        var execution = _db.NalvaExecutions.AsNoTracking().FirstOrDefault(x => x.Id == row.ExecutionId);
+        string? workflowName = null;
+        if (execution?.WorkflowRunId is Guid runId)
+        {
+            var run = _db.NalvaWorkflowRuns.AsNoTracking().FirstOrDefault(x => x.Id == runId);
+            if (run is not null)
+            {
+                var definition = _db.NalvaWorkflowDefinitions.AsNoTracking().FirstOrDefault(x => x.Id == run.DefinitionId);
+                workflowName = definition?.Name;
+            }
+        }
+
+        var related = ExtractApprovalSummary(row.ArgsJson, row.ContextJson);
+        return new NalvaApprovalDto(
+            row.Id,
+            row.ExecutionId,
+            row.AgentKey,
+            row.Action,
+            row.ToolName,
+            row.Risk,
+            row.ContextJson,
+            row.Status,
+            row.RequestedAt,
+            row.RequestedByUserId,
+            row.ApproverUserId,
+            row.DecidedAt,
+            row.DecisionNote,
+            row.ExecutionResult,
+            execution?.WorkflowRunId,
+            workflowName,
+            execution?.Objective,
+            related.Entity,
+            related.Amount,
+            related.Risk,
+            row.ExpiresAt,
+            NalvaCollaborationService.Fingerprint(row.ArgsJson),
+            row.ArgsJson);
+    }
+
+    private static (string? Entity, string? Amount, string? Risk) ExtractApprovalSummary(string? argsJson, string? contextJson)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(argsJson) ? (contextJson ?? "{}") : argsJson);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                return (null, null, null);
+            string? entity = null;
+            if (doc.RootElement.TryGetProperty("customerId", out var customer))
+                entity = $"customer:{customer}";
+            else if (doc.RootElement.TryGetProperty("orderId", out var order))
+                entity = $"order:{order}";
+            else if (doc.RootElement.TryGetProperty("leadId", out var lead))
+                entity = $"lead:{lead}";
+            else if (doc.RootElement.TryGetProperty("supplierId", out var supplier))
+                entity = $"supplier:{supplier}";
+            else if (doc.RootElement.TryGetProperty("ticketId", out var ticket))
+                entity = $"ticket:{ticket}";
+
+            string? amount = null;
+            if (doc.RootElement.TryGetProperty("amount", out var amt))
+                amount = amt.ToString();
+            else if (doc.RootElement.TryGetProperty("total", out var total))
+                amount = total.ToString();
+            else if (doc.RootElement.TryGetProperty("grandTotal", out var grand))
+                amount = grand.ToString();
+
+            string? risk = null;
+            if (doc.RootElement.TryGetProperty("risk", out var riskNode))
+                risk = riskNode.ToString();
+            return (entity, amount, risk);
+        }
+        catch (JsonException)
+        {
+            return (null, null, null);
+        }
+    }
 
     private static DateTime MonthStart() => new(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
 

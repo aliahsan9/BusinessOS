@@ -638,7 +638,7 @@ public sealed class MarketingOperationsService : IMarketingOperationsService
         Ops.Require(_user, PermissionCodes.NalvaView, PermissionCodes.NalvaManage);
         var result = new List<MarketingConnectedAccountDto>
         {
-            new("instagram", null, "Unavailable", null, null, false, "Instagram publish is not implemented in IntegrationApi."),
+            new("instagram", null, "Partial", null, null, false, "Instagram Content Publishing requires Meta connection metadata instagramBusinessAccountId plus instagram_content_publish. Image posts only."),
             new("tiktok", null, "Unavailable", null, null, false, "TikTok provider is not present."),
             new("youtube", null, "Unavailable", null, null, false, "YouTube provider is not present.")
         };

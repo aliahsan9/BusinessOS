@@ -76,6 +76,9 @@ public enum AiToolName
     GetBusinessHealth,
     GetDailyPriorities,
     GetCustomerInsights,
+    GetExecutiveDecisionBrief,
+    ForecastSalesRevenue,
+    GetBusinessRisks,
 
     // Phase 3 specialist reads / writes (wrap existing business services)
     GetOrders,

@@ -6,6 +6,8 @@ using BusinessOS.Application.Features.Integrations;
 using BusinessOS.Application.Features.Marketing;
 using BusinessOS.Application.Features.Nalva;
 using BusinessOS.Application.Features.Operations.Services;
+using BusinessOS.Application.Features.BusinessIntelligence;
+using BusinessOS.Application.Features.FinanceAgent;
 using BusinessOS.Application.Features.ProcurementAgent;
 using BusinessOS.Application.Features.SalesAgent;
 using BusinessOS.Application.Features.Support;
@@ -41,6 +43,11 @@ public sealed class NalvaToolGateway : INalvaToolGateway
     private readonly ISalesAgentToolOperations? _sales;
     private readonly IInventoryProcurementAgentService? _procurement;
     private readonly IMarketingOperationsService? _marketing;
+    private readonly IFinanceAgentService? _finance;
+    private readonly ISalesIntelligenceService? _salesIntel;
+    private readonly ICustomerIntelligenceService? _customerIntel;
+    private readonly IExecutiveIntelligenceService? _executive;
+    private readonly IBusinessIntelligenceService? _bi;
 
     public NalvaToolGateway(
         BusinessOSDbContext db,
@@ -51,7 +58,12 @@ public sealed class NalvaToolGateway : INalvaToolGateway
         ISupportAgentService? support = null,
         ISalesAgentToolOperations? sales = null,
         IInventoryProcurementAgentService? procurement = null,
-        IMarketingOperationsService? marketing = null)
+        IMarketingOperationsService? marketing = null,
+        IFinanceAgentService? finance = null,
+        ISalesIntelligenceService? salesIntel = null,
+        ICustomerIntelligenceService? customerIntel = null,
+        IExecutiveIntelligenceService? executive = null,
+        IBusinessIntelligenceService? bi = null)
     {
         _db = db;
         _tenant = tenant;
@@ -62,6 +74,11 @@ public sealed class NalvaToolGateway : INalvaToolGateway
         _sales = sales;
         _procurement = procurement;
         _marketing = marketing;
+        _finance = finance;
+        _salesIntel = salesIntel;
+        _customerIntel = customerIntel;
+        _executive = executive;
+        _bi = bi;
     }
 
     public async Task<NalvaToolOutcome> ExecuteAsync(
@@ -82,18 +99,24 @@ public sealed class NalvaToolGateway : INalvaToolGateway
             return Fail(rejected);
 
         var args = NalvaArgs.Parse(argsJson);
-        if (tool.RequiresApproval && !approvalGranted)
+        var settings = await _db.NalvaCompanySettings.AsNoTracking().FirstOrDefaultAsync(cancellationToken);
+        var extraApproval = settings is not null
+            && NalvaJson.Strings(settings.ExtraApprovalToolsJson).Contains(tool.Name, StringComparer.OrdinalIgnoreCase);
+        var forceExternalApproval = settings?.RequireApprovalForExternalActions != false
+            && (tool.ExternalEffect || tool.Integration is "gmail" or "meta" or "external" or "prepared");
+        var requiresApproval = tool.RequiresApproval || extraApproval || (forceExternalApproval && tool.IsWrite && tool.ExternalEffect);
+        if (requiresApproval && !approvalGranted)
         {
             return new NalvaToolOutcome
             {
                 ApprovalRequired = true,
-                ApprovalAction = tool.ApprovalAction,
+                ApprovalAction = tool.ApprovalAction ?? tool.Name,
                 Risk = tool.Risk,
-                Summary = $"Waiting for a person to approve {tool.ApprovalAction}.",
+                Summary = $"Waiting for a person to approve {tool.ApprovalAction ?? tool.Name}.",
                 Data = new JsonObject
                 {
                     ["tool"] = tool.Name,
-                    ["action"] = tool.ApprovalAction,
+                    ["action"] = tool.ApprovalAction ?? tool.Name,
                     ["risk"] = tool.Risk
                 }
             };
@@ -112,6 +135,24 @@ public sealed class NalvaToolGateway : INalvaToolGateway
                 var scheduled = await MarketingPublishAfterApproval(args, cancellationToken);
                 if (scheduled is not null)
                     return scheduled;
+            }
+            if (tool.Name == "SubmitPaymentReminder" && _finance is not null)
+            {
+                var reminderId = NalvaArgs.GuidOf(args, "reminderId") ?? NalvaArgs.GuidOf(args, "id");
+                if (reminderId is null)
+                    return Fail("reminderId is required to submit a payment reminder.");
+                var submitted = await _finance.SubmitPaymentReminderAsync(
+                    reminderId.Value,
+                    approved: true,
+                    NalvaArgs.Str(args, "approvalFingerprint"),
+                    NalvaArgs.Str(args, "idempotencyKey"),
+                    cancellationToken);
+                return Ok(submitted.Summary, JsonSerializer.SerializeToNode(submitted)?.AsObject() ?? new JsonObject
+                {
+                    ["reminderId"] = submitted.ReminderId.ToString(),
+                    ["status"] = submitted.Status,
+                    ["integrationClassification"] = submitted.IntegrationClassification
+                });
             }
             var live = await TryLiveIntegrationAsync(tool.Name, argsJson, cancellationToken);
             if (live is not null)
@@ -133,7 +174,14 @@ public sealed class NalvaToolGateway : INalvaToolGateway
                 "GetCompanyOverview" => await CompanyOverview(cancellationToken),
                 "GetBusinessKPIs" => await Kpis(cancellationToken),
                 "GetSalesSummary" => await SalesSummary(cancellationToken),
-                "GetFinancialSummary" => await FinancialSummary(cancellationToken),
+                "GetFinancialSummary" => await FinanceOverviewTool(cancellationToken),
+                "GetFinanceIntelligence" => await FinanceIntelligenceTool(cancellationToken),
+                "AnalyzeExpenses" => await AnalyzeExpensesTool(cancellationToken),
+                "GetReceivablesAging" => await ReceivablesAgingTool(cancellationToken),
+                "GetPayablesSchedule" => await PayablesScheduleTool(cancellationToken),
+                "ReconcileFinancialRecords" => await ReconcileTool(cancellationToken),
+                "GetBudgetStatus" => await BudgetStatusTool(cancellationToken),
+                "PreparePaymentReminder" => await PrepareReminderTool(args, cancellationToken),
                 "GetProjectSummary" => await ProjectSummary(cancellationToken),
                 "GetInventorySummary" => await InventorySummary(cancellationToken),
                 "GetEmployeeSummary" => await EmployeeSummary(cancellationToken),
@@ -191,6 +239,11 @@ public sealed class NalvaToolGateway : INalvaToolGateway
                 "CreateQuotationDraft" => await QuotationDraft(args, cancellationToken),
                 "GetSalesPipeline" => await Pipeline(cancellationToken),
                 "GetConversionAnalytics" => await Conversion(cancellationToken),
+                "ForecastSalesRevenue" => await ForecastSales(cancellationToken),
+                "GetSalesIntelligence" => await SalesIntel(cancellationToken),
+                "GetCustomerIntelligence" => await CustomerIntel(cancellationToken),
+                "GetExecutiveDecisionBrief" => await ExecutiveBrief(args, cancellationToken),
+                "GetBusinessRisks" => await BusinessRisks(cancellationToken),
                 "SendExternalEmail" or "PublishSocialPost" or "SpendAdBudget" or "IssueRefund" or "ExecuteProductionDeployment" or "ChangeEmployeeRecord" =>
                     Ok("No external effect was performed.", new JsonObject { ["performed"] = false }),
                 "SearchKnowledgeBase" or "GetJobRequirements" => await KnowledgeSearch(agentKey, NalvaArgs.Str(args, "query"), cancellationToken),
@@ -210,14 +263,15 @@ public sealed class NalvaToolGateway : INalvaToolGateway
                 "AnalyzeRepository" or "AnalyzePullRequest" => await RepositoryRead(tool.Name, argsJson, cancellationToken),
                 "ReviewCodeChanges" or "GenerateCode" or "GenerateUnitTests" or "GenerateTechnicalDocumentation" or "GenerateCodeReviewReport" =>
                     await Draft(agentKey, executionId, "Engineering", tool.Name, EngineeringBody(tool.Name, args), cancellationToken),
-                "GetExpenseRecords" => await Expenses(cancellationToken),
+                "GetExpenseRecords" => await AnalyzeExpensesTool(cancellationToken),
                 "GetInvoiceRecords" => await Invoices(cancellationToken),
                 "GetPaymentRecords" => await Payments(cancellationToken),
-                "GetOutstandingReceivables" => await Receivables(cancellationToken),
-                "GetOutstandingPayables" => await Payables(cancellationToken),
-                "CalculateProfitability" => await Profit(cancellationToken),
-                "ForecastCashFlow" => await CashFlow(cancellationToken),
-                "GenerateFinancialReport" or "GenerateBusinessReport" or "GenerateHRReport" or "GenerateDailySummary" => await Report(agentKey, executionId, tool.Name, cancellationToken),
+                "GetOutstandingReceivables" => await ReceivablesAgingTool(cancellationToken),
+                "GetOutstandingPayables" => await PayablesScheduleTool(cancellationToken),
+                "CalculateProfitability" => await FinanceIntelligenceTool(cancellationToken),
+                "ForecastCashFlow" => await CashFlowTool(cancellationToken),
+                "GenerateFinancialReport" => await FinanceReportTool(args, cancellationToken),
+                "GenerateBusinessReport" or "GenerateHRReport" or "GenerateDailySummary" => await Report(agentKey, executionId, tool.Name, cancellationToken),
                 "AnalyzeCandidateCV" or "CompareCandidateQualifications" => CompareText(args),
                 "CreateInterviewQuestionSet" => await Draft(agentKey, executionId, "Interview", "Interview questions", InterviewBody(args), cancellationToken),
                 "CreateOnboardingTask" => await Draft(agentKey, executionId, "Onboarding", NalvaArgs.Str(args, "title") ?? "Onboarding item", "Checklist item for a person to complete. This is not a hiring decision.", cancellationToken),
@@ -254,6 +308,12 @@ public sealed class NalvaToolGateway : INalvaToolGateway
                 "GetChurnRisk" => await Churn(cancellationToken),
                 "FindDuplicateLeads" => await Duplicates(cancellationToken),
                 "GetOperationalAlerts" => await Alerts(cancellationToken),
+                "RetrieveSharedBusinessContext" => await RetrieveSharedContext(args, cancellationToken),
+                "StoreSharedBusinessDecision" => await StoreSharedDecision(agentKey, executionId, args, cancellationToken),
+                "VerifyOrderReadiness" => await VerifyOrderReadiness(args, cancellationToken),
+                "PrepareInvoiceDraft" => await PrepareInvoiceDraft(agentKey, executionId, args, cancellationToken),
+                "ClassifySupportComplaint" => await ClassifySupportComplaint(args, cancellationToken),
+                "CoordinateWorkforceObjective" => CoordinateObjective(args),
                 _ => Fail("This tool is registered but has no executor.")
             };
         }
@@ -309,15 +369,110 @@ public sealed class NalvaToolGateway : INalvaToolGateway
         });
     }
 
-    private async Task<NalvaToolOutcome> FinancialSummary(CancellationToken ct)
+    private async Task<NalvaToolOutcome> FinanceOverviewTool(CancellationToken ct)
     {
-        var since = DateTime.UtcNow.AddDays(-30);
-        return Ok("Recorded finance totals. This is not a statutory statement.", new JsonObject
+        if (_finance is null)
+            return Fail("Finance agent service is unavailable.");
+        var overview = await _finance.GetOverviewAsync(period: "month", cancellationToken: ct);
+        return Ok("Finance overview from tenant records. Not a statutory statement.", JsonSerializer.SerializeToNode(overview)?.AsObject() ?? new JsonObject());
+    }
+
+    private async Task<NalvaToolOutcome> FinanceIntelligenceTool(CancellationToken ct)
+    {
+        if (_finance is null)
+            return Fail("Finance agent service is unavailable.");
+        var intel = await _finance.GetIntelligenceAsync(period: "month", cancellationToken: ct);
+        return Ok("Finance intelligence with explicit formulas and limitations.", JsonSerializer.SerializeToNode(intel)?.AsObject() ?? new JsonObject());
+    }
+
+    private async Task<NalvaToolOutcome> AnalyzeExpensesTool(CancellationToken ct)
+    {
+        if (_finance is null)
+            return Fail("Finance agent service is unavailable.");
+        var data = await _finance.AnalyzeExpensesAsync(period: "month", cancellationToken: ct);
+        return Ok("Expense analysis from Approved/Paid expenses only.", JsonSerializer.SerializeToNode(data)?.AsObject() ?? new JsonObject());
+    }
+
+    private async Task<NalvaToolOutcome> ReceivablesAgingTool(CancellationToken ct)
+    {
+        if (_finance is null)
+            return Fail("Finance agent service is unavailable.");
+        var data = await _finance.GetReceivablesAsync(ct);
+        return Ok("Receivables aging from invoice outstanding balances.", JsonSerializer.SerializeToNode(data)?.AsObject() ?? new JsonObject());
+    }
+
+    private async Task<NalvaToolOutcome> PayablesScheduleTool(CancellationToken ct)
+    {
+        if (_finance is null)
+            return Fail("Finance agent service is unavailable.");
+        var data = await _finance.GetPayablesAsync(ct);
+        return Ok("Supplier payables from purchase invoices. Open POs are not counted as payables.", JsonSerializer.SerializeToNode(data)?.AsObject() ?? new JsonObject());
+    }
+
+    private async Task<NalvaToolOutcome> CashFlowTool(CancellationToken ct)
+    {
+        if (_finance is null)
+            return Fail("Finance agent service is unavailable.");
+        var data = await _finance.GetCashFlowAsync(projectionDays: 30, cancellationToken: ct);
+        return Ok("Cash-flow analysis with labeled projection confidence.", JsonSerializer.SerializeToNode(data)?.AsObject() ?? new JsonObject());
+    }
+
+    private async Task<NalvaToolOutcome> ReconcileTool(CancellationToken ct)
+    {
+        if (_finance is null)
+            return Fail("Finance agent service is unavailable.");
+        var data = await _finance.ReconcileAsync(ct);
+        return Ok("Reconciliation summary. Records were not modified.", JsonSerializer.SerializeToNode(data)?.AsObject() ?? new JsonObject());
+    }
+
+    private async Task<NalvaToolOutcome> BudgetStatusTool(CancellationToken ct)
+    {
+        if (_finance is null)
+            return Fail("Finance agent service is unavailable.");
+        var budgets = await _finance.GetBudgetsAsync(ct);
+        var alerts = await _finance.GetBudgetAlertsAsync(ct);
+        return Ok("Owner-configured budget status.", new JsonObject
         {
-            ["invoiceOutstanding"] = await _db.Invoices.SumAsync(x => (decimal?)x.OutstandingAmount, ct) ?? 0m,
-            ["paymentsLast30Days"] = await _db.Payments.Where(x => x.PaymentDate >= since).SumAsync(x => (decimal?)x.Amount, ct) ?? 0m,
-            ["expensesLast30Days"] = await _db.Expenses.Where(x => x.ExpenseDate >= since).SumAsync(x => (decimal?)x.Amount, ct) ?? 0m,
-            ["isAccountingRecord"] = false
+            ["budgets"] = JsonSerializer.SerializeToNode(budgets),
+            ["alerts"] = JsonSerializer.SerializeToNode(alerts)
+        });
+    }
+
+    private async Task<NalvaToolOutcome> PrepareReminderTool(JsonElement args, CancellationToken ct)
+    {
+        if (_finance is null)
+            return Fail("Finance agent service is unavailable.");
+        var invoiceId = NalvaArgs.GuidOf(args, "invoiceId") ?? NalvaArgs.GuidOf(args, "id");
+        if (invoiceId is null)
+            return Fail("invoiceId is required.");
+        var prepared = await _finance.PreparePaymentReminderAsync(new PrepareReminderRequest
+        {
+            InvoiceId = invoiceId.Value,
+            Channel = NalvaArgs.Str(args, "channel"),
+            CustomMessage = NalvaArgs.Str(args, "message") ?? NalvaArgs.Str(args, "customMessage"),
+            IdempotencyKey = NalvaArgs.Str(args, "idempotencyKey")
+        }, ct);
+        return Ok(prepared.Summary, JsonSerializer.SerializeToNode(prepared)?.AsObject() ?? new JsonObject());
+    }
+
+    private async Task<NalvaToolOutcome> FinanceReportTool(JsonElement args, CancellationToken ct)
+    {
+        if (_finance is null)
+            return Fail("Finance agent service is unavailable.");
+        var report = await _finance.GenerateReportAsync(new FinanceReportRequest
+        {
+            ReportType = NalvaArgs.Str(args, "reportType") ?? NalvaArgs.Str(args, "type") ?? "monthly-profit-loss",
+            Period = NalvaArgs.Str(args, "period") ?? "month"
+        }, ct);
+        return Ok(report.BodyMarkdown, new JsonObject
+        {
+            ["reportType"] = report.ReportType,
+            ["currency"] = report.Currency,
+            ["startDate"] = report.StartDate.ToString("O"),
+            ["endDate"] = report.EndDate.ToString("O"),
+            ["calculationBasis"] = report.CalculationBasis,
+            ["disclaimer"] = report.Disclaimer,
+            ["limitations"] = new JsonArray(report.Limitations.Select(x => (JsonNode)x).ToArray())
         });
     }
 
@@ -670,6 +825,12 @@ public sealed class NalvaToolGateway : INalvaToolGateway
 
     private async Task<NalvaToolOutcome> Conversion(CancellationToken ct)
     {
+        if (_salesIntel is not null)
+        {
+            var data = await _salesIntel.GetConversionAsync(ct);
+            return Ok("Conversion from stored leads and orders.", JsonSerializer.SerializeToNode(data)?.AsObject() ?? new JsonObject());
+        }
+
         var total = await _db.Leads.CountAsync(ct);
         var converted = await _db.Leads.CountAsync(x => x.Status == LeadStatuses.Converted, ct);
         return Ok("Conversion from stored leads.", new JsonObject
@@ -678,6 +839,55 @@ public sealed class NalvaToolGateway : INalvaToolGateway
             ["converted"] = converted,
             ["rate"] = total == 0 ? 0 : decimal.Round((decimal)converted / total, 4)
         });
+    }
+
+    private async Task<NalvaToolOutcome> ForecastSales(CancellationToken ct)
+    {
+        if (_salesIntel is null)
+            return Fail("Sales intelligence is unavailable.");
+        var data = await _salesIntel.ForecastSalesAsync(1, ct);
+        return Ok(
+            data.Available
+                ? "Labeled sales revenue forecast from completed-order history. Prediction — not a confirmed fact."
+                : "Sales forecast unavailable due to insufficient history. No figure was invented.",
+            JsonSerializer.SerializeToNode(data)?.AsObject() ?? new JsonObject());
+    }
+
+    private async Task<NalvaToolOutcome> SalesIntel(CancellationToken ct)
+    {
+        if (_salesIntel is null)
+            return Fail("Sales intelligence is unavailable.");
+        var data = await _salesIntel.GetIntelligenceAsync(period: "month", cancellationToken: ct);
+        return Ok("Sales intelligence from recorded orders and leads.", JsonSerializer.SerializeToNode(data)?.AsObject() ?? new JsonObject());
+    }
+
+    private async Task<NalvaToolOutcome> CustomerIntel(CancellationToken ct)
+    {
+        if (_customerIntel is null)
+            return Fail("Customer intelligence is unavailable.");
+        var data = await _customerIntel.GetIntelligenceAsync(ct);
+        return Ok("Customer intelligence from completed-order history. Churn risks are estimates.", JsonSerializer.SerializeToNode(data)?.AsObject() ?? new JsonObject());
+    }
+
+    private async Task<NalvaToolOutcome> ExecutiveBrief(JsonElement args, CancellationToken ct)
+    {
+        if (_executive is null)
+            return Fail("Executive intelligence is unavailable.");
+        var question = NalvaArgs.Str(args, "question") ?? NalvaArgs.Str(args, "q") ?? "How is my business performing?";
+        var data = await _executive.AnswerAsync(question, ct);
+        return Ok(
+            data.ContainsPredictions
+                ? "Decision brief includes labeled predictions. Not confirmed financial facts."
+                : "Decision brief from recorded tenant data.",
+            JsonSerializer.SerializeToNode(data)?.AsObject() ?? new JsonObject());
+    }
+
+    private async Task<NalvaToolOutcome> BusinessRisks(CancellationToken ct)
+    {
+        if (_bi is null)
+            return Fail("Business intelligence is unavailable.");
+        var data = await _bi.GetRisksAsync(ct);
+        return Ok("Business risks from recorded inventory, finance, sales, and customer signals.", JsonSerializer.SerializeToNode(data)?.AsObject() ?? new JsonObject());
     }
 
     private async Task<NalvaToolOutcome> KnowledgeSearch(string agentKey, string? query, CancellationToken ct)
@@ -1288,6 +1498,19 @@ public sealed class NalvaToolGateway : INalvaToolGateway
 
     private async Task<NalvaToolOutcome> Churn(CancellationToken ct)
     {
+        if (_customerIntel is not null)
+        {
+            var data = await _customerIntel.GetChurnRisksAsync(ct);
+            return Ok(
+                "Potential churn risks from completed-order silence. Heuristic estimates — not confirmed churn.",
+                new JsonObject
+                {
+                    ["count"] = data.Count,
+                    ["prediction"] = true,
+                    ["customers"] = JsonSerializer.SerializeToNode(data.Take(20)) ?? new JsonArray()
+                });
+        }
+
         var cutoff = DateTime.UtcNow.AddDays(-90);
         var recent = await _db.Orders.AsNoTracking().Where(x => x.OrderDate >= cutoff).Select(x => x.CustomerId).Distinct().ToListAsync(ct);
         var older = await _db.Orders.AsNoTracking().Where(x => x.OrderDate < cutoff).Select(x => x.CustomerId).Distinct().ToListAsync(ct);
@@ -1296,7 +1519,7 @@ public sealed class NalvaToolGateway : INalvaToolGateway
         {
             ["count"] = older.Except(recent).Count(),
             ["customerIds"] = new JsonArray(ids.Select(x => (JsonNode)x.ToString()).ToArray()),
-            ["prediction"] = false
+            ["prediction"] = true
         });
     }
 
@@ -1368,7 +1591,6 @@ public sealed class NalvaToolGateway : INalvaToolGateway
     {
         var summary = tool switch
         {
-            "GenerateFinancialReport" => (await FinancialSummary(ct)).Summary,
             "GenerateHRReport" => (await EmployeeSummary(ct)).Summary,
             "GenerateDailySummary" => "Daily summary of tasks due and recent workforce results.",
             _ => (await Kpis(ct)).Summary
@@ -2094,6 +2316,218 @@ public sealed class NalvaToolGateway : INalvaToolGateway
         foreach (var row in rows)
             array.Add(row);
         return Ok($"Returned {array.Count} stored {name}.", new JsonObject { [name] = array });
+    }
+
+    private async Task<NalvaToolOutcome> RetrieveSharedContext(JsonElement args, CancellationToken ct)
+    {
+        var kind = NalvaArgs.Str(args, "kind") ?? "BusinessDecision";
+        var query = NalvaArgs.Str(args, "query");
+        var rows = await _db.NalvaMemoryRecords.AsNoTracking()
+            .Where(x => x.Kind == kind || x.Kind == "SharedBusinessContext" || x.Kind == "BusinessPolicy")
+            .OrderByDescending(x => x.CreatedAt)
+            .Take(20)
+            .ToListAsync(ct);
+        if (!string.IsNullOrWhiteSpace(query))
+            rows = rows.Where(x => x.Title.Contains(query, StringComparison.OrdinalIgnoreCase) || x.Content.Contains(query, StringComparison.OrdinalIgnoreCase)).Take(10).ToList();
+        return Ok("Shared business context from tenant-scoped memory only.", new JsonObject
+        {
+            ["count"] = rows.Count,
+            ["items"] = new JsonArray(rows.Select(x => (JsonNode)new JsonObject
+            {
+                ["id"] = x.Id.ToString(),
+                ["agentKey"] = x.AgentKey,
+                ["kind"] = x.Kind,
+                ["title"] = x.Title,
+                ["excerpt"] = NalvaGuard.Clip(x.Content, 240)
+            }).ToArray())
+        });
+    }
+
+    private async Task<NalvaToolOutcome> StoreSharedDecision(string agentKey, Guid executionId, JsonElement args, CancellationToken ct)
+    {
+        var title = NalvaArgs.Str(args, "title") ?? "Business decision";
+        var content = NalvaArgs.Str(args, "content") ?? NalvaArgs.Str(args, "decision") ?? "";
+        if (string.IsNullOrWhiteSpace(content))
+            return Fail("A decision content body is required.", NalvaErrorClass.Validation);
+        var row = new NalvaMemoryRecord
+        {
+            AgentKey = string.IsNullOrWhiteSpace(agentKey) ? "ceo" : agentKey,
+            Kind = "BusinessDecision",
+            Title = NalvaGuard.Clip(title, 200),
+            Content = NalvaGuard.Clip(content, 4000),
+            ExecutionId = executionId == Guid.Empty ? null : executionId,
+            ExpiresAt = DateTime.UtcNow.AddDays(180)
+        };
+        _db.NalvaMemoryRecords.Add(row);
+        await _db.SaveChangesAsync(ct);
+        return Ok("Stored a tenant-scoped business decision for later agents.", new JsonObject
+        {
+            ["memoryId"] = row.Id.ToString(),
+            ["kind"] = row.Kind,
+            ["verified"] = true
+        });
+    }
+
+    private async Task<NalvaToolOutcome> VerifyOrderReadiness(JsonElement args, CancellationToken ct)
+    {
+        var orderResult = await OrderDetails(args, ct);
+        if (orderResult.Data["found"]?.GetValue<bool?>() != true)
+            return Ok("Order readiness could not be verified because the order was not found.", new JsonObject
+            {
+                ["ready"] = false,
+                ["verified"] = false,
+                ["order"] = orderResult.Data.DeepClone()
+            });
+
+        var orderId = Guid.Parse(orderResult.Data["id"]!.GetValue<string>()!);
+        var customerId = Guid.Parse(orderResult.Data["customerId"]!.GetValue<string>()!);
+        var items = await _db.OrderItems.AsNoTracking().Where(x => x.OrderId == orderId).ToListAsync(ct);
+        var stockBlockers = new JsonArray();
+        foreach (var item in items)
+        {
+            var stock = await _db.Inventories.AsNoTracking().FirstOrDefaultAsync(x => x.ProductId == item.ProductId, ct);
+            var available = stock?.CurrentStock ?? 0;
+            if (available < item.Quantity)
+            {
+                stockBlockers.Add(new JsonObject
+                {
+                    ["productId"] = item.ProductId.ToString(),
+                    ["needed"] = item.Quantity,
+                    ["available"] = available
+                });
+            }
+        }
+
+        var outstanding = await _db.Invoices.AsNoTracking()
+            .Where(x => x.CustomerId == customerId && x.OutstandingAmount > 0)
+            .SumAsync(x => (decimal?)x.OutstandingAmount, ct) ?? 0m;
+        var payments = await _db.Payments.AsNoTracking().CountAsync(x => x.CustomerId == customerId, ct);
+
+        var ready = stockBlockers.Count == 0;
+        return Ok(ready
+            ? "Order verified against stock and finance records. Fulfillment still requires owner policy/approval."
+            : "Order has stock blockers. Do not mark fulfilled.",
+            new JsonObject
+            {
+                ["ready"] = ready,
+                ["verified"] = true,
+                ["orderId"] = orderId.ToString(),
+                ["customerId"] = customerId.ToString(),
+                ["paymentStatus"] = orderResult.Data["paymentStatus"]?.DeepClone(),
+                ["outstandingBalance"] = outstanding,
+                ["paymentRecordsFound"] = payments,
+                ["stockBlockers"] = stockBlockers,
+                ["fulfilled"] = false,
+                ["paid"] = string.Equals(orderResult.Data["paymentStatus"]?.GetValue<string>(), "Paid", StringComparison.OrdinalIgnoreCase)
+            });
+    }
+
+    private async Task<NalvaToolOutcome> PrepareInvoiceDraft(string agentKey, Guid executionId, JsonElement args, CancellationToken ct)
+    {
+        var customerId = NalvaArgs.GuidOf(args, "customerId");
+        var orderId = NalvaArgs.GuidOf(args, "orderId");
+        var amount = NalvaArgs.Dec(args, "amount");
+        Customer? customer = null;
+        if (customerId is Guid cid)
+            customer = await _db.Customers.AsNoTracking().FirstOrDefaultAsync(x => x.Id == cid, ct);
+        Order? order = null;
+        if (orderId is Guid oid)
+            order = await _db.Orders.AsNoTracking().FirstOrDefaultAsync(x => x.Id == oid, ct);
+
+        if (customer is null && order is null)
+            return Ok("Invoice draft was not created. Supply a verified customerId or orderId from company records.", new JsonObject
+            {
+                ["created"] = false,
+                ["posted"] = false,
+                ["reason"] = "missing_verified_transaction"
+            });
+
+        if (order is not null)
+        {
+            amount ??= order.GrandTotal;
+            customerId ??= order.CustomerId;
+        }
+
+        if (amount is null or <= 0)
+            return Ok("Invoice draft was not created. No verified positive amount was available.", new JsonObject
+            {
+                ["created"] = false,
+                ["posted"] = false,
+                ["reason"] = "missing_amount"
+            });
+
+        var body = $"Invoice draft for customer {customerId}. Amount {amount}. Order {orderId}. Not posted to the ledger.";
+        var draft = await Draft(agentKey, executionId, "InvoiceDraft", $"Invoice draft ({amount})", body, ct);
+        draft.Data["created"] = true;
+        draft.Data["posted"] = false;
+        draft.Data["amount"] = amount;
+        draft.Data["customerId"] = customerId?.ToString();
+        draft.Data["orderId"] = orderId?.ToString();
+        draft.Data["currency"] = "PKR";
+        draft.Data["verified"] = true;
+        return draft;
+    }
+
+    private async Task<NalvaToolOutcome> ClassifySupportComplaint(JsonElement args, CancellationToken ct)
+    {
+        if (_support is null)
+            return Ok("Support classification unavailable.", new JsonObject { ["classified"] = false });
+
+        var ticketId = NalvaArgs.GuidOf(args, "ticketId") ?? NalvaArgs.GuidOf(args, "id");
+        var text = NalvaArgs.Str(args, "complaint") ?? NalvaArgs.Str(args, "message") ?? "";
+        string category = "general";
+        string urgency = "medium";
+        if (text.Contains("refund", StringComparison.OrdinalIgnoreCase) || text.Contains("charge", StringComparison.OrdinalIgnoreCase))
+        {
+            category = "billing";
+            urgency = "high";
+        }
+        else if (text.Contains("damaged", StringComparison.OrdinalIgnoreCase) || text.Contains("missing", StringComparison.OrdinalIgnoreCase) || text.Contains("delivery", StringComparison.OrdinalIgnoreCase))
+        {
+            category = "fulfillment";
+            urgency = "high";
+        }
+        else if (text.Contains("urgent", StringComparison.OrdinalIgnoreCase) || text.Contains("asap", StringComparison.OrdinalIgnoreCase))
+            urgency = "high";
+
+        if (ticketId is Guid id)
+        {
+            await _support.UpdateTicketAsync(id, new SupportTicketUpdateRequest
+            {
+                Category = category,
+                Priority = urgency
+            }, ct);
+        }
+
+        return Ok("Complaint classified from supplied text and stored ticket fields when present.", new JsonObject
+        {
+            ["classified"] = true,
+            ["ticketId"] = ticketId?.ToString(),
+            ["category"] = category,
+            ["urgency"] = urgency,
+            ["verified"] = ticketId is not null,
+            ["requiresFinance"] = category == "billing",
+            ["requiresInventory"] = category == "fulfillment"
+        });
+    }
+
+    private static NalvaToolOutcome CoordinateObjective(JsonElement args)
+    {
+        var objective = NalvaArgs.Str(args, "objective") ?? "";
+        var match = NalvaObjectiveRouter.Match(objective);
+        return Ok(match.CanStart
+            ? $"Mapped objective to workflow '{match.WorkflowKey}'."
+            : match.BlockReason ?? "Objective needs clarification.",
+            new JsonObject
+            {
+                ["workflowKey"] = match.WorkflowKey,
+                ["workflowName"] = match.Name,
+                ["confidence"] = match.Confidence,
+                ["canStart"] = match.CanStart,
+                ["blockReason"] = match.BlockReason,
+                ["requiredAgents"] = new JsonArray(match.RequiredAgents.Select(x => (JsonNode)x).ToArray()),
+                ["clarifyingQuestions"] = new JsonArray(match.ClarifyingQuestions.Select(x => (JsonNode)x).ToArray())
+            });
     }
 
     private static NalvaToolOutcome Ok(string summary, JsonObject data) =>

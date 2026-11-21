@@ -168,7 +168,23 @@ public sealed class NalvaWorkflowEngine : INalvaWorkflowEngine
                 summaries.Add($"{step.Key}: {result.Summary}");
                 log.Add(new JsonObject { ["step"] = step.Key, ["status"] = result.Status, ["executionId"] = result.ExecutionId.ToString(), ["summary"] = result.Summary });
                 run.EstimatedCostUsd += result.EstimatedCostUsd;
-                context[step.OutputKey ?? step.Key] = JsonNode.Parse(result.ResultJson ?? "{}");
+
+                // Pass only validated / trust-bounded peer results to downstream agents.
+                JsonNode stepContext;
+                if (NalvaCollaborationProtocol.TryParseResult(result.ResultJson, out var envelope, out _) && envelope is not null)
+                    stepContext = NalvaCollaborationProtocol.TrustBoundary(envelope);
+                else
+                {
+                    var fallback = NalvaCollaborationProtocol.FromExecution(
+                        result.ExecutionId,
+                        run.Id,
+                        result,
+                        JsonNode.Parse(result.ResultJson ?? "{}") as JsonObject);
+                    stepContext = NalvaCollaborationProtocol.TrustBoundary(fallback);
+                }
+                context[step.OutputKey ?? step.Key] = stepContext;
+                context["lastAgentResult"] = stepContext.DeepClone();
+
                 if (result.Status == NalvaStatuses.AwaitingApproval)
                 {
                     run.Status = NalvaStatuses.AwaitingApproval;
@@ -177,7 +193,9 @@ public sealed class NalvaWorkflowEngine : INalvaWorkflowEngine
                 }
                 if (result.Status != NalvaStatuses.Completed)
                 {
-                    run.Status = NalvaStatuses.Failed;
+                    run.Status = result.Status is NalvaStatuses.Cancelled or NalvaStatuses.Paused
+                        ? NalvaStatuses.Paused
+                        : NalvaStatuses.Failed;
                     run.Error = result.Error ?? result.Summary;
                     stop = true;
                     break;

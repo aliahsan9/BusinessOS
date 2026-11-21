@@ -25,6 +25,21 @@ public static class IntegrationEndpoints
             Results.Ok(await platform.UpdateConnectionMetadataAsync(id, request, ct))).RequirePermission(PermissionCodes.NalvaManage);
         group.MapGet("/logs", async (Guid? connectionId, IIntegrationPlatform platform, CancellationToken ct) =>
             Results.Ok(await platform.GetLogsAsync(connectionId, ct)));
+        // Meta WhatsApp / Instagram hub verification (GET challenge).
+        group.MapGet("/webhooks/{provider}/{connectionId:guid}", async (string provider, Guid connectionId, HttpRequest request, IIntegrationPlatform platform, CancellationToken ct) =>
+        {
+            var result = await platform.VerifyWebhookSubscriptionAsync(
+                provider,
+                connectionId,
+                request.Query["hub.mode"].FirstOrDefault(),
+                request.Query["hub.verify_token"].FirstOrDefault(),
+                request.Query["hub.challenge"].FirstOrDefault(),
+                ct);
+            return result.StatusCode == 200 && result.Challenge is not null
+                ? Results.Content(result.Challenge, "text/plain")
+                : Results.Json(new { message = "Webhook verification failed." }, statusCode: result.StatusCode);
+        }).AllowAnonymous();
+
         group.MapPost("/webhooks/{provider}/{connectionId:guid}", async (string provider, Guid connectionId, HttpRequest request, IIntegrationPlatform platform, CancellationToken ct) =>
         {
             using var reader = new StreamReader(request.Body);
@@ -34,7 +49,8 @@ public static class IntegrationEndpoints
                 ?? request.Headers["X-Shopify-Hmac-Sha256"].FirstOrDefault()
                 ?? request.Headers["X-CompanyOS-Signature"].FirstOrDefault();
             var eventId = request.Headers["X-GitHub-Delivery"].FirstOrDefault()
-                ?? request.Headers["X-Event-Id"].FirstOrDefault();
+                ?? request.Headers["X-Event-Id"].FirstOrDefault()
+                ?? request.Headers["X-Hub-Signature-256"].FirstOrDefault();
             var result = await platform.ReceiveWebhookAsync(provider, connectionId, body, signature, eventId, ct);
             return Results.Json(new { message = result.Message }, statusCode: result.StatusCode);
         }).AllowAnonymous();

@@ -13,7 +13,7 @@ public static class NalvaWorkforcePackCatalog
             "Software house",
             "Sales, delivery, support, and finance for a software development company.",
             ["sales", "marketing", "support", "software", "finance", "analyst", "assistant", "proposal", "qa", "ceo"],
-            ["customer-acquisition", "autonomous-lead-generation", "lead-acquisition", "proposal-generation", "project-operations", "customer-support-automation", "executive-reporting", "financial-monitoring"]),
+            ["customer-acquisition", "autonomous-lead-generation", "lead-acquisition", "proposal-generation", "project-operations", "customer-support-automation", "executive-reporting", "financial-monitoring", "lead-to-customer-collaboration", "weekly-business-review", "complaint-to-resolution"]),
         Pack(
             "it-consultancy",
             "IT consultancy",
@@ -30,32 +30,32 @@ public static class NalvaWorkforcePackCatalog
             "ecommerce",
             "E-commerce",
             "Catalog, inventory, orders, support, and marketing for online sellers.",
-            ["sales", "procurement", "ecommerce", "support", "marketing", "finance", "analyst", "content"],
-            ["inventory-automation", "customer-support-automation", "content-generation", "social-campaign", "overdue-payment-followup", "financial-monitoring"]),
+            ["sales", "procurement", "ecommerce", "support", "marketing", "finance", "analyst", "content", "ceo"],
+            ["inventory-automation", "customer-support-automation", "content-generation", "social-campaign", "overdue-payment-followup", "financial-monitoring", "order-to-fulfillment", "low-stock-to-procurement", "weekly-business-review"]),
         Pack(
             "retail",
             "Retail",
             "Inventory, procurement, sales, support, and finance for storefronts.",
-            ["sales", "procurement", "support", "finance", "analyst", "ecommerce", "assistant"],
-            ["inventory-automation", "customer-support-automation", "overdue-payment-followup", "financial-monitoring", "executive-reporting"]),
+            ["sales", "procurement", "support", "finance", "analyst", "ecommerce", "assistant", "ceo"],
+            ["inventory-automation", "customer-support-automation", "overdue-payment-followup", "financial-monitoring", "executive-reporting", "low-stock-to-procurement", "order-to-fulfillment", "weekly-business-review"]),
         Pack(
             "service",
             "Service business",
             "Clients, support, sales follow-up, and financial monitoring.",
             ["sales", "support", "success", "finance", "assistant", "analyst", "ceo"],
-            ["lead-acquisition", "follow-up", "customer-support-automation", "customer-onboarding", "overdue-payment-followup", "executive-reporting"]),
+            ["lead-acquisition", "follow-up", "customer-support-automation", "customer-onboarding", "overdue-payment-followup", "executive-reporting", "complaint-to-resolution", "weekly-business-review"]),
         Pack(
             "distributor",
             "Distributor / wholesaler",
             "Order flow, procurement, inventory, and receivables for distribution.",
-            ["sales", "procurement", "finance", "analyst", "support", "assistant", "ecommerce"],
-            ["inventory-automation", "overdue-payment-followup", "financial-monitoring", "lead-qualification", "executive-reporting"]),
+            ["sales", "procurement", "finance", "analyst", "support", "assistant", "ecommerce", "ceo"],
+            ["inventory-automation", "overdue-payment-followup", "financial-monitoring", "lead-qualification", "executive-reporting", "low-stock-to-procurement", "order-to-fulfillment", "weekly-business-review"]),
         Pack(
             "custom",
             "General / custom",
             "A balanced starter workforce. Disable agents that do not match the business.",
             ["ceo", "sales", "marketing", "support", "finance", "procurement", "analyst", "assistant", "hr"],
-            ["customer-acquisition", "inventory-automation", "customer-support-automation", "financial-monitoring", "overdue-payment-followup", "executive-reporting"])
+            ["customer-acquisition", "inventory-automation", "customer-support-automation", "financial-monitoring", "overdue-payment-followup", "executive-reporting", "lead-to-customer-collaboration", "low-stock-to-procurement", "complaint-to-resolution", "weekly-business-review"])
     ];
 
     private static readonly Dictionary<string, NalvaWorkforcePack> ByKey =

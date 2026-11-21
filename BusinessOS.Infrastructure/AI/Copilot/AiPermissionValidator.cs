@@ -65,7 +65,9 @@ public sealed class AiPermissionValidator : IAiPermissionValidator
     {
         if (tool is AiToolName.GetRevenue or AiToolName.GetSalesSummary
             or AiToolName.GetBestSellingProducts or AiToolName.GetSalesTrends
-            or AiToolName.GetBusinessHealth or AiToolName.GetDailyPriorities)
+            or AiToolName.GetBusinessHealth or AiToolName.GetExecutiveDecisionBrief
+            or AiToolName.ForecastSalesRevenue or AiToolName.GetBusinessRisks
+            or AiToolName.GetDailyPriorities)
         {
             if (HasAnyRole("Owner", "Admin", "Manager", "Accountant")
                 || _currentUser.HasPermission(PermissionCodes.AnalyticsView)

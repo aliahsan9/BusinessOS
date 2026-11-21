@@ -3,8 +3,10 @@ using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Services;
+using BusinessOS.Application.Features.Audit.Services;
 using BusinessOS.Application.Features.Nalva;
 using BusinessOS.Infrastructure.AI.Nalva;
+using BusinessOS.Infrastructure.AI.Nalva.Suppliers;
 using BusinessOS.Infrastructure.Data;
 using BusinessOS.Infrastructure.Services;
 using BusinessOS.UnitTests.Common;
@@ -316,7 +318,12 @@ public class NalvaWorkforceTests
             user.SetupGet(x => x.UserId).Returns("user-1");
             user.SetupGet(x => x.TenantId).Returns(provider.TenantId);
             user.Setup(x => x.HasPermission(It.IsAny<string>())).Returns((string code) => allow || (granted?.Contains(code) ?? false));
-            var gateway = new NalvaToolGateway(db, provider, new CrmOperationsService(db, user.Object));
+            var audit = new EntityAuditService(db, user.Object);
+            var finance = new FinanceAgentService(db, provider, user.Object, audit, NullLogger<FinanceAgentService>.Instance);
+            var procurement = new InventoryProcurementAgentService(
+                db, provider, user.Object, TenantDatabase.Inventory(db), new UnavailableSupplierResearchProvider(), audit,
+                NullLogger<InventoryProcurementAgentService>.Instance);
+            var gateway = new NalvaToolGateway(db, provider, new CrmOperationsService(db, user.Object), procurement: procurement, finance: finance);
             var engine = new NalvaExecutionEngine(db, provider, user.Object, gateway, new SilentModel(), NullLogger<NalvaExecutionEngine>.Instance);
             var service = new NalvaWorkforceService(db, user.Object, engine, new NalvaWorkflowEngine(db, engine));
             return new Harness { Db = db, Service = service, Engine = engine };

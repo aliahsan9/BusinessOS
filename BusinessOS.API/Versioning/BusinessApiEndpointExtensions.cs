@@ -67,6 +67,8 @@ public static class BusinessApiEndpointExtensions
         v1.MapBusinessOperationsEndpoints();
         v1.MapNalvaEndpoints();
         v1.MapProcurementAgentEndpoints();
+        v1.MapFinanceAgentEndpoints();
+        v1.MapBusinessIntelligenceEndpoints();
         v1.MapMarketingEndpoints();
         v1.MapSupportEndpoints();
         v1.MapSalesAgentEndpoints();

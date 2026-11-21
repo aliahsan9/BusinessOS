@@ -152,7 +152,8 @@ public class MarketingAnalyticsSnapshotConfiguration : IEntityTypeConfiguration<
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Provider).HasMaxLength(40).IsRequired();
         builder.Property(x => x.ExternalPostId).HasMaxLength(200);
-        builder.Property(x => x.MetricsJson).HasMaxLength(8000);
+        // Avoid HasMaxLength(8000): SQL Server nvarchar parameters cap at 4000 for non-max typed params.
+        builder.Property(x => x.MetricsJson).HasColumnType("nvarchar(max)");
         builder.Property(x => x.DataSource).HasMaxLength(80).IsRequired();
         builder.Property(x => x.UnavailableMetricsJson).HasMaxLength(2000).IsRequired();
         builder.HasIndex(x => new { x.TenantId, x.ContentItemId });

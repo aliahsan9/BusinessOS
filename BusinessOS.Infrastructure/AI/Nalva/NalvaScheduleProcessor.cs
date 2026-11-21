@@ -1,6 +1,10 @@
 using System.Text.Json;
 using BusinessOS.Application.Common.Interfaces;
+using BusinessOS.Application.Features.FinanceAgent;
+using BusinessOS.Application.Features.Marketing;
 using BusinessOS.Application.Features.Nalva;
+using BusinessOS.Application.Features.ProcurementAgent;
+using BusinessOS.Application.Features.SalesAgent;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.Data;
@@ -45,7 +49,12 @@ public sealed class NalvaScheduleProcessor : BackgroundService
         var db = lookup.ServiceProvider.GetRequiredService<BusinessOSDbContext>();
         var now = DateTime.UtcNow;
         var due = await db.NalvaWorkflowDefinitions.IgnoreQueryFilters()
-            .Where(x => !x.IsDeleted && x.IsActive && x.TriggerKind == "Scheduled" && (x.NextRunAt == null || x.NextRunAt <= now))
+            .Where(x => !x.IsDeleted
+                && x.IsActive
+                && !x.IsPaused
+                && x.CancelledAt == null
+                && x.TriggerKind == "Scheduled"
+                && (x.NextRunAt == null || x.NextRunAt <= now))
             .OrderBy(x => x.NextRunAt)
             .Select(x => new { x.Id, x.TenantId })
             .Take(40)
@@ -59,6 +68,7 @@ public sealed class NalvaScheduleProcessor : BackgroundService
         }
 
         await ScanSignalsAsync(cancellationToken);
+        await RunAgentMonitorsAsync(cancellationToken);
     }
 
     private async Task ScanSignalsAsync(CancellationToken cancellationToken)
@@ -121,18 +131,151 @@ public sealed class NalvaScheduleProcessor : BackgroundService
                 $"DeliveryDelayed:{row.Id:N}:{today}",
                 cancellationToken);
         }
+    }
 
-        // Per-tenant procurement monitor (idempotent work items / delay notices).
-        foreach (var tenantId in delayedPurchases.Select(x => x.TenantId)
-                     .Concat(stock.Select(x => x.TenantId))
-                     .Distinct()
-                     .Take(8))
+    private async Task RunAgentMonitorsAsync(CancellationToken cancellationToken)
+    {
+        using var lookup = _scopes.CreateScope();
+        var db = lookup.ServiceProvider.GetRequiredService<BusinessOSDbContext>();
+        var today = DateTime.UtcNow.ToString("yyyyMMdd");
+
+        var stockTenants = await db.Inventories.IgnoreQueryFilters()
+            .Where(x => !x.IsDeleted && x.ReorderLevel > 0 && x.CurrentStock < x.ReorderLevel)
+            .Select(x => x.TenantId)
+            .Distinct()
+            .Take(8)
+            .ToListAsync(cancellationToken);
+        var delayedTenants = await db.Purchases.IgnoreQueryFilters()
+            .Where(x => !x.IsDeleted && x.ExpectedDeliveryDate != null && x.ExpectedDeliveryDate < DateTime.UtcNow)
+            .Select(x => x.TenantId)
+            .Distinct()
+            .Take(8)
+            .ToListAsync(cancellationToken);
+
+        foreach (var tenantId in stockTenants.Concat(delayedTenants).Distinct().Take(8))
         {
             using var job = _scopes.CreateScope();
             job.ServiceProvider.GetRequiredService<ITenantProvider>().SetTenantId(tenantId);
-            var procurement = job.ServiceProvider.GetService<Application.Features.ProcurementAgent.IInventoryProcurementAgentService>();
+            var procurement = job.ServiceProvider.GetService<IInventoryProcurementAgentService>();
             if (procurement is not null)
                 await procurement.RunScheduledMonitorAsync(cancellationToken);
+        }
+
+        var financeTenantIds = await db.FinanceAgentSettings.IgnoreQueryFilters()
+            .AsNoTracking()
+            .Select(x => x.TenantId)
+            .Distinct()
+            .Take(8)
+            .ToListAsync(cancellationToken);
+        if (financeTenantIds.Count == 0)
+        {
+            financeTenantIds = await db.Invoices.IgnoreQueryFilters()
+                .AsNoTracking()
+                .Where(x => x.OutstandingAmount > 0)
+                .Select(x => x.TenantId)
+                .Distinct()
+                .Take(8)
+                .ToListAsync(cancellationToken);
+        }
+
+        foreach (var tenantId in financeTenantIds)
+        {
+            using var job = _scopes.CreateScope();
+            job.ServiceProvider.GetRequiredService<ITenantProvider>().SetTenantId(tenantId);
+            var finance = job.ServiceProvider.GetService<IFinanceAgentService>();
+            if (finance is not null)
+                await finance.RunScheduledMonitorAsync(cancellationToken);
+        }
+
+        var marketingTenants = await db.MarketingAgentPolicies.IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted && !x.IsPaused && (x.DailyCronEnabled || x.WeeklyCronEnabled || x.MonthlyCronEnabled))
+            .Select(x => x.TenantId)
+            .Distinct()
+            .Take(8)
+            .ToListAsync(cancellationToken);
+        foreach (var tenantId in marketingTenants)
+        {
+            using var job = _scopes.CreateScope();
+            job.ServiceProvider.GetRequiredService<ITenantProvider>().SetTenantId(tenantId);
+            var marketing = job.ServiceProvider.GetService<IMarketingOperationsService>();
+            if (marketing is null)
+                continue;
+            // Idempotency: one maintenance work item key per UTC day via work-item title marker.
+            var marker = $"Daily marketing maintenance counts:{today}";
+            var exists = await job.ServiceProvider.GetRequiredService<BusinessOSDbContext>().NalvaWorkItems
+                .AnyAsync(x => x.AgentKey == "marketing" && x.Kind == "MarketingMaintenance" && x.Title.Contains(today), cancellationToken);
+            if (!exists)
+                await marketing.RunRecurringMaintenanceAsync(cancellationToken);
+            _ = marker;
+        }
+
+        var salesTenants = await db.SalesAgentSettings.IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(x => !x.IsPaused)
+            .Select(x => x.TenantId)
+            .Distinct()
+            .Take(8)
+            .ToListAsync(cancellationToken);
+        foreach (var tenantId in salesTenants)
+        {
+            using var job = _scopes.CreateScope();
+            job.ServiceProvider.GetRequiredService<ITenantProvider>().SetTenantId(tenantId);
+            var salesDb = job.ServiceProvider.GetRequiredService<BusinessOSDbContext>();
+            var already = await salesDb.NalvaWorkItems.AnyAsync(
+                x => x.AgentKey == "sales" && x.Kind == "SalesMonitor" && x.Title == $"Sales monitor {today}",
+                cancellationToken);
+            if (already)
+                continue;
+
+            var openFollowUps = await salesDb.FollowUps.CountAsync(x => x.Status == FollowUpStatuses.Open && x.DueAt < DateTime.UtcNow, cancellationToken);
+            var pendingOutreach = await salesDb.SalesOutreachMessages.CountAsync(x => x.Status == SalesAgentStatuses.PendingApproval, cancellationToken);
+            salesDb.NalvaWorkItems.Add(new NalvaWorkItem
+            {
+                TenantId = tenantId,
+                AgentKey = "sales",
+                Kind = "SalesMonitor",
+                Title = $"Sales monitor {today}",
+                Body = JsonSerializer.Serialize(new { openOverdueFollowUps = openFollowUps, pendingOutreachApprovals = pendingOutreach, fabricated = false }),
+                Status = "Open"
+            });
+            await salesDb.SaveChangesAsync(cancellationToken);
+            _ = job.ServiceProvider.GetService<ISalesAgentService>();
+        }
+
+        var supportTenants = await db.SupportTickets.IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted && (x.Status == "Open" || x.Status == "Pending" || x.Status == "Waiting"))
+            .Select(x => x.TenantId)
+            .Distinct()
+            .Take(8)
+            .ToListAsync(cancellationToken);
+        foreach (var tenantId in supportTenants)
+        {
+            using var job = _scopes.CreateScope();
+            job.ServiceProvider.GetRequiredService<ITenantProvider>().SetTenantId(tenantId);
+            var supportDb = job.ServiceProvider.GetRequiredService<BusinessOSDbContext>();
+            var already = await supportDb.NalvaWorkItems.AnyAsync(
+                x => x.AgentKey == "support" && x.Kind == "SupportMonitor" && x.Title == $"Support monitor {today}",
+                cancellationToken);
+            if (already)
+                continue;
+
+            var openTickets = await supportDb.SupportTickets.CountAsync(
+                x => x.Status == "Open" || x.Status == "Pending" || x.Status == "Waiting",
+                cancellationToken);
+            supportDb.NalvaWorkItems.Add(new NalvaWorkItem
+            {
+                TenantId = tenantId,
+                AgentKey = "support",
+                Kind = "SupportMonitor",
+                Title = $"Support monitor {today}",
+                Body = JsonSerializer.Serialize(new { openTickets, preparedResponsesOnly = true, fabricated = false }),
+                Status = "Open"
+            });
+            await supportDb.SaveChangesAsync(cancellationToken);
+
+            await EnqueueAsync(tenantId, NalvaEventNames.SupportTicketCreated, "{\"source\":\"schedule-monitor\"}", $"SupportMonitor:{tenantId:N}:{today}", cancellationToken);
         }
     }
 
@@ -158,32 +301,122 @@ public sealed class NalvaScheduleWorker
         _logger = logger;
     }
 
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, object> ClaimGates = new();
+
     public async Task RunOneAsync(Guid definitionId, CancellationToken cancellationToken)
     {
-        var definition = await _db.NalvaWorkflowDefinitions.FirstOrDefaultAsync(x => x.Id == definitionId && x.IsActive && x.TriggerKind == "Scheduled", cancellationToken);
+        var claim = Guid.NewGuid();
+        var claimed = 0;
+        try
+        {
+            claimed = await _db.NalvaWorkflowDefinitions
+                .Where(x => x.Id == definitionId
+                    && x.IsActive
+                    && !x.IsPaused
+                    && x.CancelledAt == null
+                    && x.TriggerKind == "Scheduled"
+                    && (x.ClaimToken == null || x.NextRunAt == null || x.NextRunAt <= DateTime.UtcNow))
+                .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.ClaimToken, claim), cancellationToken);
+        }
+        catch (InvalidOperationException)
+        {
+            var gate = ClaimGates.GetOrAdd(definitionId, static _ => new object());
+            lock (gate)
+            {
+                var candidate = _db.NalvaWorkflowDefinitions.FirstOrDefault(x =>
+                    x.Id == definitionId
+                    && x.IsActive
+                    && !x.IsPaused
+                    && x.CancelledAt == null
+                    && x.TriggerKind == "Scheduled"
+                    && (x.ClaimToken == null || x.NextRunAt == null || x.NextRunAt <= DateTime.UtcNow));
+                if (candidate is not null)
+                {
+                    candidate.ClaimToken = claim;
+                    _db.SaveChanges();
+                    claimed = 1;
+                }
+            }
+
+            ClaimGates.TryRemove(definitionId, out _);
+        }
+
+        if (claimed == 0)
+            return;
+
+        var definition = await _db.NalvaWorkflowDefinitions.FirstOrDefaultAsync(x => x.Id == definitionId && x.ClaimToken == claim, cancellationToken);
         if (definition is null)
             return;
+
         var now = DateTime.UtcNow;
-        if (!NalvaSchedule.TryWindow(now, definition.TimeZoneId, definition.IntervalMinutes, definition.ScheduleStartUtc, definition.ScheduleEndUtc, definition.LastScheduleWindow, out var window, out var next))
+        var spec = new NalvaScheduleSpec(
+            definition.TimeZoneId,
+            definition.RecurrenceKind,
+            definition.IntervalMinutes,
+            definition.ScheduleStartUtc,
+            definition.ScheduleEndUtc,
+            definition.LocalTimeOfDay,
+            definition.DaysOfWeek,
+            definition.DayOfMonth);
+
+        if (!NalvaSchedule.TryDue(spec, now, definition.LastScheduleWindow, out var window, out var next))
         {
             definition.NextRunAt = next;
+            definition.ClaimToken = null;
+            await _db.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
+        var running = await _db.NalvaWorkflowRuns.CountAsync(
+            x => x.DefinitionId == definition.Id && x.Status == NalvaStatuses.Running,
+            cancellationToken);
+        if (running >= Math.Max(1, definition.MaxConcurrentRuns))
+        {
+            definition.NextRunAt = now.AddMinutes(1);
+            definition.ClaimToken = null;
+            await _db.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
+        // Loop / duplicate prevention: same schedule window correlation already completed or running.
+        var correlation = $"schedule:{definition.Id:N}:{window}";
+        var duplicate = await _db.NalvaWorkflowRuns.AnyAsync(
+            x => x.DefinitionId == definition.Id
+                 && x.CorrelationId == correlation
+                 && (x.Status == NalvaStatuses.Running
+                     || x.Status == NalvaStatuses.Completed
+                     || x.Status == NalvaStatuses.AwaitingApproval),
+            cancellationToken);
+        if (duplicate)
+        {
+            definition.LastScheduleWindow = window;
+            definition.NextRunAt = next;
+            definition.ClaimToken = null;
             await _db.SaveChangesAsync(cancellationToken);
             return;
         }
 
         definition.LastScheduleWindow = window;
         definition.NextRunAt = next;
+        definition.LastRunAt = now;
+        definition.ClaimToken = null;
         await _db.SaveChangesAsync(cancellationToken);
         try
         {
             await _workflows.RunAsync(definition.Id, "{}", new NalvaWorkflowRunOptions
             {
                 TriggerSource = "Schedule",
-                CorrelationId = $"schedule:{definition.Id:N}:{window}"
+                CorrelationId = correlation
             }, cancellationToken);
+            definition.ConsecutiveFailures = 0;
+            definition.LastFailure = null;
+            await _db.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            definition.ConsecutiveFailures += 1;
+            definition.LastFailure = ex.Message.Length > 1900 ? ex.Message[..1900] : ex.Message;
+            await _db.SaveChangesAsync(cancellationToken);
             _logger.LogWarning(ex, "Scheduled workflow {WorkflowId} did not start.", definitionId);
         }
     }

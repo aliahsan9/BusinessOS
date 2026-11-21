@@ -47,3 +47,35 @@ public sealed class MetaMarketingPublishTransport : IMarketingPublishTransport
         return new MarketingPublishTransportResult(true, externalId ?? $"meta-{request.JobId:N}", null, "Meta");
     }
 }
+
+public sealed class InstagramMarketingPublishTransport : IMarketingPublishTransport
+{
+    private readonly IIntegrationPlatform _integrations;
+
+    public InstagramMarketingPublishTransport(IIntegrationPlatform integrations) => _integrations = integrations;
+
+    public string ProviderKey => "instagram";
+    public bool IsSandbox => false;
+
+    public async Task<MarketingPublishTransportResult> PublishAsync(MarketingPublishTransportRequest request, CancellationToken cancellationToken = default)
+    {
+        var args = new JsonObject
+        {
+            ["caption"] = request.Caption ?? request.Message,
+            ["imageUrl"] = request.Link,
+            ["idempotencyKey"] = request.IdempotencyKey
+        };
+        if (string.IsNullOrWhiteSpace(request.Link))
+            return new MarketingPublishTransportResult(false, null, "Instagram publishing requires an image URL (Content Publishing API).", "Instagram");
+
+        var result = await _integrations.ExecuteAsync("meta", "publishInstagram", args.ToJsonString(), true, cancellationToken);
+        if (!result.Performed)
+            return new MarketingPublishTransportResult(false, null, result.Message, "Instagram");
+
+        string? externalId = null;
+        if (result.Data?["response"] is JsonObject response)
+            externalId = response["id"]?.GetValue<string>();
+
+        return new MarketingPublishTransportResult(true, externalId ?? $"ig-{request.JobId:N}", null, "Instagram");
+    }
+}

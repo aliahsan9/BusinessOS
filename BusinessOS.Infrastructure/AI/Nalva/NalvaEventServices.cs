@@ -108,11 +108,40 @@ public sealed class NalvaEventWorker
         _logger = logger;
     }
 
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, object> ClaimGates = new();
+
     public async Task<int> DispatchOneAsync(Guid eventId, CancellationToken cancellationToken)
     {
-        var claimed = await _db.NalvaBusinessEvents
-            .Where(x => x.Id == eventId && x.Status == "Pending")
-            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Status, "Running"), cancellationToken);
+        var claimed = 0;
+        var claimedAt = DateTime.UtcNow;
+        try
+        {
+            claimed = await _db.NalvaBusinessEvents
+                .Where(x => x.Id == eventId && x.Status == "Pending")
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(x => x.Status, "Running")
+                        .SetProperty(x => x.UpdatedAt, claimedAt),
+                    cancellationToken);
+        }
+        catch (InvalidOperationException)
+        {
+            var gate = ClaimGates.GetOrAdd(eventId, static _ => new object());
+            lock (gate)
+            {
+                var candidate = _db.NalvaBusinessEvents.FirstOrDefault(x => x.Id == eventId && x.Status == "Pending");
+                if (candidate is not null)
+                {
+                    candidate.Status = "Running";
+                    candidate.UpdatedAt = claimedAt;
+                    _db.SaveChanges();
+                    claimed = 1;
+                }
+            }
+
+            ClaimGates.TryRemove(eventId, out _);
+        }
+
         if (claimed == 0)
             return 0;
 

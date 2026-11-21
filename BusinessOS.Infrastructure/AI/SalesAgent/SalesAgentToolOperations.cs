@@ -10,6 +10,7 @@ using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.Data;
 using BusinessOS.Infrastructure.AI.Nalva;
+using BusinessOS.Infrastructure.Integrations;
 using Microsoft.EntityFrameworkCore;
 
 namespace BusinessOS.Infrastructure.AI.SalesAgent;
@@ -619,7 +620,7 @@ public sealed class SalesAgentToolOperations : ISalesAgentToolOperations
             node["to"] = normalized;
             node["subject"] = subject;
             if (node["raw"] is null)
-                node["raw"] = Convert.ToBase64String(Encoding.UTF8.GetBytes($"To: {normalized}\r\nSubject: {subject}\r\n\r\n{body}"));
+                node["raw"] = GmailMime.EncodeRawMessage(normalized, subject, body);
             var live = await _integrations.ExecuteAsync("gmail", "send", node.ToJsonString(), true, ct);
             if (live.Status is not ("not_connected" or "not_enabled" or "unknown_provider"))
             {
