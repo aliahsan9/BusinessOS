@@ -19,6 +19,10 @@ public static class IntegrationEndpoints
             Results.Ok(await platform.DisconnectAsync(id, ct))).RequirePermission(PermissionCodes.NalvaManage);
         group.MapPost("/connections/{id:guid}/test", async (Guid id, IIntegrationPlatform platform, CancellationToken ct) =>
             Results.Ok(await platform.TestAsync(id, ct))).RequirePermission(PermissionCodes.NalvaManage);
+        group.MapPost("/connections/{id:guid}/webhook-secret", async (Guid id, IntegrationWebhookSecretRequest request, IIntegrationPlatform platform, CancellationToken ct) =>
+            Results.Ok(await platform.SetWebhookSecretAsync(id, request, ct))).RequirePermission(PermissionCodes.NalvaManage);
+        group.MapPut("/connections/{id:guid}/metadata", async (Guid id, IntegrationConnectionMetadataRequest request, IIntegrationPlatform platform, CancellationToken ct) =>
+            Results.Ok(await platform.UpdateConnectionMetadataAsync(id, request, ct))).RequirePermission(PermissionCodes.NalvaManage);
         group.MapGet("/logs", async (Guid? connectionId, IIntegrationPlatform platform, CancellationToken ct) =>
             Results.Ok(await platform.GetLogsAsync(connectionId, ct)));
         group.MapPost("/webhooks/{provider}/{connectionId:guid}", async (string provider, Guid connectionId, HttpRequest request, IIntegrationPlatform platform, CancellationToken ct) =>

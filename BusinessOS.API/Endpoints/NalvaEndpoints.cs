@@ -44,6 +44,10 @@ public static class NalvaEndpoints
         group.MapDelete("/memory/{id:guid}", async (Guid id, INalvaWorkforceService service, CancellationToken ct) => { await service.DeleteMemoryAsync(id, ct); return Results.NoContent(); }).RequirePermission(PermissionCodes.NalvaManage);
         group.MapGet("/executions", async (string? agentKey, string? status, DateTime? from, DateTime? to, INalvaWorkforceService service, CancellationToken ct) => Results.Ok(await service.GetExecutionsAsync(agentKey, status, from, to, ct)));
         group.MapGet("/analytics", async (string? agentKey, string? category, DateTime? from, DateTime? to, INalvaWorkforceService service, CancellationToken ct) => Results.Ok(await service.GetAnalyticsAsync(agentKey, category, from, to, ct)));
+        group.MapGet("/outcomes", async (string? agentKey, DateTime? from, DateTime? to, INalvaWorkforceService service, CancellationToken ct) => Results.Ok(await service.GetOutcomesAsync(agentKey, from, to, ct)));
+        group.MapGet("/workforce/recommendation", async (INalvaWorkforceService service, CancellationToken ct) => Results.Ok(await service.GetWorkforceRecommendationAsync(ct)));
+        group.MapPost("/workforce/apply", async (NalvaApplyWorkforcePackRequest? request, INalvaWorkforceService service, CancellationToken ct) =>
+            Results.Ok(await service.ApplyWorkforcePackAsync(request ?? new NalvaApplyWorkforcePackRequest(), ct))).RequirePermission(PermissionCodes.NalvaManage);
         group.MapGet("/settings", async (INalvaWorkforceService service, CancellationToken ct) => Results.Ok(await service.GetSettingsAsync(ct)));
         group.MapPut("/settings", async (NalvaSettingsWriteRequest request, INalvaWorkforceService service, CancellationToken ct) => Results.Ok(await service.SaveSettingsAsync(request, ct))).RequirePermission(PermissionCodes.NalvaManage);
         group.MapGet("/models", async (INalvaWorkforceService service, CancellationToken ct) => Results.Ok(await service.GetModelsAsync(ct)));

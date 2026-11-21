@@ -27,10 +27,10 @@ public static class IntegrationProviderCatalog
             ["balance", "payment"], ["refund"], ["read_write"]),
         Provider("paypal", "PayPal", "Payments", "Read an order and refund only after approval. Region support follows the connected PayPal account.", Partial, true, true,
             ["order"], ["refund"], ["openid"]),
-        Provider("linkedin", "LinkedIn", "Marketing", "Read authorized organization information. Scraping and unapproved messaging are not available.", Partial, true, false,
+        Provider("linkedin", "LinkedIn", "Marketing", "Read authorized organization information. Page publish and messaging are BLOCKED until LinkedIn write scopes are verified. WriteOperations remain empty.", Partial, true, false,
             ["organization"], [], ["r_organization_social"]),
-        Provider("meta", "Meta", "Marketing", "Read authorized Facebook Page information. Publishing is not enabled.", Partial, true, false,
-            ["pages"], [], ["pages_show_list", "pages_read_engagement"]),
+        Provider("meta", "Meta", "Marketing", "Read Facebook Pages, publish an approved feed post when pageId metadata and pages_manage_posts are present, and read post insights when externalPostId is present. Instagram/TikTok/YouTube publishing is not implemented here.", Partial, true, false,
+            ["pages", "insights"], ["publish"], ["pages_show_list", "pages_read_engagement", "pages_manage_posts", "pages_read_user_content"]),
         Provider("google-analytics", "Google Analytics", "Analytics", "Read a configured GA4 property. The property id is metadata, not a secret.", Partial, true, false,
             ["report"], [], ["https://www.googleapis.com/auth/analytics.readonly"]),
         Provider("google-ads", "Google Ads", "Advertising", "Read campaign metrics for a configured customer id. Budget and campaign changes are not enabled.", Partial, true, false,
@@ -94,6 +94,16 @@ public sealed class IntegrationExecuteRequest
     public bool Approved { get; set; }
 }
 
+public sealed class IntegrationWebhookSecretRequest
+{
+    public string Secret { get; set; } = "";
+}
+
+public sealed class IntegrationConnectionMetadataRequest
+{
+    public string? MetadataJson { get; set; }
+}
+
 public sealed class IntegrationCallResult
 {
     public bool Performed { get; init; }
@@ -154,4 +164,6 @@ public interface IIntegrationPlatform
     Task<IReadOnlyList<IntegrationLogDto>> GetLogsAsync(Guid? connectionId, CancellationToken cancellationToken = default);
     Task<IntegrationCallResult> ExecuteAsync(string providerKey, string operation, string argumentsJson, bool approved, CancellationToken cancellationToken = default);
     Task<(int StatusCode, string Message)> ReceiveWebhookAsync(string providerKey, Guid connectionId, string body, string? signature, string? eventId, CancellationToken cancellationToken = default);
+    Task<IntegrationConnectionDto> SetWebhookSecretAsync(Guid connectionId, IntegrationWebhookSecretRequest request, CancellationToken cancellationToken = default);
+    Task<IntegrationConnectionDto> UpdateConnectionMetadataAsync(Guid connectionId, IntegrationConnectionMetadataRequest request, CancellationToken cancellationToken = default);
 }

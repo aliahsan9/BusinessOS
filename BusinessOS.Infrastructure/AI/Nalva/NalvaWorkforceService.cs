@@ -571,6 +571,172 @@ public sealed partial class NalvaWorkforceService : INalvaWorkforceService
             workflowRuns == 0 ? 0 : decimal.Round((decimal)workflowsCompleted / workflowRuns, 4));
     }
 
+    public async Task<IReadOnlyList<NalvaAgentOutcomeDto>> GetOutcomesAsync(string? agentKey, DateTime? from, DateTime? to, CancellationToken cancellationToken = default)
+    {
+        Require(PermissionCodes.NalvaView);
+        var executions = await FilteredExecutions(agentKey, null, from, to, cancellationToken);
+        var workQuery = _db.NalvaWorkItems.AsNoTracking().AsQueryable();
+        if (!string.IsNullOrWhiteSpace(agentKey))
+            workQuery = workQuery.Where(x => x.AgentKey == agentKey);
+        if (from is DateTime start)
+            workQuery = workQuery.Where(x => x.CreatedAt >= start);
+        if (to is DateTime end)
+            workQuery = workQuery.Where(x => x.CreatedAt <= end);
+        var workItems = await workQuery.Take(2000).ToListAsync(cancellationToken);
+        var approvals = await _db.NalvaApprovals.AsNoTracking().ToListAsync(cancellationToken);
+        if (!string.IsNullOrWhiteSpace(agentKey))
+            approvals = approvals.Where(x => string.Equals(x.AgentKey, agentKey, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (from is DateTime approvalFrom)
+            approvals = approvals.Where(x => x.RequestedAt >= approvalFrom).ToList();
+        if (to is DateTime approvalTo)
+            approvals = approvals.Where(x => x.RequestedAt <= approvalTo).ToList();
+
+        var keys = executions.Select(x => x.AgentKey)
+            .Concat(workItems.Select(x => x.AgentKey))
+            .Concat(approvals.Select(x => x.AgentKey))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x)
+            .ToList();
+
+        var outcomes = new List<NalvaAgentOutcomeDto>();
+        foreach (var key in keys)
+        {
+            var agentExecutions = executions.Where(x => string.Equals(x.AgentKey, key, StringComparison.OrdinalIgnoreCase)).ToList();
+            var agentWork = workItems.Where(x => string.Equals(x.AgentKey, key, StringComparison.OrdinalIgnoreCase)).ToList();
+            var agentApprovals = approvals.Where(x => string.Equals(x.AgentKey, key, StringComparison.OrdinalIgnoreCase)).ToList();
+            var name = NalvaAgentCatalog.TryGet(key, out var definition) && definition is not null
+                ? definition.Name
+                : key;
+            outcomes.Add(new NalvaAgentOutcomeDto(
+                key,
+                name,
+                agentExecutions.Count,
+                agentExecutions.Count(x => x.Status == NalvaStatuses.Completed),
+                agentExecutions.Count(x => x.Status == NalvaStatuses.Failed),
+                agentApprovals.Count(x => x.Status == NalvaStatuses.Pending),
+                agentApprovals.Count(x => x.Status == NalvaStatuses.Approved),
+                agentApprovals.Count(x => x.Status == NalvaStatuses.Rejected),
+                CountOutcome(agentExecutions, "CreateLead"),
+                CountOutcome(agentExecutions, "CreateDeal"),
+                CountOutcome(agentExecutions, "CreateFollowUp") + agentWork.Count(x => x.Kind == "FollowUp"),
+                agentWork.Count(x => x.Kind is "Content" or "Strategy"),
+                agentWork.Count(x => x.Kind == "Email"),
+                agentWork.Count(x => x.Kind == "Campaign"),
+                agentWork.Count(x => x.Kind == "SupportTicket"),
+                agentWork.Count(x => x.Kind is "Purchase" or "PurchaseOrder") + CountOutcome(agentExecutions, "CreatePurchaseOrderDraft") + CountOutcome(agentExecutions, "CreatePurchaseOrder"),
+                agentWork.Count(x => x.Kind is "Report" or "BusinessReport" or "FinancialReport" or "HRReport" or "DailySummary"),
+                agentWork.Count,
+                agentExecutions.Sum(x => x.EstimatedCostUsd),
+                true));
+        }
+
+        return outcomes;
+    }
+
+    public async Task<NalvaWorkforceRecommendationDto> GetWorkforceRecommendationAsync(CancellationToken cancellationToken = default)
+    {
+        Require(PermissionCodes.NalvaView);
+        await EnsureTemplatesAsync(cancellationToken);
+        var tenantId = _user.TenantId ?? throw new BadRequestException("Company context is required.");
+        var businessType = await _db.Tenants.AsNoTracking()
+            .Where(x => x.Id == tenantId)
+            .Select(x => x.BusinessType)
+            .FirstOrDefaultAsync(cancellationToken) ?? "custom";
+        var pack = NalvaWorkforcePackCatalog.Resolve(businessType);
+        var agents = await _db.NalvaCompanyAgents.AsNoTracking().ToListAsync(cancellationToken);
+        var workflows = await _db.NalvaWorkflowDefinitions.AsNoTracking().ToListAsync(cancellationToken);
+        var recommended = pack.RecommendedAgentKeys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var agentDtos = NalvaAgentCatalog.All.Select(agent =>
+        {
+            var row = agents.FirstOrDefault(x => string.Equals(x.AgentKey, agent.Key, StringComparison.OrdinalIgnoreCase));
+            return new NalvaRecommendedAgentDto(
+                agent.Key,
+                agent.Name,
+                agent.Role,
+                agent.Category,
+                row?.Status == NalvaStatuses.Active,
+                recommended.Contains(agent.Key));
+        }).ToList();
+        var workflowRecommended = pack.RecommendedWorkflowKeys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var workflowDtos = workflows.Select(workflow => new NalvaRecommendedWorkflowDto(
+            workflow.Key,
+            workflow.Name,
+            workflow.TriggerKind,
+            workflow.IsActive,
+            workflowRecommended.Contains(workflow.Key))).ToList();
+        return new NalvaWorkforceRecommendationDto(
+            businessType,
+            pack.BusinessTypeKey,
+            pack.Name,
+            pack.Description,
+            agentDtos,
+            workflowDtos,
+            agentDtos.Count(x => x.IsActive && x.IsRecommended),
+            pack.RecommendedAgentKeys.Count);
+    }
+
+    public async Task<NalvaApplyWorkforcePackResult> ApplyWorkforcePackAsync(NalvaApplyWorkforcePackRequest request, CancellationToken cancellationToken = default)
+    {
+        Require(PermissionCodes.NalvaManage);
+        await EnsureTemplatesAsync(cancellationToken);
+        var tenantId = _user.TenantId ?? throw new BadRequestException("Company context is required.");
+        var businessType = await _db.Tenants.AsNoTracking()
+            .Where(x => x.Id == tenantId)
+            .Select(x => x.BusinessType)
+            .FirstOrDefaultAsync(cancellationToken) ?? "custom";
+        var pack = NalvaWorkforcePackCatalog.Resolve(businessType);
+        var activatedAgents = new List<string>();
+        var activatedWorkflows = new List<string>();
+        var skipped = new List<string>();
+        var only = request.OnlyAgentKeys?
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (request.ActivateRecommendedAgents)
+        {
+            foreach (var key in pack.RecommendedAgentKeys)
+            {
+                if (only is not null && !only.Contains(key))
+                {
+                    skipped.Add(key);
+                    continue;
+                }
+
+                if (!NalvaAgentCatalog.TryGet(key, out _))
+                {
+                    skipped.Add(key);
+                    continue;
+                }
+
+                await ActivateAsync(key, cancellationToken);
+                activatedAgents.Add(key);
+            }
+        }
+
+        if (request.ActivateRecommendedWorkflows)
+        {
+            var recommendedWorkflowKeys = pack.RecommendedWorkflowKeys.ToList();
+            var workflows = await _db.NalvaWorkflowDefinitions
+                .Where(x => recommendedWorkflowKeys.Contains(x.Key))
+                .ToListAsync(cancellationToken);
+            foreach (var workflow in workflows)
+            {
+                if (!workflow.IsActive)
+                {
+                    workflow.IsActive = true;
+                    activatedWorkflows.Add(workflow.Key);
+                }
+            }
+
+            if (activatedWorkflows.Count > 0)
+                await _db.SaveChangesAsync(cancellationToken);
+        }
+
+        return new NalvaApplyWorkforcePackResult(pack.BusinessTypeKey, activatedAgents, activatedWorkflows, skipped);
+    }
+
     public async Task<NalvaSettingsDto> GetSettingsAsync(CancellationToken cancellationToken = default)
     {
         Require(PermissionCodes.NalvaView);
@@ -812,6 +978,13 @@ public sealed partial class NalvaWorkforceService : INalvaWorkforceService
         new(row.Id, row.ExecutionId, row.AgentKey, row.Action, row.ToolName, row.Risk, row.ContextJson, row.Status, row.RequestedAt, row.RequestedByUserId, row.ApproverUserId, row.DecidedAt, row.DecisionNote, row.ExecutionResult);
 
     private static DateTime MonthStart() => new(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+
+    private static int CountOutcome(IEnumerable<NalvaExecution> executions, string toolName) =>
+        executions.Count(x =>
+            x.Status == NalvaStatuses.Completed &&
+            ((!string.IsNullOrWhiteSpace(x.ToolLogJson) && x.ToolLogJson.Contains($"\"{toolName}\"", StringComparison.OrdinalIgnoreCase))
+             || (!string.IsNullOrWhiteSpace(x.PlanJson) && x.PlanJson.Contains($"\"{toolName}\"", StringComparison.OrdinalIgnoreCase))
+             || (!string.IsNullOrWhiteSpace(x.ResultJson) && x.ResultJson.Contains($"\"{toolName}\"", StringComparison.OrdinalIgnoreCase))));
 
     private void Require(string permission)
     {

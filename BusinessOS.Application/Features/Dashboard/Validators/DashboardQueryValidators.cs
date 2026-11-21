@@ -2,6 +2,7 @@ using BusinessOS.Application.Features.Dashboard.Queries.GetCustomerAnalytics;
 using BusinessOS.Application.Features.Dashboard.Queries.GetDashboardOverview;
 using BusinessOS.Application.Features.Dashboard.Queries.GetInventoryAnalytics;
 using BusinessOS.Application.Features.Dashboard.Queries.GetOrderAnalytics;
+using BusinessOS.Application.Features.Dashboard.Queries.GetOwnerDashboardSummary;
 using BusinessOS.Application.Features.Dashboard.Queries.GetProductAnalytics;
 using BusinessOS.Application.Features.Dashboard.Queries.GetSalesAnalytics;
 using BusinessOS.Application.Features.Dashboard.Validators;
@@ -40,4 +41,15 @@ public sealed class GetInventoryAnalyticsDashboardQueryValidator
 public sealed class GetOrderAnalyticsQueryValidator : AbstractValidator<GetOrderAnalyticsQuery>
 {
     public GetOrderAnalyticsQueryValidator() => Include(new DashboardDateRangeQueryValidator());
+}
+
+public sealed class GetOwnerDashboardSummaryQueryValidator : AbstractValidator<GetOwnerDashboardSummaryQuery>
+{
+    public GetOwnerDashboardSummaryQueryValidator()
+    {
+        Include(new DashboardDateRangeQueryValidator());
+        RuleFor(x => x.Top)
+            .Must(top => top is 10 or 20)
+            .WithMessage("Top must be 10 or 20.");
+    }
 }

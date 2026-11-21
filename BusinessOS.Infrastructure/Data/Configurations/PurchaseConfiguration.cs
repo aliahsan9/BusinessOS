@@ -16,10 +16,16 @@ public class PurchaseConfiguration : IEntityTypeConfiguration<Purchase>
         builder.Property(x => x.Status).HasMaxLength(50).IsRequired();
         builder.Property(x => x.ReferenceNumber).HasMaxLength(100);
         builder.Property(x => x.Notes).HasMaxLength(2000);
+        builder.Property(x => x.IdempotencyKey).HasMaxLength(120);
+        builder.Property(x => x.ApprovalFingerprint).HasMaxLength(128);
+        builder.Property(x => x.PaymentTerms).HasMaxLength(200);
 
         builder.HasIndex(x => new { x.TenantId, x.Status });
         builder.HasIndex(x => new { x.TenantId, x.SupplierId });
         builder.HasIndex(x => new { x.TenantId, x.PurchaseDate });
+        builder.HasIndex(x => new { x.TenantId, x.IdempotencyKey }).IsUnique()
+            .HasFilter("[IdempotencyKey] IS NOT NULL");
+        builder.HasIndex(x => new { x.TenantId, x.ExpectedDeliveryDate });
 
         builder.HasOne(x => x.Supplier)
             .WithMany()

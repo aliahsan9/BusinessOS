@@ -13,6 +13,7 @@ public static class NalvaEventNames
     public const string PaymentReceived = "PaymentReceived";
     public const string InvoiceOverdue = "InvoiceOverdue";
     public const string StockBelowThreshold = "StockBelowThreshold";
+    public const string DeliveryDelayed = "DeliveryDelayed";
     public const string ProjectCreated = "ProjectCreated";
     public const string TaskCompleted = "TaskCompleted";
     public const string TaskOverdue = "TaskOverdue";
@@ -22,7 +23,7 @@ public static class NalvaEventNames
     public static readonly string[] Known =
     [
         CustomerRegistered, LeadCreated, LeadQualified, OrderPlaced, PaymentReceived, InvoiceOverdue,
-        StockBelowThreshold, ProjectCreated, TaskCompleted, TaskOverdue, EmployeeOnboarded, SupportTicketCreated
+        StockBelowThreshold, DeliveryDelayed, ProjectCreated, TaskCompleted, TaskOverdue, EmployeeOnboarded, SupportTicketCreated
     ];
 
     public static bool IsAllowed(string? name)

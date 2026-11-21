@@ -174,6 +174,9 @@ public interface INalvaWorkforceService
     Task DeleteMemoryAsync(Guid id, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<NalvaExecutionDto>> GetExecutionsAsync(string? agentKey, string? status, DateTime? from, DateTime? to, CancellationToken cancellationToken = default);
     Task<NalvaAnalyticsDto> GetAnalyticsAsync(string? agentKey, string? category, DateTime? from, DateTime? to, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<NalvaAgentOutcomeDto>> GetOutcomesAsync(string? agentKey, DateTime? from, DateTime? to, CancellationToken cancellationToken = default);
+    Task<NalvaWorkforceRecommendationDto> GetWorkforceRecommendationAsync(CancellationToken cancellationToken = default);
+    Task<NalvaApplyWorkforcePackResult> ApplyWorkforcePackAsync(NalvaApplyWorkforcePackRequest request, CancellationToken cancellationToken = default);
     Task<NalvaSettingsDto> GetSettingsAsync(CancellationToken cancellationToken = default);
     Task<NalvaSettingsDto> SaveSettingsAsync(NalvaSettingsWriteRequest request, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<NalvaModelDto>> GetModelsAsync(CancellationToken cancellationToken = default);

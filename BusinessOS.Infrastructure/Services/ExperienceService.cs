@@ -726,56 +726,192 @@ public sealed class ExperienceService : IExperienceService
     {
         var insights = new List<BusinessInsightDto>();
         var now = DateTime.UtcNow;
+        var currency = await _db.Tenants.AsNoTracking().Select(x => x.Currency).FirstOrDefaultAsync(cancellationToken) ?? "USD";
+        if (string.IsNullOrWhiteSpace(currency)) currency = "USD";
+
         if (_user.HasPermission(PermissionCodes.OrderView))
+        {
+            // Align with owner KPI: completed-order revenue for last 30 days vs prior 30.
+            var start = now.AddDays(-30);
+            var previousStart = start.AddDays(-30);
+            var current = await _db.Orders
+                .Where(x => x.OrderDate >= start && x.Status == OrderStatusNames.Completed)
+                .SumAsync(x => (decimal?)x.GrandTotal, cancellationToken) ?? 0;
+            var previous = await _db.Orders
+                .Where(x => x.OrderDate >= previousStart && x.OrderDate < start && x.Status == OrderStatusNames.Completed)
+                .SumAsync(x => (decimal?)x.GrandTotal, cancellationToken) ?? 0;
+            if (current > 0 || previous > 0)
+            {
+                decimal? change = previous == 0 ? null : Math.Round((current - previous) / previous * 100m, 1);
+                var direction = change is null ? "changed"
+                    : change > 0 ? "increased"
+                    : change < 0 ? "decreased"
+                    : "held steady";
+                var changeText = change is null
+                    ? "with no comparable sales in the prior period"
+                    : change == 0
+                        ? "matching the previous 30 days"
+                        : $"by {Math.Abs(change.Value):0.#}% compared with the previous 30 days";
+                insights.Add(new BusinessInsightDto
+                {
+                    Code = "sales-opportunity",
+                    Title = change is > 0 ? "Sales are up" : change is < 0 ? "Sales slowed" : "Sales overview",
+                    Message = $"Your completed sales {direction} {changeText}. Current period: {Money(current, currency)}.",
+                    Severity = change is > 0 ? "positive" : change is < 0 ? "warning" : "info",
+                    MetricLabel = "Revenue (30 days)",
+                    MetricValue = Money(current, currency),
+                    RecommendedAction = "Review sales performance",
+                    Route = "/sales",
+                    UpdatedAt = now
+                });
+            }
+        }
+
+        if (_user.HasPermission(PermissionCodes.FinanceView) || _user.HasPermission(PermissionCodes.InvoiceView))
+        {
+            var overdueRows = await _db.Invoices.AsNoTracking()
+                .Where(x => x.DueDate < now && x.OutstandingAmount > 0 && x.Status != "Paid" && x.Status != "Void" && x.Status != "Cancelled")
+                .GroupBy(_ => 1)
+                .Select(g => new { Count = g.Count(), Total = g.Sum(x => x.OutstandingAmount) })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (overdueRows is { Count: > 0 })
+            {
+                insights.Add(new BusinessInsightDto
+                {
+                    Code = "outstanding-payments",
+                    Title = "Outstanding payments",
+                    Message = overdueRows.Count == 1
+                        ? $"1 customer has an overdue balance totaling {Money(overdueRows.Total, currency)}."
+                        : $"{overdueRows.Count} invoices are overdue, totaling {Money(overdueRows.Total, currency)}.",
+                    Severity = "critical",
+                    MetricLabel = "Overdue",
+                    MetricValue = Money(overdueRows.Total, currency),
+                    RecommendedAction = "Follow up on overdue invoices",
+                    Route = "/invoices",
+                    UpdatedAt = now
+                });
+            }
+        }
+
+        if (_user.HasPermission(PermissionCodes.InventoryView) || _user.HasPermission(PermissionCodes.ProductView))
+        {
+            // Prefer Inventories as the stock source of truth (matches overview KPIs).
+            var low = await (
+                from inv in _db.Inventories.AsNoTracking()
+                join product in _db.Products.AsNoTracking() on inv.ProductId equals product.Id
+                where inv.ReorderLevel > 0 && inv.CurrentStock > 0 && inv.CurrentStock <= inv.ReorderLevel
+                orderby inv.CurrentStock
+                select new { product.Name, inv.CurrentStock, inv.ReorderLevel }
+            ).Take(5).ToListAsync(cancellationToken);
+            var lowCount = await _db.Inventories.AsNoTracking()
+                .CountAsync(x => x.ReorderLevel > 0 && x.CurrentStock > 0 && x.CurrentStock <= x.ReorderLevel, cancellationToken);
+            if (lowCount > 0 && low.Count > 0)
+            {
+                var first = low[0];
+                var names = string.Join(", ", low.Take(3).Select(x => x.Name));
+                insights.Add(new BusinessInsightDto
+                {
+                    Code = "inventory-alert",
+                    Title = "Inventory alert",
+                    Message = lowCount == 1
+                        ? $"{first.Name} is below its reorder level ({first.CurrentStock:0.##} on hand; reorder at {first.ReorderLevel:0.##})."
+                        : $"{lowCount} products are below their reorder levels, including {names}.",
+                    Severity = "warning",
+                    MetricLabel = "Low stock",
+                    MetricValue = lowCount.ToString(),
+                    RecommendedAction = "Review low-stock products",
+                    Route = "/inventory",
+                    UpdatedAt = now
+                });
+            }
+
+            // Top seller running out — only when velocity + stock data support it.
+            var monthStart = now.AddDays(-30);
+            var topSeller = await (
+                from item in _db.OrderItems.AsNoTracking()
+                join order in _db.Orders.AsNoTracking() on item.OrderId equals order.Id
+                join product in _db.Products.AsNoTracking() on item.ProductId equals product.Id
+                where order.OrderDate >= monthStart && order.Status == OrderStatusNames.Completed
+                group item by new { item.ProductId, product.Name } into g
+                orderby g.Sum(x => x.Quantity) descending
+                select new { g.Key.ProductId, g.Key.Name, Qty = g.Sum(x => x.Quantity) }
+            ).FirstOrDefaultAsync(cancellationToken);
+
+            if (topSeller is not null && topSeller.Qty >= 5)
+            {
+                var stock = await _db.Inventories.AsNoTracking()
+                    .Where(x => x.ProductId == topSeller.ProductId)
+                    .Select(x => new { x.CurrentStock, x.ReorderLevel })
+                    .FirstOrDefaultAsync(cancellationToken);
+                if (stock is not null && stock.CurrentStock > 0 && stock.CurrentStock <= Math.Max(stock.ReorderLevel, 5))
+                {
+                    var daily = topSeller.Qty / 30m;
+                    if (daily > 0 && stock.CurrentStock / daily <= 7)
+                    {
+                        insights.Add(new BusinessInsightDto
+                        {
+                            Code = "top-product-stock",
+                            Title = "Top product may run out soon",
+                            Message = $"{topSeller.Name} is selling about {daily:0.#} units/day with {stock.CurrentStock:0.##} left — roughly {stock.CurrentStock / daily:0.#} days of cover.",
+                            Severity = "warning",
+                            MetricLabel = "Units left",
+                            MetricValue = $"{stock.CurrentStock:0.##}",
+                            RecommendedAction = "Reorder this product",
+                            Route = "/inventory",
+                            UpdatedAt = now
+                        });
+                    }
+                }
+            }
+        }
+
+        if (_user.HasPermission(PermissionCodes.FinanceView))
         {
             var start = now.AddDays(-30);
             var previousStart = start.AddDays(-30);
-            var current = await _db.Orders.Where(x => x.OrderDate >= start && x.Status != OrderStatusNames.Cancelled).SumAsync(x => (decimal?)x.GrandTotal, cancellationToken) ?? 0;
-            var previous = await _db.Orders.Where(x => x.OrderDate >= previousStart && x.OrderDate < start && x.Status != OrderStatusNames.Cancelled).SumAsync(x => (decimal?)x.GrandTotal, cancellationToken) ?? 0;
-            if (current > 0 || previous > 0)
+            var currentExp = await _db.Expenses.Where(x => x.ExpenseDate >= start).SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0;
+            var previousExp = await _db.Expenses.Where(x => x.ExpenseDate >= previousStart && x.ExpenseDate < start).SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0;
+            if (previousExp > 0 && currentExp > previousExp)
             {
-                var currency = await _db.Tenants.Select(x => x.Currency).FirstOrDefaultAsync(cancellationToken) ?? "USD";
-                insights.Add(new BusinessInsightDto
+                var pct = Math.Round((currentExp - previousExp) / previousExp * 100m, 1);
+                if (pct >= 10)
                 {
-                    Code = "revenue-window",
-                    Message = $"Recorded order revenue for the last 30 days is {Money(current, currency)}, compared with {Money(previous, currency)} in the previous 30 days.",
-                    Route = "/finance"
-                });
+                    insights.Add(new BusinessInsightDto
+                    {
+                        Code = "expense-warning",
+                        Title = "Operating expenses rose",
+                        Message = $"Your operating expenses increased by {pct:0.#}% this month ({Money(currentExp, currency)} vs {Money(previousExp, currency)}).",
+                        Severity = "warning",
+                        MetricLabel = "Expenses (30 days)",
+                        MetricValue = Money(currentExp, currency),
+                        RecommendedAction = "Review expense categories",
+                        Route = "/expenses",
+                        UpdatedAt = now
+                    });
+                }
             }
         }
-        if (_user.HasPermission(PermissionCodes.FinanceView) || _user.HasPermission(PermissionCodes.InvoiceView))
-        {
-            var overdue = await _db.Invoices.CountAsync(x => x.DueDate < now && x.OutstandingAmount > 0 && x.Status != "Paid" && x.Status != "Void" && x.Status != "Cancelled", cancellationToken);
-            if (overdue > 0)
-                insights.Add(new BusinessInsightDto { Code = "overdue-invoices", Message = overdue == 1 ? "1 invoice is overdue." : $"{overdue} invoices are overdue.", Route = "/invoices" });
-        }
-        if (_user.HasPermission(PermissionCodes.InventoryView) || _user.HasPermission(PermissionCodes.ProductView))
-        {
-            var low = await _db.Products.AsNoTracking()
-                .Where(x => x.IsActive && x.ReorderLevel > 0 && x.CurrentStock <= x.ReorderLevel)
-                .OrderBy(x => x.CurrentStock)
-                .Select(x => new { x.Name, x.CurrentStock, x.ReorderLevel })
-                .Take(3)
-                .ToListAsync(cancellationToken);
-            if (low.Count > 0)
-            {
-                var first = low[0];
-                insights.Add(new BusinessInsightDto
-                {
-                    Code = "low-stock",
-                    Message = low.Count == 1
-                        ? $"{first.Name} is at {first.CurrentStock:0.##}, which is at or below its reorder level of {first.ReorderLevel:0.##}."
-                        : $"{first.Name} and {low.Count - 1} other product{(low.Count == 2 ? "" : "s")} are at or below their reorder levels.",
-                    Route = "/inventory"
-                });
-            }
-        }
+
         if (_user.HasPermission(PermissionCodes.LeadView))
         {
             var followUps = await _db.FollowUps.CountAsync(x => x.Status == "Open" && x.DueAt < now, cancellationToken);
             if (followUps > 0)
-                insights.Add(new BusinessInsightDto { Code = "follow-ups", Message = followUps == 1 ? "1 sales follow-up is overdue." : $"{followUps} sales follow-ups are overdue.", Route = "/crm/follow-ups" });
+            {
+                insights.Add(new BusinessInsightDto
+                {
+                    Code = "follow-ups",
+                    Title = "Overdue follow-ups",
+                    Message = followUps == 1 ? "1 sales follow-up is overdue." : $"{followUps} sales follow-ups are overdue.",
+                    Severity = "warning",
+                    MetricLabel = "Follow-ups",
+                    MetricValue = followUps.ToString(),
+                    RecommendedAction = "Complete overdue follow-ups",
+                    Route = "/crm/follow-ups",
+                    UpdatedAt = now
+                });
+            }
         }
+
         if (_user.HasPermission(PermissionCodes.ProjectView))
         {
             var names = await _db.Projects.AsNoTracking()
@@ -785,8 +921,22 @@ public sealed class ExperienceService : IExperienceService
                 .Take(3)
                 .ToListAsync(cancellationToken);
             if (names.Count > 0)
-                insights.Add(new BusinessInsightDto { Code = "project-deadline", Message = names.Count == 1 ? $"{names[0]} is past its planned deadline." : $"{names[0]} and {names.Count - 1} other open project{(names.Count == 2 ? "" : "s")} are past their planned deadlines.", Route = "/projects" });
+            {
+                insights.Add(new BusinessInsightDto
+                {
+                    Code = "project-deadline",
+                    Title = "Project deadlines",
+                    Message = names.Count == 1
+                        ? $"{names[0]} is past its planned deadline."
+                        : $"{names[0]} and {names.Count - 1} other open project{(names.Count == 2 ? "" : "s")} are past their planned deadlines.",
+                    Severity = "warning",
+                    RecommendedAction = "Review project timelines",
+                    Route = "/projects",
+                    UpdatedAt = now
+                });
+            }
         }
+
         return insights;
     }
 
@@ -806,8 +956,9 @@ public sealed class ExperienceService : IExperienceService
             var now = DateTime.UtcNow;
             var start = now.AddDays(-30);
             var previousStart = start.AddDays(-30);
-            dto.Revenue = await _db.Orders.Where(x => x.OrderDate >= start && x.Status != OrderStatusNames.Cancelled).SumAsync(x => (decimal?)x.GrandTotal, cancellationToken) ?? 0;
-            dto.PreviousRevenue = await _db.Orders.Where(x => x.OrderDate >= previousStart && x.OrderDate < start && x.Status != OrderStatusNames.Cancelled).SumAsync(x => (decimal?)x.GrandTotal, cancellationToken) ?? 0;
+            // Same recognized-sales definition as dashboard overview / finance KPIs.
+            dto.Revenue = await _db.Orders.Where(x => x.OrderDate >= start && x.Status == OrderStatusNames.Completed).SumAsync(x => (decimal?)x.GrandTotal, cancellationToken) ?? 0;
+            dto.PreviousRevenue = await _db.Orders.Where(x => x.OrderDate >= previousStart && x.OrderDate < start && x.Status == OrderStatusNames.Completed).SumAsync(x => (decimal?)x.GrandTotal, cancellationToken) ?? 0;
             dto.Expenses = await _db.Expenses.Where(x => x.ExpenseDate >= start).SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0;
             dto.PreviousExpenses = await _db.Expenses.Where(x => x.ExpenseDate >= previousStart && x.ExpenseDate < start).SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0;
         }

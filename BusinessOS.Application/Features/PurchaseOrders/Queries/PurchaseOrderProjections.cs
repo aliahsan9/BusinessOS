@@ -15,6 +15,7 @@ public static class PurchaseOrderProjections
             TotalAmount = x.TotalAmount,
             Status = x.Status,
             ReferenceNumber = x.ReferenceNumber,
+            ExpectedDeliveryDate = x.ExpectedDeliveryDate,
             CreatedAt = x.CreatedAt
         };
 
@@ -28,6 +29,9 @@ public static class PurchaseOrderProjections
         Status = x.Status,
         ReferenceNumber = x.ReferenceNumber,
         Notes = x.Notes,
+        ExpectedDeliveryDate = x.ExpectedDeliveryDate,
+        PaymentTerms = x.PaymentTerms,
+        SentToSupplier = x.SentToSupplier,
         CreatedAt = x.CreatedAt,
         UpdatedAt = x.UpdatedAt,
         Items = x.PurchaseItems
@@ -38,6 +42,9 @@ public static class PurchaseOrderProjections
                 ProductName = i.Product != null ? i.Product.Name : string.Empty,
                 ProductSku = i.Product != null ? i.Product.SKU : string.Empty,
                 Quantity = i.Quantity,
+                ReceivedQuantity = i.ReceivedQuantity,
+                DamagedQuantity = i.DamagedQuantity,
+                ShortageQuantity = i.ShortageQuantity,
                 UnitPrice = i.UnitPrice,
                 Total = i.Total
             })

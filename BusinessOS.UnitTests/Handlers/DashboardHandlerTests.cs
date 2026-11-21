@@ -29,12 +29,65 @@ public class DashboardServiceTests
         result.TotalProducts.Should().Be(2);
         result.TotalCategories.Should().Be(1);
         result.TotalCustomers.Should().Be(1);
+        result.NewCustomers.Should().Be(1);
+        result.ActiveCustomers.Should().Be(1);
         result.TotalOrders.Should().Be(2);
         result.TotalRevenue.Should().Be(100);
         result.TotalInventoryValue.Should().Be(20);
         result.TotalActiveUsers.Should().Be(3);
         result.LowStockProducts.Should().Be(1);
         result.OutOfStockProducts.Should().Be(1);
+        result.Currency.Should().Be("PKR");
+        result.PreviousDateRange.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task GetOverviewAsync_UsesCatalogCustomerCount_NotPeriodCreatedFilter()
+    {
+        var tenantId = Guid.NewGuid();
+        var context = await CreateSeededContextAsync(tenantId);
+
+        // Narrow "today" window after seeding an older customer CreatedAt.
+        var customer = context.Customers.Single();
+        customer.CreatedAt = DateTime.UtcNow.AddMonths(-2);
+        await context.SaveChangesAsync();
+
+        var today = new DashboardDateRange(
+            DateTime.UtcNow.Date,
+            DateTime.UtcNow.Date.AddDays(1).AddTicks(-1),
+            DateRangePeriods.Today);
+
+        var userAnalytics = new Mock<IUserAnalyticsService>();
+        userAnalytics.Setup(x => x.GetActiveUserCountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var service = new DashboardService(context, userAnalytics.Object);
+        var result = await service.GetOverviewAsync(today, CancellationToken.None);
+
+        result.TotalCustomers.Should().Be(1);
+        result.NewCustomers.Should().Be(0);
+        result.TotalOrders.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task GetOverviewAsync_OmitsRevenueChangePercent_WhenPreviousIsZero()
+    {
+        var tenantId = Guid.NewGuid();
+        var context = await CreateSeededContextAsync(tenantId);
+        var today = new DashboardDateRange(
+            DateTime.UtcNow.Date,
+            DateTime.UtcNow.Date.AddDays(1).AddTicks(-1),
+            DateRangePeriods.Today);
+
+        var userAnalytics = new Mock<IUserAnalyticsService>();
+        userAnalytics.Setup(x => x.GetActiveUserCountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var service = new DashboardService(context, userAnalytics.Object);
+        var result = await service.GetOverviewAsync(today, CancellationToken.None);
+
+        // Seeded completed order is today; previous equivalent window has zero revenue.
+        result.TotalRevenue.Should().Be(100);
+        result.PreviousRevenue.Should().Be(0);
+        result.RevenueChangePercent.Should().BeNull();
     }
 
     private static async Task<BusinessOSDbContext> CreateSeededContextAsync(Guid tenantId)
@@ -50,6 +103,20 @@ public class DashboardServiceTests
         var categoryId = Guid.NewGuid();
         var productId1 = Guid.NewGuid();
         var productId2 = Guid.NewGuid();
+
+        context.Tenants.Add(new Tenant
+        {
+            Id = tenantId,
+            Name = "Test Co",
+            Slug = "test-co",
+            Currency = "PKR",
+            BusinessType = "Retail",
+            Email = "owner@test.com",
+            Phone = "1",
+            Address = "A",
+            OwnerUserId = "user-1",
+            CreatedAt = DateTime.UtcNow
+        });
 
         context.Categories.Add(new Category
         {

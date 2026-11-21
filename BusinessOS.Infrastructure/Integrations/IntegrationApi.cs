@@ -118,6 +118,8 @@ public static class IntegrationApi
             ("paypal", "refund") => (HttpMethod.Post, "https://api-m.paypal.com/v2/payments/captures/" + Required(args, "captureId") + "/refund", new JsonObject()),
             ("linkedin", "organization") => (HttpMethod.Get, "https://api.linkedin.com/v2/organizationalEntityAcls?q=roleAssignee", null),
             ("meta", "pages") => (HttpMethod.Get, "https://graph.facebook.com/v21.0/me/accounts", null),
+            ("meta", "insights") => MetaInsights(args, metadata),
+            ("meta", "publish") => MetaPublish(args, metadata),
             ("google-analytics", "report") => (HttpMethod.Post, "https://analyticsdata.googleapis.com/v1beta/properties/" + (property ?? Required(args, "propertyId")) + ":runReport", args),
             ("google-ads", "report") => (HttpMethod.Post, "https://googleads.googleapis.com/v18/customers/" + (customer ?? Required(args, "customerId")) + "/googleAds:search", args),
             ("shopify", "products") => (HttpMethod.Get, $"https://{shop}.myshopify.com/admin/api/2024-10/products.json?limit=10", null),
@@ -127,6 +129,25 @@ public static class IntegrationApi
             ("wordpress", "draft") => (HttpMethod.Post, "https://public-api.wordpress.com/rest/v1.1/sites/" + Uri.EscapeDataString(site ?? Required(args, "site")) + "/posts/new", args),
             _ => (HttpMethod.Get, null, null)
         };
+    }
+
+    private static (HttpMethod Method, string? Url, JsonObject? Body) MetaPublish(JsonObject args, JsonObject metadata)
+    {
+        var message = Text(args, "message") ?? Text(args, "body") ?? Text(args, "caption") ?? "";
+        var body = new JsonObject { ["message"] = message };
+        var link = Text(args, "link");
+        if (!string.IsNullOrWhiteSpace(link))
+            body["link"] = link;
+        return (HttpMethod.Post, "https://graph.facebook.com/v21.0/" + Required(metadata, "pageId") + "/feed", body);
+    }
+
+    private static (HttpMethod Method, string? Url, JsonObject? Body) MetaInsights(JsonObject args, JsonObject metadata)
+    {
+        var postId = Text(args, "externalPostId") ?? Text(args, "postId") ?? Text(args, "id");
+        if (string.IsNullOrWhiteSpace(postId) || postId.Contains('/') || postId.Contains('\\') || postId.Contains(".."))
+            return (HttpMethod.Get, null, null);
+        var metrics = Text(args, "metrics") ?? "post_impressions,post_engaged_users,post_clicks";
+        return (HttpMethod.Get, "https://graph.facebook.com/v21.0/" + Uri.EscapeDataString(postId) + "/insights?metric=" + Uri.EscapeDataString(metrics), null);
     }
 
     private static string? Text(JsonObject obj, string name) =>

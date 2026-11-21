@@ -38,8 +38,15 @@ public sealed class DashboardWidgetWrite
 public sealed class BusinessInsightDto
 {
     public string Code { get; set; } = "";
+    public string Title { get; set; } = "";
     public string Message { get; set; } = "";
+    /// <summary>info | positive | warning | critical</summary>
+    public string Severity { get; set; } = "info";
+    public string? MetricLabel { get; set; }
+    public string? MetricValue { get; set; }
+    public string? RecommendedAction { get; set; }
     public string? Route { get; set; }
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
 
 public sealed class DashboardExperienceDto

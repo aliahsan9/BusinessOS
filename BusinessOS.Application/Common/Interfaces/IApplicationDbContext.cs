@@ -13,6 +13,9 @@ public interface IApplicationDbContext
     DbSet<Supplier> Suppliers { get; }
     DbSet<Purchase> Purchases { get; }
     DbSet<PurchaseItem> PurchaseItems { get; }
+    DbSet<ProcurementAgentSettings> ProcurementAgentSettings { get; }
+    DbSet<ProcurementRecommendation> ProcurementRecommendations { get; }
+    DbSet<PurchaseReceivingEvent> PurchaseReceivingEvents { get; }
     DbSet<Order> Orders { get; }
     DbSet<OrderItem> OrderItems { get; }
     DbSet<Payment> Payments { get; }
@@ -141,6 +144,25 @@ public interface IApplicationDbContext
     DbSet<ProductUsageEvent> ProductUsageEvents { get; }
     DbSet<ProductBacklogItem> ProductBacklogItems { get; }
     DbSet<CompanyDataRequest> CompanyDataRequests { get; }
+    DbSet<SupportTicket> SupportTickets { get; }
+    DbSet<SupportMessage> SupportMessages { get; }
+    DbSet<SupportFollowUpJob> SupportFollowUpJobs { get; }
+    DbSet<SupportChannelAccount> SupportChannelAccounts { get; }
+    DbSet<MarketingBrandProfile> MarketingBrandProfiles { get; }
+    DbSet<MarketingCampaign> MarketingCampaigns { get; }
+    DbSet<MarketingContentItem> MarketingContentItems { get; }
+    DbSet<MarketingContentAsset> MarketingContentAssets { get; }
+    DbSet<MarketingResearchReport> MarketingResearchReports { get; }
+    DbSet<MarketingPublishJob> MarketingPublishJobs { get; }
+    DbSet<MarketingAnalyticsSnapshot> MarketingAnalyticsSnapshots { get; }
+    DbSet<MarketingAgentPolicy> MarketingAgentPolicies { get; }
+    DbSet<SalesAgentSettings> SalesAgentSettings { get; }
+    DbSet<SalesAgentObjective> SalesAgentObjectives { get; }
+    DbSet<SalesProspectResearch> SalesProspectResearch { get; }
+    DbSet<SalesOutreachCampaign> SalesOutreachCampaigns { get; }
+    DbSet<SalesOutreachMessage> SalesOutreachMessages { get; }
+    DbSet<SalesEmailSuppression> SalesEmailSuppressions { get; }
+    DbSet<SalesOutboundEmailLog> SalesOutboundEmailLogs { get; }
 
     bool HasActiveTransaction { get; }
 

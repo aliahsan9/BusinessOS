@@ -21,6 +21,13 @@ public static class PurchaseOrderStatusRules
             },
             [PurchaseOrderStatusNames.Approved] = new(StringComparer.OrdinalIgnoreCase)
             {
+                PurchaseOrderStatusNames.PartiallyReceived,
+                PurchaseOrderStatusNames.Received,
+                PurchaseOrderStatusNames.Cancelled
+            },
+            [PurchaseOrderStatusNames.PartiallyReceived] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                PurchaseOrderStatusNames.Received,
                 PurchaseOrderStatusNames.Cancelled
             },
             [PurchaseOrderStatusNames.Received] = new(StringComparer.OrdinalIgnoreCase),
@@ -54,5 +61,6 @@ public static class PurchaseOrderStatusRules
         !string.Equals(status, PurchaseOrderStatusNames.Received, StringComparison.OrdinalIgnoreCase);
 
     public static bool CanReceive(string status) =>
-        string.Equals(status, PurchaseOrderStatusNames.Approved, StringComparison.OrdinalIgnoreCase);
+        string.Equals(status, PurchaseOrderStatusNames.Approved, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(status, PurchaseOrderStatusNames.PartiallyReceived, StringComparison.OrdinalIgnoreCase);
 }

@@ -15,6 +15,10 @@ public class PurchaseItemConfiguration : IEntityTypeConfiguration<PurchaseItem>
         builder.Property(x => x.Quantity).AsMoney();
         builder.Property(x => x.UnitPrice).AsMoney();
         builder.Property(x => x.Total).AsMoney();
+        builder.Property(x => x.ReceivedQuantity).AsMoney();
+        builder.Property(x => x.DamagedQuantity).AsMoney();
+        builder.Property(x => x.ShortageQuantity).AsMoney();
+        builder.Property(x => x.ReceivingNotes).HasMaxLength(1000);
 
         builder.HasOne(x => x.Purchase)
             .WithMany(p => p.PurchaseItems)

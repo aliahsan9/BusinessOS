@@ -5,6 +5,7 @@ using BusinessOS.Application.Features.Dashboard.Queries.GetCustomerAnalytics;
 using BusinessOS.Application.Features.Dashboard.Queries.GetDashboardOverview;
 using BusinessOS.Application.Features.Dashboard.Queries.GetInventoryAnalytics;
 using BusinessOS.Application.Features.Dashboard.Queries.GetOrderAnalytics;
+using BusinessOS.Application.Features.Dashboard.Queries.GetOwnerDashboardSummary;
 using BusinessOS.Application.Features.Dashboard.Queries.GetProductAnalytics;
 using BusinessOS.Application.Features.Dashboard.Queries.GetSalesAnalytics;
 using BusinessOS.API.Authorization;
@@ -26,6 +27,17 @@ public static class DashboardEndpoints
             .WithTags("Dashboard")
             .RequireAuthorization()
             .RequireRateLimiting("api");
+
+        group.MapGet("/summary", GetSummary)
+            .RequirePermission(PermissionCodes.OrderView)
+            .WithName("GetOwnerDashboardSummary")
+            .WithSummary("Get consolidated owner dashboard summary")
+            .WithDescription(
+                "Returns overview KPIs, sales, customers, products, inventory, orders, revenue chart, finance snapshot, " +
+                "insights, priorities, and recent activity in one response. Prefer this for the owner home page.")
+            .Produces<OwnerDashboardSummaryResponse>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status403Forbidden);
 
         group.MapGet("/overview", GetOverview)
             .RequirePermission(PermissionCodes.OrderView)
@@ -124,6 +136,21 @@ public static class DashboardEndpoints
             .WithSummary("Get inventory chart data")
             .WithDescription("Returns pie/line chart datasets for stock status and movement trends.")
             .Produces<ChartDataResponse>(StatusCodes.Status200OK);
+    }
+
+    private static async Task<IResult> GetSummary(
+        DateTime? startDate,
+        DateTime? endDate,
+        string? period,
+        int top = 10,
+        ISender sender = default!,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await sender.Send(
+            new GetOwnerDashboardSummaryQuery(startDate, endDate, period, top),
+            cancellationToken);
+
+        return Results.Ok(result);
     }
 
     private static async Task<IResult> GetOverview(

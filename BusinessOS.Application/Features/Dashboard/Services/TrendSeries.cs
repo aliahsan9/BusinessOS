@@ -21,14 +21,29 @@ public static class TrendSeries
 
     public static Grain ForSales(DashboardDateRange range)
     {
-        if (IsAll(range)) return Grain.SparseDay;
+        // Prefer filled buckets so owner charts do not look like sparse spikes.
+        // All-time uses monthly grain over a clamped recent window (see ChartWindow).
+        if (IsAll(range)) return Grain.Month;
         return ForSpan(range);
     }
 
     public static Grain ForFinance(DashboardDateRange range)
     {
-        if (IsAll(range)) return Grain.SparseMonth;
+        if (IsAll(range)) return Grain.Month;
         return ForSpan(range);
+    }
+
+    /// <summary>
+    /// For all-time periods, clamp chart windows to the last 12 months so filled
+    /// monthly buckets stay readable and do not start at Unix epoch.
+    /// </summary>
+    public static DashboardDateRange ChartWindow(DashboardDateRange range)
+    {
+        if (!IsAll(range)) return range;
+        var end = DateTime.SpecifyKind(range.EndDate, DateTimeKind.Utc);
+        var start = end.AddMonths(-11);
+        start = new DateTime(start.Year, start.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        return new DashboardDateRange(start, end, range.Period);
     }
 
     public static DateTime Truncate(DateTime value, Grain grain)

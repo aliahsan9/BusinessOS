@@ -9,6 +9,7 @@ public class PurchaseOrderSummaryResponse
     public decimal TotalAmount { get; set; }
     public string Status { get; set; } = default!;
     public string? ReferenceNumber { get; set; }
+    public DateTime? ExpectedDeliveryDate { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 
@@ -22,6 +23,9 @@ public class PurchaseOrderResponse
     public string Status { get; set; } = default!;
     public string? ReferenceNumber { get; set; }
     public string? Notes { get; set; }
+    public DateTime? ExpectedDeliveryDate { get; set; }
+    public string? PaymentTerms { get; set; }
+    public bool SentToSupplier { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public IReadOnlyList<PurchaseOrderLineItemResponse> Items { get; set; } = Array.Empty<PurchaseOrderLineItemResponse>();
@@ -34,6 +38,9 @@ public class PurchaseOrderLineItemResponse
     public string ProductName { get; set; } = default!;
     public string ProductSku { get; set; } = default!;
     public decimal Quantity { get; set; }
+    public decimal ReceivedQuantity { get; set; }
+    public decimal DamagedQuantity { get; set; }
+    public decimal ShortageQuantity { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal Total { get; set; }
 }

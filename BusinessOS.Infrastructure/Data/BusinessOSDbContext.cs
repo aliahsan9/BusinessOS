@@ -46,6 +46,9 @@ public partial class BusinessOSDbContext
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<Purchase> Purchases => Set<Purchase>();
     public DbSet<PurchaseItem> PurchaseItems => Set<PurchaseItem>();
+    public DbSet<ProcurementAgentSettings> ProcurementAgentSettings => Set<ProcurementAgentSettings>();
+    public DbSet<ProcurementRecommendation> ProcurementRecommendations => Set<ProcurementRecommendation>();
+    public DbSet<PurchaseReceivingEvent> PurchaseReceivingEvents => Set<PurchaseReceivingEvent>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<Quotation> Quotations => Set<Quotation>();
@@ -171,6 +174,25 @@ public partial class BusinessOSDbContext
     public DbSet<ProductUsageEvent> ProductUsageEvents => Set<ProductUsageEvent>();
     public DbSet<ProductBacklogItem> ProductBacklogItems => Set<ProductBacklogItem>();
     public DbSet<CompanyDataRequest> CompanyDataRequests => Set<CompanyDataRequest>();
+    public DbSet<MarketingBrandProfile> MarketingBrandProfiles => Set<MarketingBrandProfile>();
+    public DbSet<MarketingCampaign> MarketingCampaigns => Set<MarketingCampaign>();
+    public DbSet<MarketingContentItem> MarketingContentItems => Set<MarketingContentItem>();
+    public DbSet<MarketingContentAsset> MarketingContentAssets => Set<MarketingContentAsset>();
+    public DbSet<MarketingResearchReport> MarketingResearchReports => Set<MarketingResearchReport>();
+    public DbSet<MarketingPublishJob> MarketingPublishJobs => Set<MarketingPublishJob>();
+    public DbSet<MarketingAnalyticsSnapshot> MarketingAnalyticsSnapshots => Set<MarketingAnalyticsSnapshot>();
+    public DbSet<MarketingAgentPolicy> MarketingAgentPolicies => Set<MarketingAgentPolicy>();
+    public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
+    public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
+    public DbSet<SupportFollowUpJob> SupportFollowUpJobs => Set<SupportFollowUpJob>();
+    public DbSet<SupportChannelAccount> SupportChannelAccounts => Set<SupportChannelAccount>();
+    public DbSet<SalesAgentSettings> SalesAgentSettings => Set<SalesAgentSettings>();
+    public DbSet<SalesAgentObjective> SalesAgentObjectives => Set<SalesAgentObjective>();
+    public DbSet<SalesProspectResearch> SalesProspectResearch => Set<SalesProspectResearch>();
+    public DbSet<SalesOutreachCampaign> SalesOutreachCampaigns => Set<SalesOutreachCampaign>();
+    public DbSet<SalesOutreachMessage> SalesOutreachMessages => Set<SalesOutreachMessage>();
+    public DbSet<SalesEmailSuppression> SalesEmailSuppressions => Set<SalesEmailSuppression>();
+    public DbSet<SalesOutboundEmailLog> SalesOutboundEmailLogs => Set<SalesOutboundEmailLog>();
 
     public override int SaveChanges() =>
         SaveChangesAsync(CancellationToken.None).GetAwaiter().GetResult();
@@ -510,10 +532,32 @@ public partial class BusinessOSDbContext
         FilterTenant<StorefrontInquiry>(builder);
         FilterTenant<DashboardPreference>(builder);
         FilterTenant<SupplierPortalAccess>(builder);
+        FilterTenant<ProcurementAgentSettings>(builder);
+        FilterTenant<ProcurementRecommendation>(builder);
+        FilterTenant<PurchaseReceivingEvent>(builder);
         FilterTenant<AgencyWorkspace>(builder);
         FilterTenant<LaunchFeedback>(builder);
         FilterTenant<ProductUsageEvent>(builder);
         FilterTenant<CompanyDataRequest>(builder);
+        FilterTenant<SupportTicket>(builder);
+        FilterTenant<SupportMessage>(builder);
+        FilterTenant<SupportFollowUpJob>(builder);
+        FilterTenant<SupportChannelAccount>(builder);
+        FilterTenant<MarketingBrandProfile>(builder);
+        FilterTenant<MarketingCampaign>(builder);
+        FilterTenant<MarketingContentItem>(builder);
+        FilterTenant<MarketingContentAsset>(builder);
+        FilterTenant<MarketingResearchReport>(builder);
+        FilterTenant<MarketingPublishJob>(builder);
+        FilterTenant<MarketingAnalyticsSnapshot>(builder);
+        FilterTenant<MarketingAgentPolicy>(builder);
+        FilterTenant<SalesAgentSettings>(builder);
+        FilterTenant<SalesAgentObjective>(builder);
+        FilterTenant<SalesProspectResearch>(builder);
+        FilterTenant<SalesOutreachCampaign>(builder);
+        FilterTenant<SalesOutreachMessage>(builder);
+        FilterTenant<SalesEmailSuppression>(builder);
+        FilterTenant<SalesOutboundEmailLog>(builder);
     }
 
     private void FilterTenant<TEntity>(ModelBuilder builder)

@@ -3,10 +3,15 @@ using System.Text.Json.Nodes;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Integrations;
+using BusinessOS.Application.Features.Marketing;
 using BusinessOS.Application.Features.Nalva;
 using BusinessOS.Application.Features.Operations.Services;
+using BusinessOS.Application.Features.ProcurementAgent;
+using BusinessOS.Application.Features.SalesAgent;
+using BusinessOS.Application.Features.Support;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
+using BusinessOS.Infrastructure.AI.SalesAgent;
 using BusinessOS.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -32,14 +37,31 @@ public sealed class NalvaToolGateway : INalvaToolGateway
     private readonly ICrmOperationsService _crm;
     private readonly INalvaEventOutbox? _events;
     private readonly IIntegrationPlatform? _integrations;
+    private readonly ISupportAgentService? _support;
+    private readonly ISalesAgentToolOperations? _sales;
+    private readonly IInventoryProcurementAgentService? _procurement;
+    private readonly IMarketingOperationsService? _marketing;
 
-    public NalvaToolGateway(BusinessOSDbContext db, ITenantProvider tenant, ICrmOperationsService crm, INalvaEventOutbox? events = null, IIntegrationPlatform? integrations = null)
+    public NalvaToolGateway(
+        BusinessOSDbContext db,
+        ITenantProvider tenant,
+        ICrmOperationsService crm,
+        INalvaEventOutbox? events = null,
+        IIntegrationPlatform? integrations = null,
+        ISupportAgentService? support = null,
+        ISalesAgentToolOperations? sales = null,
+        IInventoryProcurementAgentService? procurement = null,
+        IMarketingOperationsService? marketing = null)
     {
         _db = db;
         _tenant = tenant;
         _crm = crm;
         _events = events;
         _integrations = integrations;
+        _support = support;
+        _sales = sales;
+        _procurement = procurement;
+        _marketing = marketing;
     }
 
     public async Task<NalvaToolOutcome> ExecuteAsync(
@@ -79,6 +101,18 @@ public sealed class NalvaToolGateway : INalvaToolGateway
 
         if (tool.RequiresApproval && tool.Integration == "prepared")
         {
+            if (tool.Name == "SendExternalEmail" && _sales is not null)
+            {
+                var outreach = await _sales.TrySendOutreachEmailAsync(args, argsJson, true, cancellationToken);
+                if (outreach is not null)
+                    return outreach;
+            }
+            if (tool.Name == "PublishSocialPost" && _marketing is not null)
+            {
+                var scheduled = await MarketingPublishAfterApproval(args, cancellationToken);
+                if (scheduled is not null)
+                    return scheduled;
+            }
             var live = await TryLiveIntegrationAsync(tool.Name, argsJson, cancellationToken);
             if (live is not null)
                 return live;
@@ -106,17 +140,48 @@ public sealed class NalvaToolGateway : INalvaToolGateway
                 "GetAgentStatus" => await AgentStatus(cancellationToken),
                 "GetAgentExecutionResults" => await ExecutionResults(cancellationToken),
                 "CreateAgentTask" or "DelegateAgentTask" => await Delegate(tool.Name, args, agentKey, delegationChain, depth, cancellationToken),
-                "GetCompanyProfile" => await CompanyProfile(cancellationToken),
+                "GetCompanyProfile" or "GetMarketingBrandProfile" => await CompanyProfile(cancellationToken),
                 "GetTargetCustomers" => await Customers(cancellationToken),
                 "GetCustomerSegments" => await Segments(cancellationToken),
-                "ResearchMarket" => await ResearchMarket(cancellationToken),
-                "ResearchCompetitors" => await KnowledgeSearch(agentKey, "competitor", cancellationToken),
-                "GenerateMarketingStrategy" => await Draft(agentKey, executionId, "Strategy", "Marketing strategy", StrategyBody(), cancellationToken),
-                "CreateContentDraft" => await Draft(agentKey, executionId, "Content", NalvaArgs.Str(args, "title") ?? "Content draft", ContentBody(agentKey, args), cancellationToken),
-                "CreateContentCalendar" => await Draft(agentKey, executionId, "Calendar", "Content calendar", "Internal calendar draft. Nothing was scheduled externally.", cancellationToken),
-                "CreateCampaignDraft" => await Draft(agentKey, executionId, "Campaign", NalvaArgs.Str(args, "title") ?? "Campaign draft", "Campaign draft. Nothing was published.", cancellationToken),
+                "ResearchMarket" => await ResearchMarket(agentKey, cancellationToken),
+                "ResearchCompetitors" => await ResearchCompetitors(agentKey, cancellationToken),
+                "GenerateMarketingStrategy" => await MarketingStrategy(agentKey, args, cancellationToken),
+                "CreateContentDraft" => await MarketingContentDraft(agentKey, executionId, args, cancellationToken),
+                "CreateContentCalendar" => await MarketingCalendar(agentKey, args, cancellationToken),
+                "CreateCampaignDraft" => await MarketingCampaignDraft(agentKey, args, cancellationToken),
                 "GetCampaignAnalytics" => await CampaignAnalytics(cancellationToken),
+                "UpsertBrandProfile" => await UpsertBrandProfile(args, cancellationToken),
+                "GenerateMarketingGraphic" => await MarketingGraphic(args, cancellationToken),
+                "ScheduleApprovedMarketingPost" => await ScheduleMarketingPost(args, cancellationToken),
+                "SyncMarketingAnalytics" => await SyncMarketingAnalytics(args, cancellationToken),
+                "GenerateMarketingPerformanceReport" => await MarketingPerformanceReport(args, cancellationToken),
+                "ShareMarketingInsightsWithSales" => await ShareMarketingInsights(agentKey, args, cancellationToken),
+                "AssignMarketingObjective" => await AssignMarketingObjective(agentKey, executionId, args, cancellationToken),
                 "SearchAuthorizedLeadSources" => await LeadSources(cancellationToken),
+                "ResearchExternalProspects" => _sales is null
+                    ? Ok("Sales research operations are unavailable.", new JsonObject { ["researched"] = 0 })
+                    : await _sales.ResearchExternalProspectsAsync(agentKey, executionId, args, cancellationToken),
+                "QualifyLead" => _sales is null
+                    ? Ok("Sales qualification is unavailable.", new JsonObject { ["qualified"] = false })
+                    : await _sales.QualifyProspectAsync(args, cancellationToken),
+                "CreateOutreachCampaign" => _sales is null
+                    ? Ok("Outreach campaigns are unavailable.", new JsonObject { ["created"] = false })
+                    : await _sales.CreateOutreachCampaignAsync(agentKey, executionId, args, cancellationToken),
+                "GeneratePersonalizedOutreach" => _sales is null
+                    ? Ok("Personalized outreach is unavailable.", new JsonObject { ["created"] = false })
+                    : await _sales.GeneratePersonalizedOutreachAsync(agentKey, executionId, args, cancellationToken),
+                "GetSalesAgentStatus" => _sales is null
+                    ? Ok("Sales Agent status is unavailable.", new JsonObject())
+                    : await _sales.GetSalesAgentStatusAsync(cancellationToken),
+                "AssignSalesObjective" => _sales is null
+                    ? Ok("Sales objectives are unavailable.", new JsonObject { ["assigned"] = false })
+                    : await _sales.AssignSalesObjectiveAsync(agentKey, executionId, args, cancellationToken),
+                "ProcessProspectReply" => _sales is null
+                    ? Ok("Prospect reply processing is unavailable.", new JsonObject { ["processed"] = false })
+                    : await _sales.ProcessProspectReplyAsync(args, cancellationToken),
+                "GenerateSalesCampaignReport" => _sales is null
+                    ? Ok("Sales campaign reports are unavailable.", new JsonObject())
+                    : await _sales.GenerateSalesCampaignReportAsync(agentKey, executionId, args, cancellationToken),
                 "ResearchProspect" or "GetLeadDetails" => await LeadDetails(args, cancellationToken),
                 "CreateLead" => await CreateLead(args, cancellationToken),
                 "UpdateLead" => await UpdateLead(args, cancellationToken),
@@ -133,9 +198,13 @@ public sealed class NalvaToolGateway : INalvaToolGateway
                 "GetOrderDetails" => await OrderDetails(args, cancellationToken),
                 "GetCustomerHistory" => await CustomerHistory(args, cancellationToken),
                 "CreateSupportTicket" => await SupportTicket(agentKey, executionId, args, cancellationToken),
-                "UpdateSupportTicket" => await UpdateWorkItem(args, "Open", cancellationToken),
-                "CreateResponseDraft" => await Draft(agentKey, executionId, "Response", "Customer reply draft", NalvaArgs.Str(args, "body") ?? "Reply draft. It was not sent.", cancellationToken),
-                "EscalateTicket" => await UpdateWorkItem(args, "Escalated", cancellationToken),
+                "UpdateSupportTicket" => await UpdateSupportTicketTool(args, cancellationToken),
+                "CreateResponseDraft" => await CreateSupportResponseDraft(agentKey, executionId, args, cancellationToken),
+                "SendSupportReply" => await SendSupportReplyTool(args, cancellationToken),
+                "EscalateTicket" => await EscalateSupportTicketTool(args, cancellationToken),
+                "ResolveSupportTicket" => await ResolveSupportTicketTool(args, cancellationToken),
+                "ScheduleSupportFollowUp" => await ScheduleSupportFollowUpTool(args, cancellationToken),
+                "ReceiveSupportMessage" => await ReceiveSupportMessageTool(args, cancellationToken),
                 "GetProjectDetails" or "GetProjectRequirements" => await ProjectDetails(args, tool.Name == "GetProjectRequirements", cancellationToken),
                 "CreateDevelopmentTask" or "CreateTask" => await CreateTask(args, cancellationToken),
                 "AnalyzeRepository" or "AnalyzePullRequest" => await RepositoryRead(tool.Name, argsJson, cancellationToken),
@@ -157,16 +226,23 @@ public sealed class NalvaToolGateway : INalvaToolGateway
                 "GetSalesAnalytics" => await SalesSummary(cancellationToken),
                 "GetRevenueAnalytics" => await Revenue(cancellationToken),
                 "GetInventoryAnalytics" or "GetInventoryLevels" or "GetLowStockProducts" => await InventoryDetails(tool.Name, cancellationToken),
+                "GetInventoryRisks" => await ProcurementJson(async () => await _procurement!.GetInventoryRisksAsync(cancellationToken), "risks"),
+                "GetProcurementOverview" => await ProcurementJson(async () => await _procurement!.GetOverviewAsync(cancellationToken), "overview"),
                 "GetCustomerAnalytics" => await CustomerAnalytics(cancellationToken),
                 "GetProjectAnalytics" => await ProjectSummary(cancellationToken),
                 "GetExpenseAnalytics" => await ExpenseAnalytics(cancellationToken),
                 "IdentifyBusinessTrends" => await Trends(cancellationToken),
                 "GetSupplierDetails" => await SupplierDetails(args, cancellationToken),
-                "CompareSupplierPrices" => await SupplierPrices(args, cancellationToken),
+                "CompareSupplierPrices" or "ResearchSuppliers" => await ResearchSuppliers(args, cancellationToken),
                 "GetPurchaseHistory" or "GetPendingPurchaseOrders" => await Purchases(tool.Name == "GetPendingPurchaseOrders", cancellationToken),
-                "ForecastProductDemand" => await Demand(cancellationToken),
-                "CreatePurchaseOrderDraft" => await PurchaseDraft(args, "Draft", cancellationToken),
-                "CreatePurchaseOrder" => await PurchaseDraft(args, "Pending", cancellationToken),
+                "ForecastProductDemand" => await ForecastDemand(args, cancellationToken),
+                "GetProcurementRecommendations" => await ProcurementJson(async () => await _procurement!.GetRecommendationsAsync(cancellationToken), "recommendations"),
+                "GetDelayedDeliveries" => await DelayedDeliveries(cancellationToken),
+                "GetSlowMovingProducts" => await SlowMoving(cancellationToken),
+                "GetProcurementBudgetNeed" => await ProcurementBudget(cancellationToken),
+                "CreatePurchaseOrderDraft" or "PreparePurchaseOrder" => await PreparePurchase(args, cancellationToken),
+                "CreatePurchaseOrder" or "SubmitPreparedPurchaseOrder" => await SubmitPurchase(args, approvalGranted, cancellationToken),
+                "ReceivePurchaseOrderVerified" => await ReceiveVerified(args, cancellationToken),
                 "GetUpcomingTasks" or "GetCalendarEvents" => await Tasks(cancellationToken),
                 "CreateCalendarEvent" => await Draft(agentKey, executionId, "Calendar", NalvaArgs.Str(args, "title") ?? "Calendar note", "Internal note. No invitation was sent.", cancellationToken),
                 "SummarizeMeetingNotes" => await Draft(agentKey, executionId, "Meeting", "Meeting summary", NalvaGuard.Clip(NalvaArgs.Str(args, "notes"), 2000), cancellationToken),
@@ -328,6 +404,24 @@ public sealed class NalvaToolGateway : INalvaToolGateway
 
     private async Task<NalvaToolOutcome> CompanyProfile(CancellationToken ct)
     {
+        if (_marketing is not null)
+        {
+            var brand = await _marketing.GetOrSeedBrandProfileAsync(ct);
+            return Ok("Marketing brand profile seeded from company records.", new JsonObject
+            {
+                ["found"] = true,
+                ["id"] = brand.Id.ToString(),
+                ["name"] = brand.BusinessName,
+                ["businessName"] = brand.BusinessName,
+                ["industry"] = brand.Industry,
+                ["website"] = brand.Website,
+                ["brandColorsJson"] = brand.BrandColorsJson,
+                ["productsServicesJson"] = brand.ProductsServicesJson,
+                ["sourceNotes"] = brand.SourceNotes,
+                ["logoUrl"] = brand.LogoUrl
+            });
+        }
+
         var company = await _db.Tenants.AsNoTracking().FirstOrDefaultAsync(ct);
         if (company is null)
             return Ok("No company profile row was found for this tenant.", new JsonObject { ["found"] = false });
@@ -365,8 +459,26 @@ public sealed class NalvaToolGateway : INalvaToolGateway
         }));
     }
 
-    private async Task<NalvaToolOutcome> ResearchMarket(CancellationToken ct)
+    private async Task<NalvaToolOutcome> ResearchMarket(string agentKey, CancellationToken ct)
     {
+        if (_marketing is not null)
+        {
+            var report = await _marketing.CreateResearchReportAsync(new CreateResearchReportRequest
+            {
+                Kind = "Market",
+                Title = "Market research",
+                AgentKey = agentKey
+            }, ct);
+            return Ok(report.Body, new JsonObject
+            {
+                ["reportId"] = report.Id.ToString(),
+                ["kind"] = report.Kind,
+                ["fabricated"] = report.Fabricated,
+                ["sourcesJson"] = report.SourcesJson,
+                ["externalResearch"] = false
+            });
+        }
+
         var segments = await _db.CustomerSegments.CountAsync(ct);
         var customers = await _db.Customers.CountAsync(ct);
         return Ok("Market note from this company's records. No external market feed was used.", new JsonObject
@@ -376,6 +488,29 @@ public sealed class NalvaToolGateway : INalvaToolGateway
             ["externalResearch"] = false,
             ["estimate"] = false
         });
+    }
+
+    private async Task<NalvaToolOutcome> ResearchCompetitors(string agentKey, CancellationToken ct)
+    {
+        if (_marketing is not null)
+        {
+            var report = await _marketing.CreateResearchReportAsync(new CreateResearchReportRequest
+            {
+                Kind = "Competitor",
+                Title = "Competitor research",
+                AgentKey = agentKey
+            }, ct);
+            return Ok(report.Body, new JsonObject
+            {
+                ["reportId"] = report.Id.ToString(),
+                ["kind"] = report.Kind,
+                ["fabricated"] = report.Fabricated,
+                ["competitorNamesJson"] = report.CompetitorNamesJson,
+                ["sourcesJson"] = report.SourcesJson
+            });
+        }
+
+        return await KnowledgeSearch(agentKey, "competitor", ct);
     }
 
     private async Task<NalvaToolOutcome> LeadSources(CancellationToken ct)
@@ -547,14 +682,36 @@ public sealed class NalvaToolGateway : INalvaToolGateway
 
     private async Task<NalvaToolOutcome> KnowledgeSearch(string agentKey, string? query, CancellationToken ct)
     {
+        if (_support is not null && string.Equals(agentKey, SupportAgentKeys.Support, StringComparison.OrdinalIgnoreCase))
+        {
+            var supportKnowledge = await _support.SearchKnowledgeAsync(query, ct);
+            var supportSources = supportKnowledge["sources"] as JsonArray ?? [];
+            return Ok(supportSources.Count == 0 ? "No authorized knowledge matched." : "Authorized knowledge.", supportKnowledge);
+        }
+
         var rows = await _db.NalvaKnowledgeSources.AsNoTracking()
             .Where(x => x.AgentKey == null || x.AgentKey == agentKey)
             .ToListAsync(ct);
-        if (!string.IsNullOrWhiteSpace(query))
+        var tokens = string.IsNullOrWhiteSpace(query)
+            ? Array.Empty<string>()
+            : query.Split([' ', '\t', '\r', '\n', ',', '.', '?', '!'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(x => x.Length > 2)
+                .Select(x => x.ToLowerInvariant())
+                .Distinct()
+                .ToArray();
+        if (tokens.Length > 0)
         {
-            rows = rows.Where(x =>
-                x.Title.Contains(query, StringComparison.OrdinalIgnoreCase)
-                || x.Content.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+            rows = rows
+                .Select(row =>
+                {
+                    var haystack = $"{row.Title} {row.Content}".ToLowerInvariant();
+                    var score = tokens.Count(token => haystack.Contains(token, StringComparison.Ordinal));
+                    return (row, score);
+                })
+                .Where(x => x.score > 0)
+                .OrderByDescending(x => x.score)
+                .Select(x => x.row)
+                .ToList();
         }
         var list = new JsonArray();
         foreach (var row in rows.Take(5))
@@ -566,10 +723,11 @@ public sealed class NalvaToolGateway : INalvaToolGateway
                 ["id"] = row.Id.ToString(),
                 ["title"] = row.Title,
                 ["agentKey"] = row.AgentKey,
-                ["excerpt"] = NalvaGuard.Clip(row.Content, 240)
+                ["excerpt"] = NalvaGuard.Clip(row.Content, 240),
+                ["source"] = "authorized-knowledge"
             });
         }
-        var data = new JsonObject { ["sources"] = list, ["authorizedOnly"] = true };
+        var data = new JsonObject { ["sources"] = list, ["authorizedOnly"] = true, ["invented"] = false };
         if (string.Equals(agentKey, "legal", StringComparison.OrdinalIgnoreCase))
             data["disclaimer"] = "This organizes stored documents. It is not legal advice.";
         return Ok(list.Count == 0 ? "No authorized knowledge matched." : "Authorized knowledge.", data);
@@ -597,19 +755,28 @@ public sealed class NalvaToolGateway : INalvaToolGateway
     private async Task<NalvaToolOutcome> OrderDetails(JsonElement args, CancellationToken ct)
     {
         var id = NalvaArgs.GuidOf(args, "orderId") ?? NalvaArgs.GuidOf(args, "id");
-        if (id is null)
-            return Ok("No order id was supplied.", new JsonObject { ["found"] = false });
-        var order = await _db.Orders.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
+        var number = NalvaArgs.Str(args, "orderNumber");
+        var customerId = NalvaArgs.GuidOf(args, "customerId");
+        Order? order = null;
+        if (id is Guid orderId)
+            order = await _db.Orders.AsNoTracking().FirstOrDefaultAsync(x => x.Id == orderId, ct);
+        if (order is null && !string.IsNullOrWhiteSpace(number))
+            order = await _db.Orders.AsNoTracking().FirstOrDefaultAsync(x => x.OrderNumber == number, ct);
         if (order is null || order.TenantId != CompanyId)
             return Ok("That order was not found in this company.", new JsonObject { ["found"] = false });
+        if (customerId is Guid requiredCustomer && order.CustomerId != requiredCustomer)
+            return Ok("That order does not belong to the authorized customer.", new JsonObject { ["found"] = false, ["authorized"] = false });
         return Ok("Stored order.", new JsonObject
         {
             ["found"] = true,
+            ["authorized"] = true,
             ["id"] = order.Id.ToString(),
+            ["customerId"] = order.CustomerId.ToString(),
             ["number"] = order.OrderNumber,
             ["status"] = order.Status,
             ["total"] = order.GrandTotal,
-            ["paymentStatus"] = order.PaymentStatus
+            ["paymentStatus"] = order.PaymentStatus,
+            ["shippingAddress"] = order.ShippingAddress
         });
     }
 
@@ -618,9 +785,26 @@ public sealed class NalvaToolGateway : INalvaToolGateway
         var id = NalvaArgs.GuidOf(args, "customerId");
         if (id is null)
             return Ok("No customer id was supplied.", new JsonObject { ["found"] = false });
+        var customer = await _db.Customers.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (customer is null || customer.TenantId != CompanyId)
+            return Ok("That customer was not found in this company.", new JsonObject { ["found"] = false });
         var orders = await _db.Orders.AsNoTracking().Where(x => x.CustomerId == id).CountAsync(ct);
         var followUps = await _db.FollowUps.AsNoTracking().Where(x => x.CustomerId == id).CountAsync(ct);
-        return Ok("Stored customer history.", new JsonObject { ["customerId"] = id.ToString(), ["orders"] = orders, ["followUps"] = followUps });
+        var openTickets = await _db.SupportTickets.AsNoTracking().CountAsync(x =>
+            x.CustomerId == id &&
+            x.Status != SupportTicketStatuses.Resolved &&
+            x.Status != SupportTicketStatuses.Closed, ct);
+        var complaints = await _db.SupportTickets.AsNoTracking().CountAsync(x =>
+            x.CustomerId == id && x.Category == "Complaint", ct);
+        return Ok("Stored customer history.", new JsonObject
+        {
+            ["found"] = true,
+            ["customerId"] = id.ToString(),
+            ["orders"] = orders,
+            ["followUps"] = followUps,
+            ["openSupportTickets"] = openTickets,
+            ["complaintTickets"] = complaints
+        });
     }
 
     private async Task<NalvaToolOutcome> ProjectDetails(JsonElement args, bool requirementsOnly, CancellationToken ct)
@@ -799,18 +983,28 @@ public sealed class NalvaToolGateway : INalvaToolGateway
         return Ok("Stored supplier.", new JsonObject { ["found"] = true, ["id"] = supplier.Id.ToString(), ["name"] = supplier.Name, ["email"] = supplier.Email });
     }
 
-    private async Task<NalvaToolOutcome> SupplierPrices(JsonElement args, CancellationToken ct)
+    private async Task<NalvaToolOutcome> ResearchSuppliers(JsonElement args, CancellationToken ct)
     {
+        if (_procurement is null)
+            return Fail("Procurement agent service is not available.");
         var productId = NalvaArgs.GuidOf(args, "productId");
-        var items = _db.PurchaseItems.AsNoTracking().Where(x => !x.IsDeleted && x.TenantId == CompanyId);
-        if (productId is not null)
-            items = items.Where(x => x.ProductId == productId);
-        var rows = await items.OrderByDescending(x => x.UnitPrice).Take(10).Select(x => new { x.ProductId, x.UnitPrice, x.Quantity }).ToListAsync(ct);
-        return List("prices", rows.Select(x => new JsonObject
+        var quantity = NalvaArgs.Dec(args, "quantity") ?? 1m;
+        if (productId is null)
+            return Ok("A productId is required to compare suppliers.", new JsonObject { ["found"] = false });
+        var options = await _procurement.CompareSuppliersAsync(productId.Value, quantity, ct);
+        return List("suppliers", options.Select(x => new JsonObject
         {
-            ["productId"] = x.ProductId.ToString(),
+            ["supplierId"] = x.SupplierId?.ToString(),
+            ["name"] = x.SupplierName,
+            ["source"] = x.Source,
+            ["classification"] = x.Classification,
             ["unitPrice"] = x.UnitPrice,
-            ["quantity"] = x.Quantity
+            ["quantity"] = x.Quantity,
+            ["moq"] = x.MinimumOrderQuantity,
+            ["totalCost"] = x.TotalCost,
+            ["deliveryDays"] = x.EstimatedDeliveryDays,
+            ["paymentTerms"] = x.PaymentTerms,
+            ["notes"] = x.Notes
         }));
     }
 
@@ -819,66 +1013,214 @@ public sealed class NalvaToolGateway : INalvaToolGateway
         var query = _db.Purchases.AsNoTracking();
         if (pendingOnly)
             query = query.Where(x => x.Status == "Draft" || x.Status == "Pending");
-        var rows = await query.OrderByDescending(x => x.PurchaseDate).Take(20).Select(x => new { x.Id, x.Status, x.TotalAmount }).ToListAsync(ct);
+        var rows = await query.OrderByDescending(x => x.PurchaseDate).Take(20).Select(x => new { x.Id, x.Status, x.TotalAmount, x.ExpectedDeliveryDate }).ToListAsync(ct);
         return List("purchases", rows.Select(x => new JsonObject
         {
             ["id"] = x.Id.ToString(),
             ["status"] = x.Status,
-            ["total"] = x.TotalAmount
+            ["total"] = x.TotalAmount,
+            ["expectedDeliveryDate"] = x.ExpectedDeliveryDate?.ToString("O")
         }));
     }
 
-    private async Task<NalvaToolOutcome> Demand(CancellationToken ct)
+    private async Task<NalvaToolOutcome> ForecastDemand(JsonElement args, CancellationToken ct)
     {
-        var since = DateTime.UtcNow.AddDays(-90);
-        var orderIds = await _db.Orders.AsNoTracking().Where(x => x.OrderDate >= since).Select(x => x.Id).ToListAsync(ct);
-        if (orderIds.Count < 3)
-            return Ok("Not enough order history to estimate demand.", new JsonObject { ["estimate"] = false, ["orders"] = orderIds.Count });
-        var qty = await _db.OrderItems.AsNoTracking().Where(x => orderIds.Contains(x.OrderId) && !x.IsDeleted).SumAsync(x => (decimal?)x.Quantity, ct) ?? 0m;
-        return Ok("Labeled demand note from the last 90 days of order lines. No stock was moved.", new JsonObject { ["estimate"] = true, ["units"] = qty, ["stockMoved"] = false });
+        if (_procurement is null)
+            return Fail("Procurement agent service is not available.");
+        var productId = NalvaArgs.GuidOf(args, "productId");
+        var rows = await _procurement.AnalyzeDemandAsync(productId, ct);
+        return List("demand", rows.Take(25).Select(x => new JsonObject
+        {
+            ["productId"] = x.ProductId.ToString(),
+            ["name"] = x.ProductName,
+            ["sku"] = x.Sku,
+            ["averageDailyDemand"] = x.AverageDailyDemand,
+            ["averageMonthlyDemand"] = x.AverageMonthlyDemand,
+            ["daysOfCover"] = x.DaysOfCover,
+            ["estimatedStockoutDate"] = x.EstimatedStockoutDate?.ToString("O"),
+            ["suggestedReorderQuantity"] = x.SuggestedReorderQuantity,
+            ["confidence"] = x.Confidence,
+            ["forecastAvailable"] = x.ForecastAvailable,
+            ["assumptions"] = x.Assumptions
+        }));
     }
 
-    private async Task<NalvaToolOutcome> PurchaseDraft(JsonElement args, string status, CancellationToken ct)
+    private async Task<NalvaToolOutcome> DelayedDeliveries(CancellationToken ct)
     {
+        if (_procurement is null)
+            return Fail("Procurement agent service is not available.");
+        var rows = (await _procurement.GetDeliveriesAsync(ct)).Where(x => x.IsDelayed).ToList();
+        return List("deliveries", rows.Select(x => new JsonObject
+        {
+            ["purchaseOrderId"] = x.PurchaseOrderId.ToString(),
+            ["reference"] = x.ReferenceNumber,
+            ["supplier"] = x.SupplierName,
+            ["daysLate"] = x.DaysLate,
+            ["remaining"] = x.RemainingQuantity,
+            ["expectedDeliveryDate"] = x.ExpectedDeliveryDate?.ToString("O")
+        }));
+    }
+
+    private async Task<NalvaToolOutcome> SlowMoving(CancellationToken ct)
+    {
+        if (_procurement is null)
+            return Fail("Procurement agent service is not available.");
+        var rows = (await _procurement.GetInventoryRisksAsync(ct)).Where(x => x.RiskKind == "slow-moving").ToList();
+        return List("slowMoving", rows.Select(x => new JsonObject
+        {
+            ["productId"] = x.ProductId.ToString(),
+            ["name"] = x.ProductName,
+            ["sku"] = x.Sku,
+            ["currentStock"] = x.CurrentStock,
+            ["explanation"] = x.Explanation
+        }));
+    }
+
+    private async Task<NalvaToolOutcome> ProcurementBudget(CancellationToken ct)
+    {
+        if (_procurement is null)
+            return Fail("Procurement agent service is not available.");
+        var overview = await _procurement.GetOverviewAsync(ct);
+        return Ok("Estimated procurement need from recorded low/out-of-stock recommendations using product cost prices.", new JsonObject
+        {
+            ["estimatedProcurementNeed"] = overview.EstimatedProcurementNeed,
+            ["lowStockCount"] = overview.LowStockCount,
+            ["outOfStockCount"] = overview.OutOfStockCount,
+            ["classification"] = overview.DataClassification
+        });
+    }
+
+    private async Task<NalvaToolOutcome> PreparePurchase(JsonElement args, CancellationToken ct)
+    {
+        if (_procurement is null)
+            return Fail("Procurement agent service is not available.");
         var supplierId = NalvaArgs.GuidOf(args, "supplierId");
         var productId = NalvaArgs.GuidOf(args, "productId");
         var quantity = NalvaArgs.Dec(args, "quantity") ?? 0m;
+        var unitPrice = NalvaArgs.Dec(args, "unitPrice");
         if (supplierId is null || productId is null || quantity <= 0)
-            return Ok("Supplier, product, and quantity are required, so no purchase was created.", new JsonObject { ["created"] = false });
-        var supplier = await _db.Suppliers.AsNoTracking().FirstOrDefaultAsync(x => x.Id == supplierId, ct);
-        var product = await _db.Products.AsNoTracking().FirstOrDefaultAsync(x => x.Id == productId, ct);
-        if (supplier is null || product is null || supplier.TenantId != CompanyId || product.TenantId != CompanyId)
-            return Fail("The supplier or product was not found in this company.");
-        var purchase = new Purchase
+            return Ok("Supplier, product, and quantity are required, so no purchase was prepared.", new JsonObject { ["created"] = false });
+
+        if (unitPrice is null)
         {
-            SupplierId = supplier.Id,
-            PurchaseDate = DateTime.UtcNow,
-            TotalAmount = quantity * product.CostPrice,
-            Status = status,
-            ReferenceNumber = status == "Draft" ? "NALVA-DRAFT" : "NALVA-PENDING",
-            Notes = status == "Draft"
-                ? "Draft prepared by Nalva. Not a commitment and not sent to the supplier."
-                : "Pending purchase created after approval. Not transmitted to the supplier."
-        };
-        _db.Purchases.Add(purchase);
-        await _db.SaveChangesAsync(ct);
-        _db.PurchaseItems.Add(new PurchaseItem
+            var product = await _db.Products.AsNoTracking().FirstOrDefaultAsync(x => x.Id == productId, ct);
+            unitPrice = product?.CostPrice ?? 0m;
+        }
+
+        var prepared = await _procurement.PreparePurchaseOrderAsync(new PreparePurchaseOrderRequest
         {
-            PurchaseId = purchase.Id,
-            ProductId = product.Id,
+            SupplierId = supplierId.Value,
+            ProductId = productId.Value,
             Quantity = quantity,
-            UnitPrice = product.CostPrice,
-            Total = quantity * product.CostPrice,
-            TenantId = CompanyId
-        });
-        await _db.SaveChangesAsync(ct);
-        return Ok(status == "Draft" ? "Purchase draft created." : "Pending purchase created after approval.", new JsonObject
+            UnitPrice = unitPrice.Value,
+            ExpectedDeliveryDate = NalvaArgs.Date(args, "expectedDeliveryDate"),
+            PaymentTerms = NalvaArgs.Str(args, "paymentTerms"),
+            Reason = NalvaArgs.Str(args, "reason"),
+            IdempotencyKey = NalvaArgs.Str(args, "idempotencyKey") ?? $"nalva:{productId:N}:{supplierId:N}:{quantity}",
+            Source = "nalva"
+        }, ct);
+
+        return Ok(prepared.Summary, new JsonObject
         {
-            ["created"] = true,
-            ["purchaseId"] = purchase.Id.ToString(),
-            ["status"] = status,
+            ["created"] = prepared.Created,
+            ["duplicatePrevented"] = prepared.DuplicatePrevented,
+            ["recommendationId"] = prepared.RecommendationId.ToString(),
+            ["purchaseOrderId"] = prepared.PurchaseOrderId?.ToString(),
+            ["status"] = prepared.Status,
+            ["approvalFingerprint"] = prepared.ApprovalFingerprint,
+            ["requiresApproval"] = prepared.RequiresApproval,
             ["sentToSupplier"] = false
         });
+    }
+
+    private async Task<NalvaToolOutcome> SubmitPurchase(JsonElement args, bool approvalGranted, CancellationToken ct)
+    {
+        if (_procurement is null)
+            return Fail("Procurement agent service is not available.");
+        if (!approvalGranted)
+            return Fail("Approval is required before submitting a purchase.");
+
+        var recommendationId = NalvaArgs.GuidOf(args, "recommendationId");
+        if (recommendationId is null)
+        {
+            // Backward-compatible path: create pending PO from supplier/product/qty after approval.
+            var prepared = await PreparePurchase(args, ct);
+            if (prepared.Data["recommendationId"]?.GetValue<string>() is not string rec || !Guid.TryParse(rec, out var id))
+                return prepared;
+            recommendationId = id;
+        }
+
+        var result = await _procurement.SubmitPreparedPurchaseAsync(
+            recommendationId.Value,
+            NalvaArgs.Str(args, "idempotencyKey"),
+            approved: true,
+            approvalFingerprint: NalvaArgs.Str(args, "approvalFingerprint"),
+            ct);
+
+        return Ok(result.Summary, new JsonObject
+        {
+            ["created"] = result.Created,
+            ["duplicatePrevented"] = result.DuplicatePrevented,
+            ["purchaseOrderId"] = result.PurchaseOrderId?.ToString(),
+            ["status"] = result.Status,
+            ["sentToSupplier"] = false,
+            ["approvalFingerprint"] = result.ApprovalFingerprint
+        });
+    }
+
+    private async Task<NalvaToolOutcome> ReceiveVerified(JsonElement args, CancellationToken ct)
+    {
+        if (_procurement is null)
+            return Fail("Procurement agent service is not available.");
+        var purchaseId = NalvaArgs.GuidOf(args, "purchaseOrderId") ?? NalvaArgs.GuidOf(args, "id");
+        if (purchaseId is null)
+            return Fail("purchaseOrderId is required for verified receiving.");
+
+        var lines = new List<ReceiveVerificationLineRequest>();
+        if (args.TryGetProperty("lines", out var linesEl) && linesEl.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var line in linesEl.EnumerateArray())
+            {
+                var itemId = NalvaArgs.GuidOf(line, "purchaseItemId");
+                var qty = NalvaArgs.Dec(line, "receivedQuantity") ?? 0m;
+                if (itemId is null || qty <= 0)
+                    continue;
+                lines.Add(new ReceiveVerificationLineRequest
+                {
+                    PurchaseItemId = itemId.Value,
+                    ReceivedQuantity = qty,
+                    DamagedQuantity = NalvaArgs.Dec(line, "damagedQuantity") ?? 0m,
+                    DiscrepancyNotes = NalvaArgs.Str(line, "discrepancyNotes")
+                });
+            }
+        }
+
+        if (lines.Count == 0)
+            return Fail("Verified receiving requires explicit line quantities. Supplier delivery claims alone cannot increase stock.");
+
+        var result = await _procurement.ReceiveVerifiedAsync(new ReceiveVerificationRequest
+        {
+            PurchaseOrderId = purchaseId.Value,
+            Lines = lines,
+            Notes = NalvaArgs.Str(args, "notes")
+        }, ct);
+
+        return Ok(result.Summary, new JsonObject
+        {
+            ["purchaseOrderId"] = result.PurchaseOrderId.ToString(),
+            ["status"] = result.Status,
+            ["stockIncreasedBy"] = result.StockIncreasedBy,
+            ["discrepancies"] = new JsonArray(result.Discrepancies.Select(x => (JsonNode)x).ToArray())
+        });
+    }
+
+    private async Task<NalvaToolOutcome> ProcurementJson<T>(Func<Task<T>> load, string key)
+    {
+        if (_procurement is null)
+            return Fail("Procurement agent service is not available.");
+        var value = await load();
+        var node = JsonSerializer.SerializeToNode(value) ?? new JsonObject();
+        return Ok($"Recorded {key} from the procurement agent.", new JsonObject { [key] = node });
     }
 
     private async Task<NalvaToolOutcome> Tasks(CancellationToken ct)
@@ -1001,6 +1343,22 @@ public sealed class NalvaToolGateway : INalvaToolGateway
 
     private async Task<NalvaToolOutcome> CampaignAnalytics(CancellationToken ct)
     {
+        if (_marketing is not null)
+        {
+            var overview = await _marketing.GetOverviewAsync(ct);
+            var snaps = await _db.MarketingAnalyticsSnapshots.AsNoTracking().CountAsync(ct);
+            var withMetrics = await _db.MarketingAnalyticsSnapshots.AsNoTracking().CountAsync(x => x.MetricsJson != null, ct);
+            return Ok("Marketing campaign counts and verified analytics snapshots only.", new JsonObject
+            {
+                ["campaigns"] = overview.Campaigns,
+                ["activeCampaigns"] = overview.ActiveCampaigns,
+                ["contentPublished"] = overview.ContentPublished,
+                ["analyticsSnapshots"] = snaps,
+                ["snapshotsWithMetrics"] = withMetrics,
+                ["externalAnalytics"] = withMetrics > 0
+            });
+        }
+
         var campaigns = await _db.NalvaWorkItems.CountAsync(x => x.Kind == "Campaign", ct);
         var leads = await _db.Leads.CountAsync(x => x.Source == "Nalva", ct);
         return Ok("Draft campaigns and Nalva-sourced leads. Not an advertising-platform report.", new JsonObject { ["campaignDrafts"] = campaigns, ["nalvaLeads"] = leads, ["externalAnalytics"] = false });
@@ -1033,10 +1391,241 @@ public sealed class NalvaToolGateway : INalvaToolGateway
 
     private async Task<NalvaToolOutcome> SupportTicket(string agentKey, Guid executionId, JsonElement args, CancellationToken ct)
     {
+        if (_support is not null)
+        {
+            var result = await _support.ReceiveInboundAsync(new SupportInboundMessageRequest
+            {
+                Channel = NalvaArgs.Str(args, "channel") ?? SupportChannels.Sandbox,
+                Subject = NalvaArgs.Str(args, "title") ?? NalvaArgs.Str(args, "subject") ?? "Support ticket",
+                Body = NalvaArgs.Str(args, "body") ?? NalvaArgs.Str(args, "description") ?? "Opened from the workforce.",
+                CustomerId = NalvaArgs.GuidOf(args, "customerId"),
+                CustomerEmail = NalvaArgs.Str(args, "customerEmail"),
+                OrderId = NalvaArgs.GuidOf(args, "orderId"),
+                OrderNumber = NalvaArgs.Str(args, "orderNumber"),
+                IdempotencyKey = NalvaArgs.Str(args, "idempotencyKey") ?? $"tool-ticket:{executionId:N}",
+                ProcessWithAgent = NalvaArgs.Bool(args, "process") != false
+            }, ct);
+
+            var ticket = await _support.GetTicketAsync(result.TicketId, ct);
+            if (ticket is not null)
+            {
+                var row = await _db.SupportTickets.FirstOrDefaultAsync(x => x.Id == ticket.Id, ct);
+                if (row is not null)
+                {
+                    row.ExecutionId = executionId == Guid.Empty ? row.ExecutionId : executionId;
+                    row.AssignedAgentKey = agentKey;
+                    await _db.SaveChangesAsync(ct);
+                }
+            }
+
+            return Ok(result.Summary, new JsonObject
+            {
+                ["ticketId"] = result.TicketId.ToString(),
+                ["ticketNumber"] = result.TicketNumber,
+                ["status"] = result.Status,
+                ["responseSent"] = result.ResponseSent,
+                ["escalated"] = result.Escalated,
+                ["deliveryStatus"] = result.ResponseDeliveryStatus
+            });
+        }
+
         var draft = await Draft(agentKey, executionId, "SupportTicket", NalvaArgs.Str(args, "title") ?? "Support ticket", NalvaArgs.Str(args, "body") ?? "Opened from the workforce.", ct);
         if (_events is not null && draft.Success)
             await _events.EnqueueAsync(NalvaEventNames.SupportTicketCreated, draft.Data.ToJsonString(), "SupportTicketCreated:" + executionId.ToString("N"), ct);
         return draft;
+    }
+
+    private async Task<NalvaToolOutcome> UpdateSupportTicketTool(JsonElement args, CancellationToken ct)
+    {
+        if (_support is null)
+            return await UpdateWorkItem(args, "Open", ct);
+
+        var id = NalvaArgs.GuidOf(args, "ticketId") ?? NalvaArgs.GuidOf(args, "id");
+        if (id is null)
+            return Ok("No ticket id was supplied.", new JsonObject { ["updated"] = false });
+
+        var updated = await _support.UpdateTicketAsync(id.Value, new SupportTicketUpdateRequest
+        {
+            Status = NalvaArgs.Str(args, "status"),
+            Priority = NalvaArgs.Str(args, "priority"),
+            Category = NalvaArgs.Str(args, "category"),
+            AssignedUserId = NalvaArgs.Str(args, "assignedUserId"),
+            AiSummary = NalvaArgs.Str(args, "summary"),
+            RecommendedAction = NalvaArgs.Str(args, "recommendedAction"),
+            RelatedOrderId = NalvaArgs.GuidOf(args, "orderId")
+        }, ct);
+
+        return Ok("Support ticket updated.", new JsonObject
+        {
+            ["updated"] = true,
+            ["ticketId"] = updated.Id.ToString(),
+            ["status"] = updated.Status,
+            ["priority"] = updated.Priority,
+            ["category"] = updated.Category
+        });
+    }
+
+    private async Task<NalvaToolOutcome> CreateSupportResponseDraft(string agentKey, Guid executionId, JsonElement args, CancellationToken ct)
+    {
+        var body = NalvaArgs.Str(args, "body") ?? "Reply draft. It was not sent.";
+        var ticketId = NalvaArgs.GuidOf(args, "ticketId") ?? NalvaArgs.GuidOf(args, "id");
+        if (_support is not null && ticketId is Guid id)
+        {
+            var message = await _support.AddReplyAsync(id, new SupportReplyRequest
+            {
+                Body = body,
+                IsInternalNote = true,
+                SendToCustomer = false
+            }, ct);
+            return Ok("Stored an internal response draft. It was not sent.", new JsonObject
+            {
+                ["ticketId"] = id.ToString(),
+                ["messageId"] = message.Id.ToString(),
+                ["sent"] = false,
+                ["deliveryStatus"] = message.DeliveryStatus
+            });
+        }
+
+        return await Draft(agentKey, executionId, "Response", "Customer reply draft", body, ct);
+    }
+
+    private async Task<NalvaToolOutcome> SendSupportReplyTool(JsonElement args, CancellationToken ct)
+    {
+        if (_support is null)
+            return Fail("Support agent service is unavailable.");
+
+        var id = NalvaArgs.GuidOf(args, "ticketId") ?? NalvaArgs.GuidOf(args, "id");
+        var body = NalvaArgs.Str(args, "body");
+        if (id is null || string.IsNullOrWhiteSpace(body))
+            return Fail("ticketId and body are required.");
+
+        var message = await _support.AddReplyAsync(id.Value, new SupportReplyRequest
+        {
+            Body = body,
+            SendToCustomer = true,
+            Channel = NalvaArgs.Str(args, "channel")
+        }, ct);
+
+        return Ok(
+            message.DeliveryStatus is SupportDeliveryStatuses.Sent or SupportDeliveryStatuses.Delivered or SupportDeliveryStatuses.Simulated
+                ? "Support reply was handed to the channel adapter."
+                : "Support reply was not delivered.",
+            new JsonObject
+            {
+                ["messageId"] = message.Id.ToString(),
+                ["deliveryStatus"] = message.DeliveryStatus,
+                ["sent"] = message.DeliveryStatus is SupportDeliveryStatuses.Sent or SupportDeliveryStatuses.Delivered or SupportDeliveryStatuses.Simulated,
+                ["error"] = message.Error
+            });
+    }
+
+    private async Task<NalvaToolOutcome> EscalateSupportTicketTool(JsonElement args, CancellationToken ct)
+    {
+        if (_support is null)
+            return await UpdateWorkItem(args, "Escalated", ct);
+
+        var id = NalvaArgs.GuidOf(args, "ticketId") ?? NalvaArgs.GuidOf(args, "id");
+        if (id is null)
+            return Ok("No ticket id was supplied.", new JsonObject { ["escalated"] = false });
+
+        var ticket = await _support.EscalateAsync(id.Value, new SupportEscalateRequest
+        {
+            Reason = NalvaArgs.Str(args, "reason") ?? "Escalated by support agent.",
+            Summary = NalvaArgs.Str(args, "summary"),
+            RecommendedAction = NalvaArgs.Str(args, "recommendedAction"),
+            Priority = NalvaArgs.Str(args, "priority") ?? SupportPriorities.High
+        }, ct);
+
+        return Ok("Support ticket escalated and owner notified when possible.", new JsonObject
+        {
+            ["escalated"] = true,
+            ["ticketId"] = ticket.Id.ToString(),
+            ["status"] = ticket.Status,
+            ["reason"] = ticket.EscalationReason
+        });
+    }
+
+    private async Task<NalvaToolOutcome> ResolveSupportTicketTool(JsonElement args, CancellationToken ct)
+    {
+        if (_support is null)
+            return Fail("Support agent service is unavailable.");
+
+        var id = NalvaArgs.GuidOf(args, "ticketId") ?? NalvaArgs.GuidOf(args, "id");
+        if (id is null)
+            return Fail("ticketId is required.");
+
+        var ticket = await _support.ResolveAsync(id.Value, new SupportResolveRequest
+        {
+            Resolution = NalvaArgs.Str(args, "resolution") ?? "Resolved by support agent.",
+            Close = NalvaArgs.Bool(args, "close") == true,
+            ScheduleFollowUp = NalvaArgs.Bool(args, "scheduleFollowUp") != false
+        }, ct);
+
+        return Ok("Support ticket resolved.", new JsonObject
+        {
+            ["ticketId"] = ticket.Id.ToString(),
+            ["status"] = ticket.Status,
+            ["resolution"] = ticket.Resolution
+        });
+    }
+
+    private async Task<NalvaToolOutcome> ScheduleSupportFollowUpTool(JsonElement args, CancellationToken ct)
+    {
+        if (_support is null)
+            return Fail("Support agent service is unavailable.");
+
+        var id = NalvaArgs.GuidOf(args, "ticketId") ?? NalvaArgs.GuidOf(args, "id");
+        if (id is null)
+            return Fail("ticketId is required.");
+
+        var hours = NalvaArgs.Int(args, "hours") ?? 24;
+        var followUp = await _support.ScheduleFollowUpAsync(id.Value, new SupportFollowUpRequest
+        {
+            Kind = NalvaArgs.Str(args, "kind") ?? "CustomerCheckIn",
+            MessageTemplate = NalvaArgs.Str(args, "message") ?? "We wanted to check whether your issue was resolved.",
+            DueAt = DateTime.UtcNow.AddHours(Math.Clamp(hours, 1, 168)),
+            Channel = NalvaArgs.Str(args, "channel"),
+            DedupKey = NalvaArgs.Str(args, "dedupKey"),
+            RespectBusinessHours = NalvaArgs.Bool(args, "respectBusinessHours") != false
+        }, ct);
+
+        return Ok("Support follow-up scheduled.", new JsonObject
+        {
+            ["followUpId"] = followUp.Id.ToString(),
+            ["dueAt"] = followUp.DueAt,
+            ["status"] = followUp.Status
+        });
+    }
+
+    private async Task<NalvaToolOutcome> ReceiveSupportMessageTool(JsonElement args, CancellationToken ct)
+    {
+        if (_support is null)
+            return Fail("Support agent service is unavailable.");
+
+        var result = await _support.ReceiveInboundAsync(new SupportInboundMessageRequest
+        {
+            Channel = NalvaArgs.Str(args, "channel") ?? SupportChannels.Sandbox,
+            Body = NalvaArgs.Str(args, "body") ?? "",
+            Subject = NalvaArgs.Str(args, "subject"),
+            CustomerId = NalvaArgs.GuidOf(args, "customerId"),
+            CustomerEmail = NalvaArgs.Str(args, "customerEmail"),
+            OrderId = NalvaArgs.GuidOf(args, "orderId"),
+            OrderNumber = NalvaArgs.Str(args, "orderNumber"),
+            ExternalThreadId = NalvaArgs.Str(args, "threadId"),
+            ExternalMessageId = NalvaArgs.Str(args, "messageId"),
+            IdempotencyKey = NalvaArgs.Str(args, "idempotencyKey"),
+            ProcessWithAgent = true
+        }, ct);
+
+        return Ok(result.Summary, new JsonObject
+        {
+            ["ticketId"] = result.TicketId.ToString(),
+            ["ticketNumber"] = result.TicketNumber,
+            ["status"] = result.Status,
+            ["responseSent"] = result.ResponseSent,
+            ["escalated"] = result.Escalated,
+            ["deliveryStatus"] = result.ResponseDeliveryStatus
+        });
     }
 
     private async Task<NalvaToolOutcome?> TryLiveIntegrationAsync(string tool, string argsJson, CancellationToken ct)
@@ -1047,12 +1636,14 @@ public sealed class NalvaToolGateway : INalvaToolGateway
         {
             "SendExternalEmail" => "gmail",
             "IssueRefund" => "stripe",
+            "PublishSocialPost" => "meta",
             _ => ""
         };
         var operation = tool switch
         {
             "SendExternalEmail" => "send",
             "IssueRefund" => "refund",
+            "PublishSocialPost" => "publish",
             _ => ""
         };
         if (provider.Length == 0)
@@ -1064,6 +1655,24 @@ public sealed class NalvaToolGateway : INalvaToolGateway
             {
                 var body = node["body"] is JsonValue value && value.TryGetValue<string>(out var text) ? text : "";
                 node["raw"] = System.Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("Subject: Company message\r\n\r\n" + body));
+                argsJson = node.ToJsonString();
+            }
+        }
+        if (tool == "PublishSocialPost")
+        {
+            var node = JsonNode.Parse(string.IsNullOrWhiteSpace(argsJson) ? "{}" : argsJson) as JsonObject ?? new JsonObject();
+            if (node["message"] is null)
+            {
+                var body = node["body"] is JsonValue value && value.TryGetValue<string>(out var text)
+                    ? text
+                    : node["caption"] is JsonValue caption && caption.TryGetValue<string>(out var captionText)
+                        ? captionText
+                        : "";
+                if (string.IsNullOrWhiteSpace(body))
+                    return Ok(
+                        "Approved. The post has no message body, so nothing was published.",
+                        new JsonObject { ["performed"] = false, ["integration"] = "prepared", ["action"] = "PublishSocialContent" });
+                node["message"] = body;
                 argsJson = node.ToJsonString();
             }
         }
@@ -1125,6 +1734,320 @@ public sealed class NalvaToolGateway : INalvaToolGateway
             ["hiringDecision"] = false,
             ["protectedTraitsIgnored"] = true
         });
+    }
+
+    private async Task<NalvaToolOutcome> MarketingStrategy(string agentKey, JsonElement args, CancellationToken ct)
+    {
+        if (_marketing is null)
+            return await Draft(agentKey, Guid.Empty, "Strategy", "Marketing strategy", StrategyBody(), ct);
+        var campaign = await _marketing.GenerateStrategyAsync(new GenerateStrategyRequest
+        {
+            Title = NalvaArgs.Str(args, "title"),
+            Objective = NalvaArgs.Str(args, "objective"),
+            TargetAudience = NalvaArgs.Str(args, "targetAudience"),
+            AgentKey = agentKey,
+            CampaignId = NalvaArgs.GuidOf(args, "campaignId")
+        }, ct);
+        return Ok("Marketing strategy stored on campaign.", new JsonObject
+        {
+            ["campaignId"] = campaign.Id.ToString(),
+            ["title"] = campaign.Title,
+            ["strategyApproved"] = campaign.StrategyApproved,
+            ["strategyBody"] = campaign.StrategyBody
+        });
+    }
+
+    private async Task<NalvaToolOutcome> MarketingContentDraft(string agentKey, Guid executionId, JsonElement args, CancellationToken ct)
+    {
+        if (_marketing is null)
+            return await Draft(agentKey, executionId, "Content", NalvaArgs.Str(args, "title") ?? "Content draft", ContentBody(agentKey, args), ct);
+        var item = await _marketing.GenerateContentItemAsync(new GenerateContentItemRequest
+        {
+            Title = NalvaArgs.Str(args, "title"),
+            Platform = NalvaArgs.Str(args, "platform") ?? "LinkedIn",
+            Brief = NalvaArgs.Str(args, "brief") ?? NalvaArgs.Str(args, "body"),
+            CampaignId = NalvaArgs.GuidOf(args, "campaignId"),
+            AgentKey = agentKey,
+            ExecutionId = executionId == Guid.Empty ? null : executionId
+        }, ct);
+        return Ok("Marketing content draft stored.", new JsonObject
+        {
+            ["contentItemId"] = item.Id.ToString(),
+            ["platform"] = item.Platform,
+            ["approvalStatus"] = item.ApprovalStatus,
+            ["published"] = false
+        });
+    }
+
+    private async Task<NalvaToolOutcome> MarketingCalendar(string agentKey, JsonElement args, CancellationToken ct)
+    {
+        if (_marketing is null)
+            return await Draft(agentKey, Guid.Empty, "Calendar", "Content calendar", "Internal calendar draft. Nothing was scheduled externally.", ct);
+        var days = (int)(NalvaArgs.Dec(args, "days") ?? 7);
+        var items = await _marketing.GenerateContentCalendarAsync(new GenerateContentCalendarRequest
+        {
+            Days = days,
+            CampaignId = NalvaArgs.GuidOf(args, "campaignId"),
+            AgentKey = agentKey
+        }, ct);
+        return Ok($"Created {items.Count} calendar content items. Nothing was published externally.", new JsonObject
+        {
+            ["count"] = items.Count,
+            ["campaignId"] = items.FirstOrDefault()?.CampaignId?.ToString(),
+            ["published"] = false
+        });
+    }
+
+    private async Task<NalvaToolOutcome> MarketingCampaignDraft(string agentKey, JsonElement args, CancellationToken ct)
+    {
+        if (_marketing is null)
+            return await Draft(agentKey, Guid.Empty, "Campaign", NalvaArgs.Str(args, "title") ?? "Campaign draft", "Campaign draft. Nothing was published.", ct);
+        var campaign = await _marketing.CreateCampaignAsync(new CreateCampaignRequest
+        {
+            Title = NalvaArgs.Str(args, "title") ?? "Campaign draft",
+            Objective = NalvaArgs.Str(args, "objective"),
+            TargetAudience = NalvaArgs.Str(args, "targetAudience"),
+            StrategyBody = NalvaArgs.Str(args, "brief"),
+            AgentKey = agentKey
+        }, ct);
+        return Ok("Campaign draft stored. Nothing was published.", new JsonObject
+        {
+            ["campaignId"] = campaign.Id.ToString(),
+            ["status"] = campaign.Status,
+            ["published"] = false
+        });
+    }
+
+    private async Task<NalvaToolOutcome> UpsertBrandProfile(JsonElement args, CancellationToken ct)
+    {
+        if (_marketing is null)
+            return await Draft("marketing", Guid.Empty, "BrandProfile", "Brand profile note", "Marketing service unavailable; brand fields were not persisted.", ct);
+        var brand = await _marketing.UpsertBrandProfileAsync(new UpsertBrandProfileRequest
+        {
+            BusinessName = NalvaArgs.Str(args, "businessName"),
+            Industry = NalvaArgs.Str(args, "industry"),
+            TargetAudience = NalvaArgs.Str(args, "targetAudience"),
+            BrandDescription = NalvaArgs.Str(args, "brandDescription"),
+            BrandVoice = NalvaArgs.Str(args, "brandVoice"),
+            BrandColorsJson = NalvaArgs.Str(args, "brandColorsJson"),
+            Website = NalvaArgs.Str(args, "website"),
+            CompetitorsJson = NalvaArgs.Str(args, "competitorsJson"),
+            SourceNotes = NalvaArgs.Str(args, "sourceNotes")
+        }, ct);
+        return Ok("Brand profile updated.", new JsonObject { ["id"] = brand.Id.ToString(), ["businessName"] = brand.BusinessName });
+    }
+
+    private async Task<NalvaToolOutcome> MarketingGraphic(JsonElement args, CancellationToken ct)
+    {
+        if (_marketing is null)
+            return await Draft("marketing", Guid.Empty, "Graphic", "Visual brief", "BriefOnly visual brief. OpenAI image generation and marketing assets were not available in this context.", ct);
+        var asset = await _marketing.GenerateGraphicAsync(new GenerateGraphicRequest
+        {
+            ContentItemId = NalvaArgs.GuidOf(args, "contentItemId"),
+            CampaignId = NalvaArgs.GuidOf(args, "campaignId"),
+            Platform = NalvaArgs.Str(args, "platform"),
+            Prompt = NalvaArgs.Str(args, "prompt"),
+            Brief = NalvaArgs.Str(args, "brief")
+        }, ct);
+        return Ok(asset.Source == "BriefOnly"
+            ? "Stored a visual brief only. OpenAI image generation was not available."
+            : "Generated a graphic asset.", new JsonObject
+        {
+            ["assetId"] = asset.Id.ToString(),
+            ["source"] = asset.Source,
+            ["kind"] = asset.Kind,
+            ["brandCompliant"] = asset.BrandCompliant
+        });
+    }
+
+    private async Task<NalvaToolOutcome> ScheduleMarketingPost(JsonElement args, CancellationToken ct)
+    {
+        if (_marketing is null)
+            return Ok("Marketing service unavailable. Nothing was scheduled.", new JsonObject { ["scheduled"] = false });
+        var id = NalvaArgs.GuidOf(args, "contentItemId") ?? NalvaArgs.GuidOf(args, "id");
+        if (id is null)
+            return Fail("contentItemId is required.");
+        var job = await _marketing.ScheduleApprovedContentAsync(id.Value, new ScheduleContentRequest
+        {
+            RunAtUtc = null,
+            ConnectedAccountProvider = NalvaArgs.Str(args, "provider") ?? "sandbox",
+            ConnectedAccountExternalId = NalvaArgs.Str(args, "accountExternalId") ?? "sandbox",
+            IdempotencyKey = NalvaArgs.Str(args, "idempotencyKey")
+        }, ct);
+        return Ok("Publish job scheduled.", new JsonObject
+        {
+            ["jobId"] = job.Id.ToString(),
+            ["status"] = job.Status,
+            ["provider"] = job.Provider,
+            ["idempotencyKey"] = job.IdempotencyKey
+        });
+    }
+
+    private async Task<NalvaToolOutcome> SyncMarketingAnalytics(JsonElement args, CancellationToken ct)
+    {
+        if (_marketing is null)
+            return Ok("Marketing service unavailable. No analytics were synced.", new JsonObject { ["synced"] = false, ["externalAnalytics"] = false });
+        var result = await _marketing.SyncAnalyticsAsync(new SyncAnalyticsRequest
+        {
+            ContentItemId = NalvaArgs.GuidOf(args, "contentItemId"),
+            CampaignId = NalvaArgs.GuidOf(args, "campaignId"),
+            AllowSandbox = true
+        }, ct);
+        return Ok(result.Message, new JsonObject
+        {
+            ["snapshotsCreated"] = result.SnapshotsCreated,
+            ["dataSource"] = result.DataSource
+        });
+    }
+
+    private async Task<NalvaToolOutcome> MarketingPerformanceReport(JsonElement args, CancellationToken ct)
+    {
+        if (_marketing is null)
+            return await CampaignAnalytics(ct);
+        var report = await _marketing.GeneratePerformanceReportAsync(NalvaArgs.GuidOf(args, "campaignId"), ct);
+        return Ok(report.Body, new JsonObject
+        {
+            ["title"] = report.Title,
+            ["fabricated"] = report.Fabricated,
+            ["verifiedMetricsJson"] = report.VerifiedMetricsJson,
+            ["unavailableMetricsJson"] = report.UnavailableMetricsJson,
+            ["dataSourcesJson"] = report.DataSourcesJson
+        });
+    }
+
+    private async Task<NalvaToolOutcome> ShareMarketingInsights(string agentKey, JsonElement args, CancellationToken ct)
+    {
+        if (_marketing is null)
+            return await Draft(agentKey, Guid.Empty, "MarketingInsight", "Marketing insights for sales", "Structured insight placeholder. Marketing service was unavailable.", ct);
+        await _marketing.ShareInsightsWithSalesAsync(NalvaArgs.GuidOf(args, "campaignId"), agentKey, ct);
+        return Ok("Stored a MarketingInsight work item for sales. This is not a freeform chat message.", new JsonObject
+        {
+            ["kind"] = "MarketingInsight",
+            ["shared"] = true
+        });
+    }
+
+    private async Task<NalvaToolOutcome> AssignMarketingObjective(string agentKey, Guid executionId, JsonElement args, CancellationToken ct)
+    {
+        var title = NalvaArgs.Str(args, "title") ?? NalvaArgs.Str(args, "objective") ?? "Marketing objective";
+        var objective = NalvaArgs.Str(args, "objective") ?? NalvaArgs.Str(args, "campaignObjective") ?? "BrandAwareness";
+        var audience = NalvaArgs.Str(args, "targetAudience");
+        var brief = NalvaArgs.Str(args, "brief") ?? NalvaArgs.Str(args, "body");
+
+        if (_marketing is null)
+        {
+            return await Draft(agentKey, executionId, "MarketingObjective", title,
+                $"Marketing objective draft: {objective}. Marketing service unavailable; campaign was not persisted.", ct);
+        }
+
+        var campaign = await _marketing.CreateCampaignAsync(new CreateCampaignRequest
+        {
+            Title = title.Trim(),
+            Objective = objective,
+            TargetAudience = audience,
+            StrategyBody = brief,
+            AgentKey = "marketing"
+        }, ct);
+
+        var work = new NalvaWorkItem
+        {
+            AgentKey = agentKey,
+            Kind = "MarketingObjective",
+            Title = NalvaGuard.Clip(title, 200),
+            Body = NalvaGuard.Clip(
+                $"Assigned marketing objective '{objective}' as campaign {campaign.Id}. {brief}".Trim(),
+                4000),
+            Status = "Open",
+            RelatedEntityType = "MarketingCampaign",
+            RelatedEntityId = campaign.Id,
+            ExecutionId = executionId == Guid.Empty ? null : executionId
+        };
+        _db.NalvaWorkItems.Add(work);
+
+        Guid? queuedTaskId = null;
+        var marketingAgent = await _db.NalvaCompanyAgents.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.AgentKey == "marketing" && x.Status == NalvaStatuses.Active, ct);
+        if (marketingAgent is not null)
+        {
+            var task = new NalvaTask
+            {
+                AgentKey = "marketing",
+                Objective = $"Execute marketing objective: {title}",
+                Status = NalvaStatuses.Queued,
+                RunAfter = DateTime.UtcNow,
+                InitiatorUserId = null,
+                Depth = 0,
+                DelegationChain = agentKey,
+                ToolPlanJson = JsonSerializer.Serialize(new[]
+                {
+                    "GetMarketingBrandProfile", "GenerateMarketingStrategy", "CreateContentCalendar", "CreateContentDraft"
+                }),
+                ArgumentsJson = new JsonObject
+                {
+                    ["campaignId"] = campaign.Id.ToString(),
+                    ["title"] = title,
+                    ["objective"] = objective
+                }.ToJsonString()
+            };
+            _db.NalvaTasks.Add(task);
+            queuedTaskId = task.Id;
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return Ok("Marketing objective assigned to the Marketing Agent.", new JsonObject
+        {
+            ["assigned"] = true,
+            ["campaignId"] = campaign.Id.ToString(),
+            ["workItemId"] = work.Id.ToString(),
+            ["queuedTaskId"] = queuedTaskId?.ToString(),
+            ["objective"] = objective
+        });
+    }
+
+    private async Task<NalvaToolOutcome?> MarketingPublishAfterApproval(JsonElement args, CancellationToken ct)
+    {
+        if (_marketing is null)
+            return null;
+        var contentId = NalvaArgs.GuidOf(args, "contentItemId") ?? NalvaArgs.GuidOf(args, "id");
+        if (contentId is null)
+            return null;
+        try
+        {
+            var content = await _marketing.GetContentAsync(contentId.Value, ct);
+            if (content.ApprovalStatus is not ("Approved" or "Scheduled"))
+            {
+                return Ok(
+                    "Content must be approved via the marketing approval flow before publish scheduling. Nothing was published.",
+                    new JsonObject
+                    {
+                        ["performed"] = false,
+                        ["contentItemId"] = content.Id.ToString(),
+                        ["approvalStatus"] = content.ApprovalStatus,
+                        ["requiresMarketingApproval"] = true
+                    });
+            }
+
+            var job = await _marketing.ScheduleApprovedContentAsync(contentId.Value, new ScheduleContentRequest
+            {
+                RunAtUtc = DateTime.UtcNow,
+                ConnectedAccountProvider = NalvaArgs.Str(args, "provider") ?? content.ConnectedAccountProvider ?? "sandbox",
+                ConnectedAccountExternalId = NalvaArgs.Str(args, "accountExternalId") ?? content.ConnectedAccountExternalId ?? "sandbox",
+                IdempotencyKey = NalvaArgs.Str(args, "idempotencyKey")
+            }, ct);
+            await _marketing.ProcessDuePublishJobsAsync(ct);
+            return Ok("Approved publish path created a marketing publish job.", new JsonObject
+            {
+                ["performed"] = job.Status is "Succeeded" or "Pending" or "Running",
+                ["jobId"] = job.Id.ToString(),
+                ["status"] = job.Status,
+                ["provider"] = job.Provider,
+                ["externalPostId"] = job.ExternalPostId
+            });
+        }
+        catch (AppException ex)
+        {
+            return Ok(ex.Message, new JsonObject { ["performed"] = false, ["error"] = ex.Message });
+        }
     }
 
     private static string StrategyBody() =>
@@ -1217,6 +2140,26 @@ internal static class NalvaArgs
         if (value.ValueKind == JsonValueKind.True) return true;
         if (value.ValueKind == JsonValueKind.False) return false;
         return value.ValueKind == JsonValueKind.String && bool.TryParse(value.GetString(), out var parsed) ? parsed : null;
+    }
+
+    public static int? Int(JsonElement args, string name)
+    {
+        if (args.ValueKind != JsonValueKind.Object || !args.TryGetProperty(name, out var value))
+            return null;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number))
+            return number;
+        return value.ValueKind == JsonValueKind.String && int.TryParse(value.GetString(), out var parsed) ? parsed : null;
+    }
+
+    public static DateTime? Date(JsonElement args, string name)
+    {
+        var text = Str(args, name);
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+        return DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.RoundtripKind, out var parsed)
+            ? DateTime.SpecifyKind(parsed.ToUniversalTime(), DateTimeKind.Utc)
+            : null;
     }
 
     public static IReadOnlyList<string> Strings(JsonElement args, string name)

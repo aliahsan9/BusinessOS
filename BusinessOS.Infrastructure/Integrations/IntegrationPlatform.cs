@@ -274,6 +274,52 @@ public sealed class IntegrationPlatform : IIntegrationPlatform
         }
     }
 
+    public async Task<IntegrationConnectionDto> SetWebhookSecretAsync(Guid connectionId, IntegrationWebhookSecretRequest request, CancellationToken cancellationToken = default)
+    {
+        Require(PermissionCodesManage());
+        if (string.IsNullOrWhiteSpace(request.Secret) || request.Secret.Length > 500)
+            throw new BadRequestException("A webhook secret between 1 and 500 characters is required.");
+        var connection = await _db.CompanyIntegrationConnections.FirstOrDefaultAsync(x => x.Id == connectionId, cancellationToken)
+            ?? throw new NotFoundException("That connection was not found.");
+        if (!IntegrationProviderCatalog.TryGet(connection.ProviderKey, out var provider) || provider is null || !provider.SupportsWebhooks)
+            throw new BadRequestException("That provider does not accept webhooks.");
+        connection.WebhookSecretProtected = _protector.Protect(request.Secret.Trim());
+        connection.LastError = null;
+        await _db.SaveChangesAsync(cancellationToken);
+        await LogAsync(connection.Id, connection.ProviderKey, "webhook.secret", true, 0, null, cancellationToken);
+        return Map(connection);
+    }
+
+    public async Task<IntegrationConnectionDto> UpdateConnectionMetadataAsync(Guid connectionId, IntegrationConnectionMetadataRequest request, CancellationToken cancellationToken = default)
+    {
+        Require(PermissionCodesManage());
+        var connection = await _db.CompanyIntegrationConnections.FirstOrDefaultAsync(x => x.Id == connectionId, cancellationToken)
+            ?? throw new NotFoundException("That connection was not found.");
+        if (string.IsNullOrWhiteSpace(request.MetadataJson))
+        {
+            connection.MetadataJson = null;
+        }
+        else
+        {
+            if (NalvaGuard.RejectsArguments(request.MetadataJson, out var rejected))
+                throw new BadRequestException(rejected);
+            try
+            {
+                _ = JsonNode.Parse(request.MetadataJson);
+            }
+            catch (JsonException)
+            {
+                throw new BadRequestException("Metadata must be valid JSON.");
+            }
+
+            connection.MetadataJson = NalvaGuard.Clip(request.MetadataJson, 4000);
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        await LogAsync(connection.Id, connection.ProviderKey, "metadata.update", true, 0, null, cancellationToken);
+        return Map(connection);
+    }
+
     public async Task<(int StatusCode, string Message)> ReceiveWebhookAsync(string providerKey, Guid connectionId, string body, string? signature, string? eventId, CancellationToken cancellationToken)
     {
         var connection = await _db.CompanyIntegrationConnections.IgnoreQueryFilters()

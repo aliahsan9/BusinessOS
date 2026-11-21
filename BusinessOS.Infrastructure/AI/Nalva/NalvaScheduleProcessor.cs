@@ -2,6 +2,7 @@ using System.Text.Json;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Nalva;
 using BusinessOS.Domain.Entities;
+using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -80,6 +81,59 @@ public sealed class NalvaScheduleProcessor : BackgroundService
             .ToListAsync(cancellationToken);
         foreach (var row in invoices)
             await EnqueueAsync(row.TenantId, NalvaEventNames.InvoiceOverdue, $"{{\"invoiceId\":\"{row.Id}\",\"outstanding\":{row.OutstandingAmount}}}", $"InvoiceOverdue:{row.Id:N}:{today}", cancellationToken);
+
+        var overdueTasks = await db.WorkTasks.IgnoreQueryFilters()
+            .Where(x => !x.IsDeleted
+                        && x.DueDate != null
+                        && x.DueDate < DateTime.UtcNow
+                        && x.Status != WorkTaskStatus.Done
+                        && x.Status != WorkTaskStatus.Cancelled)
+            .Select(x => new { x.TenantId, x.Id, x.ProjectId, x.Title })
+            .Take(25)
+            .ToListAsync(cancellationToken);
+        foreach (var row in overdueTasks)
+        {
+            var title = JsonSerializer.Serialize(row.Title);
+            await EnqueueAsync(
+                row.TenantId,
+                NalvaEventNames.TaskOverdue,
+                $"{{\"taskId\":\"{row.Id}\",\"projectId\":\"{row.ProjectId}\",\"title\":{title}}}",
+                $"TaskOverdue:{row.Id:N}:{today}",
+                cancellationToken);
+        }
+
+        var delayedPurchases = await db.Purchases.IgnoreQueryFilters()
+            .Where(x => !x.IsDeleted
+                        && x.ExpectedDeliveryDate != null
+                        && x.ExpectedDeliveryDate < DateTime.UtcNow
+                        && (x.Status == PurchaseOrderStatusNames.Approved
+                            || x.Status == PurchaseOrderStatusNames.PartiallyReceived
+                            || x.Status == PurchaseOrderStatusNames.Pending))
+            .Select(x => new { x.TenantId, x.Id, x.ExpectedDeliveryDate })
+            .Take(25)
+            .ToListAsync(cancellationToken);
+        foreach (var row in delayedPurchases)
+        {
+            await EnqueueAsync(
+                row.TenantId,
+                NalvaEventNames.DeliveryDelayed,
+                $"{{\"purchaseOrderId\":\"{row.Id}\",\"expectedDeliveryDate\":\"{row.ExpectedDeliveryDate:O}\"}}",
+                $"DeliveryDelayed:{row.Id:N}:{today}",
+                cancellationToken);
+        }
+
+        // Per-tenant procurement monitor (idempotent work items / delay notices).
+        foreach (var tenantId in delayedPurchases.Select(x => x.TenantId)
+                     .Concat(stock.Select(x => x.TenantId))
+                     .Distinct()
+                     .Take(8))
+        {
+            using var job = _scopes.CreateScope();
+            job.ServiceProvider.GetRequiredService<ITenantProvider>().SetTenantId(tenantId);
+            var procurement = job.ServiceProvider.GetService<Application.Features.ProcurementAgent.IInventoryProcurementAgentService>();
+            if (procurement is not null)
+                await procurement.RunScheduledMonitorAsync(cancellationToken);
+        }
     }
 
     private async Task EnqueueAsync(Guid tenantId, string name, string payload, string key, CancellationToken cancellationToken)

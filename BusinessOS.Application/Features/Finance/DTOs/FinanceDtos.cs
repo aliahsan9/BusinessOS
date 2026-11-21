@@ -3,12 +3,16 @@ namespace BusinessOS.Application.Features.Finance.DTOs;
 public class FinancialDashboardResponse
 {
     public decimal TotalRevenue { get; set; }
+    public decimal CostOfGoodsSold { get; set; }
     public decimal TotalExpenses { get; set; }
+    public decimal GrossProfit { get; set; }
+    /// <summary>Gross profit minus operating expenses (includes COGS).</summary>
     public decimal NetProfit { get; set; }
     public decimal TotalPayments { get; set; }
     public decimal OutstandingInvoices { get; set; }
     public int CompletedOrders { get; set; }
     public int TotalExpensesCount { get; set; }
+    public string Currency { get; set; } = "USD";
     public string Period { get; set; } = default!;
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }

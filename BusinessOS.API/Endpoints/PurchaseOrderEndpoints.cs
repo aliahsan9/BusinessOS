@@ -93,7 +93,8 @@ public static class PurchaseOrderEndpoints
             .WithName("ReceivePurchaseOrder")
             .WithSummary("Receive a purchase order")
             .WithDescription(
-                "Marks an Approved purchase order as Received and increases stock for each line item.")
+                "Verified receiving for Approved or PartiallyReceived purchase orders. " +
+                "Optional body lines support partial receiving. Stock increases only for verified quantities.")
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound);
@@ -192,10 +193,33 @@ public static class PurchaseOrderEndpoints
 
     private static async Task<IResult> ReceivePurchaseOrder(
         Guid id,
+        ReceivePurchaseOrderRequest? request,
         ISender sender,
         CancellationToken cancellationToken)
     {
-        await sender.Send(new ReceivePurchaseOrderCommand(id), cancellationToken);
+        IReadOnlyList<ReceivePurchaseOrderLineDto>? lines = null;
+        if (request?.Lines is { Count: > 0 })
+        {
+            lines = request.Lines
+                .Select(x => new ReceivePurchaseOrderLineDto(x.PurchaseItemId, x.ReceivedQuantity, x.DamagedQuantity, x.DiscrepancyNotes))
+                .ToList();
+        }
+
+        await sender.Send(new ReceivePurchaseOrderCommand(id, lines, request?.Notes), cancellationToken);
         return Results.NoContent();
     }
+}
+
+public sealed class ReceivePurchaseOrderRequest
+{
+    public string? Notes { get; set; }
+    public List<ReceivePurchaseOrderLineRequest>? Lines { get; set; }
+}
+
+public sealed class ReceivePurchaseOrderLineRequest
+{
+    public Guid PurchaseItemId { get; set; }
+    public decimal ReceivedQuantity { get; set; }
+    public decimal DamagedQuantity { get; set; }
+    public string? DiscrepancyNotes { get; set; }
 }

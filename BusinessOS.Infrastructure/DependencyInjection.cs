@@ -38,6 +38,14 @@ using BusinessOS.Infrastructure.AI.Agents.Tools;
 using BusinessOS.Infrastructure.AI.Copilot;
 using BusinessOS.Infrastructure.AI.Copilot.Tools;
 using BusinessOS.Infrastructure.AI.Nalva;
+using BusinessOS.Infrastructure.AI.SalesAgent;
+using BusinessOS.Infrastructure.AI.Support;
+using BusinessOS.Application.Features.Marketing;
+using BusinessOS.Application.Features.ProcurementAgent;
+using BusinessOS.Application.Features.SalesAgent;
+using BusinessOS.Application.Features.Support;
+using BusinessOS.Infrastructure.AI.Nalva.Suppliers;
+using BusinessOS.Infrastructure.Services.Marketing;
 using BusinessOS.Infrastructure.Integrations;
 using BusinessOS.Infrastructure.Payments;
 using BusinessOS.Infrastructure.Data;
@@ -319,6 +327,10 @@ public static class DependencyInjection
         services.AddScoped<IProjectOperationsService, ProjectOperationsService>();
         services.AddScoped<IBusinessWorkflowService, BusinessWorkflowService>();
         services.AddScoped<IBusinessAgentGateway, BusinessAgentGateway>();
+        services.AddScoped<IMarketingPublishTransport, SandboxMarketingPublishTransport>();
+        services.AddScoped<IMarketingPublishTransport, MetaMarketingPublishTransport>();
+        services.AddScoped<IMarketingImageClient, MarketingImageClient>();
+        services.AddScoped<IMarketingOperationsService, MarketingOperationsService>();
         services.AddScoped<INalvaToolGateway, NalvaToolGateway>();
         services.AddScoped<INalvaExecutionEngine, NalvaExecutionEngine>();
         services.AddScoped<INalvaWorkflowEngine, NalvaWorkflowEngine>();
@@ -329,10 +341,45 @@ public static class DependencyInjection
         services.AddScoped<INalvaEventDispatcher, NalvaEventDispatcher>();
         services.AddScoped<NalvaScheduleWorker>();
         services.AddScoped<IIntegrationPlatform, IntegrationPlatform>();
+        services.AddScoped<ISupportChannelAdapter, SandboxSupportChannelAdapter>();
+        services.AddScoped<ISupportChannelAdapter, WebsiteChatSupportChannelAdapter>();
+        services.AddScoped<ISupportChannelAdapter, EmailSupportChannelAdapter>();
+        services.AddScoped<ISupportChannelAdapter, WhatsAppSupportChannelAdapter>();
+        services.AddScoped<ISupportChannelAdapter, MessengerSupportChannelAdapter>();
+        services.AddScoped<SupportChannelRouter>();
+        services.AddScoped<ISupportAgentService, SupportAgentService>();
+        services.AddScoped<ILeadQualificationService, LeadQualificationService>();
+        services.AddScoped<ILeadResearchProvider, FixtureLeadResearchProvider>();
+        services.AddScoped<ILeadResearchProvider, ConfiguredHttpLeadResearchProvider>();
+        services.AddScoped<ILeadResearchRouter, LeadResearchRouter>();
+        services.AddScoped<ISalesAgentToolOperations, SalesAgentToolOperations>();
+        services.AddScoped<ISalesAgentService, SalesAgentService>();
+        services.AddScoped<TestSupplierResearchProvider>();
+        services.AddScoped<UnavailableSupplierResearchProvider>();
+        services.AddScoped<ISupplierResearchProvider>(sp =>
+        {
+            var configured = sp.GetRequiredService<IConfiguration>()["Procurement:SupplierResearchProvider"];
+            return string.Equals(configured, "test", StringComparison.OrdinalIgnoreCase)
+                ? sp.GetRequiredService<TestSupplierResearchProvider>()
+                : sp.GetRequiredService<UnavailableSupplierResearchProvider>();
+        });
+        services.AddScoped<IInventoryProcurementAgentService, InventoryProcurementAgentService>();
         services.AddHostedService<NalvaTaskProcessor>();
         services.AddHostedService<NalvaScheduleProcessor>();
         services.AddHostedService<NalvaEventHostedService>();
+        services.AddHostedService<SupportFollowUpProcessor>();
+        services.AddHostedService<MarketingPublishProcessor>();
         services.AddHttpClient("Integrations", client => client.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient("SalesLeadResearch", client => client.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient(MarketingImageClient.HttpClientName, (sp, client) =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AiOptions>>().Value;
+            var baseUrl = string.IsNullOrWhiteSpace(options.OpenAiBaseUrl)
+                ? "https://api.openai.com/"
+                : options.OpenAiBaseUrl.TrimEnd('/') + "/";
+            client.BaseAddress = new Uri(baseUrl);
+            client.Timeout = TimeSpan.FromSeconds(60);
+        });
         services.Configure<IntegrationPlatformOptions>(configuration.GetSection(IntegrationPlatformOptions.SectionName));
 
         services.Configure<StripeOptions>(configuration.GetSection(StripeOptions.SectionName));

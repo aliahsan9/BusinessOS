@@ -86,26 +86,15 @@ public sealed class AnalyticsService : IAnalyticsService
         IReadOnlyList<(DateTime OrderDate, decimal GrandTotal)> orders,
         DashboardDateRange dateRange)
     {
+        var window = TrendSeries.ChartWindow(dateRange);
         var grain = TrendSeries.ForSales(dateRange);
-        if (grain == TrendSeries.Grain.SparseDay)
-        {
-            return orders
-                .GroupBy(x => TrendSeries.Truncate(x.OrderDate, grain))
-                .Select(g => new RevenueTrendPointDto
-                {
-                    Date = g.Key,
-                    Revenue = Math.Round(g.Sum(x => x.GrandTotal), 2),
-                    OrderCount = g.Count()
-                })
-                .OrderBy(x => x.Date)
-                .ToList();
-        }
 
         var lookup = orders
+            .Where(x => x.OrderDate >= window.StartDate && x.OrderDate <= window.EndDate)
             .GroupBy(x => TrendSeries.Truncate(x.OrderDate, grain))
             .ToDictionary(g => g.Key, g => (Revenue: g.Sum(x => x.GrandTotal), Count: g.Count()));
 
-        return TrendSeries.Buckets(dateRange, grain)
+        return TrendSeries.Buckets(window, grain)
             .Select(bucket =>
             {
                 lookup.TryGetValue(bucket, out var hit);

@@ -333,11 +333,15 @@ public class QuotationPurchaseAndSupplierTests
         purchase.Status = PurchaseOrderStatusNames.Approved;
         await context.SaveChangesAsync();
 
+        var currentUser = new Mock<ICurrentUserService>();
+        currentUser.SetupGet(x => x.UserId).Returns("user-1");
+        currentUser.Setup(x => x.HasPermission(It.IsAny<string>())).Returns(true);
         await new ReceivePurchaseOrderCommandHandler(
             context,
             TenantDatabase.Inventory(context),
             TestHandlerDependencies.CreateCache(),
             provider,
+            currentUser.Object,
             TestHandlerDependencies.CreateLogger<ReceivePurchaseOrderCommandHandler>())
             .Handle(new ReceivePurchaseOrderCommand(id), CancellationToken.None);
 

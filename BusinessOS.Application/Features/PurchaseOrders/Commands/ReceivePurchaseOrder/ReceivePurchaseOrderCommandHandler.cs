@@ -4,6 +4,7 @@ using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Inventory.Queries;
 using BusinessOS.Application.Features.Inventory.Services;
 using BusinessOS.Application.Features.PurchaseOrders.Services;
+using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,7 @@ public sealed class ReceivePurchaseOrderCommandHandler : IRequestHandler<Receive
     private readonly IInventoryService _inventoryService;
     private readonly ICacheService _cache;
     private readonly ITenantProvider _tenantProvider;
+    private readonly ICurrentUserService _user;
     private readonly ILogger<ReceivePurchaseOrderCommandHandler> _logger;
 
     public ReceivePurchaseOrderCommandHandler(
@@ -24,12 +26,14 @@ public sealed class ReceivePurchaseOrderCommandHandler : IRequestHandler<Receive
         IInventoryService inventoryService,
         ICacheService cache,
         ITenantProvider tenantProvider,
+        ICurrentUserService user,
         ILogger<ReceivePurchaseOrderCommandHandler> logger)
     {
         _context = context;
         _inventoryService = inventoryService;
         _cache = cache;
         _tenantProvider = tenantProvider;
+        _user = user;
         _logger = logger;
     }
 
@@ -46,41 +50,92 @@ public sealed class ReceivePurchaseOrderCommandHandler : IRequestHandler<Receive
         {
             throw new BadRequestException(
                 $"Purchase order in '{purchase.Status}' status cannot be received. " +
-                "Only Approved purchase orders can be received.");
+                "Only Approved or PartiallyReceived purchase orders can be received.");
         }
+
+        var lines = request.Lines;
+        if (lines is null || lines.Count == 0)
+        {
+            lines = purchase.PurchaseItems
+                .Where(x => !x.IsDeleted && x.ReceivedQuantity < x.Quantity)
+                .Select(x => new ReceivePurchaseOrderLineDto(x.Id, x.Quantity - x.ReceivedQuantity))
+                .ToList();
+        }
+
+        if (lines.Count == 0)
+            throw new BadRequestException("Nothing remains to receive on this purchase order.");
 
         var referenceNumber = purchase.ReferenceNumber ?? purchase.Id.ToString();
         var transaction = await _context.BeginTransactionAsync(cancellationToken);
         try
         {
-            var transitioned = await _context.TryTransitionPurchaseStatusAsync(
-                purchase.Id,
-                purchase.Status,
-                PurchaseOrderStatusNames.Received,
-                cancellationToken);
-
-            if (!transitioned)
+            decimal stockIncreased = 0;
+            foreach (var line in lines)
             {
-                throw new ConflictException(
-                    "This purchase order was changed by someone else. Refresh and try again.",
-                    ErrorCodes.ConcurrencyConflict);
+                var item = purchase.PurchaseItems.FirstOrDefault(x => x.Id == line.PurchaseItemId && !x.IsDeleted)
+                    ?? throw new BadRequestException($"Purchase line {line.PurchaseItemId} was not found.");
+
+                if (line.ReceivedQuantity < 0 || line.DamagedQuantity < 0)
+                    throw new BadRequestException("Received and damaged quantities cannot be negative.");
+
+                var remaining = item.Quantity - item.ReceivedQuantity;
+                if (line.ReceivedQuantity > remaining)
+                    throw new BadRequestException($"Cannot receive {line.ReceivedQuantity}; only {remaining} remaining on line {item.Id}.");
+
+                if (line.ReceivedQuantity > 0)
+                {
+                    await _inventoryService.IncreaseStockAsync(
+                        new StockChangeRequest
+                        {
+                            ProductId = item.ProductId,
+                            Quantity = line.ReceivedQuantity,
+                            ReferenceNumber = referenceNumber,
+                            Notes = $"Purchase order {purchase.Id} verified receive"
+                        },
+                        cancellationToken);
+                    stockIncreased += line.ReceivedQuantity;
+                }
+
+                item.ReceivedQuantity += line.ReceivedQuantity;
+                item.DamagedQuantity += line.DamagedQuantity;
+                item.ShortageQuantity = Math.Max(0, item.Quantity - item.ReceivedQuantity);
+                if (!string.IsNullOrWhiteSpace(line.DiscrepancyNotes))
+                    item.ReceivingNotes = line.DiscrepancyNotes.Trim();
             }
 
-            if (!string.Equals(purchase.Status, PurchaseOrderStatusNames.Received, StringComparison.Ordinal))
-                purchase.Status = PurchaseOrderStatusNames.Received;
+            var fullyReceived = purchase.PurchaseItems.Where(x => !x.IsDeleted).All(x => x.ReceivedQuantity >= x.Quantity);
+            var newStatus = fullyReceived
+                ? PurchaseOrderStatusNames.Received
+                : PurchaseOrderStatusNames.PartiallyReceived;
 
-            foreach (var item in purchase.PurchaseItems.OrderBy(item => item.ProductId))
+            if (!string.Equals(purchase.Status, newStatus, StringComparison.OrdinalIgnoreCase))
             {
-                await _inventoryService.IncreaseStockAsync(
-                    new StockChangeRequest
-                    {
-                        ProductId = item.ProductId,
-                        Quantity = item.Quantity,
-                        ReferenceNumber = referenceNumber,
-                        Notes = $"Purchase order {purchase.Id} received"
-                    },
+                var transitioned = await _context.TryTransitionPurchaseStatusAsync(
+                    purchase.Id,
+                    purchase.Status,
+                    newStatus,
                     cancellationToken);
+
+                if (!transitioned)
+                {
+                    throw new ConflictException(
+                        "This purchase order was changed by someone else. Refresh and try again.",
+                        ErrorCodes.ConcurrencyConflict);
+                }
+
+                purchase.Status = newStatus;
             }
+
+            _context.PurchaseReceivingEvents.Add(new PurchaseReceivingEvent
+            {
+                Id = Guid.NewGuid(),
+                PurchaseId = purchase.Id,
+                ReceivedByUserId = _user.UserId ?? "system",
+                Notes = request.Notes,
+                PayloadJson = System.Text.Json.JsonSerializer.Serialize(lines),
+                StockIncreasedBy = stockIncreased,
+                ResultStatus = purchase.Status
+            });
 
             await _context.SaveChangesAsync(cancellationToken);
             if (transaction is not null)
@@ -105,9 +160,9 @@ public sealed class ReceivePurchaseOrderCommandHandler : IRequestHandler<Receive
             await EntityCacheInvalidator.InvalidateInventoryAsync(_cache, tenantId, item.ProductId, cancellationToken);
 
         _logger.LogInformation(
-            "Received purchase order {PurchaseOrderId} and increased stock for {ItemCount} items",
+            "Verified receive for purchase order {PurchaseOrderId}; status {Status}",
             purchase.Id,
-            purchase.PurchaseItems.Count);
+            purchase.Status);
 
         return Unit.Value;
     }

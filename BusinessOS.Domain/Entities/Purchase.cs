@@ -14,6 +14,22 @@ public class Purchase : AuditableEntity
     public string? ReferenceNumber { get; set; }
     public string? Notes { get; set; }
 
+    /// <summary>Expected arrival date used for delivery monitoring.</summary>
+    public DateTime? ExpectedDeliveryDate { get; set; }
+
+    /// <summary>Prevents duplicate agent-created purchase orders for the same intent.</summary>
+    public string? IdempotencyKey { get; set; }
+
+    /// <summary>Hash of supplier + lines + prices approved for this purchase.</summary>
+    public string? ApprovalFingerprint { get; set; }
+
+    public string? PaymentTerms { get; set; }
+
+    /// <summary>True only when an approved external supplier transmission succeeded.</summary>
+    public bool SentToSupplier { get; set; }
+
+    public DateTime? DelayedNotifiedAt { get; set; }
+
     public Supplier Supplier { get; set; } = default!;
     public ICollection<PurchaseItem> PurchaseItems { get; set; } = new List<PurchaseItem>();
 }

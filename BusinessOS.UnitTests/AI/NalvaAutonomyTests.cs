@@ -72,7 +72,7 @@ public class NalvaAutonomyTests
     public void BusinessTemplates_ArePresentAndHaveNoCompanyData()
     {
         var keys = NalvaWorkflowCatalog.All.Select(template => template.Key).ToArray();
-        keys.Should().Contain(["customer-onboarding", "lead-acquisition", "inventory-automation", "financial-monitoring", "project-operations", "customer-support-automation"]);
+        keys.Should().Contain(["customer-onboarding", "lead-acquisition", "inventory-automation", "financial-monitoring", "project-operations", "customer-support-automation", "overdue-payment-followup"]);
         var json = System.Text.Json.JsonSerializer.Serialize(NalvaWorkflowCatalog.All);
         json.Should().NotContain("apiKey").And.NotContain("sk_live").And.NotContain("password");
     }
@@ -86,6 +86,8 @@ public class NalvaAutonomyTests
         IntegrationProviderCatalog.TryGet("gmail", out var gmail).Should().BeTrue();
         gmail!.WriteOperations.Should().Contain("send");
         gmail.ReadOperations.Should().Contain("list");
+        IntegrationProviderCatalog.TryGet("meta", out var meta).Should().BeTrue();
+        meta!.WriteOperations.Should().Contain("publish");
     }
 
     [Fact]
