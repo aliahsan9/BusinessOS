@@ -1,5 +1,6 @@
 using BusinessOS.Application.Common.Authorization;
 using BusinessOS.Application.Common.Extensions;
+using BusinessOS.Application.Common.Idempotency;
 using BusinessOS.Application.Common.Models;
 using BusinessOS.Application.Features.Orders.Commands.CreateOrder;
 using BusinessOS.Application.Features.Orders.Commands.DeleteOrder;
@@ -34,7 +35,8 @@ public static class OrderEndpoints
             .WithSummary("Create an order")
             .WithDescription(
                 "Creates a new order for an existing active customer with line items. " +
-                "Product prices are loaded automatically and totals are calculated.")
+                "Product prices are loaded automatically and totals are calculated. " +
+                "Send an optional Idempotency-Key header to safely retry without duplicating orders.")
             .Produces(StatusCodes.Status201Created)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status409Conflict);
@@ -94,10 +96,23 @@ public static class OrderEndpoints
 
     private static async Task<IResult> CreateOrder(
         CreateOrderCommand command,
+        HttpContext httpContext,
         ISender sender,
         CancellationToken cancellationToken)
     {
-        var id = await sender.Send(command, cancellationToken);
+        var idempotencyKey = httpContext.Request.Headers["Idempotency-Key"].FirstOrDefault()
+            ?? command.IdempotencyKey;
+        if (!string.IsNullOrWhiteSpace(idempotencyKey) && !IdempotencyKeyRules.IsValid(idempotencyKey))
+        {
+            return Results.BadRequest(new
+            {
+                detail = "Idempotency-Key must be 1-128 visible ASCII characters without spaces."
+            });
+        }
+
+        var id = await sender.Send(
+            command with { IdempotencyKey = idempotencyKey },
+            cancellationToken);
         return Results.Created($"/api/v1/orders/{id}", new { id });
     }
 

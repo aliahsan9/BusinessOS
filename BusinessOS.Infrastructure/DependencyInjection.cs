@@ -12,6 +12,7 @@ using BusinessOS.Application.Features.Pdf.Services;
 using BusinessOS.Application.Features.Reports.Services;
 using BusinessOS.Application.Features.Activities.Services;
 using BusinessOS.Application.Features.Notifications.Services;
+using BusinessOS.Application.Features.Growth;
 using BusinessOS.Application.Features.Launch;
 using BusinessOS.Application.Features.Onboarding.Services;
 using BusinessOS.Application.Features.AI.Services;
@@ -119,7 +120,10 @@ public static class DependencyInjection
                         "DefaultConnection is not configured. Set ConnectionStrings:DefaultConnection or the ConnectionStrings__DefaultConnection environment variable.");
                 }
 
-                options.UseSqlServer(connectionString);
+                // Command timeout only. EnableRetryOnFailure is deferred: it is incompatible with
+                // the many user-initiated BeginTransactionAsync paths unless every transactional
+                // unit is wrapped in CreateExecutionStrategy().ExecuteAsync (...).
+                options.UseSqlServer(connectionString, sql => sql.CommandTimeout(30));
             }
 
             // Runtime interceptors can make EF report a false pending-model-changes warning
@@ -180,6 +184,7 @@ public static class DependencyInjection
         services.AddScoped<ICompanyAnnouncementService, CompanyAnnouncementService>();
         services.AddScoped<IPlatformAdminService, PlatformAdminService>();
         services.AddScoped<ICommercialAdminService, CommercialAdminService>();
+        services.AddScoped<IGrowthService, GrowthService>();
         services.AddSingleton<IPlatformAiOverride, PlatformAiOverride>();
         services.AddScoped<ISubscriptionEntitlementService, SubscriptionEntitlementService>();
         services.AddScoped<ITenantLimitService, TenantLimitService>();
@@ -188,6 +193,18 @@ public static class DependencyInjection
         services.AddScoped<IRoleService, RoleService>();
         services.AddScoped<IPermissionService, PermissionService>();
         services.AddScoped<IRbacAuditService, RbacAuditService>();
+        services.AddScoped<Application.Features.Enterprise.IEnterpriseEntitlementGuard, Enterprise.EnterpriseEntitlementGuard>();
+        services.AddScoped<Application.Features.Enterprise.IOrgScopeService, Enterprise.OrgScopeService>();
+        services.AddScoped<Application.Features.Enterprise.IEnterpriseOrganizationService, Enterprise.EnterpriseOrganizationService>();
+        services.AddScoped<Application.Features.Enterprise.IEnterpriseRbacService, Enterprise.EnterpriseRbacService>();
+        services.AddScoped<Application.Features.Enterprise.IApprovalGovernanceService, Enterprise.ApprovalGovernanceService>();
+        services.AddScoped<Application.Features.Enterprise.IEnterpriseAuditService, Enterprise.EnterpriseAuditService>();
+        services.AddScoped<Application.Features.Enterprise.IEnterpriseReportingService, Enterprise.EnterpriseReportingService>();
+        services.AddScoped<Application.Features.Enterprise.IEnterpriseSsoService, Enterprise.EnterpriseSsoService>();
+        services.AddScoped<Application.Features.Enterprise.IEnterpriseMfaService, Enterprise.EnterpriseMfaService>();
+        services.AddScoped<Application.Features.Enterprise.IEnterpriseAgentGovernanceService, Enterprise.EnterpriseAgentGovernanceService>();
+        services.AddHttpClient("enterprise-sso", client => client.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHostedService<Enterprise.EnterpriseMaintenanceProcessor>();
         services.AddScoped<IAnalyticsModuleService, AnalyticsModuleService>();
         services.AddScoped<IFinanceService, FinanceService>();
         services.AddScoped<IPdfGenerationService, PdfGenerationService>();

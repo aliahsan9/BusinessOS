@@ -16,6 +16,7 @@ public class NalvaCompanyAgent : AuditableEntity
     public string Status { get; set; } = "Inactive";
     public int AutonomyLevel { get; set; } = 3;
     public Guid? DepartmentId { get; set; }
+    public Guid? BranchId { get; set; }
     public string? Model { get; set; }
     public decimal? Temperature { get; set; }
     public int DailyExecutionLimit { get; set; } = 100;
@@ -24,6 +25,11 @@ public class NalvaCompanyAgent : AuditableEntity
     public string PermissionsJson { get; set; } = "[]";
     public string ResponsibilitiesJson { get; set; } = "[]";
     public string ApprovalActionsJson { get; set; } = "[]";
+    /// <summary>JSON array of tool names explicitly denied for this agent.</summary>
+    public string DeniedToolsJson { get; set; } = "[]";
+    /// <summary>JSON array of sensitive field paths the agent may not read/write.</summary>
+    public string SensitiveDataRestrictionsJson { get; set; } = "[]";
+    public bool RequireHumanSupervision { get; set; }
     public string? HealthMessage { get; set; }
     public DateTime? ActivatedAt { get; set; }
     public string? ActivatedByUserId { get; set; }

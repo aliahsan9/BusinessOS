@@ -154,11 +154,18 @@ public sealed class NalvaScheduleProcessor : BackgroundService
 
         foreach (var tenantId in stockTenants.Concat(delayedTenants).Distinct().Take(8))
         {
-            using var job = _scopes.CreateScope();
-            job.ServiceProvider.GetRequiredService<ITenantProvider>().SetTenantId(tenantId);
-            var procurement = job.ServiceProvider.GetService<IInventoryProcurementAgentService>();
-            if (procurement is not null)
-                await procurement.RunScheduledMonitorAsync(cancellationToken);
+            try
+            {
+                using var job = _scopes.CreateScope();
+                job.ServiceProvider.GetRequiredService<ITenantProvider>().SetTenantId(tenantId);
+                var procurement = job.ServiceProvider.GetService<IInventoryProcurementAgentService>();
+                if (procurement is not null)
+                    await procurement.RunScheduledMonitorAsync(cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Procurement scheduled monitor failed for tenant {TenantId}", tenantId);
+            }
         }
 
         var financeTenantIds = await db.FinanceAgentSettings.IgnoreQueryFilters()
@@ -180,11 +187,18 @@ public sealed class NalvaScheduleProcessor : BackgroundService
 
         foreach (var tenantId in financeTenantIds)
         {
-            using var job = _scopes.CreateScope();
-            job.ServiceProvider.GetRequiredService<ITenantProvider>().SetTenantId(tenantId);
-            var finance = job.ServiceProvider.GetService<IFinanceAgentService>();
-            if (finance is not null)
-                await finance.RunScheduledMonitorAsync(cancellationToken);
+            try
+            {
+                using var job = _scopes.CreateScope();
+                job.ServiceProvider.GetRequiredService<ITenantProvider>().SetTenantId(tenantId);
+                var finance = job.ServiceProvider.GetService<IFinanceAgentService>();
+                if (finance is not null)
+                    await finance.RunScheduledMonitorAsync(cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Finance scheduled monitor failed for tenant {TenantId}", tenantId);
+            }
         }
 
         var marketingTenants = await db.MarketingAgentPolicies.IgnoreQueryFilters()

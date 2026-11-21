@@ -5,10 +5,13 @@ using BusinessOS.Application.Common.Authorization;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Roles.DTOs;
 using BusinessOS.Domain.Entities;
+using BusinessOS.Infrastructure.Data;
 using BusinessOS.Infrastructure.Identity;
+using BusinessOS.Infrastructure.MultiTenancy;
 using BusinessOS.Infrastructure.Services;
 using FluentAssertions;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Moq;
 
@@ -36,12 +39,22 @@ public class RoleServiceTests
             Mock.Of<IRoleStore<ApplicationRole>>(), null!, null!, null!, null!);
 
         _currentUser.SetupGet(x => x.TenantId).Returns(_tenantId);
+        _currentUser.SetupGet(x => x.Roles).Returns(["Owner"]);
+        _currentUser.Setup(x => x.HasPermission(It.IsAny<string>())).Returns(true);
 
         var versions = new Mock<IAuthorizationVersionService>();
         versions.Setup(x => x.BumpUserAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         versions.Setup(x => x.BumpUsersWithRoleAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
+
+        var tenantProvider = new TenantProvider();
+        tenantProvider.SetTenantId(_tenantId);
+        var db = new BusinessOSDbContext(
+            new DbContextOptionsBuilder<BusinessOSDbContext>()
+                .UseInMemoryDatabase("rbac-" + Guid.NewGuid())
+                .Options,
+            tenantProvider);
 
         _sut = new RoleService(
             _roleRepository.Object,
@@ -50,7 +63,8 @@ public class RoleServiceTests
             _currentUser.Object,
             _userManager.Object,
             _roleManager.Object,
-            versions.Object);
+            versions.Object,
+            db);
     }
 
     [Fact]

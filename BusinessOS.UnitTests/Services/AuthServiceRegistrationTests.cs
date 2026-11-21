@@ -68,5 +68,7 @@ public class AuthServiceRegistrationTests
             Mock.Of<IEmailNotificationService>(),
             Options.Create(new AppOptions()),
             new MemoryCache(new MemoryCacheOptions()),
-            Mock.Of<Microsoft.Extensions.Logging.ILogger<AuthService>>());
+            Mock.Of<Microsoft.Extensions.Logging.ILogger<AuthService>>(),
+            BusinessOS.UnitTests.Common.TestUserManager.Create(),
+            Microsoft.AspNetCore.DataProtection.DataProtectionProvider.Create("BusinessOS.UnitTests"));
 }

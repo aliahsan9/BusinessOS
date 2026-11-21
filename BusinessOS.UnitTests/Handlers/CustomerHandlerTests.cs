@@ -334,9 +334,10 @@ public class GetCustomerAnalyticsHandlerTests
 
         var result = await handler.Handle(new GetCustomerAnalyticsQuery(customerId), CancellationToken.None);
 
+        // TotalSpending / AOV use completed orders only; TotalOrders includes every status.
         result.TotalOrders.Should().Be(2);
-        result.TotalSpending.Should().Be(150);
-        result.AverageOrderValue.Should().Be(75);
+        result.TotalSpending.Should().Be(100);
+        result.AverageOrderValue.Should().Be(100);
         result.TotalCompletedOrders.Should().Be(1);
         result.LastOrderDate.Should().NotBeNull();
     }

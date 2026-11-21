@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using BusinessOS.Application.Common.Authorization;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Common.Exceptions;
@@ -14,6 +15,9 @@ using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.Data;
+using BusinessOS.Infrastructure.Identity;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -35,6 +39,8 @@ public sealed class AuthService : IAuthService
     private readonly IMemoryCache _resetAttempts;
     private readonly AppOptions _appOptions;
     private readonly ILogger<AuthService> _logger;
+    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IDataProtector _mfaProtector;
 
     public AuthService(
         IIdentityService identityService,
@@ -48,7 +54,9 @@ public sealed class AuthService : IAuthService
         IEmailNotificationService emailService,
         IOptions<AppOptions> appOptions,
         IMemoryCache resetAttempts,
-        ILogger<AuthService> logger)
+        ILogger<AuthService> logger,
+        UserManager<ApplicationUser> userManager,
+        IDataProtectionProvider dataProtection)
     {
         _identityService = identityService;
         _tenantRegistrationService = tenantRegistrationService;
@@ -62,6 +70,8 @@ public sealed class AuthService : IAuthService
         _appOptions = appOptions.Value;
         _resetAttempts = resetAttempts;
         _logger = logger;
+        _userManager = userManager;
+        _mfaProtector = dataProtection.CreateProtector("BusinessOS.Enterprise.MfaChallenge");
     }
 
     public async Task<AuthResponse> LoginAsync(
@@ -76,6 +86,43 @@ public sealed class AuthService : IAuthService
         {
             _logger.LogWarning("Failed login attempt for {Email}", email);
             throw new UnauthorizedException("Invalid credentials");
+        }
+
+        var appUser = await _userManager.FindByIdAsync(user.Id);
+        if (appUser is not null)
+        {
+            _tenantProvider.SetTenantId(user.TenantId);
+            await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+            var requireMfa = await db.TenantSettings.AsNoTracking()
+                .Select(x => x.RequireMfa)
+                .FirstOrDefaultAsync(cancellationToken)
+                || await db.TenantEnterpriseSecuritySettings.AsNoTracking()
+                    .Select(x => x.RequireMfa)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+            if (appUser.TwoFactorEnabled || requireMfa)
+            {
+                if (requireMfa && !appUser.TwoFactorEnabled)
+                    throw new UnauthorizedException("Multi-factor authentication is required. Enroll an authenticator before signing in.");
+
+                var mfaToken = _mfaProtector.Protect(JsonSerializer.Serialize(new
+                {
+                    userId = appUser.Id,
+                    expires = DateTime.UtcNow.AddMinutes(5)
+                }));
+                return new AuthResponse
+                {
+                    Token = string.Empty,
+                    RequiresMfa = true,
+                    MfaToken = mfaToken,
+                    UserId = appUser.Id,
+                    Email = appUser.Email ?? email,
+                    TenantId = appUser.TenantId,
+                    Roles = [],
+                    Permissions = [],
+                    ExpiresAt = DateTime.UtcNow.AddMinutes(5)
+                };
+            }
         }
 
         return await CreateSessionForUserAsync(user, cancellationToken);

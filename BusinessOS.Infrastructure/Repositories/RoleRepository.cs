@@ -175,14 +175,30 @@ public sealed class RoleRepository : IRoleRepository
         CancellationToken cancellationToken = default)
     {
         var tenantId = await ResolveUserTenantIdAsync(userId, cancellationToken);
-        return await _context.RbacUserRoles
+        var rolePermissions = await _context.RbacUserRoles
             .AsNoTracking()
             .Where(x => x.UserId == userId && x.TenantId == tenantId && x.Role.IsActive)
             .SelectMany(x => x.Role.RolePermissions)
             .Select(x => x.Permission.Code)
-            .Distinct()
-            .OrderBy(x => x)
             .ToListAsync(cancellationToken);
+
+        var now = DateTime.UtcNow;
+        var temporary = await _context.TemporaryPermissionGrants
+            .AsNoTracking()
+            .Where(x =>
+                x.TenantId == tenantId &&
+                x.UserId == userId &&
+                !x.IsRevoked &&
+                !x.IsDeleted &&
+                x.ExpiresAt > now)
+            .Select(x => x.PermissionCode)
+            .ToListAsync(cancellationToken);
+
+        return rolePermissions
+            .Concat(temporary)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     public async Task<IReadOnlyList<Role>> GetUserRolesAsync(

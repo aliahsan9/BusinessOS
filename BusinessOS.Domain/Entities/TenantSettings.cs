@@ -30,6 +30,10 @@ public class TenantSettings : AuditableEntity
     public int LateGraceMinutes { get; set; } = 15;
     public bool AllowNegativeStock { get; set; }
     public decimal OpeningCashBalance { get; set; }
+    public bool RequireMfa { get; set; }
+    public int AuditRetentionDays { get; set; } = 365;
+    public int SessionIdleMinutes { get; set; } = 60;
+    public int MaxConcurrentSessions { get; set; } = 10;
 
     public Tenant Tenant { get; set; } = default!;
 }

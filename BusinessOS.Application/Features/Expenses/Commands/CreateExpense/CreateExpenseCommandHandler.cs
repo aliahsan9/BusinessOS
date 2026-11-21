@@ -4,6 +4,7 @@ using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Activities.DTOs;
 using BusinessOS.Application.Features.Audit;
 using BusinessOS.Application.Features.Audit.Services;
+using BusinessOS.Application.Features.Enterprise;
 using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
@@ -21,6 +22,7 @@ public sealed class CreateExpenseCommandHandler : IRequestHandler<CreateExpenseC
     private readonly ICacheService _cache;
     private readonly ITenantProvider _tenantProvider;
     private readonly ILogger<CreateExpenseCommandHandler> _logger;
+    private readonly IApprovalGovernanceService? _approvals;
 
     public CreateExpenseCommandHandler(
         IApplicationDbContext context,
@@ -28,7 +30,8 @@ public sealed class CreateExpenseCommandHandler : IRequestHandler<CreateExpenseC
         IEntityAuditService entityAudit,
         ICacheService cache,
         ITenantProvider tenantProvider,
-        ILogger<CreateExpenseCommandHandler> logger)
+        ILogger<CreateExpenseCommandHandler> logger,
+        IApprovalGovernanceService? approvals = null)
     {
         _context = context;
         _businessEvents = businessEvents;
@@ -36,6 +39,7 @@ public sealed class CreateExpenseCommandHandler : IRequestHandler<CreateExpenseC
         _cache = cache;
         _tenantProvider = tenantProvider;
         _logger = logger;
+        _approvals = approvals;
     }
 
     public async Task<Guid> Handle(CreateExpenseCommand request, CancellationToken cancellationToken)
@@ -63,6 +67,24 @@ public sealed class CreateExpenseCommandHandler : IRequestHandler<CreateExpenseC
             IsRecurring = request.IsRecurring,
             RecurrencePattern = string.IsNullOrWhiteSpace(request.RecurrencePattern) ? null : request.RecurrencePattern.Trim()
         };
+
+        if (_approvals is not null)
+        {
+            var pending = await _approvals.EvaluateAndEnqueueAsync(new ApprovalEvaluateRequest
+            {
+                TriggerType = ApprovalTriggerTypes.ExpenseAmount,
+                SubjectType = nameof(Expense),
+                SubjectId = expense.Id.ToString(),
+                Title = $"Expense approval: {expense.Title}",
+                Amount = expense.Amount,
+                PayloadJson = $"{{\"expenseId\":\"{expense.Id}\",\"amount\":{expense.Amount}}}"
+            }, cancellationToken);
+            if (pending is not null)
+            {
+                expense.Status = "PendingApproval";
+                expense.PendingApprovalRequestId = pending.Id;
+            }
+        }
 
         _context.Expenses.Add(expense);
         await _context.SaveChangesAsync(cancellationToken);

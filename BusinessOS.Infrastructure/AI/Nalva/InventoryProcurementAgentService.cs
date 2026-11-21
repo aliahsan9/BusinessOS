@@ -791,56 +791,68 @@ public sealed class InventoryProcurementAgentService : IInventoryProcurementAgen
 
     public async Task RunScheduledMonitorAsync(CancellationToken cancellationToken = default)
     {
-        var settings = await EnsureSettingsAsync(cancellationToken);
-        if (!settings.DailyInventoryMonitoring && !settings.DeliveryFollowUps)
+        // Hosted processors may run without an interactive user; still require tenant context.
+        if (!_tenant.HasTenant())
             return;
 
-        if (settings.LowStockDetection || settings.DailyInventoryMonitoring)
+        try
         {
-            var risks = await GetInventoryRisksAsync(cancellationToken);
-            var critical = risks.Where(x => x.RiskKind is "low-stock" or "out-of-stock" or "discrepancy").Take(20).ToList();
-            foreach (var risk in critical)
-            {
-                _db.NalvaWorkItems.Add(new NalvaWorkItem
-                {
-                    AgentKey = "procurement",
-                    Kind = "InventoryAlert",
-                    Title = $"{risk.RiskKind}: {risk.ProductName}",
-                    Body = risk.Explanation,
-                    Status = "Open",
-                    RelatedEntityType = "Product",
-                    RelatedEntityId = risk.ProductId
-                });
-            }
-        }
+            var settings = await EnsureSettingsAsync(cancellationToken);
+            if (!settings.DailyInventoryMonitoring && !settings.DeliveryFollowUps)
+                return;
 
-        if (settings.DeliveryFollowUps)
+            if (settings.LowStockDetection || settings.DailyInventoryMonitoring)
+            {
+                var risks = await GetInventoryRisksAsync(cancellationToken);
+                var critical = risks.Where(x => x.RiskKind is "low-stock" or "out-of-stock" or "discrepancy").Take(20).ToList();
+                foreach (var risk in critical)
+                {
+                    _db.NalvaWorkItems.Add(new NalvaWorkItem
+                    {
+                        AgentKey = "procurement",
+                        Kind = "InventoryAlert",
+                        Title = $"{risk.RiskKind}: {risk.ProductName}",
+                        Body = risk.Explanation,
+                        Status = "Open",
+                        RelatedEntityType = "Product",
+                        RelatedEntityId = risk.ProductId
+                    });
+                }
+            }
+
+            if (settings.DeliveryFollowUps)
+            {
+                var deliveries = await GetDeliveriesAsync(cancellationToken);
+                foreach (var delayed in deliveries.Where(x => x.IsDelayed).Take(20))
+                {
+                    var purchase = await _db.Purchases.FirstOrDefaultAsync(x => x.Id == delayed.PurchaseOrderId, cancellationToken);
+                    if (purchase is null)
+                        continue;
+                    if (purchase.DelayedNotifiedAt is DateTime notified && notified.Date == DateTime.UtcNow.Date)
+                        continue;
+
+                    purchase.DelayedNotifiedAt = DateTime.UtcNow;
+                    _db.NalvaWorkItems.Add(new NalvaWorkItem
+                    {
+                        AgentKey = "procurement",
+                        Kind = "DeliveryDelay",
+                        Title = $"Delayed delivery {delayed.ReferenceNumber}",
+                        Body = $"Expected {delayed.ExpectedDeliveryDate:yyyy-MM-dd}; {delayed.DaysLate} day(s) late. Remaining {delayed.RemainingQuantity:0.##}.",
+                        Status = "Open",
+                        RelatedEntityType = "Purchase",
+                        RelatedEntityId = delayed.PurchaseOrderId
+                    });
+                }
+            }
+
+            await _db.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("Procurement scheduled monitor completed for tenant {TenantId}", _tenant.TenantId);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            var deliveries = await GetDeliveriesAsync(cancellationToken);
-            foreach (var delayed in deliveries.Where(x => x.IsDelayed).Take(20))
-            {
-                var purchase = await _db.Purchases.FirstOrDefaultAsync(x => x.Id == delayed.PurchaseOrderId, cancellationToken);
-                if (purchase is null)
-                    continue;
-                if (purchase.DelayedNotifiedAt is DateTime notified && notified.Date == DateTime.UtcNow.Date)
-                    continue;
-
-                purchase.DelayedNotifiedAt = DateTime.UtcNow;
-                _db.NalvaWorkItems.Add(new NalvaWorkItem
-                {
-                    AgentKey = "procurement",
-                    Kind = "DeliveryDelay",
-                    Title = $"Delayed delivery {delayed.ReferenceNumber}",
-                    Body = $"Expected {delayed.ExpectedDeliveryDate:yyyy-MM-dd}; {delayed.DaysLate} day(s) late. Remaining {delayed.RemainingQuantity:0.##}.",
-                    Status = "Open",
-                    RelatedEntityType = "Purchase",
-                    RelatedEntityId = delayed.PurchaseOrderId
-                });
-            }
+            _logger.LogWarning(ex, "Procurement agent monitor failed for tenant {TenantId}", _tenant.TenantId);
+            throw;
         }
-
-        await _db.SaveChangesAsync(cancellationToken);
-        _logger.LogInformation("Procurement scheduled monitor completed for tenant {TenantId}", _tenant.TenantId);
     }
 
     private async Task<Dictionary<Guid, decimal>> LoadIncomingByProductAsync(CancellationToken ct)
@@ -1001,12 +1013,18 @@ public sealed class InventoryProcurementAgentService : IInventoryProcurementAgen
 
     private void Require(string permission)
     {
+        // Background hosted jobs are scoped by tenant, not an interactive HTTP user.
+        if (string.IsNullOrWhiteSpace(_user.UserId))
+            return;
         if (!_user.HasPermission(permission))
             throw new ForbiddenException($"Missing permission {permission}.");
     }
 
     private void RequireAny(params string[] permissions)
     {
+        // Background hosted jobs are scoped by tenant, not an interactive HTTP user.
+        if (string.IsNullOrWhiteSpace(_user.UserId))
+            return;
         if (permissions.Any(_user.HasPermission))
             return;
         throw new ForbiddenException($"Missing permission {permissions[0]}.");

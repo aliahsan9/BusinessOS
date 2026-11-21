@@ -62,13 +62,36 @@ public sealed class NalvaTaskProcessor : BackgroundService
             .Take(NalvaLimits.TasksPerPass)
             .ToList();
 
-        foreach (var item in selected)
+        if (selected.Count == 0)
+            return;
+
+        // Bounded parallelism: separate DI scopes per task so tenants stay isolated.
+        var gate = new SemaphoreSlim(NalvaLimits.MaxParallelTaskExecutions);
+        var jobs = selected.Select(async item =>
         {
-            using var job = _scopes.CreateScope();
-            var tenant = job.ServiceProvider.GetRequiredService<ITenantProvider>();
-            tenant.SetTenantId(item.TenantId);
-            var engine = job.ServiceProvider.GetRequiredService<INalvaExecutionEngine>();
-            await engine.RunQueuedTaskAsync(item.Id, cancellationToken);
-        }
+            await gate.WaitAsync(cancellationToken);
+            try
+            {
+                using var job = _scopes.CreateScope();
+                var tenant = job.ServiceProvider.GetRequiredService<ITenantProvider>();
+                tenant.SetTenantId(item.TenantId);
+                var engine = job.ServiceProvider.GetRequiredService<INalvaExecutionEngine>();
+                await engine.RunQueuedTaskAsync(item.Id, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Nalva task {TaskId} for tenant {TenantId} failed in processor pass.",
+                    item.Id,
+                    item.TenantId);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        });
+
+        await Task.WhenAll(jobs);
     }
 }

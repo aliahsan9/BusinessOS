@@ -5,6 +5,7 @@ namespace BusinessOS.Domain.Entities;
 public class Department : AuditableEntity
 {
     public Guid TenantId { get; set; }
+    public Guid? BranchId { get; set; }
     public string Name { get; set; } = default!;
     public string? Description { get; set; }
     public Guid? ManagerEmployeeId { get; set; }
@@ -218,6 +219,7 @@ public class CustomerInteraction : AuditableEntity
 public class Warehouse : AuditableEntity
 {
     public Guid TenantId { get; set; }
+    public Guid? BranchId { get; set; }
     public string Name { get; set; } = default!;
     public string? Code { get; set; }
     public string? Address { get; set; }

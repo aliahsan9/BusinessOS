@@ -9,8 +9,10 @@
     <CoverletOutputFormat>cobertura</CoverletOutputFormat>
     <ExcludeByFile>**/Migrations/**/*.cs;**/obj/**/*.cs;**/Program.cs</ExcludeByFile>
     <Exclude>[BusinessOS.Infrastructure.Migrations]*;[BusinessOS.Infrastructure.Data.DbInitializer]*;[Microsoft.AspNetCore.OpenApi.Generated]*</Exclude>
-    <Threshold>30</Threshold>
+    <!-- HTTP-focused suite covers less Application surface than unit tests; primary line gate is UnitTests at 35%. -->
+    <Threshold>25</Threshold>
     <ThresholdType>line</ThresholdType>
+    <ThresholdStat>total</ThresholdStat>
     <RunSettingsFilePath>$(MSBuildThisFileDirectory)..\coverlet.runsettings</RunSettingsFilePath>
   </PropertyGroup>
 

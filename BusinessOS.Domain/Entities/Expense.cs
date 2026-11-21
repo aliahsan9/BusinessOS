@@ -5,6 +5,8 @@ namespace BusinessOS.Domain.Entities;
 public class Expense : AuditableEntity
 {
     public Guid TenantId { get; set; }
+    public Guid? BranchId { get; set; }
+    public Guid? DepartmentId { get; set; }
 
     public string Title { get; set; } = default!;
     public decimal Amount { get; set; }
@@ -17,6 +19,7 @@ public class Expense : AuditableEntity
     public string? Description { get; set; }
     public string? ReceiptUrl { get; set; }
     public string Status { get; set; } = "Pending";
+    public Guid? PendingApprovalRequestId { get; set; }
     public bool IsRecurring { get; set; }
     public string? RecurrencePattern { get; set; }
     public Guid? PurchaseInvoiceId { get; set; }

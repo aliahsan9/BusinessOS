@@ -15,4 +15,9 @@ public sealed class AuthResponse
     public IReadOnlyList<string> Permissions { get; set; } = [];
 
     public DateTime ExpiresAt { get; set; }
+
+    /// <summary>When true, Token is an MFA challenge token and full access requires /auth/mfa/verify.</summary>
+    public bool RequiresMfa { get; set; }
+
+    public string? MfaToken { get; set; }
 }

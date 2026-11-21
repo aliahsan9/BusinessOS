@@ -219,6 +219,7 @@ public class SaleOrderWorkflowTests
             TestHandlerDependencies.CreateBusinessEvents(),
             TestHandlerDependencies.CreateCache(),
             Tenant(tenantId),
+            Mock.Of<BusinessOS.Application.Common.Idempotency.IIdempotencyService>(),
             NullLogger<CreateOrderCommandHandler>.Instance);
         var mediator = new Mock<IMediator>();
         mediator

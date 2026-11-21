@@ -187,6 +187,7 @@ public class SophiaV2BusinessWorkflowTests
             TestHandlerDependencies.CreateBusinessEvents(),
             TestHandlerDependencies.CreateCache(),
             provider,
+            Mock.Of<BusinessOS.Application.Common.Idempotency.IIdempotencyService>(),
             TestHandlerDependencies.CreateLogger<CreateOrderCommandHandler>());
     }
 

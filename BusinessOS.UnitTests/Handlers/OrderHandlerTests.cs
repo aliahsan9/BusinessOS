@@ -159,6 +159,7 @@ public class CreateOrderHandlerTests
             TestHandlerDependencies.CreateBusinessEvents(),
             TestHandlerDependencies.CreateCache(),
             Mock.Of<ITenantProvider>(),
+            Mock.Of<BusinessOS.Application.Common.Idempotency.IIdempotencyService>(),
             TestHandlerDependencies.CreateLogger<CreateOrderCommandHandler>());
 
         var id = await handler.Handle(
@@ -194,6 +195,7 @@ public class CreateOrderHandlerTests
             TestHandlerDependencies.CreateBusinessEvents(),
             TestHandlerDependencies.CreateCache(),
             Mock.Of<ITenantProvider>(),
+            Mock.Of<BusinessOS.Application.Common.Idempotency.IIdempotencyService>(),
             TestHandlerDependencies.CreateLogger<CreateOrderCommandHandler>());
     }
 

@@ -767,10 +767,40 @@ public sealed class FinanceAgentService : IFinanceAgentService
     {
         RequireAny(PermissionCodes.FinanceView, PermissionCodes.NalvaView);
         var budgets = await _db.FinanceBudgets.AsNoTracking().OrderByDescending(x => x.PeriodStart).ToListAsync(cancellationToken);
-        var result = new List<FinanceBudgetDto>();
-        foreach (var budget in budgets)
-            result.Add(await MapBudgetAsync(budget, cancellationToken));
-        return result;
+        if (budgets.Count == 0)
+            return Array.Empty<FinanceBudgetDto>();
+
+        // One expense scan for the union of budget windows, then allocate in memory (avoids 1+N Sum queries).
+        var windowStart = budgets.Min(x => x.PeriodStart);
+        var windowEnd = budgets.Max(x => x.PeriodEnd);
+        var expenses = await RecognizedExpensesQuery(windowStart, windowEnd)
+            .Select(x => new
+            {
+                x.Amount,
+                x.ExpenseDate,
+                x.ExpenseCategoryId,
+                CategoryName = x.ExpenseCategory.Name
+            })
+            .ToListAsync(cancellationToken);
+
+        return budgets.Select(budget =>
+        {
+            var actual = expenses
+                .Where(x =>
+                    x.ExpenseDate >= budget.PeriodStart &&
+                    x.ExpenseDate <= budget.PeriodEnd &&
+                    (budget.ExpenseCategoryId is Guid categoryId
+                        ? x.ExpenseCategoryId == categoryId
+                        : string.IsNullOrWhiteSpace(budget.CategoryName)
+                            || string.Equals(x.CategoryName, budget.CategoryName, StringComparison.OrdinalIgnoreCase)))
+                .Sum(x => x.Amount);
+            var remaining = budget.Amount - actual;
+            var utilization = budget.Amount <= 0 ? 0 : decimal.Round(actual / budget.Amount * 100m, 2);
+            return new FinanceBudgetDto(
+                budget.Id, budget.Name, budget.ExpenseCategoryId, budget.CategoryName, budget.Amount, budget.Currency,
+                budget.PeriodStart, budget.PeriodEnd, decimal.Round(actual, 2), decimal.Round(remaining, 2), utilization,
+                actual > budget.Amount, budget.IsRecommendation, budget.Status);
+        }).ToList();
     }
 
     public async Task<FinanceBudgetDto> UpsertBudgetAsync(FinanceBudgetWriteRequest request, CancellationToken cancellationToken = default)
@@ -1137,12 +1167,18 @@ public sealed class FinanceAgentService : IFinanceAgentService
 
     private void Require(string permission)
     {
+        // Background hosted jobs are scoped by tenant, not an interactive HTTP user.
+        if (string.IsNullOrWhiteSpace(_user.UserId))
+            return;
         if (!_user.HasPermission(permission))
             throw new ForbiddenException($"Missing permission {permission}.");
     }
 
     private void RequireAny(params string[] permissions)
     {
+        // Background hosted jobs are scoped by tenant, not an interactive HTTP user.
+        if (string.IsNullOrWhiteSpace(_user.UserId))
+            return;
         if (permissions.Any(_user.HasPermission))
             return;
         throw new ForbiddenException($"Missing permission {string.Join(" or ", permissions)}.");
@@ -1295,41 +1331,49 @@ public sealed class FinanceAgentService : IFinanceAgentService
 
     private async Task<IReadOnlyList<ProfitabilityItemDto>> BuildProductProfitabilityAsync(ReportContext ctx, CancellationToken ct)
     {
-        var rows = await (
+        var grouped = await (
             from item in _db.OrderItems.AsNoTracking()
             join order in _db.Orders.AsNoTracking() on item.OrderId equals order.Id
             join product in _db.Products.AsNoTracking() on item.ProductId equals product.Id
             where order.OrderDate >= ctx.Start && order.OrderDate <= ctx.End && order.Status == OrderStatusNames.Completed
+            group item by new { item.ProductId, product.Name } into g
             select new
             {
-                item.ProductId,
-                product.Name,
-                Revenue = item.UnitPrice * item.Quantity,
-                Cost = item.UnitCost * item.Quantity
+                g.Key.ProductId,
+                g.Key.Name,
+                Revenue = g.Sum(x => x.UnitPrice * x.Quantity),
+                Cost = g.Sum(x => x.UnitCost * x.Quantity),
+                HasCost = g.Sum(x => x.UnitCost > 0 ? 1 : 0) > 0
             }
-        ).ToListAsync(ct);
+        )
+        .OrderByDescending(x => x.Revenue)
+        .Take(50)
+        .ToListAsync(ct);
 
-        return rows.GroupBy(x => new { x.ProductId, x.Name })
-            .Select(g =>
-            {
-                var revenue = g.Sum(x => x.Revenue);
-                var cost = g.Sum(x => x.Cost);
-                var hasCost = g.Any(x => x.Cost > 0);
-                return new ProfitabilityItemDto(
-                    g.Key.ProductId,
-                    g.Key.Name,
-                    decimal.Round(revenue, 2),
-                    hasCost ? decimal.Round(cost, 2) : null,
-                    hasCost ? decimal.Round(revenue - cost, 2) : null,
-                    hasCost ? "medium" : "unavailable",
-                    hasCost ? "Gross profit uses order-line UnitCost." : "UnitCost missing — gross profit not shown.");
-            })
-            .OrderByDescending(x => x.Revenue)
-            .Take(50)
+        return grouped
+            .Select(g => new ProfitabilityItemDto(
+                g.ProductId,
+                g.Name,
+                decimal.Round(g.Revenue, 2),
+                g.HasCost ? decimal.Round(g.Cost, 2) : null,
+                g.HasCost ? decimal.Round(g.Revenue - g.Cost, 2) : null,
+                g.HasCost ? "medium" : "unavailable",
+                g.HasCost ? "Gross profit uses order-line UnitCost." : "UnitCost missing — gross profit not shown."))
             .ToList();
     }
 
     private async Task<FinanceBudgetDto> MapBudgetAsync(FinanceBudget budget, CancellationToken ct)
+    {
+        var actual = await ResolveBudgetActualAsync(budget, ct);
+        var remaining = budget.Amount - actual;
+        var utilization = budget.Amount <= 0 ? 0 : decimal.Round(actual / budget.Amount * 100m, 2);
+        return new FinanceBudgetDto(
+            budget.Id, budget.Name, budget.ExpenseCategoryId, budget.CategoryName, budget.Amount, budget.Currency,
+            budget.PeriodStart, budget.PeriodEnd, decimal.Round(actual, 2), decimal.Round(remaining, 2), utilization,
+            actual > budget.Amount, budget.IsRecommendation, budget.Status);
+    }
+
+    private async Task<decimal> ResolveBudgetActualAsync(FinanceBudget budget, CancellationToken ct)
     {
         var query = RecognizedExpensesQuery(budget.PeriodStart, budget.PeriodEnd);
         if (budget.ExpenseCategoryId is Guid categoryId)
@@ -1337,13 +1381,7 @@ public sealed class FinanceAgentService : IFinanceAgentService
         else if (!string.IsNullOrWhiteSpace(budget.CategoryName))
             query = query.Where(x => x.ExpenseCategory.Name == budget.CategoryName);
 
-        var actual = await query.SumAsync(x => (decimal?)x.Amount, ct) ?? 0m;
-        var remaining = budget.Amount - actual;
-        var utilization = budget.Amount <= 0 ? 0 : decimal.Round(actual / budget.Amount * 100m, 2);
-        return new FinanceBudgetDto(
-            budget.Id, budget.Name, budget.ExpenseCategoryId, budget.CategoryName, budget.Amount, budget.Currency,
-            budget.PeriodStart, budget.PeriodEnd, decimal.Round(actual, 2), decimal.Round(remaining, 2), utilization,
-            actual > budget.Amount, budget.IsRecommendation, budget.Status);
+        return await query.SumAsync(x => (decimal?)x.Amount, ct) ?? 0m;
     }
 
     private async Task TrackActivityAsync(

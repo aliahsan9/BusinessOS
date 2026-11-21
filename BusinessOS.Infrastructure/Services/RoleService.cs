@@ -4,6 +4,7 @@ using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Roles.DTOs;
 using BusinessOS.Application.Features.Roles.Services;
 using BusinessOS.Domain.Entities;
+using BusinessOS.Infrastructure.Data;
 using BusinessOS.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 
@@ -18,6 +19,7 @@ public sealed class RoleService : IRoleService
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly RoleManager<ApplicationRole> _roleManager;
     private readonly IAuthorizationVersionService _authorizationVersions;
+    private readonly BusinessOSDbContext _db;
 
     public RoleService(
         IRoleRepository roleRepository,
@@ -26,7 +28,8 @@ public sealed class RoleService : IRoleService
         ICurrentUserService currentUser,
         UserManager<ApplicationUser> userManager,
         RoleManager<ApplicationRole> roleManager,
-        IAuthorizationVersionService authorizationVersions)
+        IAuthorizationVersionService authorizationVersions,
+        BusinessOSDbContext db)
     {
         _roleRepository = roleRepository;
         _permissionRepository = permissionRepository;
@@ -35,6 +38,7 @@ public sealed class RoleService : IRoleService
         _userManager = userManager;
         _roleManager = roleManager;
         _authorizationVersions = authorizationVersions;
+        _db = db;
     }
 
     public async Task<RoleDto> CreateRoleAsync(
@@ -167,6 +171,8 @@ public sealed class RoleService : IRoleService
 
         EnsureCustomRoleOwnedByCurrentTenant(role);
         EnsureRoleCanChange(role, "changed");
+        if (role.IsReadOnly && !PermissionCodes.ViewOnly.Contains(permission.Code))
+            throw new BadRequestException("Read-only roles cannot receive write permissions.");
         EnsureCanGrant(permission);
 
         await _roleRepository.AssignPermissionAsync(roleId, permissionId, cancellationToken);
@@ -228,6 +234,7 @@ public sealed class RoleService : IRoleService
         await _userManager.AddToRoleAsync(user, role.Name);
         user.SecurityVersion++;
         await _userManager.UpdateAsync(user);
+        await AppendAssignmentHistoryAsync(userId, role, "RoleAssigned", cancellationToken);
 
         await _auditService.LogAsync(
             "UserRoleAssigned",
@@ -257,6 +264,7 @@ public sealed class RoleService : IRoleService
         await _userManager.RemoveFromRoleAsync(user, role.Name);
         user.SecurityVersion++;
         await _userManager.UpdateAsync(user);
+        await AppendAssignmentHistoryAsync(userId, role, "RoleRevoked", cancellationToken);
 
         await _auditService.LogAsync(
             "UserRoleRemoved",
@@ -313,13 +321,39 @@ public sealed class RoleService : IRoleService
 
     private void EnsureCanGrant(Permission permission)
     {
-        if (!string.Equals(permission.Code, PermissionCodes.SystemAdminManage, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(permission.Code, PermissionCodes.SystemAdminManage, StringComparison.OrdinalIgnoreCase)
+            && !_currentUser.HasPermission(PermissionCodes.SystemAdminManage))
+        {
+            throw new BadRequestException("Platform administration cannot be granted from a tenant account.");
+        }
+
+        var roles = _currentUser.Roles ?? [];
+        if (roles.Contains("Owner", StringComparer.OrdinalIgnoreCase))
             return;
 
-        if (_currentUser.HasPermission(PermissionCodes.SystemAdminManage))
+        if (!_currentUser.HasPermission(permission.Code))
+            throw new ForbiddenException($"You cannot grant permission '{permission.Code}' that you do not hold.");
+    }
+
+    private async Task AppendAssignmentHistoryAsync(
+        string userId,
+        Role role,
+        string action,
+        CancellationToken cancellationToken)
+    {
+        if (_currentUser.TenantId is not Guid tenantId || tenantId == Guid.Empty)
             return;
 
-        throw new BadRequestException("Platform administration cannot be granted from a tenant account.");
+        _db.RoleAssignmentHistories.Add(new RoleAssignmentHistory
+        {
+            TenantId = tenantId,
+            UserId = userId,
+            RoleId = role.Id,
+            RoleName = role.Name,
+            Action = action,
+            ActorUserId = _currentUser.UserId ?? "system"
+        });
+        await _db.SaveChangesAsync(cancellationToken);
     }
 
     private void EnsureUserInCurrentTenant(ApplicationUser user)

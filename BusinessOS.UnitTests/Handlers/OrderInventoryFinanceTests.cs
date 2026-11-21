@@ -197,6 +197,7 @@ public class OrderAndInventoryEdgeTests
             TestHandlerDependencies.CreateBusinessEvents(),
             TestHandlerDependencies.CreateCache(),
             provider,
+            Mock.Of<BusinessOS.Application.Common.Idempotency.IIdempotencyService>(),
             TestHandlerDependencies.CreateLogger<CreateOrderCommandHandler>());
     }
 
@@ -319,6 +320,7 @@ public class ProductLifecycleTests
             TestHandlerDependencies.CreateBusinessEvents(),
             TestHandlerDependencies.CreateCache(),
             provider,
+            Mock.Of<BusinessOS.Application.Common.Idempotency.IIdempotencyService>(),
             TestHandlerDependencies.CreateLogger<CreateOrderCommandHandler>())
             .Handle(
                 new CreateOrderCommand(customer.Id, 0, 99m, [new CreateOrderItemDto(product.Id, 1)]),

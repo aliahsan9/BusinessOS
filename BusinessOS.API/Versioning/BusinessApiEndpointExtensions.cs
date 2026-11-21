@@ -76,6 +76,8 @@ public static class BusinessApiEndpointExtensions
         v1.MapExperienceEndpoints();
         v1.MapCompanyOsEndpoints();
         v1.MapLaunchEndpoints();
+        v1.MapGrowthEndpoints();
+        v1.MapEnterpriseEndpoints();
 
         // External payment providers are configured with fixed callback URLs.
         app.MapLegacyBillingWebhooks();

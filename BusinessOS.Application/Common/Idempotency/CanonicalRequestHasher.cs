@@ -10,6 +10,7 @@ public static class IdempotencyOperations
     public const string PaymentRefund = "payments.refund";
     public const string BillingCheckout = "billing.checkout";
     public const string BillingRefund = "billing.refund";
+    public const string OrderCreate = "orders.create";
 }
 
 public static class IdempotencyKeyRules
@@ -66,6 +67,29 @@ public static class CanonicalRequestHasher
             paymentMethod.Trim(),
             paymentDate.ToUniversalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             (referenceNo ?? string.Empty).Trim());
+
+    public static string OrderCreate(
+        Guid tenantId,
+        Guid customerId,
+        decimal discount,
+        decimal tax,
+        IReadOnlyList<(Guid ProductId, decimal Quantity)> items)
+    {
+        var itemPart = string.Join(
+            '|',
+            items
+                .OrderBy(item => item.ProductId)
+                .ThenBy(item => item.Quantity)
+                .Select(item => $"{item.ProductId:D}:{Money(item.Quantity)}"));
+
+        return Hash(
+            IdempotencyOperations.OrderCreate,
+            tenantId.ToString("D"),
+            customerId.ToString("D"),
+            Money(discount),
+            Money(tax),
+            itemPart);
+    }
 
     public static string PaymentRefund(Guid tenantId, Guid paymentId, decimal amount, string currency) =>
         Hash(

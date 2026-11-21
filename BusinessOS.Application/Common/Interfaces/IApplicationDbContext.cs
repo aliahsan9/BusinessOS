@@ -175,6 +175,22 @@ public interface IApplicationDbContext
     DbSet<SalesOutreachMessage> SalesOutreachMessages { get; }
     DbSet<SalesEmailSuppression> SalesEmailSuppressions { get; }
     DbSet<SalesOutboundEmailLog> SalesOutboundEmailLogs { get; }
+    DbSet<MarketingLead> MarketingLeads { get; }
+    DbSet<PlatformSupportTicket> PlatformSupportTickets { get; }
+    DbSet<ReferralCode> ReferralCodes { get; }
+    DbSet<ReferralRedemption> ReferralRedemptions { get; }
+    DbSet<CompanyBranch> CompanyBranches { get; }
+    DbSet<PermissionGroup> PermissionGroups { get; }
+    DbSet<PermissionGroupPermission> PermissionGroupPermissions { get; }
+    DbSet<TemporaryPermissionGrant> TemporaryPermissionGrants { get; }
+    DbSet<RoleAssignmentHistory> RoleAssignmentHistories { get; }
+    DbSet<ApprovalPolicy> ApprovalPolicies { get; }
+    DbSet<ApprovalPolicyStep> ApprovalPolicySteps { get; }
+    DbSet<ApprovalRequest> ApprovalRequests { get; }
+    DbSet<ApprovalDecision> ApprovalDecisions { get; }
+    DbSet<EnterpriseAuditEvent> EnterpriseAuditEvents { get; }
+    DbSet<TenantSsoConfiguration> TenantSsoConfigurations { get; }
+    DbSet<TenantEnterpriseSecuritySettings> TenantEnterpriseSecuritySettings { get; }
 
     bool HasActiveTransaction { get; }
 
@@ -212,6 +228,11 @@ public interface IApplicationDbContext
         CancellationToken cancellationToken = default);
 
     void Detach<TEntity>(TEntity entity) where TEntity : class;
+
+    /// <summary>
+    /// EF Core change tracker for concurrency retry / detach patterns in application services.
+    /// </summary>
+    Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker ChangeTracker { get; }
 
     Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default);

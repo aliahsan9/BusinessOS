@@ -5765,6 +5765,8 @@ namespace BusinessOS.Infrastructure.Migrations
 
                     b.HasIndex("TenantId", "CreatedAt");
 
+                    b.HasIndex("TenantId", "OrderDate");
+
                     b.HasIndex("TenantId", "OrderNumber")
                         .IsUnique();
 
@@ -5772,6 +5774,9 @@ namespace BusinessOS.Infrastructure.Migrations
                         .IsDescending(false, false, true);
 
                     b.HasIndex("TenantId", "Status", "CreatedAt")
+                        .IsDescending(false, false, true);
+
+                    b.HasIndex("TenantId", "Status", "OrderDate")
                         .IsDescending(false, false, true);
 
                     b.ToTable("Orders", (string)null);

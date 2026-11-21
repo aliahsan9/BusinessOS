@@ -144,6 +144,17 @@ public static class PermissionCodes
     public const string NalvaManage = "Nalva.Manage";
     public const string NalvaApprove = "Nalva.Approve";
 
+    public const string EnterpriseView = "Enterprise.View";
+    public const string EnterpriseManage = "Enterprise.Manage";
+    public const string OrgBranchView = "Org.Branch.View";
+    public const string OrgBranchManage = "Org.Branch.Manage";
+    public const string ApprovalPolicyView = "Approval.Policy.View";
+    public const string ApprovalPolicyManage = "Approval.Policy.Manage";
+    public const string ApprovalDecide = "Approval.Decide";
+    public const string AuditExport = "Audit.Export";
+    public const string SsoManage = "Sso.Manage";
+    public const string AgentGovernanceManage = "Agent.Governance.Manage";
+
     public static readonly IReadOnlyList<PermissionDefinition> All =
     [
         new("Create Category", CategoryCreate, "Create product categories", "Category"),
@@ -279,7 +290,18 @@ public static class PermissionCodes
         new("Manage Time", TimeManage, "Approve timesheets", "Project"),
         new("Manage Client Portal", PortalManage, "Invite clients to project portal", "Project"),
         new("View Storefront", StorefrontView, "View the company storefront and public profile", "Storefront"),
-        new("Manage Storefront", StorefrontManage, "Publish the company profile, catalog, and reviews", "Storefront")
+        new("Manage Storefront", StorefrontManage, "Publish the company profile, catalog, and reviews", "Storefront"),
+
+        new("View Enterprise", EnterpriseView, "View enterprise administration surfaces", "Enterprise"),
+        new("Manage Enterprise", EnterpriseManage, "Manage enterprise hierarchy, security, and governance", "Enterprise"),
+        new("View Branches", OrgBranchView, "View company branches", "Organization"),
+        new("Manage Branches", OrgBranchManage, "Create and update company branches", "Organization"),
+        new("View Approval Policies", ApprovalPolicyView, "View approval policies and requests", "Approval"),
+        new("Manage Approval Policies", ApprovalPolicyManage, "Configure multi-level approval policies", "Approval"),
+        new("Decide Approvals", ApprovalDecide, "Approve or reject pending approval requests", "Approval"),
+        new("Export Audit Logs", AuditExport, "Export enterprise audit logs", "Audit"),
+        new("Manage SSO", SsoManage, "Configure enterprise SSO and MFA policies", "Security"),
+        new("Manage Agent Governance", AgentGovernanceManage, "Configure enterprise AI agent restrictions", "Nalva")
     ];
 
     public static readonly IReadOnlySet<string> ViewOnly = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -318,7 +340,11 @@ public static class PermissionCodes
         DealView,
         WarehouseView,
         TimeView,
-        StorefrontView
+        StorefrontView,
+        EnterpriseView,
+        OrgBranchView,
+        ApprovalPolicyView,
+        NalvaView
     };
 
     public static readonly IReadOnlySet<string> EmployeePermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)

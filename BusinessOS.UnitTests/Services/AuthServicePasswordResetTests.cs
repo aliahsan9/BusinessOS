@@ -10,9 +10,12 @@ using BusinessOS.Application.Features.Notifications.Services;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.Data;
+using BusinessOS.Infrastructure.Identity;
 using BusinessOS.Infrastructure.MultiTenancy;
 using BusinessOS.Infrastructure.Services;
 using FluentAssertions;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -212,7 +215,9 @@ public class AuthServicePasswordResetTests
             Mock.Of<IEmailNotificationService>(),
             Options.Create(new AppOptions { FrontendBaseUrl = "https://app.example.com" }),
             new MemoryCache(new MemoryCacheOptions()),
-            NullLogger<AuthService>.Instance);
+            NullLogger<AuthService>.Instance,
+            BusinessOS.UnitTests.Common.TestUserManager.Create(),
+            DataProtectionProvider.Create("BusinessOS.UnitTests"));
 
         var response = await sut.RegisterExternalUserAsync(
             email,
@@ -263,7 +268,9 @@ public class AuthServicePasswordResetTests
                 PasswordResetTokenHours = 24
             }),
             new MemoryCache(new MemoryCacheOptions()),
-            logger);
+            logger,
+            BusinessOS.UnitTests.Common.TestUserManager.Create(),
+            DataProtectionProvider.Create("BusinessOS.UnitTests"));
 
     private sealed class TestDbContextFactory : IDbContextFactory<BusinessOSDbContext>
     {

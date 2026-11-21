@@ -21,6 +21,14 @@ public class Role : BaseEntity
     /// </summary>
     public Guid? TenantId { get; set; }
 
+    /// <summary>Tenant | Branch | Department. System roles are always Tenant-scoped.</summary>
+    public string ScopeKind { get; set; } = "Tenant";
+
+    public Guid? ScopeId { get; set; }
+
+    /// <summary>When true, write permissions cannot be assigned to this role.</summary>
+    public bool IsReadOnly { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public Tenant? Tenant { get; set; }

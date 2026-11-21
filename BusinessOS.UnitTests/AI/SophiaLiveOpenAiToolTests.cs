@@ -20,6 +20,8 @@ using Moq;
 
 namespace BusinessOS.UnitTests.AI;
 
+[Trait("Category", "LiveSmoke")]
+[Trait("Provider", "OpenAI")]
 public class SophiaLiveOpenAiToolTests
 {
     private const decimal ThisMonthOrders = 8642.17m;

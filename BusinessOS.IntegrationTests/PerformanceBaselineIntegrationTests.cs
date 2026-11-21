@@ -68,4 +68,36 @@ public class PerformanceBaselineIntegrationTests : IntegrationTestBase
             measurements.Select(m => $"{m.Name}={m.ElapsedMs}ms/{(int)m.Status}"));
         summary.Should().NotBeNullOrWhiteSpace();
     }
+
+    [Fact]
+    public async Task ConcurrentAuthenticatedListReads_DoNotFail()
+    {
+        var owner = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        await IntegrationInventoryHelper.CreateProductWithStockAsync(Client, owner, 5);
+
+        var tasks = Enumerable.Range(0, 8)
+            .Select(_ => IntegrationHttp.SendAuthorizedAsync(
+                Client, HttpMethod.Get, "/api/v1/products?page=1&pageSize=20", owner))
+            .ToArray();
+
+        var responses = await Task.WhenAll(tasks);
+        responses.Should().OnlyContain(r => r.StatusCode == HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task DashboardAnalytics_RespondsWithinSoftCeiling()
+    {
+        var owner = await IntegrationHttp.RegisterAndAuthenticateAsync(Client);
+        var sw = Stopwatch.StartNew();
+        var response = await IntegrationHttp.SendAuthorizedAsync(
+            Client,
+            HttpMethod.Get,
+            "/api/v1/dashboard/sales?period=month",
+            owner);
+        sw.Stop();
+
+        // Soft ceiling only — documents measured latency for the in-memory host.
+        response.StatusCode.Should().BeOneOf(HttpStatusCode.OK, HttpStatusCode.NotFound);
+        sw.ElapsedMilliseconds.Should().BeLessThan(5_000);
+    }
 }

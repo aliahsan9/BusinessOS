@@ -3,10 +3,12 @@ using System.Text.Json;
 using BusinessOS.API.Middleware;
 using BusinessOS.Application.Common.Exceptions;
 using FluentAssertions;
+using Moq;
 using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace BusinessOS.UnitTests.Security;
@@ -105,9 +107,12 @@ public class ExceptionHandlingMiddlewareTests
         context.Request.Path = "/api/v1/orders";
         context.RequestServices = new ServiceCollection().BuildServiceProvider();
 
+        var env = new Mock<IHostEnvironment>();
+        env.SetupGet(x => x.EnvironmentName).Returns("Production");
         var middleware = new ExceptionHandlingMiddleware(
             _ => throw exception,
-            NullLogger<ExceptionHandlingMiddleware>.Instance);
+            NullLogger<ExceptionHandlingMiddleware>.Instance,
+            env.Object);
 
         await middleware.InvokeAsync(context);
 

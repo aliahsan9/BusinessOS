@@ -43,9 +43,11 @@ public class Employee : AuditableEntity
     public string? EmployeeCode { get; set; }
     public string? UserId { get; set; }
     public string? ProfilePictureUrl { get; set; }
+    public Guid? PrimaryBranchId { get; set; }
     public Guid? DepartmentId { get; set; }
     public Guid? TeamId { get; set; }
     public Guid? ManagerEmployeeId { get; set; }
+    public bool IsRegionalManager { get; set; }
     public string EmploymentStatus { get; set; } = "Active";
     public string EmploymentType { get; set; } = "FullTime";
     public string? Skills { get; set; }

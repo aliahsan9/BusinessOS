@@ -7,5 +7,6 @@ public record CreateOrderCommand(
     Guid CustomerId,
     decimal Discount,
     decimal Tax,
-    IReadOnlyList<CreateOrderItemDto> Items
+    IReadOnlyList<CreateOrderItemDto> Items,
+    string? IdempotencyKey = null
 ) : IRequest<Guid>;

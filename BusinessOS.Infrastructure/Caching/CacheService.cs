@@ -40,7 +40,7 @@ public sealed class CacheService : ICacheService
         if (_cache.TryGetValue(key, out T? value) && value is not null)
         {
             sw.Stop();
-            _logger.LogInformation(
+            _logger.LogDebug(
                 "[Cache Hit] {CacheKey} in {ElapsedMs} ms",
                 key,
                 sw.Elapsed.TotalMilliseconds);
@@ -48,7 +48,7 @@ public sealed class CacheService : ICacheService
         }
 
         sw.Stop();
-        _logger.LogInformation(
+        _logger.LogDebug(
             "[Cache Miss] {CacheKey} in {ElapsedMs} ms",
             key,
             sw.Elapsed.TotalMilliseconds);
@@ -71,7 +71,7 @@ public sealed class CacheService : ICacheService
         _keys[key] = 0;
         sw.Stop();
 
-        _logger.LogInformation(
+        _logger.LogDebug(
             "[Cache Set] {CacheKey} Absolute={Absolute} Sliding={Sliding} in {ElapsedMs} ms",
             key,
             absoluteExpiration ?? _settings.DefaultExpiration,

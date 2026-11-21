@@ -56,14 +56,29 @@ public class ExperienceServiceTests
     {
         var (service, harness) = Create();
         harness.User.Permissions.Add(PermissionCodes.ProductView);
-        harness.Db.Products.Add(new Product
+        var product = new Product
         {
+            Id = Guid.NewGuid(),
             Name = "Packing boxes",
             SKU = "BOX-1",
             CategoryId = Guid.NewGuid(),
             CurrentStock = 1,
             ReorderLevel = 5,
             IsActive = true,
+            RowVersion = new byte[8]
+        };
+        harness.Db.Products.Add(product);
+        // Insights read Inventories (not Product.CurrentStock alone).
+        harness.Db.Inventories.Add(new Inventory
+        {
+            Id = Guid.NewGuid(),
+            TenantId = harness.TenantId,
+            ProductId = product.Id,
+            CurrentStock = 1,
+            ReorderLevel = 5,
+            MinimumStockLevel = 0,
+            MaximumStockLevel = 100,
+            LastUpdated = DateTime.UtcNow,
             RowVersion = new byte[8]
         });
         await harness.Db.SaveChangesAsync();
@@ -73,7 +88,8 @@ public class ExperienceServiceTests
         dashboard.Insights.Should().Contain(x => x.Message.Contains("Packing boxes") && x.Message.Contains("5"));
         dashboard.Insights.Should().NotContain(x => x.Code == "revenue-window");
 
-        var product = await harness.Db.Products.SingleAsync();
+        var inventory = await harness.Db.Inventories.SingleAsync();
+        inventory.CurrentStock = 20;
         product.CurrentStock = 20;
         await harness.Db.SaveChangesAsync();
         var cleared = await service.GetDashboardAsync(CancellationToken.None);

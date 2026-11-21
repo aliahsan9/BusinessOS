@@ -18,13 +18,16 @@ public sealed class ExceptionHandlingMiddleware
 
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
+    private readonly IHostEnvironment _environment;
 
     public ExceptionHandlingMiddleware(
         RequestDelegate next,
-        ILogger<ExceptionHandlingMiddleware> logger)
+        ILogger<ExceptionHandlingMiddleware> logger,
+        IHostEnvironment environment)
     {
         _next = next;
         _logger = logger;
+        _environment = environment;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -170,6 +173,7 @@ public sealed class ExceptionHandlingMiddleware
             {
                 DbUpdateConcurrencyException => "This record was changed by someone else. Refresh and try again.",
                 OpenAiProviderException openAiFailure => openAiFailure.Failure.ClientMessage,
+                _ when statusCode >= StatusCodes.Status500InternalServerError && (_environment.IsDevelopment() || _environment.IsEnvironment("Testing")) => exception.Message,
                 _ when statusCode >= StatusCodes.Status500InternalServerError => "An unexpected error occurred.",
                 _ => exception.Message
             },

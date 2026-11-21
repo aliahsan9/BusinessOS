@@ -6,6 +6,7 @@ public class Order : AuditableEntity
 {
     public Guid TenantId { get; set; }
     public Guid CustomerId { get; set; }
+    public Guid? BranchId { get; set; }
 
     public string OrderNumber { get; set; } = default!;
     public DateTime OrderDate { get; set; } = DateTime.UtcNow;

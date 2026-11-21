@@ -91,24 +91,64 @@ public sealed class VectorSyncBackgroundService : BackgroundService
         if (stale.Count > 0)
             await db.SaveChangesAsync(cancellationToken);
 
-        var batch = await db.VectorSyncOutboxMessages
+        var candidates = await db.VectorSyncOutboxMessages
+            .AsNoTracking()
             .Where(x =>
                 (x.Status == VectorSyncStatus.Pending || x.Status == VectorSyncStatus.Failed)
                 && (x.NextAttemptAt == null || x.NextAttemptAt <= now))
             .OrderBy(x => x.CreatedAt)
+            .Select(x => x.Id)
             .Take(_options.BatchSize)
             .ToListAsync(cancellationToken);
 
-        if (batch.Count == 0)
+        if (candidates.Count == 0)
             return;
 
-        foreach (var message in batch)
+        // Atomic per-message claim so multiple API replicas cannot double-embed.
+        var claimedIds = new List<Guid>(candidates.Count);
+        var leaseUntil = now.AddMinutes(10);
+        foreach (var candidateId in candidates)
         {
-            message.Status = VectorSyncStatus.Processing;
-            message.NextAttemptAt = now.AddMinutes(10);
+            var claimed = 0;
+            try
+            {
+                claimed = await db.VectorSyncOutboxMessages
+                    .Where(x =>
+                        x.Id == candidateId
+                        && (x.Status == VectorSyncStatus.Pending || x.Status == VectorSyncStatus.Failed)
+                        && (x.NextAttemptAt == null || x.NextAttemptAt <= now))
+                    .ExecuteUpdateAsync(
+                        setters => setters
+                            .SetProperty(x => x.Status, VectorSyncStatus.Processing)
+                            .SetProperty(x => x.NextAttemptAt, leaseUntil),
+                        cancellationToken);
+            }
+            catch (InvalidOperationException)
+            {
+                var row = await db.VectorSyncOutboxMessages.FirstOrDefaultAsync(
+                    x => x.Id == candidateId
+                        && (x.Status == VectorSyncStatus.Pending || x.Status == VectorSyncStatus.Failed)
+                        && (x.NextAttemptAt == null || x.NextAttemptAt <= now),
+                    cancellationToken);
+                if (row is not null)
+                {
+                    row.Status = VectorSyncStatus.Processing;
+                    row.NextAttemptAt = leaseUntil;
+                    await db.SaveChangesAsync(cancellationToken);
+                    claimed = 1;
+                }
+            }
+
+            if (claimed == 1)
+                claimedIds.Add(candidateId);
         }
 
-        await db.SaveChangesAsync(cancellationToken);
+        if (claimedIds.Count == 0)
+            return;
+
+        var batch = await db.VectorSyncOutboxMessages
+            .Where(x => claimedIds.Contains(x.Id))
+            .ToListAsync(cancellationToken);
 
         foreach (var message in batch)
         {

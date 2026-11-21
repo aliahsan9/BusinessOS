@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Nodes;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
@@ -11,6 +11,7 @@ using BusinessOS.Application.Features.FinanceAgent;
 using BusinessOS.Application.Features.ProcurementAgent;
 using BusinessOS.Application.Features.SalesAgent;
 using BusinessOS.Application.Features.Support;
+using BusinessOS.Application.Features.Enterprise;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.AI.SalesAgent;
@@ -48,6 +49,8 @@ public sealed class NalvaToolGateway : INalvaToolGateway
     private readonly ICustomerIntelligenceService? _customerIntel;
     private readonly IExecutiveIntelligenceService? _executive;
     private readonly IBusinessIntelligenceService? _bi;
+    private readonly IEnterpriseAgentGovernanceService? _agentGovernance;
+    private readonly IApprovalGovernanceService? _approvalGovernance;
 
     public NalvaToolGateway(
         BusinessOSDbContext db,
@@ -63,7 +66,9 @@ public sealed class NalvaToolGateway : INalvaToolGateway
         ISalesIntelligenceService? salesIntel = null,
         ICustomerIntelligenceService? customerIntel = null,
         IExecutiveIntelligenceService? executive = null,
-        IBusinessIntelligenceService? bi = null)
+        IBusinessIntelligenceService? bi = null,
+        IEnterpriseAgentGovernanceService? agentGovernance = null,
+        IApprovalGovernanceService? approvalGovernance = null)
     {
         _db = db;
         _tenant = tenant;
@@ -79,6 +84,8 @@ public sealed class NalvaToolGateway : INalvaToolGateway
         _customerIntel = customerIntel;
         _executive = executive;
         _bi = bi;
+        _agentGovernance = agentGovernance;
+        _approvalGovernance = approvalGovernance;
     }
 
     public async Task<NalvaToolOutcome> ExecuteAsync(
@@ -99,12 +106,44 @@ public sealed class NalvaToolGateway : INalvaToolGateway
             return Fail(rejected);
 
         var args = NalvaArgs.Parse(argsJson);
+
+        if (_agentGovernance is not null)
+        {
+            try
+            {
+                await _agentGovernance.EnsureToolAllowedAsync(
+                    agentKey,
+                    tool.Name,
+                    NalvaArgs.GuidOf(args, "departmentId"),
+                    cancellationToken);
+            }
+            catch (ForbiddenException ex)
+            {
+                return Fail(ex.Message);
+            }
+        }
+
         var settings = await _db.NalvaCompanySettings.AsNoTracking().FirstOrDefaultAsync(cancellationToken);
         var extraApproval = settings is not null
             && NalvaJson.Strings(settings.ExtraApprovalToolsJson).Contains(tool.Name, StringComparer.OrdinalIgnoreCase);
         var forceExternalApproval = settings?.RequireApprovalForExternalActions != false
             && (tool.ExternalEffect || tool.Integration is "gmail" or "meta" or "external" or "prepared");
         var requiresApproval = tool.RequiresApproval || extraApproval || (forceExternalApproval && tool.IsWrite && tool.ExternalEffect);
+
+        if (_approvalGovernance is not null && requiresApproval && !approvalGranted)
+        {
+            await _approvalGovernance.EvaluateAndEnqueueAsync(new ApprovalEvaluateRequest
+            {
+                TriggerType = ApprovalTriggerTypes.AgentTool,
+                SubjectType = "NalvaTool",
+                SubjectId = executionId.ToString(),
+                Title = $"Agent {agentKey} requests {tool.Name}",
+                PayloadJson = argsJson,
+                ToolName = tool.Name,
+                Amount = NalvaArgs.Dec(args, "amount")
+            }, cancellationToken);
+        }
+
         if (requiresApproval && !approvalGranted)
         {
             return new NalvaToolOutcome
@@ -489,12 +528,22 @@ public sealed class NalvaToolGateway : INalvaToolGateway
 
     private async Task<NalvaToolOutcome> InventorySummary(CancellationToken ct)
     {
-        var products = await _db.Products.AsNoTracking().Where(x => x.IsActive).Select(x => new { x.CurrentStock, x.ReorderLevel }).ToListAsync(ct);
+        var summary = await _db.Products.AsNoTracking()
+            .Where(x => x.IsActive)
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Products = g.Count(),
+                Units = g.Sum(x => x.CurrentStock),
+                LowStock = g.Sum(x => x.CurrentStock <= x.ReorderLevel ? 1 : 0)
+            })
+            .FirstOrDefaultAsync(ct);
+
         return Ok("Inventory summary from product stock.", new JsonObject
         {
-            ["products"] = products.Count,
-            ["units"] = products.Sum(x => x.CurrentStock),
-            ["lowStock"] = products.Count(x => x.CurrentStock <= x.ReorderLevel)
+            ["products"] = summary?.Products ?? 0,
+            ["units"] = summary?.Units ?? 0m,
+            ["lowStock"] = summary?.LowStock ?? 0
         });
     }
 
@@ -848,7 +897,7 @@ public sealed class NalvaToolGateway : INalvaToolGateway
         var data = await _salesIntel.ForecastSalesAsync(1, ct);
         return Ok(
             data.Available
-                ? "Labeled sales revenue forecast from completed-order history. Prediction — not a confirmed fact."
+                ? "Labeled sales revenue forecast from completed-order history. Prediction â€” not a confirmed fact."
                 : "Sales forecast unavailable due to insufficient history. No figure was invented.",
             JsonSerializer.SerializeToNode(data)?.AsObject() ?? new JsonObject());
     }
@@ -1502,7 +1551,7 @@ public sealed class NalvaToolGateway : INalvaToolGateway
         {
             var data = await _customerIntel.GetChurnRisksAsync(ct);
             return Ok(
-                "Potential churn risks from completed-order silence. Heuristic estimates — not confirmed churn.",
+                "Potential churn risks from completed-order silence. Heuristic estimates â€” not confirmed churn.",
                 new JsonObject
                 {
                     ["count"] = data.Count,
@@ -2622,3 +2671,4 @@ internal static class NalvaJson
 
     public static string Serialize<T>(T value) => JsonSerializer.Serialize(value);
 }
+

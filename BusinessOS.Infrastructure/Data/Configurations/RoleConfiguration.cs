@@ -23,6 +23,15 @@ public sealed class RoleConfiguration : IEntityTypeConfiguration<Role>
             .IsRequired()
             .HasDefaultValue(false);
 
+        builder.Property(x => x.ScopeKind)
+            .HasMaxLength(40)
+            .IsRequired()
+            .HasDefaultValue("Tenant");
+
+        builder.Property(x => x.IsReadOnly)
+            .IsRequired()
+            .HasDefaultValue(false);
+
         builder.HasOne(x => x.Tenant)
             .WithMany()
             .HasForeignKey(x => x.TenantId)

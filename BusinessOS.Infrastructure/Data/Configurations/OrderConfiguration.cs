@@ -29,6 +29,10 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
 
         builder.HasIndex(x => new { x.TenantId, x.OrderNumber }).IsUnique();
         builder.HasIndex(x => new { x.TenantId, x.CreatedAt });
+        // Finance/analytics filter on OrderDate; CreatedAt indexes alone cause range scans.
+        builder.HasIndex(x => new { x.TenantId, x.OrderDate });
+        builder.HasIndex(x => new { x.TenantId, x.Status, x.OrderDate })
+            .IsDescending(false, false, true);
         builder.HasIndex(x => new { x.TenantId, x.Status, x.CreatedAt })
             .IsDescending(false, false, true);
         builder.HasIndex(x => new { x.TenantId, x.CustomerId, x.CreatedAt })

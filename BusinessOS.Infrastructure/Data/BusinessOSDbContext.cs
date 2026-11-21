@@ -205,6 +205,22 @@ public partial class BusinessOSDbContext
     public DbSet<SalesOutreachMessage> SalesOutreachMessages => Set<SalesOutreachMessage>();
     public DbSet<SalesEmailSuppression> SalesEmailSuppressions => Set<SalesEmailSuppression>();
     public DbSet<SalesOutboundEmailLog> SalesOutboundEmailLogs => Set<SalesOutboundEmailLog>();
+    public DbSet<MarketingLead> MarketingLeads => Set<MarketingLead>();
+    public DbSet<PlatformSupportTicket> PlatformSupportTickets => Set<PlatformSupportTicket>();
+    public DbSet<ReferralCode> ReferralCodes => Set<ReferralCode>();
+    public DbSet<ReferralRedemption> ReferralRedemptions => Set<ReferralRedemption>();
+    public DbSet<CompanyBranch> CompanyBranches => Set<CompanyBranch>();
+    public DbSet<PermissionGroup> PermissionGroups => Set<PermissionGroup>();
+    public DbSet<PermissionGroupPermission> PermissionGroupPermissions => Set<PermissionGroupPermission>();
+    public DbSet<TemporaryPermissionGrant> TemporaryPermissionGrants => Set<TemporaryPermissionGrant>();
+    public DbSet<RoleAssignmentHistory> RoleAssignmentHistories => Set<RoleAssignmentHistory>();
+    public DbSet<ApprovalPolicy> ApprovalPolicies => Set<ApprovalPolicy>();
+    public DbSet<ApprovalPolicyStep> ApprovalPolicySteps => Set<ApprovalPolicyStep>();
+    public DbSet<ApprovalRequest> ApprovalRequests => Set<ApprovalRequest>();
+    public DbSet<ApprovalDecision> ApprovalDecisions => Set<ApprovalDecision>();
+    public DbSet<EnterpriseAuditEvent> EnterpriseAuditEvents => Set<EnterpriseAuditEvent>();
+    public DbSet<TenantSsoConfiguration> TenantSsoConfigurations => Set<TenantSsoConfiguration>();
+    public DbSet<TenantEnterpriseSecuritySettings> TenantEnterpriseSecuritySettings => Set<TenantEnterpriseSecuritySettings>();
 
     public override int SaveChanges() =>
         SaveChangesAsync(CancellationToken.None).GetAwaiter().GetResult();
@@ -256,6 +272,7 @@ public partial class BusinessOSDbContext
         foreach (var entry in ChangeTracker.Entries().ToList())
         {
             if (entry.Entity is TenantAuditLog or EntityAuditLog or RbacAuditLog or AiCopilotAuditLog or PlatformAuditLog
+                    or EnterpriseAuditEvent or RoleAssignmentHistory
                 && entry.State is EntityState.Modified or EntityState.Deleted)
             {
                 throw new InvalidOperationException("Audit records cannot be modified or deleted.");
@@ -581,6 +598,22 @@ public partial class BusinessOSDbContext
         FilterTenant<SalesOutreachMessage>(builder);
         FilterTenant<SalesEmailSuppression>(builder);
         FilterTenant<SalesOutboundEmailLog>(builder);
+        FilterTenant<CompanyBranch>(builder);
+        FilterTenant<PermissionGroup>(builder);
+        FilterTenant<TemporaryPermissionGrant>(builder);
+        FilterTenant<ApprovalPolicy>(builder);
+        FilterTenant<ApprovalPolicyStep>(builder);
+        FilterTenant<ApprovalRequest>(builder);
+        FilterTenant<ApprovalDecision>(builder);
+        FilterTenant<TenantSsoConfiguration>(builder);
+        FilterTenant<TenantEnterpriseSecuritySettings>(builder);
+
+        builder.Entity<PermissionGroupPermission>()
+            .HasQueryFilter(x => x.TenantId == _tenantId);
+        builder.Entity<RoleAssignmentHistory>()
+            .HasQueryFilter(x => x.TenantId == _tenantId);
+        builder.Entity<EnterpriseAuditEvent>()
+            .HasQueryFilter(x => x.TenantId == _tenantId);
     }
 
     private void FilterTenant<TEntity>(ModelBuilder builder)

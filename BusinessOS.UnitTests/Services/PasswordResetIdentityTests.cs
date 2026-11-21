@@ -71,13 +71,21 @@ public class PasswordResetIdentityTests
         invalid.Succeeded.Should().BeFalse();
 
         var token = await identity.GeneratePasswordResetTokenAsync("owner@acme.com", CancellationToken.None);
-        await Task.Delay(50);
-        var expired = await identity.ResetPasswordWithTokenAsync(
-            "owner@acme.com",
-            token!,
-            "NewPassword1",
-            CancellationToken.None);
-        expired.Succeeded.Should().BeFalse();
+        // Lifetime is 1ms; poll briefly so slow CI hosts still observe expiry without a fixed flaky sleep.
+        IdentityOperationResult? expired = null;
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            await Task.Delay(25);
+            expired = await identity.ResetPasswordWithTokenAsync(
+                "owner@acme.com",
+                token!,
+                "NewPassword1",
+                CancellationToken.None);
+            if (!expired.Succeeded)
+                break;
+        }
+
+        expired!.Succeeded.Should().BeFalse();
         var user = await users.FindByEmailAsync("owner@acme.com");
         (await users.CheckPasswordAsync(user!, "OldPassword1")).Should().BeTrue();
     }

@@ -44,6 +44,11 @@ public static class NalvaLimits
     public const decimal MaxEstimatedCostPerExecutionUsd = 1.00m;
     public const int TasksPerCompanyPerPass = 2;
     public const int TasksPerPass = 10;
+    /// <summary>
+    /// Max tasks executed in parallel within a single processor pass.
+    /// Bounded so one busy tenant cannot monopolize the worker process.
+    /// </summary>
+    public const int MaxParallelTaskExecutions = 3;
     /// <summary>Stalled Running claims older than this are recovered after restart or crash.</summary>
     public const int ClaimLeaseSeconds = 180;
 }

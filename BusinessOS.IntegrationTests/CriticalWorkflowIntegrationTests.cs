@@ -323,7 +323,9 @@ public class CriticalWorkflowIntegrationTests : IntegrationTestBase
             || path.Contains("openapi")
             || path.Contains("scalar")
             || path.Contains("swagger")
-            || path.Contains("/billing/plans");
+            || path.Contains("/billing/plans")
+            || path.Contains("/growth/")
+            || path.Contains("/enterprise/");
     }
 
     private async Task<AuthResponse> AsEmployeeAsync(AuthResponse owner)

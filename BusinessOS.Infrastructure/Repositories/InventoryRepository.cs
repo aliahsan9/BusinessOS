@@ -35,12 +35,15 @@ public sealed class InventoryRepository : IInventoryRepository
         await _context.SaveChangesAsync(cancellationToken);
     }
 
+    private const int AlertListCap = 200;
+
     public Task<List<Inventory>> GetLowStockAsync(CancellationToken cancellationToken = default) =>
         _context.Inventories
             .AsNoTracking()
             .Include(x => x.Product)
             .Where(x => x.CurrentStock > 0 && x.CurrentStock <= x.ReorderLevel)
             .OrderBy(x => x.CurrentStock)
+            .Take(AlertListCap)
             .ToListAsync(cancellationToken);
 
     public Task<List<Inventory>> GetOutOfStockAsync(CancellationToken cancellationToken = default) =>
@@ -49,6 +52,7 @@ public sealed class InventoryRepository : IInventoryRepository
             .Include(x => x.Product)
             .Where(x => x.CurrentStock == 0)
             .OrderBy(x => x.Product!.Name)
+            .Take(AlertListCap)
             .ToListAsync(cancellationToken);
 
     public Task<List<Inventory>> GetReorderProductsAsync(CancellationToken cancellationToken = default) =>
@@ -57,6 +61,7 @@ public sealed class InventoryRepository : IInventoryRepository
             .Include(x => x.Product)
             .Where(x => x.CurrentStock <= x.ReorderLevel)
             .OrderBy(x => x.CurrentStock)
+            .Take(AlertListCap)
             .ToListAsync(cancellationToken);
 
     public IQueryable<Inventory> Query() =>

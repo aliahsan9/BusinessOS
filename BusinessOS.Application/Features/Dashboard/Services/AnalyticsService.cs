@@ -29,42 +29,52 @@ public sealed class AnalyticsService : IAnalyticsService
             .AsNoTracking()
             .Where(x => x.Status == OrderStatusNames.Completed);
 
-        var todaySales = await completedOrders
-            .Where(x => x.OrderDate >= todayStart)
-            .SumAsync(x => x.GrandTotal, cancellationToken);
-
-        var weeklySales = await completedOrders
-            .Where(x => x.OrderDate >= weekStart)
-            .SumAsync(x => x.GrandTotal, cancellationToken);
-
-        var monthlySales = await completedOrders
-            .Where(x => x.OrderDate >= monthStart)
-            .SumAsync(x => x.GrandTotal, cancellationToken);
-
-        var yearlySales = await completedOrders
+        // Single round-trip for period KPIs instead of four separate Sum queries.
+        var periodSales = await completedOrders
             .Where(x => x.OrderDate >= yearStart)
-            .SumAsync(x => x.GrandTotal, cancellationToken);
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Today = g.Sum(x => x.OrderDate >= todayStart ? x.GrandTotal : 0m),
+                Weekly = g.Sum(x => x.OrderDate >= weekStart ? x.GrandTotal : 0m),
+                Monthly = g.Sum(x => x.OrderDate >= monthStart ? x.GrandTotal : 0m),
+                Yearly = g.Sum(x => x.GrandTotal)
+            })
+            .FirstOrDefaultAsync(cancellationToken);
 
-        var filteredOrders = await _context.Orders
+        var todaySales = periodSales?.Today ?? 0m;
+        var weeklySales = periodSales?.Weekly ?? 0m;
+        var monthlySales = periodSales?.Monthly ?? 0m;
+        var yearlySales = periodSales?.Yearly ?? 0m;
+
+        var rangeStats = await _context.Orders
             .AsNoTracking()
             .Where(x => x.OrderDate >= dateRange.StartDate && x.OrderDate <= dateRange.EndDate)
-            .Select(x => new { x.GrandTotal, x.OrderDate, x.Status })
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Completed = g.Sum(x => x.Status == OrderStatusNames.Completed ? 1 : 0),
+                Cancelled = g.Sum(x => x.Status == OrderStatusNames.Cancelled ? 1 : 0),
+                CompletedRevenue = g.Sum(x => x.Status == OrderStatusNames.Completed ? x.GrandTotal : 0m)
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var completed = rangeStats?.Completed ?? 0;
+        var cancelled = rangeStats?.Cancelled ?? 0;
+        var completedRevenue = rangeStats?.CompletedRevenue ?? 0m;
+
+        // Only completed rows needed for trend buckets — projected, not full entities.
+        var completedRowsRaw = await _context.Orders
+            .AsNoTracking()
+            .Where(x =>
+                x.OrderDate >= dateRange.StartDate &&
+                x.OrderDate <= dateRange.EndDate &&
+                x.Status == OrderStatusNames.Completed)
+            .Select(x => new { x.OrderDate, x.GrandTotal })
             .ToListAsync(cancellationToken);
-
-        var completed = filteredOrders.Count(x =>
-            x.Status.Equals(OrderStatusNames.Completed, StringComparison.OrdinalIgnoreCase));
-        var cancelled = filteredOrders.Count(x =>
-            x.Status.Equals(OrderStatusNames.Cancelled, StringComparison.OrdinalIgnoreCase));
-
-        var completedRevenue = filteredOrders
-            .Where(x => x.Status.Equals(OrderStatusNames.Completed, StringComparison.OrdinalIgnoreCase))
-            .Sum(x => x.GrandTotal);
-
-        var completedRows = filteredOrders
-            .Where(x => x.Status.Equals(OrderStatusNames.Completed, StringComparison.OrdinalIgnoreCase))
-            .Select(x => (x.OrderDate, x.GrandTotal))
-            .ToList();
-        var revenueTrends = BuildRevenueTrends(completedRows, dateRange);
+        var revenueTrends = BuildRevenueTrends(
+            completedRowsRaw.Select(x => (x.OrderDate, x.GrandTotal)).ToList(),
+            dateRange);
 
         return new SalesAnalyticsResponse
         {
@@ -270,8 +280,26 @@ public sealed class AnalyticsService : IAnalyticsService
         DashboardDateRange dateRange,
         CancellationToken cancellationToken = default)
     {
+        var inventoryTotals = await _context.Inventories
+            .AsNoTracking()
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                InventoryValue = g.Sum(x => x.CurrentStock * x.Product.CostPrice),
+                TotalStockQuantity = g.Sum(x => x.CurrentStock),
+                LowStockProducts = g.Sum(x => x.CurrentStock > 0 && x.CurrentStock <= x.ReorderLevel ? 1 : 0),
+                OutOfStockProducts = g.Sum(x => x.CurrentStock <= 0 ? 1 : 0)
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var inventoryValue = inventoryTotals?.InventoryValue ?? 0m;
+        var totalStockQuantity = inventoryTotals?.TotalStockQuantity ?? 0m;
+
+        // Cap stock-level payload for large catalogs; KPIs above remain exact.
         var stockLevels = await _context.Inventories
             .AsNoTracking()
+            .OrderBy(x => x.CurrentStock)
+            .Take(500)
             .Select(x => new InventoryStockLevelDto
             {
                 ProductId = x.ProductId,
@@ -285,14 +313,6 @@ public sealed class AnalyticsService : IAnalyticsService
                         : "InStock"
             })
             .ToListAsync(cancellationToken);
-
-        var inventoryValue = await _context.Inventories
-            .AsNoTracking()
-            .SumAsync(x => x.CurrentStock * x.Product.CostPrice, cancellationToken);
-
-        var totalStockQuantity = await _context.Inventories
-            .AsNoTracking()
-            .SumAsync(x => x.CurrentStock, cancellationToken);
 
         var reorderRecommendations = await _context.Inventories
             .AsNoTracking()
@@ -332,8 +352,8 @@ public sealed class AnalyticsService : IAnalyticsService
         {
             InventoryValue = Math.Round(inventoryValue, 2),
             TotalStockQuantity = totalStockQuantity,
-            LowStockProducts = stockLevels.Count(x => x.StockStatus == "LowStock"),
-            OutOfStockProducts = stockLevels.Count(x => x.StockStatus == "OutOfStock"),
+            LowStockProducts = inventoryTotals?.LowStockProducts ?? 0,
+            OutOfStockProducts = inventoryTotals?.OutOfStockProducts ?? 0,
             StockLevels = stockLevels,
             ReorderRecommendations = reorderRecommendations,
             StockMovementTrends = stockMovementTrends,
@@ -345,32 +365,36 @@ public sealed class AnalyticsService : IAnalyticsService
         DashboardDateRange dateRange,
         CancellationToken cancellationToken = default)
     {
-        var orders = await _context.Orders
+        var ordersByStatusRaw = await _context.Orders
             .AsNoTracking()
             .Where(x => x.OrderDate >= dateRange.StartDate && x.OrderDate <= dateRange.EndDate)
-            .Select(x => new { x.Status, x.OrderDate })
+            .GroupBy(x => x.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
             .ToListAsync(cancellationToken);
 
-        var totalOrders = orders.Count;
-        var completed = orders.Count(x =>
-            x.Status.Equals(OrderStatusNames.Completed, StringComparison.OrdinalIgnoreCase));
-        var cancelled = orders.Count(x =>
-            x.Status.Equals(OrderStatusNames.Cancelled, StringComparison.OrdinalIgnoreCase));
+        var totalOrders = ordersByStatusRaw.Sum(x => x.Count);
+        var completed = ordersByStatusRaw
+            .Where(x => x.Status.Equals(OrderStatusNames.Completed, StringComparison.OrdinalIgnoreCase))
+            .Sum(x => x.Count);
+        var cancelled = ordersByStatusRaw
+            .Where(x => x.Status.Equals(OrderStatusNames.Cancelled, StringComparison.OrdinalIgnoreCase))
+            .Sum(x => x.Count);
 
-        var ordersByStatus = orders
-            .GroupBy(x => x.Status, StringComparer.OrdinalIgnoreCase)
+        var ordersByStatus = ordersByStatusRaw
             .Select(g => new OrderStatusCountDto
             {
-                Status = g.Key,
-                Count = g.Count(),
+                Status = g.Status,
+                Count = g.Count,
                 Percentage = totalOrders > 0
-                    ? Math.Round((decimal)g.Count() / totalOrders * 100, 2)
+                    ? Math.Round((decimal)g.Count / totalOrders * 100, 2)
                     : 0
             })
             .OrderByDescending(x => x.Count)
             .ToList();
 
-        var ordersPerDay = orders
+        var ordersPerDay = await _context.Orders
+            .AsNoTracking()
+            .Where(x => x.OrderDate >= dateRange.StartDate && x.OrderDate <= dateRange.EndDate)
             .GroupBy(x => x.OrderDate.Date)
             .Select(g => new OrderPeriodCountDto
             {
@@ -378,16 +402,24 @@ public sealed class AnalyticsService : IAnalyticsService
                 Count = g.Count()
             })
             .OrderBy(x => x.Period)
-            .ToList();
+            .ToListAsync(cancellationToken);
 
-        var ordersPerMonth = orders
-            .GroupBy(x => new DateTime(x.OrderDate.Year, x.OrderDate.Month, 1))
+        // Group by Year/Month (translatable); build Period DateTime after materialization.
+        var ordersPerMonthRaw = await _context.Orders
+            .AsNoTracking()
+            .Where(x => x.OrderDate >= dateRange.StartDate && x.OrderDate <= dateRange.EndDate)
+            .GroupBy(x => new { x.OrderDate.Year, x.OrderDate.Month })
+            .Select(g => new { g.Key.Year, g.Key.Month, Count = g.Count() })
+            .OrderBy(x => x.Year)
+            .ThenBy(x => x.Month)
+            .ToListAsync(cancellationToken);
+
+        var ordersPerMonth = ordersPerMonthRaw
             .Select(g => new OrderPeriodCountDto
             {
-                Period = g.Key,
-                Count = g.Count()
+                Period = new DateTime(g.Year, g.Month, 1, 0, 0, 0, DateTimeKind.Utc),
+                Count = g.Count
             })
-            .OrderBy(x => x.Period)
             .ToList();
 
         return new OrderAnalyticsResponse

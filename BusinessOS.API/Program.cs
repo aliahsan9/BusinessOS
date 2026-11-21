@@ -15,9 +15,11 @@ using BusinessOS.Infrastructure;
 using BusinessOS.Infrastructure.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
+using System.IO.Compression;
 using Serilog;
 using Serilog.Events;
 
@@ -49,6 +51,21 @@ try
     builder.Services.AddMemoryCache();
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddProblemDetails();
+    builder.Services.AddResponseCompression(options =>
+    {
+        options.EnableForHttps = true;
+        options.Providers.Add<BrotliCompressionProvider>();
+        options.Providers.Add<GzipCompressionProvider>();
+        options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(
+        [
+            "application/json",
+            "application/problem+json"
+        ]);
+    });
+    builder.Services.Configure<BrotliCompressionProviderOptions>(options =>
+        options.Level = CompressionLevel.Fastest);
+    builder.Services.Configure<GzipCompressionProviderOptions>(options =>
+        options.Level = CompressionLevel.Fastest);
     // Adding Rate Limiting services
 
     builder.Services.Configure<ForwardedHeadersOptions>(options =>
@@ -261,6 +278,7 @@ try
     await DbInitializer.SeedAsync(app.Services);
 
     app.UseForwardedHeaders();
+    app.UseResponseCompression();
 
     // Correlation ID must run first so all subsequent logs share it.
     app.UseMiddleware<CorrelationIdMiddleware>();

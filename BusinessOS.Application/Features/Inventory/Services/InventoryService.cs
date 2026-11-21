@@ -157,20 +157,32 @@ public sealed class InventoryService : IInventoryService
             .ToListAsync(cancellationToken);
         var services = serviceIds.ToHashSet();
 
-        foreach (var (productId, quantity) in productQuantities)
+        var stockProductIds = productIds.Where(id => !services.Contains(id)).ToList();
+        if (stockProductIds.Count == 0)
+            return;
+
+        // Single query for all products — deduct remains the authoritative concurrency gate.
+        var inventories = await _context.Inventories
+            .AsNoTracking()
+            .Where(inventory => stockProductIds.Contains(inventory.ProductId))
+            .Select(inventory => new
+            {
+                inventory.ProductId,
+                inventory.CurrentStock,
+                ProductName = inventory.Product.Name
+            })
+            .ToDictionaryAsync(inventory => inventory.ProductId, cancellationToken);
+
+        foreach (var productId in stockProductIds)
         {
-            if (services.Contains(productId))
-                continue;
-
-            var inventory = await _inventoryRepository.GetByProductIdAsync(productId, cancellationToken);
-
-            if (inventory is null)
+            var quantity = productQuantities[productId];
+            if (!inventories.TryGetValue(productId, out var inventory))
                 throw new BadRequestException($"No inventory record exists for product {productId}.");
 
             if (inventory.CurrentStock < quantity)
             {
                 throw new BadRequestException(
-                    $"Insufficient stock for product '{inventory.Product.Name}'. " +
+                    $"Insufficient stock for product '{inventory.ProductName}'. " +
                     $"Available: {inventory.CurrentStock}, Requested: {quantity}.");
             }
         }
@@ -341,21 +353,44 @@ public sealed class InventoryService : IInventoryService
                 UserId = _currentUserService.UserId
             });
 
-            await MirrorWarehouseAsync(productId, quantityChange, result.NewStock, cancellationToken);
+            const int warehouseAttempts = 3;
+            for (var attempt = 1; attempt <= warehouseAttempts; attempt++)
+            {
+                try
+                {
+                    await MirrorWarehouseAsync(productId, quantityChange, result.NewStock, cancellationToken);
+                    await _context.SaveChangesAsync(cancellationToken);
+                    break;
+                }
+                catch (DbUpdateConcurrencyException ex) when (attempt < warehouseAttempts)
+                {
+                    _logger.LogWarning(
+                        ex,
+                        "Warehouse concurrency conflict for product {ProductId}; retry {Attempt}/{Max}",
+                        productId,
+                        attempt,
+                        warehouseAttempts);
 
-            try
-            {
-                await _context.SaveChangesAsync(cancellationToken);
-            }
-            catch (DbUpdateConcurrencyException ex)
-            {
-                _logger.LogWarning(
-                    ex,
-                    "Concurrency conflict while updating stock for product {ProductId}",
-                    productId);
-                throw new ConflictException(
-                    "Stock changed while this update was being saved. Refresh and try again.",
-                    ErrorCodes.ConcurrencyConflict);
+                    foreach (var entry in _context.ChangeTracker.Entries<WarehouseStock>()
+                                 .Where(entry => entry.Entity.ProductId == productId)
+                                 .ToList())
+                    {
+                        if (entry.State == EntityState.Added)
+                            entry.State = EntityState.Detached;
+                        else
+                            await entry.ReloadAsync(cancellationToken);
+                    }
+                }
+                catch (DbUpdateConcurrencyException ex)
+                {
+                    _logger.LogWarning(
+                        ex,
+                        "Concurrency conflict while updating stock for product {ProductId}",
+                        productId);
+                    throw new ConflictException(
+                        "Stock changed while this update was being saved. Refresh and try again.",
+                        ErrorCodes.ConcurrencyConflict);
+                }
             }
 
             var reorder = await _context.Inventories.AsNoTracking()

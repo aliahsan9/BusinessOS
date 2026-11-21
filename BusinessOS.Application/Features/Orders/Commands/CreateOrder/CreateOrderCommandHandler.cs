@@ -1,3 +1,4 @@
+using System.Text.Json;
 using BusinessOS.Application.Common.Caching;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Idempotency;
@@ -22,6 +23,7 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
     private readonly IBusinessEventService _businessEvents;
     private readonly ICacheService _cache;
     private readonly ITenantProvider _tenantProvider;
+    private readonly IIdempotencyService _idempotency;
     private readonly ILogger<CreateOrderCommandHandler> _logger;
 
     public CreateOrderCommandHandler(
@@ -31,6 +33,7 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
         IBusinessEventService businessEvents,
         ICacheService cache,
         ITenantProvider tenantProvider,
+        IIdempotencyService idempotency,
         ILogger<CreateOrderCommandHandler> logger)
     {
         _context = context;
@@ -39,11 +42,55 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
         _businessEvents = businessEvents;
         _cache = cache;
         _tenantProvider = tenantProvider;
+        _idempotency = idempotency;
         _logger = logger;
     }
 
     public async Task<Guid> Handle(CreateOrderCommand request, CancellationToken cancellationToken)
     {
+        var tenantId = _tenantProvider.TenantId;
+        IdempotencyRecord? staged = null;
+        string? requestHash = null;
+
+        if (!string.IsNullOrWhiteSpace(request.IdempotencyKey))
+        {
+            if (!IdempotencyKeyRules.IsValid(request.IdempotencyKey))
+                throw new BadRequestException("Idempotency-Key must be 1-128 visible ASCII characters without spaces.");
+
+            requestHash = CanonicalRequestHasher.OrderCreate(
+                tenantId,
+                request.CustomerId,
+                request.Discount,
+                request.Tax,
+                request.Items.Select(item => (item.ProductId, item.Quantity)).ToList());
+
+            var outcome = await _idempotency.BeginLocalAsync(
+                IdempotencyOperations.OrderCreate,
+                request.IdempotencyKey,
+                requestHash,
+                cancellationToken);
+
+            switch (outcome.Kind)
+            {
+                case IdempotencyOutcomeKind.Replay:
+                    return outcome.ResourceId
+                        ?? throw new ConflictException(
+                            "The original order could not be replayed.",
+                            ErrorCodes.IdempotencyKeyReused);
+                case IdempotencyOutcomeKind.Conflict:
+                    throw new ConflictException(
+                        "This Idempotency-Key was already used for a different order request.",
+                        ErrorCodes.IdempotencyKeyReused);
+                case IdempotencyOutcomeKind.InProgress:
+                    throw new ConflictException(
+                        "This order is still processing. Retry the same request.",
+                        ErrorCodes.IdempotencyInProgress);
+                case IdempotencyOutcomeKind.Started:
+                    staged = outcome.Record;
+                    break;
+            }
+        }
+
         var customer = await _context.Customers
             .FirstOrDefaultAsync(x => x.Id == request.CustomerId, cancellationToken);
 
@@ -125,10 +172,49 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
         try
         {
             _context.Orders.Add(order);
+            if (staged is not null)
+            {
+                _idempotency.CompleteLocal(
+                    staged,
+                    201,
+                    JsonSerializer.Serialize(new { id = order.Id }),
+                    order.Id);
+            }
+
             await _context.SaveChangesAsync(cancellationToken);
             await _inventoryService.DeductForOrderAsync(order, orderItems, cancellationToken);
             if (transaction is not null)
                 await transaction.CommitAsync(cancellationToken);
+        }
+        catch (Exception ex) when (staged is not null && DbExceptionClassifier.IsUniqueViolation(ex))
+        {
+            if (transaction is not null)
+                await transaction.RollbackAsync(cancellationToken);
+
+            _context.Detach(order);
+            _idempotency.Detach(staged);
+            var replay = await _idempotency.BeginLocalAsync(
+                IdempotencyOperations.OrderCreate,
+                request.IdempotencyKey!,
+                requestHash!,
+                cancellationToken);
+
+            if (replay.Kind == IdempotencyOutcomeKind.Replay && replay.ResourceId.HasValue)
+                return replay.ResourceId.Value;
+
+            if (replay.Record is not null && replay.Kind == IdempotencyOutcomeKind.Started)
+                _idempotency.Detach(replay.Record);
+
+            if (replay.Kind == IdempotencyOutcomeKind.Conflict)
+            {
+                throw new ConflictException(
+                    "This Idempotency-Key was already used for a different order request.",
+                    ErrorCodes.IdempotencyKeyReused);
+            }
+
+            throw new ConflictException(
+                "This order is still processing. Retry the same request.",
+                ErrorCodes.IdempotencyInProgress);
         }
         catch (Exception ex) when (DbExceptionClassifier.IsUniqueViolation(ex))
         {
@@ -143,6 +229,8 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
         {
             if (transaction is not null)
                 await transaction.RollbackAsync(cancellationToken);
+            if (staged is not null)
+                _idempotency.Detach(staged);
             throw;
         }
         finally
