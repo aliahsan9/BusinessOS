@@ -108,7 +108,7 @@ public sealed partial class NalvaWorkforceService : INalvaWorkforceService
         Require(PermissionCodes.NalvaManage);
         var row = await RequireAgentAsync(key, cancellationToken);
         row.Status = NalvaStatuses.Inactive;
-        var queued = await _db.NalvaTasks.Where(x => x.AgentKey == row.AgentKey && x.Status == NalvaStatuses.Queued).ToListAsync(cancellationToken);
+        var queued = await _db.NalvaTasks.Where(x => x.AgentKey == row.AgentKey && (x.Status == NalvaStatuses.Queued || x.Status == NalvaStatuses.Assigned)).ToListAsync(cancellationToken);
         foreach (var task in queued)
             task.Status = NalvaStatuses.Cancelled;
         await ReviseAsync(row, cancellationToken);
@@ -250,6 +250,7 @@ public sealed partial class NalvaWorkforceService : INalvaWorkforceService
                 x => x.IdempotencyKey == idempotencyKey
                      && (x.Status == NalvaStatuses.Completed
                          || x.Status == NalvaStatuses.Queued
+                         || x.Status == NalvaStatuses.Assigned
                          || x.Status == NalvaStatuses.Running
                          || x.Status == NalvaStatuses.AwaitingApproval
                          || x.Status == NalvaStatuses.Paused),
@@ -261,7 +262,7 @@ public sealed partial class NalvaWorkforceService : INalvaWorkforceService
         {
             AgentKey = agent.AgentKey,
             Objective = request.Objective.Trim(),
-            Status = NalvaStatuses.Queued,
+            Status = NalvaStatuses.Assigned,
             Priority = Math.Clamp(request.Priority ?? 1, 1, 5),
             RunAfter = request.RunAfter ?? DateTime.UtcNow,
             Deadline = request.Deadline,
@@ -278,13 +279,13 @@ public sealed partial class NalvaWorkforceService : INalvaWorkforceService
     }
 
     public Task<NalvaTaskDto> CancelTaskAsync(Guid id, CancellationToken cancellationToken = default) =>
-        SetTaskAsync(id, NalvaStatuses.Cancelled, [NalvaStatuses.Queued, NalvaStatuses.Paused, NalvaStatuses.Pending, NalvaStatuses.AwaitingApproval], cancellationToken);
+        SetTaskAsync(id, NalvaStatuses.Cancelled, [NalvaStatuses.Queued, NalvaStatuses.Assigned, NalvaStatuses.Paused, NalvaStatuses.Pending, NalvaStatuses.AwaitingApproval], cancellationToken);
 
     public Task<NalvaTaskDto> PauseTaskAsync(Guid id, CancellationToken cancellationToken = default) =>
-        SetTaskAsync(id, NalvaStatuses.Paused, [NalvaStatuses.Queued], cancellationToken);
+        SetTaskAsync(id, NalvaStatuses.Paused, [NalvaStatuses.Queued, NalvaStatuses.Assigned], cancellationToken);
 
     public Task<NalvaTaskDto> ResumeTaskAsync(Guid id, CancellationToken cancellationToken = default) =>
-        SetTaskAsync(id, NalvaStatuses.Queued, [NalvaStatuses.Paused], cancellationToken);
+        SetTaskAsync(id, NalvaStatuses.Assigned, [NalvaStatuses.Paused], cancellationToken);
 
     public async Task<NalvaTaskDto> RetryTaskAsync(Guid id, CancellationToken cancellationToken = default)
     {
@@ -293,7 +294,7 @@ public sealed partial class NalvaWorkforceService : INalvaWorkforceService
             ?? throw new NotFoundException("Task was not found.");
         if (task.Status is not NalvaStatuses.Failed and not NalvaStatuses.DeadLetter)
             throw new BadRequestException("Only a failed task can be retried.");
-        task.Status = NalvaStatuses.Queued;
+        task.Status = NalvaStatuses.Assigned;
         task.RunAfter = DateTime.UtcNow;
         task.LastError = null;
         task.ClaimToken = null;
@@ -588,7 +589,7 @@ public sealed partial class NalvaWorkforceService : INalvaWorkforceService
             .CountAsync(x => x.StartedAt >= today && x.Status == NalvaStatuses.Failed, cancellationToken);
 
         return new NalvaReliabilitySnapshotDto(
-            tasks.Count(x => x.Status == NalvaStatuses.Queued),
+            tasks.Count(x => x.Status == NalvaStatuses.Queued || x.Status == NalvaStatuses.Assigned),
             tasks.Count(x => x.Status == NalvaStatuses.Running),
             tasks.Count(x => x.Status == NalvaStatuses.DeadLetter),
             tasks.Count(x => x.Status == NalvaStatuses.Failed),
@@ -813,11 +814,21 @@ public sealed partial class NalvaWorkforceService : INalvaWorkforceService
         Require(PermissionCodes.NalvaManage);
         await EnsureTemplatesAsync(cancellationToken);
         var tenantId = _user.TenantId ?? throw new BadRequestException("Company context is required.");
-        var businessType = await _db.Tenants.AsNoTracking()
-            .Where(x => x.Id == tenantId)
-            .Select(x => x.BusinessType)
-            .FirstOrDefaultAsync(cancellationToken) ?? "custom";
-        var pack = NalvaWorkforcePackCatalog.Resolve(businessType);
+        NalvaWorkforcePack pack;
+        if (!string.IsNullOrWhiteSpace(request.PackKey)
+            && NalvaWorkforcePackCatalog.All.FirstOrDefault(x =>
+                string.Equals(x.BusinessTypeKey, request.PackKey, StringComparison.OrdinalIgnoreCase)) is { } explicitPack)
+        {
+            pack = explicitPack;
+        }
+        else
+        {
+            var businessType = await _db.Tenants.AsNoTracking()
+                .Where(x => x.Id == tenantId)
+                .Select(x => x.BusinessType)
+                .FirstOrDefaultAsync(cancellationToken) ?? "custom";
+            pack = NalvaWorkforcePackCatalog.Resolve(businessType);
+        }
         var activatedAgents = new List<string>();
         var activatedWorkflows = new List<string>();
         var skipped = new List<string>();

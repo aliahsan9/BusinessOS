@@ -39,6 +39,7 @@ public partial class BusinessOSDbContext
     public DbSet<BillingTransaction> BillingTransactions => Set<BillingTransaction>();
     public DbSet<PaymentProvider> PaymentProviders => Set<PaymentProvider>();
     public DbSet<Category> Categories => Set<Category>();
+    public DbSet<DataImportBatch> DataImportBatches => Set<DataImportBatch>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Supplier> Suppliers => Set<Supplier>();
@@ -163,6 +164,11 @@ public partial class BusinessOSDbContext
     public DbSet<NalvaCompanySettings> NalvaCompanySettings => Set<NalvaCompanySettings>();
     public DbSet<NalvaWorkItem> NalvaWorkItems => Set<NalvaWorkItem>();
     public DbSet<NalvaBusinessEvent> NalvaBusinessEvents => Set<NalvaBusinessEvent>();
+    public DbSet<BusinessAutopilotConfig> BusinessAutopilotConfigs => Set<BusinessAutopilotConfig>();
+    public DbSet<BusinessGoal> BusinessGoals => Set<BusinessGoal>();
+    public DbSet<BusinessGoalProgress> BusinessGoalProgress => Set<BusinessGoalProgress>();
+    public DbSet<BusinessMemoryEntry> BusinessMemoryEntries => Set<BusinessMemoryEntry>();
+    public DbSet<AutopilotOperationLog> AutopilotOperationLogs => Set<AutopilotOperationLog>();
     public DbSet<CompanyIntegrationConnection> CompanyIntegrationConnections => Set<CompanyIntegrationConnection>();
     public DbSet<IntegrationOAuthState> IntegrationOAuthStates => Set<IntegrationOAuthState>();
     public DbSet<IntegrationActivityLog> IntegrationActivityLogs => Set<IntegrationActivityLog>();
@@ -547,6 +553,11 @@ public partial class BusinessOSDbContext
         FilterTenant<NalvaCompanySettings>(builder);
         FilterTenant<NalvaWorkItem>(builder);
         FilterTenant<NalvaBusinessEvent>(builder);
+        FilterTenant<BusinessAutopilotConfig>(builder);
+        FilterTenant<BusinessGoal>(builder);
+        FilterTenant<BusinessGoalProgress>(builder);
+        FilterTenant<BusinessMemoryEntry>(builder);
+        FilterTenant<AutopilotOperationLog>(builder);
         FilterTenant<CompanyIntegrationConnection>(builder);
         FilterTenant<IntegrationOAuthState>(builder);
         FilterTenant<IntegrationActivityLog>(builder);
@@ -572,6 +583,7 @@ public partial class BusinessOSDbContext
         FilterTenant<FinanceBudget>(builder);
         FilterTenant<FinancePaymentReminder>(builder);
         FilterTenant<FinanceBankImportBatch>(builder);
+        FilterTenant<DataImportBatch>(builder);
         FilterTenant<FinanceBankStatementLine>(builder);
         FilterTenant<FinanceAgentActivity>(builder);
         FilterTenant<PredictionAccuracyLog>(builder);

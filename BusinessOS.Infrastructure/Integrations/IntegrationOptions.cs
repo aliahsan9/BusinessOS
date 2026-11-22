@@ -18,16 +18,17 @@ public sealed class IntegrationPlatformOptions
 
     public ProviderCredential For(string providerKey) => providerKey switch
     {
-        "gmail" or "google-calendar" or "google-drive" or "google-analytics" or "google-ads" => Google,
+        "gmail" or "google-calendar" or "google-drive" or "google-analytics" or "google-ads" or "google-business-profile" => Google,
         "github" => GitHub,
         "slack" => Slack,
-        "microsoft-teams" => Microsoft,
+        "microsoft-teams" or "outlook" or "microsoft-calendar" or "microsoft-onedrive" => Microsoft,
         "whatsapp" or "meta" => Meta,
         "stripe" => Stripe,
         "paypal" => PayPal,
         "linkedin" => LinkedIn,
         "shopify" => Shopify,
         "wordpress" => WordPress,
+        "smtp-email" => new ProviderCredential { Enabled = true, ClientId = "smtp", ClientSecret = "smtp" },
         _ => new ProviderCredential()
     };
 }
@@ -43,11 +44,11 @@ public static class IntegrationOAuthEndpoints
 {
     public static (string Authorize, string Token) For(string provider, string? shop) => provider switch
     {
-        "gmail" or "google-calendar" or "google-drive" or "google-analytics" or "google-ads" =>
+        "gmail" or "google-calendar" or "google-drive" or "google-analytics" or "google-ads" or "google-business-profile" =>
             ("https://accounts.google.com/o/oauth2/v2/auth", "https://oauth2.googleapis.com/token"),
         "github" => ("https://github.com/login/oauth/authorize", "https://github.com/login/oauth/access_token"),
         "slack" => ("https://slack.com/oauth/v2/authorize", "https://slack.com/api/oauth.v2.access"),
-        "microsoft-teams" =>
+        "microsoft-teams" or "outlook" or "microsoft-calendar" or "microsoft-onedrive" =>
             ("https://login.microsoftonline.com/common/oauth2/v2.0/authorize", "https://login.microsoftonline.com/common/oauth2/v2.0/token"),
         "whatsapp" or "meta" =>
             ("https://www.facebook.com/v21.0/dialog/oauth", "https://graph.facebook.com/v21.0/oauth/access_token"),

@@ -26,6 +26,9 @@ public class Payment : AuditableEntity
 
     public string? ProviderOperationKey { get; set; }
 
+    /// <summary>Stable key from historical import; prevents duplicate payment creation on re-import.</summary>
+    public string? ExternalImportKey { get; set; }
+
     public byte[] RowVersion { get; set; } = default!;
 
     public Order Order { get; set; } = default!;

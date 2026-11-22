@@ -1,0 +1,434 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>BusinessOS.API</name>
+    </assembly>
+    <members>
+        <member name="T:BusinessOS.API.Endpoints.AccountEndpoints">
+            <summary>
+            Authenticated self-service account endpoints for the current user.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.Endpoints.AgentEndpoints">
+            <summary>
+            HTTP endpoints for AI employee agents (Navla and future specialists).
+            Extends the existing Copilot surface without replacing <c>/api/v1/ai</c>.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.Endpoints.AnalyticsEndpoints">
+            <summary>
+            Advanced business analytics endpoints for the dedicated analytics dashboard.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.Endpoints.AuthEndpoints">
+            <summary>
+            Authentication endpoints for registration, login, password reset, and team invitation acceptance.
+            </summary>
+            <remarks>
+            Public endpoints under <c>/api/v1/auth</c>. No JWT is required except where noted.
+            Registration creates a new tenant and owner user; the response includes a JWT for immediate API access.
+            Team invitation preview and acceptance are unauthenticated flows using emailed tokens.
+            </remarks>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.AuthEndpoints.MapAuthEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder)">
+            <summary>
+            Maps authentication endpoints under <c>/api/v1/auth</c>.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.AuthEndpoints.Register(BusinessOS.Application.Features.Auth.Commands.Register.RegisterCommand,MediatR.ISender,BusinessOS.Application.Features.Auth.Services.IAuthSessionService,Microsoft.AspNetCore.Http.HttpContext,System.Threading.CancellationToken)">
+            <summary>Creates a new tenant and user; returns JWT on success.</summary>
+            <param name="command">Registration payload with email, password, name, and business name.</param>
+            <param name="sender">Mediator sender for handling the command.</param>
+            <param name="sessions">Session service that issues the refresh cookie.</param>
+            <param name="httpContext">Current HTTP context that receives the refresh cookie.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>201 Created with <see cref="T:BusinessOS.Application.Features.Auth.DTOs.AuthResponse"/> at login URL.</returns>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.AuthEndpoints.Login(BusinessOS.Application.Features.Auth.Commands.Login.LoginCommand,MediatR.ISender,BusinessOS.Application.Features.Auth.Services.IAuthSessionService,Microsoft.AspNetCore.Http.HttpContext,System.Threading.CancellationToken)">
+            <summary>Authenticates user credentials and returns a JWT.</summary>
+            <param name="command">Login payload with email and password.</param>
+            <param name="sender">Mediator sender for handling the command.</param>
+            <param name="sessions">Session service that issues the refresh cookie.</param>
+            <param name="httpContext">Current HTTP context that receives the refresh cookie.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>200 OK with <see cref="T:BusinessOS.Application.Features.Auth.DTOs.AuthResponse"/>.</returns>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.AuthEndpoints.ForgotPassword(BusinessOS.Application.Features.Auth.Commands.ForgotPassword.ForgotPasswordCommand,MediatR.ISender,System.Threading.CancellationToken)">
+            <summary>Initiates password reset flow via email.</summary>
+            <param name="command">Forgot-password payload with email address.</param>
+            <param name="sender">Mediator sender for handling the command.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>200 OK with generic success message.</returns>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.AuthEndpoints.ResetPassword(BusinessOS.Application.Features.Auth.Commands.ResetPassword.ResetPasswordCommand,MediatR.ISender,System.Threading.CancellationToken)">
+            <summary>Completes password reset using emailed token.</summary>
+            <param name="command">Reset payload with email, token, and new password.</param>
+            <param name="sender">Mediator sender for handling the command.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>200 OK on successful password change.</returns>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.AuthEndpoints.GetInvitationPreview(System.String,BusinessOS.Application.Features.Team.Services.ITeamService,System.Threading.CancellationToken)">
+            <summary>Previews a team invitation by token.</summary>
+            <param name="token">Invitation token from the email link.</param>
+            <param name="teamService">Team service for handling invitation preview.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>200 OK with <see cref="T:BusinessOS.Application.Features.Team.DTOs.InvitationPreviewDto"/>.</returns>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.AuthEndpoints.AcceptInvitation(BusinessOS.Application.Features.Team.DTOs.AcceptInvitationRequest,BusinessOS.Application.Features.Team.Services.ITeamService,System.Threading.CancellationToken)">
+            <summary>Accepts a team invitation and joins the tenant.</summary>
+            <param name="request">Acceptance payload with token and optional profile fields.</param>
+            <param name="teamService">Team service for handling invitation acceptance.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>204 No Content on success.</returns>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.BillingEndpoints.MapLegacyBillingWebhooks(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder)">
+            <summary>
+            Keeps the original payment-provider callback URLs. These are not a second API version.
+            They are excluded from OpenAPI so they do not duplicate the version 1.0 webhook operations.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.Endpoints.CategoryEndpoints">
+            <summary>
+            Category management endpoints.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.CategoryEndpoints.MapCategoryEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder)">
+            <summary>
+            Maps category CRUD and list endpoints under <c>/api/v1/categories</c>.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.Endpoints.CustomerEndpoints">
+            <summary>
+            Customer management endpoints.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.CustomerEndpoints.MapCustomerEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder)">
+            <summary>
+            Maps customer CRUD, search, orders, and analytics endpoints under <c>/api/v1/customers</c>.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.Endpoints.DashboardEndpoints">
+            <summary>
+            Executive dashboard, analytics, and chart reporting endpoints.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.DashboardEndpoints.MapDashboardEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder)">
+            <summary>
+            Maps dashboard endpoints under <c>/api/v1/dashboard</c>.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.Endpoints.InventoryEndpoints">
+            <summary>
+            Inventory and stock management endpoints.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.InventoryEndpoints.MapInventoryEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder)">
+            <summary>
+            Maps inventory endpoints under <c>/api/v1/inventory</c>.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.Endpoints.InventoryEndpoints.UpdateInventoryRequest">
+            <summary>Update inventory threshold levels.</summary>
+            <example>{ "minimumStockLevel": 5, "maximumStockLevel": 100, "reorderLevel": 10 }</example>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.InventoryEndpoints.UpdateInventoryRequest.#ctor(System.Decimal,System.Decimal,System.Decimal)">
+            <summary>Update inventory threshold levels.</summary>
+            <example>{ "minimumStockLevel": 5, "maximumStockLevel": 100, "reorderLevel": 10 }</example>
+        </member>
+        <member name="T:BusinessOS.API.Endpoints.InventoryEndpoints.StockChangeRequestBody">
+            <summary>Increase or decrease stock quantity.</summary>
+            <example>{ "productId": "3fa85f64-5717-4562-b3fc-2c963f66afa6", "quantity": 10, "notes": "Restock" }</example>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.InventoryEndpoints.StockChangeRequestBody.#ctor(System.Guid,System.Decimal,System.String,System.String)">
+            <summary>Increase or decrease stock quantity.</summary>
+            <example>{ "productId": "3fa85f64-5717-4562-b3fc-2c963f66afa6", "quantity": 10, "notes": "Restock" }</example>
+        </member>
+        <member name="T:BusinessOS.API.Endpoints.InventoryEndpoints.AdjustStockRequestBody">
+            <summary>Adjust stock with explicit transaction type.</summary>
+            <example>{ "productId": "3fa85f64-5717-4562-b3fc-2c963f66afa6", "quantity": 5, "transactionType": "Adjustment", "notes": "Cycle count" }</example>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.InventoryEndpoints.AdjustStockRequestBody.#ctor(System.Guid,System.Decimal,System.String,System.String,System.String)">
+            <summary>Adjust stock with explicit transaction type.</summary>
+            <example>{ "productId": "3fa85f64-5717-4562-b3fc-2c963f66afa6", "quantity": 5, "transactionType": "Adjustment", "notes": "Cycle count" }</example>
+        </member>
+        <member name="T:BusinessOS.API.Endpoints.InvoiceEndpoints">
+            <summary>
+            Invoice management endpoints.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.InvoiceEndpoints.MapInvoiceEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder)">
+            <summary>
+            Maps invoice endpoints under <c>/api/v1/invoices</c>.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.Endpoints.OrderEndpoints">
+            <summary>
+            Order management endpoints.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.OrderEndpoints.MapOrderEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder)">
+            <summary>
+            Maps order CRUD, list, and status endpoints under <c>/api/v1/orders</c>.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.Endpoints.PaymentEndpoints">
+            <summary>
+            Payment management endpoints.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.PaymentEndpoints.MapPaymentEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder)">
+            <summary>
+            Maps payment CRUD endpoints under <c>/api/v1/payments</c>.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.Endpoints.ProductEndpoints">
+            <summary>
+            Product management endpoints.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.ProductEndpoints.MapProductEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder)">
+            <summary>
+            Maps product CRUD and list endpoints under <c>/api/v1/products</c>.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.Endpoints.PurchaseOrderEndpoints">
+            <summary>
+            Purchase order management endpoints.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.PurchaseOrderEndpoints.MapPurchaseOrderEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder)">
+            <summary>
+            Maps purchase order CRUD, status, and receive endpoints under <c>/api/v1/purchase-orders</c>.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.Endpoints.QuotationEndpoints">
+            <summary>
+            Quotation management endpoints.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.QuotationEndpoints.MapQuotationEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder)">
+            <summary>
+            Maps quotation CRUD, status, and convert endpoints under <c>/api/v1/quotations</c>.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.Endpoints.ReportEndpoints">
+            <summary>
+            PDF report generation and history endpoints.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.Endpoints.RoleEndpoints">
+            <summary>
+            Role and permission management endpoints.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.RoleEndpoints.MapRoleEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder)">
+            <summary>
+            Maps RBAC endpoints for roles, permissions, and assignments.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.Endpoints.SupplierEndpoints">
+            <summary>
+            Supplier management endpoints.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.Endpoints.SupplierEndpoints.MapSupplierEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder)">
+            <summary>
+            Maps supplier CRUD and related endpoints under <c>/api/v1/suppliers</c>.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.Middleware.SerilogEnrichmentMiddleware">
+            <summary>
+            Pushes tenant and user properties into the Serilog log context after authentication
+            and tenant resolution. Does not alter tenant resolution behavior.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.Middleware.UnversionedApiPathMiddleware">
+            <summary>
+            Turns a missing URL version into 400 <c>API_VERSION_REQUIRED</c>, and an unknown URL version into 400 <c>API_VERSION_UNSUPPORTED</c>.
+            The version route constraint does not select an endpoint for an undeclared version, which would otherwise be a generic 404.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.OpenApi.EndpointDocumentation">
+            <summary>
+            Shared OpenAPI documentation fragments for BusinessOS minimal API endpoints.
+            </summary>
+        </member>
+        <member name="F:BusinessOS.API.OpenApi.EndpointDocumentation.TenantAuthNote">
+            <summary>
+            Standard authentication note for protected tenant-scoped endpoints.
+            </summary>
+        </member>
+        <member name="F:BusinessOS.API.OpenApi.EndpointDocumentation.PublicNote">
+            <summary>
+            Standard public endpoint note (no authentication).
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.OpenApi.EndpointDocumentation.WithStatusCodes(System.String,System.ValueTuple{System.Int32,System.String}[])">
+            <summary>
+            Appends common HTTP status code documentation to an endpoint description.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.OpenApi.EndpointDocumentation.WithExampleRequest(System.String,System.String,System.String,System.String)">
+            <summary>
+            Appends a JSON example block to the description for Scalar rendering.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.OpenApi.EndpointDocumentation.WithExampleResponse(System.String,System.String)">
+            <summary>
+            Appends a JSON response example block to the description.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.OpenApi.EndpointDocumentation.WithBusinessRules(System.String,System.String[])">
+            <summary>
+            Appends business rules section to the description.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.OpenApi.OpenApiDocumentationExtensions">
+            <summary>
+            Extension methods for enriching minimal API OpenAPI metadata from XML documentation and BusinessOS conventions.
+            </summary>
+        </member>
+        <member name="F:BusinessOS.API.OpenApi.OpenApiDocumentationExtensions.TagOrder">
+            <summary>
+            Standard OpenAPI tag order for Scalar grouping.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.OpenApi.OpenApiDocumentationExtensions.AddXmlDocumentationSupport(Microsoft.AspNetCore.OpenApi.OpenApiOptions,System.Reflection.Assembly[])">
+            <summary>
+            Registers operation and schema transformers that merge XML documentation into the OpenAPI document.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.OpenApi.OpenApiDocumentationExtensions.ApplySecurityRequirements(Microsoft.OpenApi.OpenApiOperation,System.Boolean,System.Boolean)">
+            <summary>
+            Applies BusinessOS security requirements (Bearer JWT + optional tenant header) to an operation.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.OpenApi.OpenApiExtensions">
+            <summary>
+            Registers OpenAPI document generation with BusinessOS-specific metadata for Scalar.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.OpenApi.OpenApiExtensions.AddBusinessOpenApi(Asp.Versioning.IApiVersioningBuilder)">
+            <summary>
+            Adds OpenAPI generation with JWT + tenant security schemes, tag ordering, and XML documentation support.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.OpenApi.XmlDocumentationProvider">
+            <summary>
+            Loads and queries XML documentation files generated at build time for referenced assemblies.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.OpenApi.XmlDocumentationProvider.#ctor(System.Collections.Generic.IEnumerable{System.Reflection.Assembly})">
+            <summary>
+            Creates a provider that indexes XML documentation from the given assemblies.
+            </summary>
+            <param name="assemblies">Assemblies whose companion .xml files should be loaded from the output directory.</param>
+        </member>
+        <member name="M:BusinessOS.API.OpenApi.XmlDocumentationProvider.GetTypeSummary(System.Type)">
+            <summary>
+            Returns the summary text for a type, or null when no XML documentation exists.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.OpenApi.XmlDocumentationProvider.GetMethodSummary(System.Reflection.MethodInfo)">
+            <summary>
+            Returns the summary text for a method, or null when no XML documentation exists.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.OpenApi.XmlDocumentationProvider.GetRemarks(System.String)">
+            <summary>
+            Returns remarks for a documented member.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.OpenApi.XmlDocumentationProvider.GetFullDescription(System.String)">
+            <summary>
+            Returns the combined summary and remarks for OpenAPI descriptions.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.OpenApi.XmlDocumentationProvider.GetTypeMemberName(System.Type)">
+            <summary>
+            Builds the XML member name for a type (e.g. <c>T:Namespace.Type</c>).
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.OpenApi.XmlDocumentationProvider.GetMethodMemberName(System.Reflection.MethodInfo)">
+            <summary>
+            Builds the XML member name for a method (e.g. <c>M:Namespace.Type.Method</c>).
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.Versioning.ApiVersioningPaths">
+            <summary>
+            Shared path rules for URL-segment API versioning.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.Versioning.ApiVersioningPaths.StripVersion(System.String)">
+            <summary>
+            Turns <c>/api/v1/auth/login</c> into <c>/api/auth/login</c> so public-path checks stay version-independent.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.Versioning.ApiVersioningServiceExtensions">
+            <summary>
+            Registers URL-segment API versioning, API Explorer, and versioned OpenAPI documents.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.API.Versioning.BusinessApiEndpointExtensions">
+            <summary>
+            Maps the version 1.0 business API and its OpenAPI/Scalar documents.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.Versioning.BusinessApiEndpointExtensions.MapBusinessApi(Microsoft.AspNetCore.Builder.WebApplication)">
+            <summary>
+            Maps every business Minimal API under <c>/api/v{version}/...</c> at version 1.0.
+            Health checks and the SignalR hub stay outside this group.
+            Payment-provider webhooks also keep their original unversioned paths.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.API.Versioning.BusinessApiEndpointExtensions.MapBusinessApiReference(Microsoft.AspNetCore.Builder.WebApplication)">
+            <summary>
+            Exposes one OpenAPI document per API version and registers those documents with Scalar.
+            </summary>
+        </member>
+        <member name="M:Microsoft.AspNetCore.OpenApi.Generated.DocumentationCommentIdHelper.CreateDocumentationId(System.Type)">
+            <summary>
+            Generates a documentation comment ID for a type.
+            Example: T:Namespace.Outer+Inner`1 becomes T:Namespace.Outer.Inner`1
+            </summary>
+        </member>
+        <member name="M:Microsoft.AspNetCore.OpenApi.Generated.DocumentationCommentIdHelper.CreateDocumentationId(System.Reflection.PropertyInfo)">
+            <summary>
+            Generates a documentation comment ID for a property.
+            Example: P:Namespace.ContainingType.PropertyName or for an indexer P:Namespace.ContainingType.Item(System.Int32)
+            </summary>
+        </member>
+        <member name="M:Microsoft.AspNetCore.OpenApi.Generated.DocumentationCommentIdHelper.CreateDocumentationId(System.Type,System.String)">
+            <summary>
+            Generates a documentation comment ID for a property given its container type and property name.
+            Example: P:Namespace.ContainingType.PropertyName
+            </summary>
+        </member>
+        <member name="M:Microsoft.AspNetCore.OpenApi.Generated.DocumentationCommentIdHelper.CreateDocumentationId(System.Reflection.MethodInfo)">
+            <summary>
+            Generates a documentation comment ID for a method (or constructor).
+            For example:
+              M:Namespace.ContainingType.MethodName(ParamType1,ParamType2)~ReturnType
+              M:Namespace.ContainingType.#ctor(ParamType)
+            </summary>
+        </member>
+        <member name="M:Microsoft.AspNetCore.OpenApi.Generated.DocumentationCommentIdHelper.GetTypeDocId(System.Type,System.Boolean,System.Boolean)">
+            <summary>
+            Generates a documentation ID string for a type.
+            This method handles nested types (replacing '+' with '.'),
+            generic types, arrays, pointers, by-ref types, and generic parameters.
+            The <paramref name="includeGenericArguments"/> flag controls whether
+            constructed generic type arguments are emitted, while <paramref name="omitGenericArity"/>
+            controls whether the generic arity marker (e.g. "`1") is appended.
+            </summary>
+        </member>
+        <member name="M:Microsoft.AspNetCore.OpenApi.Generated.DocumentationCommentIdHelper.NormalizeDocId(System.String)">
+            <summary>
+            Normalizes a documentation comment ID to match the compiler-style format.
+            Strips the return type suffix for ordinary methods but retains it for conversion operators.
+            </summary>
+            <param name="docId">The documentation comment ID to normalize.</param>
+            <returns>The normalized documentation comment ID.</returns>
+        </member>
+    </members>
+</doc>

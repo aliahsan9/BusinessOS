@@ -47,7 +47,7 @@ public sealed class NalvaTaskProcessor : BackgroundService
         var now = DateTime.UtcNow;
         var due = await db.NalvaTasks.IgnoreQueryFilters()
             .Where(x => !x.IsDeleted
-                && x.Status == NalvaStatuses.Queued
+                && (x.Status == NalvaStatuses.Assigned || x.Status == NalvaStatuses.Queued)
                 && x.RunAfter <= now
                 && (x.NextAttemptAt == null || x.NextAttemptAt <= now))
             .OrderByDescending(x => x.Priority)

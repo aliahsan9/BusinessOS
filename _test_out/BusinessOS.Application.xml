@@ -1,0 +1,1050 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>BusinessOS.Application</name>
+    </assembly>
+    <members>
+        <member name="T:BusinessOS.Application.Common.Caching.CacheKeys">
+            <summary>
+            Tenant-aware cache key factory. Every key includes <c>Tenant_{tenantId}_</c>
+            so tenants never share cache entries.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Common.Caching.EntityCacheInvalidator">
+            <summary>
+            Centralized cache invalidation helpers for write operations.
+            Removes related list, detail, dashboard, and inventory entries so clients never see stale data.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Common.Caching.ICacheService">
+            <summary>
+            Centralized in-memory cache abstraction. Application code must not use <c>IMemoryCache</c> directly.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Common.Caching.ICacheService.GetAsync``1(System.String,System.Threading.CancellationToken)">
+            <summary>Gets a cached value by key, or <c>null</c> on a cache miss.</summary>
+        </member>
+        <member name="M:BusinessOS.Application.Common.Caching.ICacheService.SetAsync``1(System.String,``0,System.Nullable{System.TimeSpan},System.Nullable{System.TimeSpan},System.Threading.CancellationToken)">
+            <summary>
+            Stores a value in the cache.
+            When neither expiration is supplied, the configured default absolute expiration is applied.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Common.Caching.ICacheService.RemoveAsync(System.String,System.Threading.CancellationToken)">
+            <summary>Removes a single cache entry.</summary>
+        </member>
+        <member name="M:BusinessOS.Application.Common.Caching.ICacheService.RemoveByPrefixAsync(System.String,System.Threading.CancellationToken)">
+            <summary>Removes all cache entries whose keys start with the given prefix.</summary>
+        </member>
+        <member name="M:BusinessOS.Application.Common.Caching.ICacheService.ExistsAsync(System.String,System.Threading.CancellationToken)">
+            <summary>Returns whether a cache entry exists for the key.</summary>
+        </member>
+        <member name="M:BusinessOS.Application.Common.Caching.ICacheService.GetOrSetAsync``1(System.String,System.Func{System.Threading.CancellationToken,System.Threading.Tasks.Task{``0}},System.Nullable{System.TimeSpan},System.Nullable{System.TimeSpan},System.Threading.CancellationToken)">
+            <summary>
+            Cache-aside helper with stampede protection: concurrent callers for the same key
+            share a single factory invocation and reuse the cached result.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Common.Interfaces.IApplicationDbContext.TryAcceptOrderPaymentAsync(System.Guid,System.Decimal,System.Threading.CancellationToken)">
+            <summary>
+            Accepts a payment only when the order balance still covers it.
+            On SQL Server the order row is locked for the caller's transaction.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Common.Interfaces.IAuthService.RegisterExternalUserAsync(System.String,System.String,System.String,System.String,System.String,System.String,System.String,System.Threading.CancellationToken)">
+            <summary>
+            Creates a new tenant and owner for a verified external identity.
+            The caller supplies the provider subject. Tenant id is generated here and is never taken from the client.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Common.Interfaces.ICurrentUserService">
+            <summary>
+            Provides access to the claims and identity details of the currently authenticated HTTP user.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Interfaces.ICurrentUserService.UserId">
+            <summary>Gets the unique identifier of the authenticated user, or <c>null</c> if unauthenticated.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Interfaces.ICurrentUserService.Email">
+            <summary>Gets the email address of the authenticated user.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Interfaces.ICurrentUserService.TenantId">
+            <summary>Gets the tenant ID associated with the current user session.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Interfaces.ICurrentUserService.Roles">
+            <summary>Gets the list of role names assigned to the current user.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Interfaces.ICurrentUserService.Permissions">
+            <summary>Gets the list of permission keys granted to the current user.</summary>
+        </member>
+        <member name="M:BusinessOS.Application.Common.Interfaces.ICurrentUserService.HasPermission(System.String)">
+            <summary>
+            Checks whether the user holds a specific permission code.
+            </summary>
+            <param name="permissionCode">The permission key string to evaluate.</param>
+            <returns><c>true</c> if the user holds the permission; otherwise, <c>false</c>.</returns>
+        </member>
+        <member name="M:BusinessOS.Application.Common.Interfaces.IIdentityService.GeneratePasswordResetTokenAsync(System.String,System.Threading.CancellationToken)">
+            <summary>
+            Generates a password-reset token for an active user. Returns null when the email is unknown or inactive.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Common.Interfaces.IIdentityService.ResetPasswordWithTokenAsync(System.String,System.String,System.String,System.Threading.CancellationToken)">
+            <summary>
+            Resets a password using an emailed Identity reset token.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Common.Interfaces.IIdentityService.CreateExternalUserAsync(BusinessOS.Application.Common.Interfaces.CreateExternalUserRequest,System.Threading.CancellationToken)">
+            <summary>
+            Creates a user with no local password and attaches one external login.
+            Always uses <see cref="P:BusinessOS.Application.Common.Interfaces.CreateExternalUserRequest.TenantId"/> and ignores any ambient tenant.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Common.Interfaces.ITenantContext">
+            <summary>
+            Provides access to the currently resolved multi-tenant context for the active HTTP request scope.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Interfaces.ITenantContext.TenantId">
+            <summary>Gets the unique identifier of the active tenant.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Interfaces.ITenantContext.TenantName">
+            <summary>Gets the display name of the active tenant.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Interfaces.ITenantContext.Slug">
+            <summary>Gets the URL-friendly slug identifier of the tenant.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Interfaces.ITenantContext.SubscriptionPlanName">
+            <summary>Gets the name of the active subscription plan.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Interfaces.ITenantContext.SubscriptionPlanId">
+            <summary>Gets the unique identifier of the active subscription plan.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Interfaces.ITenantContext.Limits">
+            <summary>Gets the feature and usage limits configured for the tenant.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Interfaces.ITenantContext.Usage">
+            <summary>Gets a snapshot of current tenant usage statistics.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Interfaces.ITenantContext.IsActive">
+            <summary>Gets a value indicating whether the tenant account is active.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Interfaces.ITenantContext.IsLoaded">
+            <summary>Gets a value indicating whether tenant details have been successfully resolved and loaded.</summary>
+        </member>
+        <member name="M:BusinessOS.Application.Common.Interfaces.ITenantContext.LoadAsync(System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously loads tenant configuration, limits, and usage details.
+            </summary>
+            <param name="cancellationToken">Cancellation token to cancel the operation.</param>
+        </member>
+        <member name="T:BusinessOS.Application.Common.Interfaces.ITenantMembershipLookup">
+            <summary>
+            Reads the tenant membership stored for an Identity user.
+            Callers must not trust a client-supplied tenant id in place of this result.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Common.Options.AiMemoryOptions">
+            <summary>
+            Token-efficient conversational memory settings. Bound from the <c>AiMemory</c> configuration section.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Options.AiMemoryOptions.RecentMessageLimit">
+            <summary>Maximum recent role-messages included when token counts are unavailable.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Options.AiMemoryOptions.MaxHistoryTokens">
+            <summary>
+            Approximate token budget reserved for conversation history (summary + recent turns).
+            Does not include system prompt, tools, or the model response.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Options.AiMemoryOptions.SummarizationThreshold">
+            <summary>Start rolling summarization once unsummarized messages exceed this count.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Options.AiMemoryOptions.MaxSummaryTokens">
+            <summary>Approximate maximum size of the stored rolling summary.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Options.AiMemoryOptions.LongTermSemanticMemoryEnabled">
+            <summary>
+            Optional future Qdrant long-term semantic memory. Disabled by default and unused in the
+            SQL-backed conversation path. Do not mix chat embeddings with business-document collections.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Options.AppOptions.FrontendBaseUrl">
+            <summary>
+            Angular frontend base URL used for password-reset and invitation links.
+            Reset links are built only from this value, never from the request Host header.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Options.AppOptions.PasswordResetTokenHours">
+            <summary>
+            Lifetime of ASP.NET Core Identity password-reset tokens. Clamped to 1–168 hours.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Common.Options.CacheSettings">
+            <summary>
+            In-memory cache expiration settings loaded via the Options pattern.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Options.CacheSettings.DefaultExpirationMinutes">
+            <summary>Default absolute expiration for general query results (minutes).</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Options.CacheSettings.DashboardExpirationMinutes">
+            <summary>Absolute expiration for dashboard aggregates (minutes).</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Options.CacheSettings.ReportExpirationMinutes">
+            <summary>Absolute expiration for report query results (minutes).</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Options.CacheSettings.StaticDataExpirationMinutes">
+            <summary>Absolute expiration for static lookup tables such as categories (minutes).</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Options.EmailOptions.Enabled">
+            <summary>
+            When false (default), emails are logged instead of sent.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Options.EmailOptions.TimeoutSeconds">
+            <summary>
+            SMTP operation timeout. Values outside 5–60 are clamped.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Common.Options.GoogleAuthOptions">
+            <summary>
+            Public Google OAuth client settings. The ID-token flow does not use a client secret.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Options.GoogleAuthOptions.ClientId">
+            <summary>
+            OAuth 2.0 client ID from Google Cloud Console. This value is public and is also
+            embedded in the Angular app. It is not a secret, but it must match the SPA client.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Options.LoggingPerformanceOptions.MediatRWarningThresholdMs">
+            <summary>Warn when a MediatR handler exceeds this duration (ms).</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Options.LoggingPerformanceOptions.HttpWarningThresholdMs">
+            <summary>Warn when an HTTP request exceeds this duration (ms).</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Options.LoggingPerformanceOptions.SlowQueryThresholdMs">
+            <summary>Warn when a database command exceeds this duration (ms).</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Common.Options.LoggingPerformanceOptions.AiWarningThresholdMs">
+            <summary>Warn when an AI operation exceeds this duration (ms).</summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.ConversationLanguage">
+            <summary>
+            Picks Navla's reply language from the current message, an explicit switch, or the
+            conversation preference. Routing cues let existing English tool matchers understand
+            Urdu, Roman Urdu, and Arabic without a second intent model.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Agents.ConversationLanguage.ExpandForRouting(System.String)">
+            <summary>
+            Appends English routing words so tool selection and date ranges work in Urdu and Arabic.
+            The original message is preserved for the model and for entity extraction.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Agents.ConversationLanguage.IsBestSellerCue(System.String)">
+            <summary>Ranking questions such as "kon sa product zyada sell ho raha hai".</summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Agents.ConversationLanguage.IsStockOnHandCue(System.String)">
+            <summary>On-hand stock questions, not low-stock alerts.</summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Agents.ConversationLanguage.IsLowStockCue(System.String)">
+            <summary>Reorder-threshold questions, including Urdu, Roman Urdu, and Arabic word order.</summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Agents.ConversationLanguage.IsOutOfStockCue(System.String)">
+            <summary>Products with zero units, including Roman Urdu "stock mein nahi".</summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Agents.ConversationLanguage.IsAvailableProductsCue(System.String)">
+            <summary>Questions about how many products are on hand, including Arabic.</summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Agents.ConversationLanguage.EnglishCueRegex">
+            <remarks>
+            Pattern:<br/>
+            <code>\\b(show|what|why|how|please|total|sales|invoice|stock|order|month|revenue)\\b</code><br/>
+            Options:<br/>
+            <code>RegexOptions.IgnoreCase | RegexOptions.CultureInvariant</code><br/>
+            Explanation:<br/>
+            <code>
+            ○ Match if at a word boundary.<br/>
+            ○ 1st capture group.<br/>
+                ○ Match with 11 alternative expressions.<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Ss].<br/>
+                        ○ Match a character in the set [Hh].<br/>
+                        ○ Match a character in the set [Oo].<br/>
+                        ○ Match a character in the set [Ww].<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Ww].<br/>
+                        ○ Match a character in the set [Hh].<br/>
+                        ○ Match with 2 alternative expressions.<br/>
+                            ○ Match a sequence of expressions.<br/>
+                                ○ Match a character in the set [Aa].<br/>
+                                ○ Match a character in the set [Tt].<br/>
+                            ○ Match a character in the set [Yy].<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Hh].<br/>
+                        ○ Match a character in the set [Oo].<br/>
+                        ○ Match a character in the set [Ww].<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Pp].<br/>
+                        ○ Match a character in the set [Ll].<br/>
+                        ○ Match a character in the set [Ee].<br/>
+                        ○ Match a character in the set [Aa].<br/>
+                        ○ Match a character in the set [Ss].<br/>
+                        ○ Match a character in the set [Ee].<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Tt].<br/>
+                        ○ Match a character in the set [Oo].<br/>
+                        ○ Match a character in the set [Tt].<br/>
+                        ○ Match a character in the set [Aa].<br/>
+                        ○ Match a character in the set [Ll].<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Ss].<br/>
+                        ○ Match a character in the set [Aa].<br/>
+                        ○ Match a character in the set [Ll].<br/>
+                        ○ Match a character in the set [Ee].<br/>
+                        ○ Match a character in the set [Ss].<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Ii].<br/>
+                        ○ Match a character in the set [Nn].<br/>
+                        ○ Match a character in the set [Vv].<br/>
+                        ○ Match a character in the set [Oo].<br/>
+                        ○ Match a character in the set [Ii].<br/>
+                        ○ Match a character in the set [Cc].<br/>
+                        ○ Match a character in the set [Ee].<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Ss].<br/>
+                        ○ Match a character in the set [Tt].<br/>
+                        ○ Match a character in the set [Oo].<br/>
+                        ○ Match a character in the set [Cc].<br/>
+                        ○ Match a character in the set [Kk\u212A].<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Oo].<br/>
+                        ○ Match a character in the set [Rr].<br/>
+                        ○ Match a character in the set [Dd].<br/>
+                        ○ Match a character in the set [Ee].<br/>
+                        ○ Match a character in the set [Rr].<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Mm].<br/>
+                        ○ Match a character in the set [Oo].<br/>
+                        ○ Match a character in the set [Nn].<br/>
+                        ○ Match a character in the set [Tt].<br/>
+                        ○ Match a character in the set [Hh].<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Rr].<br/>
+                        ○ Match a character in the set [Ee].<br/>
+                        ○ Match a character in the set [Vv].<br/>
+                        ○ Match a character in the set [Ee].<br/>
+                        ○ Match a character in the set [Nn].<br/>
+                        ○ Match a character in the set [Uu].<br/>
+                        ○ Match a character in the set [Ee].<br/>
+            ○ Match if at a word boundary.<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Agents.DTOs.AgentChatResponse.PendingConfirmation">
+            <summary>
+            Present only when a write is waiting for the user. Displaying this does not execute the action.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Agents.DTOs.AgentChatResponse.SpecialistAgents">
+            <summary>
+            Domain specialists selected for this turn (inventory, sales, finance, …).
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.DTOs.AgentStreamChunkDto">
+            <summary>
+            Streaming chunk for agent chat, optionally carrying workflow step updates.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Agents.DTOs.AgentStreamChunkDto.Type">
+            <summary>
+            tool | status | workflow_step | token | final | error
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.DTOs.TtsVoiceOption">
+            <summary>A voice the active speech provider can synthesize.</summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.DTOs.TtsVoiceCatalogDto">
+            <summary>Voices exposed to the client for the active speech provider.</summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.DTOs.AgentExecutionState">
+            <summary>
+            Mutable bag of entity IDs and values passed between workflow steps.
+            Serialized into <c>AgentWorkflowRun.ProgressJson</c>.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.Enums.AgentKeys">
+            <summary>
+            Stable machine keys for built-in AI employee agents.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.Enums.AgentLanguages">
+            <summary>
+            Language codes for Navla chat and voice. Concrete codes are en, ur, ur-Latn, and ar.
+            "auto" means detect from the message. Add a code here before teaching the resolver a new language.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Agents.Enums.AgentLanguages.Normalize(System.String)">
+            <summary>A speakable language. Auto and blank become English.</summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Agents.Enums.AgentLanguages.Coalesce(System.String[])">
+            <summary>First concrete language, otherwise English.</summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.NavlaSpecialistKeys">
+            <summary>
+            Domain specialists behind the Navla chat orchestrator. Personas (sophia/adam/emma)
+            remain the UI identity; specialists scope tools and status messaging.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.Services.IAgentEmployeeService">
+            <summary>
+            Primary facade for AI employee agent interactions (chat, voice, onboarding, workflows).
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.Services.IAgentOnboardingOrchestrator">
+            <summary>
+            Conversational onboarding flow driven by an AI employee agent.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Agents.Services.IAgentOnboardingOrchestrator.GetCurrentStateAsync(System.Nullable{System.Guid},System.Threading.CancellationToken)">
+            <summary>
+            Returns the current onboarding conversation state for the user, if any.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.Services.IAgentPersonaService">
+            <summary>
+            Resolves AI employee persona prompts and catalog metadata.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Agents.Services.IAgentPersonaService.ListEmployeesAsync(System.Threading.CancellationToken)">
+            <summary>
+            Lists active employees for the current tenant (tenant overrides win over system defaults).
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Agents.Services.IAgentPersonaService.ResolvePersonaAsync(System.String,System.Threading.CancellationToken)">
+            <summary>
+            Resolves the effective persona for an agent key (falls back to Navla / default). The stored key remains sophia.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Agents.Services.IAgentPersonaService.GetDefaultAgentKeyAsync(System.Threading.CancellationToken)">
+            <summary>
+            Returns the system default agent key for the current tenant context.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Agents.Services.IAgentPersonaService.BuildSystemPromptAsync(System.String,System.String,System.Boolean,System.Threading.CancellationToken)">
+            <summary>
+            Builds the full system prompt with optional language and tone adjustments.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.Services.IAgentPlanner">
+            <summary>
+            Plans multi-step autonomous workflows from detected intent and conversation context.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Agents.Services.IAgentPlanner.RequiresWorkflow(BusinessOS.Application.Features.AI.Enums.AiCopilotIntent,System.String,BusinessOS.Application.Features.AI.DTOs.AiMemoryStateDto)">
+            <summary>
+            Returns true when the intent (or message) should be executed as a multi-step workflow.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Agents.Services.IAgentPlanner.Plan(System.String,BusinessOS.Application.Features.AI.Enums.AiCopilotIntent,System.String,BusinessOS.Application.Features.AI.DTOs.AiPageContextDto,BusinessOS.Application.Features.AI.DTOs.AiMemoryStateDto)">
+            <summary>
+            Builds an ordered plan of steps for the given intent and agent.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Agents.Services.IAgentPlanner.PlanOnboarding(System.String,System.String)">
+            <summary>
+            Plans a conversational onboarding workflow for the given agent.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.Services.IAgentIntentParser">
+            <summary>
+            Bilingual intent parser wrapping the existing copilot intent detector.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.Services.IAgentArgumentExtractor">
+            <summary>
+            Extracts strongly typed JSON arguments for a tool from natural language.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.Services.IAgentToolExecutor">
+            <summary>
+            Permission-checked tool execution with argument extraction, logging, and one retry.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.Services.IAgentSelfCorrector">
+            <summary>
+            Classifies tool failures and suggests retry or clarification.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.Services.IAgentActionLogger">
+            <summary>
+            Structured logging for every agent tool action.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.Services.IAgentRuntimeOrchestrator">
+            <summary>
+            Orchestrates intent → plan → sequential tool execution with live progress events.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.Services.IAgentWorkflowService">
+            <summary>
+            Creates and updates AI employee workflow runs and step progress.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.Services.ISophiaTtsService">
+            <summary>
+            Selects a configured speech provider, caches identical audio, and falls back when a provider fails.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Agents.Services.ISophiaTtsService.ActiveProvider">
+            <summary>Provider that will be tried first.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Agents.Services.ISophiaTtsService.DefaultVoice">
+            <summary>Default voice of the active provider.</summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Agents.Services.ISophiaTtsService.ListVoices">
+            <summary>Voices the client may choose for the active provider.</summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Agents.Services.ISophiaTtsService.SynthesizeAsync(System.String,System.String,System.Double,System.String,System.Threading.CancellationToken)">
+            <summary>
+            Synthesizes speech audio, usually MP3.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.Services.SophiaTtsResult">
+            <summary>
+            Result of a speech synthesis request.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Agents.Services.SophiaTtsResult.AudioBytes">
+            <summary>Raw audio bytes (typically MP3).</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Agents.Services.SophiaTtsResult.ContentType">
+            <summary>MIME content type of the audio (e.g. audio/mpeg).</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Agents.Services.SophiaTtsResult.VoiceName">
+            <summary>Voice identifier used for synthesis.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Agents.Services.SophiaTtsResult.Provider">
+            <summary>Provider that produced the audio.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Agents.Services.SophiaTtsResult.ServedFromCache">
+            <summary>True when the audio was served from the response cache.</summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.Services.ITtsProvider">
+            <summary>
+            One text-to-speech backend. The API key, if any, stays inside the provider.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Agents.Services.ITtsProvider.Key">
+            <summary>Stable provider id, such as <c>openai</c> or <c>edge</c>.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Agents.Services.ITtsProvider.IsAvailable">
+            <summary>False when required configuration, such as an API key, is missing.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Agents.Services.ITtsProvider.ModelId">
+            <summary>Model or engine id included in the audio cache key.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Agents.Services.ITtsProvider.DefaultVoice">
+            <summary>Voice used when the caller does not choose one.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Agents.Services.ITtsProvider.Voices">
+            <summary>Voices this provider accepts.</summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.Services.TtsSynthesisRequest">
+            <summary>Input for a single synthesis call.</summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Agents.Services.IVoicePreferenceService">
+            <summary>
+            Loads and persists per-user voice preferences for AI employees.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.AI.ConversationMemory.ConversationContextBuilder">
+            <summary>
+            Selects a token-budgeted slice of conversation history for the LLM.
+            Summarized messages are omitted from the recent window to avoid duplication.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.AI.ConversationMemory.ConversationContextBuilder.SelectMessagesToSummarize(System.Collections.Generic.IReadOnlyList{BusinessOS.Application.Features.AI.DTOs.AiMemoryTurnDto},System.Int32,BusinessOS.Application.Common.Options.AiMemoryOptions)">
+            <summary>
+            Messages that should be rolled into the next summary (older than the retained recent window).
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.AI.ConversationMemory.ConversationTitleFormatter">
+            <summary>
+            Deterministic conversation titles from the first user message. Avoids an extra LLM call.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.AI.ConversationMemory.ConversationTitleFormatter.WhitespaceRegex">
+            <remarks>
+            Pattern:<br/>
+            <code>\\s+</code><br/>
+            Explanation:<br/>
+            <code>
+            ○ Match a whitespace character atomically at least once.<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:BusinessOS.Application.Features.AI.ConversationMemory.ConversationTokenEstimator">
+            <summary>
+            Conservative character-based token estimate. Not a tokenizer: assumes ~4 characters per token
+            plus a small per-message overhead. Over-estimates slightly so the context window stays safe.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.AI.DTOs.AiCopilotChatResponse.ConversationId">
+            <summary>Alias of <see cref="P:BusinessOS.Application.Features.AI.DTOs.AiCopilotChatResponse.SessionId"/> for conversation-oriented clients.</summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.AI.DTOs.AiWorkflowStepProgressDto">
+            <summary>
+            Lightweight workflow step progress carried on copilot responses
+            (avoids a circular dependency on Agents DTOs).
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.AI.DTOs.AiMemoryStateDto.PendingActionJson">
+            <summary>
+            JSON draft of a write action waiting for details or confirmation. Null when idle.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.AI.DTOs.AiStreamChunkDto.Type">
+            <summary>
+            token | status | workflow_step | done | final | error
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.AI.Services.IAiTool.ParameterSchemaJson">
+            <summary>
+            JSON schema description of accepted arguments for structured extraction.
+            Null means the tool parses the raw message itself (legacy).
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.AI.Services.IAiTool.ExecuteWithArgsAsync(BusinessOS.Application.Features.AI.DTOs.AiCopilotExecutionContext,System.Text.Json.JsonElement,System.Threading.CancellationToken)">
+            <summary>
+            Execute with pre-extracted JSON args. Default implementations fall back to <see cref="M:BusinessOS.Application.Features.AI.Services.IAiTool.ExecuteAsync(BusinessOS.Application.Features.AI.DTOs.AiCopilotExecutionContext,System.Threading.CancellationToken)"/>.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Analytics.DTOs.AnalyticsMetricDto">
+            <summary>KPI metric with period-over-period growth.</summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Analytics.DTOs.AnalyticsOverviewResponse">
+            <summary>Executive analytics overview with 8 KPI cards.</summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Analytics.DTOs.AnalyticsTopCustomerDto">
+            <summary>Top customer ranked by invoice revenue.</summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Analytics.DTOs.AnalyticsRecentActivityDto">
+            <summary>Recent business activity feed item.</summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Analytics.DTOs.AnalyticsTaskBreakdownDto">
+            <summary>Task distribution (order line items mapped as tasks).</summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Analytics.DTOs.AnalyticsProjectStatusDto">
+            <summary>Project (order) status distribution.</summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Auth.Google.GoogleTokenValidationException">
+            <summary>
+            Raised when a Google ID token cannot be trusted. The message is generic so it can be logged
+            without echoing the token or the library's raw validation text.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Auth.Google.GoogleIdentity">
+            <summary>
+            Claims taken from a signature-validated Google ID token. Never construct this from client JSON.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Auth.Google.GoogleIdentity.#ctor(System.String,System.String,System.Boolean,System.String,System.String,System.String)">
+            <summary>
+            Claims taken from a signature-validated Google ID token. Never construct this from client JSON.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Billing.Services.IBillingPaymentReconciler.ApplyVerifiedResultAsync(BusinessOS.Domain.Enums.PaymentProviderType,System.String,BusinessOS.Domain.Enums.BillingTransactionStatus,System.String,System.Nullable{System.Decimal},System.String,System.Threading.CancellationToken)">
+            <summary>
+            Applies a verified provider result to the billing transaction identified by the stable operation key.
+            Returns false when no local transaction exists. Does not create a charge from webhook metadata.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Billing.Services.ISubscriptionEntitlementService">
+            <summary>
+            Server-side subscription limits for the authenticated tenant.
+            Plan limits, subscription ids, and tenant ids supplied by the client are ignored.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Billing.Services.ISubscriptionEntitlementService.EnsureCanCreateAsync(BusinessOS.Domain.Billing.QuotaResource,System.Int64,System.Threading.CancellationToken)">
+            <summary>
+            Throws <see cref="T:BusinessOS.Application.Common.Exceptions.PlanLimitExceededException"/> when the tenant cannot add
+            <paramref name="additionalUnits"/>. Persistence still re-checks inside the same database transaction.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Billing.Services.ResourceUsage">
+            <summary>
+            Live usage for one tenant. User seats include active members and unexpired pending invitations.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Billing.Services.ResourceUsage.#ctor(System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,System.Int64,System.Int32,System.Nullable{System.DateTime})">
+            <summary>
+            Live usage for one tenant. User seats include active members and unexpired pending invitations.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Billing.Services.SubscriptionRevenueMath">
+            <summary>
+            Recurring revenue uses the price the company is actually contracted to pay.
+            Trials and failed payments are reported separately. Nothing here is a cash collection.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Dashboard.DTOs.ChartDataResponse">
+            <summary>Chart payload optimized for line, bar, pie, and doughnut charts.</summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Dashboard.DTOs.DashboardOverviewResponse">
+            <summary>Executive dashboard KPI snapshot.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Dashboard.DTOs.DashboardOverviewResponse.TotalProducts">
+            <summary>Catalog product count (not period-filtered).</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Dashboard.DTOs.DashboardOverviewResponse.TotalCategories">
+            <summary>Catalog category count (not period-filtered).</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Dashboard.DTOs.DashboardOverviewResponse.TotalCustomers">
+            <summary>Catalog customer count (not period-filtered).</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Dashboard.DTOs.DashboardOverviewResponse.NewCustomers">
+            <summary>Customers created within the selected period.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Dashboard.DTOs.DashboardOverviewResponse.ActiveCustomers">
+            <summary>Distinct customers with a completed order in the selected period.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Dashboard.DTOs.DashboardOverviewResponse.TotalRevenue">
+            <summary>Completed-order revenue in the selected period (recognized sales).</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Dashboard.DTOs.DashboardOverviewResponse.RevenueChangePercent">
+            <summary>Percent change vs previous equivalent period; null when previous is zero.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Dashboard.DTOs.DashboardOverviewResponse.Currency">
+            <summary>Tenant currency code (e.g. PKR, USD).</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Dashboard.DTOs.CustomerAnalyticsDashboardResponse.AverageLifetimeValue">
+            <summary>UI alias for CustomerLifetimeValue.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Dashboard.DTOs.CustomerAnalyticsDashboardResponse.AverageSpending">
+            <summary>UI alias for AverageCustomerSpending.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Dashboard.DTOs.TopCustomerDto.FullName">
+            <summary>UI alias for CustomerName.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Dashboard.DTOs.ProductAnalyticsResponse.HighestRevenueProducts">
+            <summary>UI alias for ProductRevenue.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Dashboard.DTOs.ProductAnalyticsResponse.ProductRankings">
+            <summary>UI alias for ProductPerformanceRanking.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Dashboard.DTOs.ProductPerformanceDto.TotalQuantitySold">
+            <summary>UI alias for QuantitySold (legacy frontend contract).</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Dashboard.DTOs.ProductPerformanceDto.TotalRevenue">
+            <summary>UI alias for Revenue (legacy frontend contract).</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Dashboard.DTOs.ProductPerformanceDto.CurrentStock">
+            <summary>Legacy stock field; product analytics does not load inventory here.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Dashboard.DTOs.InventoryAnalyticsDashboardResponse.TotalInventoryValue">
+            <summary>UI alias for InventoryValue.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Dashboard.DTOs.InventoryAnalyticsDashboardResponse.LowStockCount">
+            <summary>UI alias for LowStockProducts.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Dashboard.DTOs.InventoryAnalyticsDashboardResponse.OutOfStockCount">
+            <summary>UI alias for OutOfStockProducts.</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Dashboard.DTOs.OrderAnalyticsResponse.SuccessRate">
+            <summary>UI alias for OrderSuccessRate.</summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Dashboard.DTOs.OwnerDashboardSummaryResponse">
+            <summary>
+            Consolidated owner-home payload. Prefer this over fanning out many dashboard calls.
+            Revenue is always completed-order recognized sales unless a field name says otherwise.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Dashboard.DTOs.DashboardPriorityDto.Priority">
+            <summary>high | medium | low</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Dashboard.DTOs.DashboardPriorityDto.Source">
+            <summary>recommendation | task</summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Dashboard.Services.DashboardCacheService">
+            <summary>
+            Dashboard-specific cache facade. Delegates to the centralized <see cref="T:BusinessOS.Application.Common.Caching.ICacheService"/>
+            while preserving the existing <see cref="T:BusinessOS.Application.Features.Dashboard.Services.IDashboardCacheService"/> contract.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Dashboard.Services.DashboardService.PreviousRange(BusinessOS.Application.Features.Dashboard.Models.DashboardDateRange)">
+            <summary>Equivalent-length window immediately before the selected range.</summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Dashboard.Services.DashboardService.ChangePercent(System.Decimal,System.Decimal)">
+            <summary>Null when previous is zero to avoid misleading ∞% growth.</summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Dashboard.Services.ReportingService.BuildCustomerGrowthSeriesAsync(BusinessOS.Application.Features.Dashboard.Models.DashboardDateRange,System.Threading.CancellationToken)">
+            <summary>
+            New customers over the active window. Short histories stay daily so quiet
+            days remain visible; longer histories roll up to months.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Dashboard.Services.TrendSeries">
+            <summary>
+            Bucket size for a dashboard period. Short filters need a finer grain so a
+            single sale still rises and falls against the quiet hours or days around it.
+            </summary>
+        </member>
+        <member name="F:BusinessOS.Application.Features.Dashboard.Services.TrendSeries.Grain.SparseDay">
+            <summary>Days that have activity only. Used for all-time sales.</summary>
+        </member>
+        <member name="F:BusinessOS.Application.Features.Dashboard.Services.TrendSeries.Grain.SparseMonth">
+            <summary>Months that have activity only. Used for all-time finance.</summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Dashboard.Services.TrendSeries.ChartWindow(BusinessOS.Application.Features.Dashboard.Models.DashboardDateRange)">
+            <summary>
+            For all-time periods, clamp chart windows to the last 12 months so filled
+            monthly buckets stay readable and do not start at Unix epoch.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Experience.BusinessInsightDto.Severity">
+            <summary>info | positive | warning | critical</summary>
+        </member>
+        <member name="P:BusinessOS.Application.Features.Finance.DTOs.FinancialDashboardResponse.NetProfit">
+            <summary>Gross profit minus operating expenses (includes COGS).</summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Invoices.Services.InvoicePaymentCalculator.ReconcileOrdersAsync(BusinessOS.Application.Common.Interfaces.IApplicationDbContext,System.Collections.Generic.IEnumerable{System.Guid},System.Threading.CancellationToken)">
+            <summary>
+            Writes payment-backed amounts onto invoices for the order.
+            Paid, draft, and cancelled statuses are left as declared. Sent invoices
+            become Paid, PartiallyPaid, or Overdue from the balance and due date.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Nalva.NalvaGuard.SecretPattern">
+            <remarks>
+            Pattern:<br/>
+            <code>(?i)(api[_-]?key|password|secret|connectionstring|authorization)(\\s*[:=]\\s*)([^\\s,;}{]+)</code><br/>
+            Options:<br/>
+            <code>RegexOptions.CultureInvariant</code><br/>
+            Explanation:<br/>
+            <code>
+            ○ 1st capture group.<br/>
+                ○ Match with 5 alternative expressions.<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Aa].<br/>
+                        ○ Match a character in the set [Pp].<br/>
+                        ○ Match a character in the set [Ii].<br/>
+                        ○ Match a character in the set [\-_] atomically, optionally.<br/>
+                        ○ Match a character in the set [Kk\u212A].<br/>
+                        ○ Match a character in the set [Ee].<br/>
+                        ○ Match a character in the set [Yy].<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Pp].<br/>
+                        ○ Match a character in the set [Aa].<br/>
+                        ○ Match a character in the set [Ss] exactly 2 times.<br/>
+                        ○ Match a character in the set [Ww].<br/>
+                        ○ Match a character in the set [Oo].<br/>
+                        ○ Match a character in the set [Rr].<br/>
+                        ○ Match a character in the set [Dd].<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Ss].<br/>
+                        ○ Match a character in the set [Ee].<br/>
+                        ○ Match a character in the set [Cc].<br/>
+                        ○ Match a character in the set [Rr].<br/>
+                        ○ Match a character in the set [Ee].<br/>
+                        ○ Match a character in the set [Tt].<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Cc].<br/>
+                        ○ Match a character in the set [Oo].<br/>
+                        ○ Match a character in the set [Nn] exactly 2 times.<br/>
+                        ○ Match a character in the set [Ee].<br/>
+                        ○ Match a character in the set [Cc].<br/>
+                        ○ Match a character in the set [Tt].<br/>
+                        ○ Match a character in the set [Ii].<br/>
+                        ○ Match a character in the set [Oo].<br/>
+                        ○ Match a character in the set [Nn].<br/>
+                        ○ Match a character in the set [Ss].<br/>
+                        ○ Match a character in the set [Tt].<br/>
+                        ○ Match a character in the set [Rr].<br/>
+                        ○ Match a character in the set [Ii].<br/>
+                        ○ Match a character in the set [Nn].<br/>
+                        ○ Match a character in the set [Gg].<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Aa].<br/>
+                        ○ Match a character in the set [Uu].<br/>
+                        ○ Match a character in the set [Tt].<br/>
+                        ○ Match a character in the set [Hh].<br/>
+                        ○ Match a character in the set [Oo].<br/>
+                        ○ Match a character in the set [Rr].<br/>
+                        ○ Match a character in the set [Ii].<br/>
+                        ○ Match a character in the set [Zz].<br/>
+                        ○ Match a character in the set [Aa].<br/>
+                        ○ Match a character in the set [Tt].<br/>
+                        ○ Match a character in the set [Ii].<br/>
+                        ○ Match a character in the set [Oo].<br/>
+                        ○ Match a character in the set [Nn].<br/>
+            ○ 2nd capture group.<br/>
+                ○ Match a whitespace character atomically any number of times.<br/>
+                ○ Match a character in the set [:=].<br/>
+                ○ Match a whitespace character greedily any number of times.<br/>
+            ○ 3rd capture group.<br/>
+                ○ Match a character in the set [^,;{}\s] atomically at least once.<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:BusinessOS.Application.Features.Nalva.NalvaWorkforcePackCatalog">
+            <summary>
+            Business-type workforce recommendations. Packs suggest agents and workflows;
+            owners still activate individually and can disable irrelevant agents.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Application.Features.PurchaseOrders.Commands.ReceivePurchaseOrder.ReceivePurchaseOrderCommand">
+            <summary>
+            Verified receiving. When <see cref="P:BusinessOS.Application.Features.PurchaseOrders.Commands.ReceivePurchaseOrder.ReceivePurchaseOrderCommand.Lines"/> is null, remaining quantities on all lines are received in full.
+            Stock only increases from verified quantities — never from a supplier delivery claim alone.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.PurchaseOrders.Commands.ReceivePurchaseOrder.ReceivePurchaseOrderCommand.#ctor(System.Guid,System.Collections.Generic.IReadOnlyList{BusinessOS.Application.Features.PurchaseOrders.Commands.ReceivePurchaseOrder.ReceivePurchaseOrderLineDto},System.String)">
+            <summary>
+            Verified receiving. When <see cref="P:BusinessOS.Application.Features.PurchaseOrders.Commands.ReceivePurchaseOrder.ReceivePurchaseOrderCommand.Lines"/> is null, remaining quantities on all lines are received in full.
+            Stock only increases from verified quantities — never from a supplier delivery claim alone.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Application.Features.Tenant.Services.ITenantLimitService.TryConsumeAiRequestAsync(System.String,System.Nullable{System.Int32},System.Nullable{System.Int32},System.Nullable{System.Int32},System.Nullable{System.Decimal},System.String,System.String,System.String,System.String,System.Nullable{System.Decimal},System.Threading.CancellationToken)">
+            <summary>
+            Consumes one AI request when the call is accepted. The same operation key does not consume twice.
+            Provider failures after acceptance still consume the request. Validation failures do not.
+            </summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.EnglishCueRegex_0">
+            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the EnglishCueRegex method.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.EnglishCueRegex_0.Instance">
+            <summary>Cached, thread-safe singleton instance.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.EnglishCueRegex_0.#ctor">
+            <summary>Initializes the instance.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.EnglishCueRegex_0.RunnerFactory">
+            <summary>Provides a factory for creating <see cref="T:System.Text.RegularExpressions.RegexRunner"/> instances to be used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.EnglishCueRegex_0.RunnerFactory.CreateInstance">
+            <summary>Creates an instance of a <see cref="T:System.Text.RegularExpressions.RegexRunner"/> used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.EnglishCueRegex_0.RunnerFactory.Runner">
+            <summary>Provides the runner that contains the custom logic implementing the specified regular expression.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.EnglishCueRegex_0.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
+            <summary>Scan the <paramref name="inputSpan"/> starting from base.runtextstart for the next match.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.EnglishCueRegex_0.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Search <paramref name="inputSpan"/> starting from base.runtextpos for the next location a match could possibly start.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if a possible match was found; false if no more matches are possible.</returns>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.EnglishCueRegex_0.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Determine whether <paramref name="inputSpan"/> at base.runtextpos is a match for the regular expression.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if the regular expression matches at the current position; otherwise, false.</returns>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.WhitespaceRegex_1">
+            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the WhitespaceRegex method.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.WhitespaceRegex_1.Instance">
+            <summary>Cached, thread-safe singleton instance.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.WhitespaceRegex_1.#ctor">
+            <summary>Initializes the instance.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.WhitespaceRegex_1.RunnerFactory">
+            <summary>Provides a factory for creating <see cref="T:System.Text.RegularExpressions.RegexRunner"/> instances to be used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.WhitespaceRegex_1.RunnerFactory.CreateInstance">
+            <summary>Creates an instance of a <see cref="T:System.Text.RegularExpressions.RegexRunner"/> used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.WhitespaceRegex_1.RunnerFactory.Runner">
+            <summary>Provides the runner that contains the custom logic implementing the specified regular expression.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.WhitespaceRegex_1.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
+            <summary>Scan the <paramref name="inputSpan"/> starting from base.runtextstart for the next match.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.WhitespaceRegex_1.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Search <paramref name="inputSpan"/> starting from base.runtextpos for the next location a match could possibly start.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if a possible match was found; false if no more matches are possible.</returns>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.WhitespaceRegex_1.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Determine whether <paramref name="inputSpan"/> at base.runtextpos is a match for the regular expression.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if the regular expression matches at the current position; otherwise, false.</returns>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.SecretPattern_2">
+            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the SecretPattern method.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.SecretPattern_2.Instance">
+            <summary>Cached, thread-safe singleton instance.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.SecretPattern_2.#ctor">
+            <summary>Initializes the instance.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.SecretPattern_2.RunnerFactory">
+            <summary>Provides a factory for creating <see cref="T:System.Text.RegularExpressions.RegexRunner"/> instances to be used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.SecretPattern_2.RunnerFactory.CreateInstance">
+            <summary>Creates an instance of a <see cref="T:System.Text.RegularExpressions.RegexRunner"/> used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.SecretPattern_2.RunnerFactory.Runner">
+            <summary>Provides the runner that contains the custom logic implementing the specified regular expression.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.SecretPattern_2.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
+            <summary>Scan the <paramref name="inputSpan"/> starting from base.runtextstart for the next match.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.SecretPattern_2.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Search <paramref name="inputSpan"/> starting from base.runtextpos for the next location a match could possibly start.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if a possible match was found; false if no more matches are possible.</returns>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.SecretPattern_2.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Determine whether <paramref name="inputSpan"/> at base.runtextpos is a match for the regular expression.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if the regular expression matches at the current position; otherwise, false.</returns>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.Utilities">
+            <summary>Helper methods used by generated <see cref="T:System.Text.RegularExpressions.Regex"/>-derived implementations.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_defaultTimeout">
+            <summary>Default timeout value set in <see cref="T:System.AppContext"/>, or <see cref="F:System.Text.RegularExpressions.Regex.InfiniteMatchTimeout"/> if none was set.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_hasTimeout">
+            <summary>Whether <see cref="F:System.Text.RegularExpressions.Generated.Utilities.s_defaultTimeout"/> is non-infinite.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.Utilities.IsBoundaryWordChar(System.Char)">
+            <summary>Determines whether the specified index is a boundary word character.</summary>
+            <remarks>This is the same as \w plus U+200C ZERO WIDTH NON-JOINER and U+200D ZERO WIDTH JOINER.</remarks>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.Utilities.IsPostWordCharBoundary(System.ReadOnlySpan{System.Char},System.Int32)">
+            <summary>Determines whether the specified index is a boundary.</summary>
+            <remarks>This variant is only employed when the previous character has already been validated as a word character.</remarks>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.Utilities.IsPreWordCharBoundary(System.ReadOnlySpan{System.Char},System.Int32)">
+            <summary>Determines whether the specified index is a boundary.</summary>
+            <remarks>This variant is only employed when the subsequent character will separately be validated as a word character.</remarks>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.WordCategoriesMask">
+            <summary>Provides a mask of Unicode categories that combine to form [\w].</summary>
+        </member>
+        <member name="P:System.Text.RegularExpressions.Generated.Utilities.WordCharBitmap">
+            <summary>Gets a bitmap for whether each character 0 through 127 is in [\w]</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_indexOfAnyStrings_OrdinalIgnoreCase_476E74EDCC92F0C737A2F0144BA6124BA94AC650F53B9BD99798D43BFE28990F">
+            <summary>Supports searching for the specified strings.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_indexOfAnyStrings_OrdinalIgnoreCase_E90C1F764739CE3D6C90EF98052619FC6C172B82B627A1B14DDD3826F97CBE2E">
+            <summary>Supports searching for the specified strings.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_whitespace">
+            <summary>Supports searching for characters in or not in "\t\n\v\f\r \u0085             \u2028\u2029  　".</summary>
+        </member>
+    </members>
+</doc>

@@ -9,6 +9,7 @@ using BusinessOS.Application.Features.Agents.Services;
 using BusinessOS.Application.Features.AI.DTOs;
 using BusinessOS.Application.Features.AI.Enums;
 using BusinessOS.Application.Features.AI.Services;
+using BusinessOS.Application.Features.Nalva;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.AI;
 using BusinessOS.Infrastructure.AI.Agents;
@@ -38,6 +39,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
     private readonly SophiaModelToolLoop _modelLoop;
     private readonly IApplicationDbContext _db;
     private readonly ILogger<AgentRuntimeOrchestrator> _logger;
+    private readonly INavlaWorkforceManager? _workforceManager;
 
     public AgentRuntimeOrchestrator(
         IAgentIntentParser intentParser,
@@ -53,7 +55,8 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         ISaleOrderDraftService saleDrafts,
         SophiaModelToolLoop modelLoop,
         IApplicationDbContext db,
-        ILogger<AgentRuntimeOrchestrator> logger)
+        ILogger<AgentRuntimeOrchestrator> logger,
+        INavlaWorkforceManager? workforceManager = null)
     {
         _intentParser = intentParser;
         _planner = planner;
@@ -69,6 +72,7 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         _modelLoop = modelLoop;
         _db = db;
         _logger = logger;
+        _workforceManager = workforceManager;
     }
 
     public async IAsyncEnumerable<AgentStreamChunkDto> RunStreamAsync(
@@ -187,6 +191,42 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
                 specialistLabel: specialistRoute.DisplayLabel);
             yield return new AgentStreamChunkDto { Type = "final", Content = denied.Reply, FinalResponse = denied };
             yield break;
+        }
+
+        // Phase 8B — Navla as workforce manager: delegate multi-agent work to Nalva orchestrator.
+        if (_workforceManager is not null
+            && pending is null
+            && _workforceManager.LooksLikeWorkforceDelegation(request.Message))
+        {
+            yield return Status("Coordinating AI workforce…");
+            var delegation = await _workforceManager.DelegateAsync(
+                new NavlaWorkforceDelegationRequest
+                {
+                    Message = request.Message,
+                    StartImmediately = true,
+                    ActivateMissingAgents = true,
+                    IdempotencyKey = string.IsNullOrWhiteSpace(request.ClientRequestId)
+                        ? null
+                        : $"navla-wf-{request.ClientRequestId}"
+                },
+                cancellationToken);
+
+            if (delegation.Handled)
+            {
+                var workforceReply = BuildWorkforceReply(delegation, language);
+                var workforceResponse = BuildResponse(
+                    persona,
+                    agentKey,
+                    language,
+                    AiCopilotIntent.Workflow,
+                    sessionId,
+                    workforceReply,
+                    specialists: specialistRoute.SpecialistKeys,
+                    specialistLabel: "Navla Workforce Manager");
+                await foreach (var chunk in StreamText(workforceReply, workforceResponse, cancellationToken))
+                    yield return chunk;
+                yield break;
+            }
         }
 
         // Conversational / help / dashboard / document search → existing copilot (preserves /api/ai parity).
@@ -816,6 +856,24 @@ public sealed class AgentRuntimeOrchestrator : IAgentRuntimeOrchestrator
         // Prefer first line for TTS.
         var first = reply.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? reply;
         return first.Length > 280 ? first[..280] : first;
+    }
+
+    private static string BuildWorkforceReply(NavlaWorkforceDelegationResult delegation, string language)
+    {
+        var lines = new List<string> { delegation.Summary };
+        if (delegation.MissingAgents.Count > 0)
+            lines.Add("Missing agents that need activation: " + string.Join(", ", delegation.MissingAgents) + ".");
+        if (delegation.ClarifyingQuestions.Count > 0)
+            lines.Add(string.Join(" ", delegation.ClarifyingQuestions));
+        if (!string.IsNullOrWhiteSpace(delegation.BlockReason) && !delegation.Started)
+            lines.Add(delegation.BlockReason);
+        if (delegation.Started && delegation.WorkflowRunId is Guid runId)
+            lines.Add($"Workflow run id: {runId:N}. Approvals still pause high-impact actions.");
+
+        var english = string.Join("\n", lines.Where(x => !string.IsNullOrWhiteSpace(x)));
+        if (AgentLanguages.IsRtl(language) || language.StartsWith("ur", StringComparison.OrdinalIgnoreCase))
+            return english + "\n\n(Navla ne AI workforce ko assign kiya — results recorded executions se aayenge, invent nahi.)";
+        return english;
     }
 
     private static AgentChatResponse BuildResponse(

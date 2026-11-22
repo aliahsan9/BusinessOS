@@ -191,6 +191,7 @@ public interface IApplicationDbContext
     DbSet<EnterpriseAuditEvent> EnterpriseAuditEvents { get; }
     DbSet<TenantSsoConfiguration> TenantSsoConfigurations { get; }
     DbSet<TenantEnterpriseSecuritySettings> TenantEnterpriseSecuritySettings { get; }
+    DbSet<DataImportBatch> DataImportBatches { get; }
 
     bool HasActiveTransaction { get; }
 

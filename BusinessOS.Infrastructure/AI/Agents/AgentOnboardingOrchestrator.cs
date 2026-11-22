@@ -250,13 +250,16 @@ public sealed class AgentOnboardingOrchestrator : IAgentOnboardingOrchestrator
 
         await _onboardingService.SaveBusinessProfileAsync(
             new SaveOnboardingBusinessProfileRequest(
-                name,
-                null,
-                null,
-                industry,
-                description,
-                currency,
-                timezone),
+                Name: name,
+                LogoUrl: null,
+                Website: null,
+                Industry: industry,
+                Description: description,
+                Phone: null,
+                Address: null,
+                Currency: currency,
+                Timezone: timezone,
+                FinancialYearStartMonth: 7),
             cancellationToken);
     }
 

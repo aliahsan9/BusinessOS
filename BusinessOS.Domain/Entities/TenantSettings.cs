@@ -14,6 +14,8 @@ public class TenantSettings : AuditableEntity
     public string Theme { get; set; } = "light";
     public string? LogoUrl { get; set; }
     public string Timezone { get; set; } = "UTC";
+    /// <summary>Calendar month (1-12) when the financial year starts. Pakistan default is July (7).</summary>
+    public int FinancialYearStartMonth { get; set; } = 7;
     public bool AiAssistantEnabled { get; set; } = true;
     public bool AiShowSuggestions { get; set; } = true;
     public bool EmailNotificationsEnabled { get; set; } = true;

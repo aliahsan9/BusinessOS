@@ -21,7 +21,12 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
         builder.Property(x => x.RefundedAmount).AsMoney().HasDefaultValue(0m);
         builder.Property(x => x.ProviderReference).HasMaxLength(200);
         builder.Property(x => x.ProviderOperationKey).HasMaxLength(128);
+        builder.Property(x => x.ExternalImportKey).HasMaxLength(100);
         builder.Property(x => x.RowVersion).IsRowVersion();
+
+        builder.HasIndex(x => new { x.TenantId, x.ExternalImportKey })
+            .IsUnique()
+            .HasFilter("[ExternalImportKey] IS NOT NULL AND [IsDeleted] = 0");
 
         builder.HasOne(x => x.Order)
             .WithMany()

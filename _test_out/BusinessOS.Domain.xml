@@ -1,0 +1,1278 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>BusinessOS.Domain</name>
+    </assembly>
+    <members>
+        <member name="T:BusinessOS.Domain.Billing.CommercialFeatureKeys">
+            <summary>
+            Feature keys the entitlement service understands. Plan rows and company overrides
+            store these keys. Call sites ask for a key; they do not embed plan names.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Billing.CommercialFeatureCatalog">
+            <summary>
+            Default feature matrix for the four public plans. A database grant or company override replaces these.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Billing.AiUsageCost">
+            <summary>
+            Turns token counts into a cost using a price card. The result is an estimate unless a provider charge is supplied.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Billing.ContractedEntitlement">
+            <summary>
+            Limits and prices locked for an existing subscriber when the public catalog changes.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Billing.CurrencyMath">
+            <summary>
+            Decimal money helpers. Financial amounts are never calculated with floating-point types.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Billing.QuotaResource">
+            <summary>
+            A resource whose creation is limited by the tenant's subscription.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Common.AuditableEntity">
+            <summary>
+            Abstract base type for entities that track creation, modification, and soft-delete state.
+            </summary>
+            <remarks>
+            Inherits <see cref="T:BusinessOS.Domain.Common.BaseEntity"/>. Tenant scope is defined by each derived entity (typically via TenantId).
+            Soft-deleted records remain in storage with <see cref="P:BusinessOS.Domain.Common.AuditableEntity.IsDeleted"/> set to true.
+            </remarks>
+        </member>
+        <member name="P:BusinessOS.Domain.Common.AuditableEntity.CreatedAt">
+            <summary>
+            UTC timestamp when the entity was first created. Defaults to the current UTC time on insert.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Common.AuditableEntity.UpdatedAt">
+            <summary>
+            UTC timestamp of the most recent update, or null if the entity has never been modified after creation.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Common.AuditableEntity.IsDeleted">
+            <summary>
+            Indicates whether the entity has been soft-deleted. Defaults to false for active records.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Common.BaseEntity">
+            <summary>
+            Abstract base type for all domain entities, providing a globally unique identifier.
+            </summary>
+            <remarks>
+            Not tenant-scoped. Derived types add tenant isolation, auditing, or other cross-cutting concerns.
+            </remarks>
+        </member>
+        <member name="P:BusinessOS.Domain.Common.BaseEntity.Id">
+            <summary>
+            Primary key for the entity. Generated as a new GUID on creation unless explicitly set.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Companies.AgencyTemplateCatalog">
+            <summary>
+            Agency launch templates. They configure the shared CompanyOS application.
+            They are not separate products.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Companies.LaunchNoticeCatalog">
+            <summary>
+            Public description of the first commercial release. Wording here is what the product is allowed to claim.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Companies.BusinessTypeCatalog">
+            <summary>
+            Data-backed company templates. New types are rows in <c>BusinessTypeTemplates</c>, seeded from this catalog.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.Activity">
+            <summary>
+            Records a user action performed within a tenant for activity feeds and audit trails.
+            </summary>
+            <remarks>
+            Tenant-scoped. Each row captures who did what to which entity, optionally with serialized metadata.
+            </remarks>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Activity.TenantId">
+            <summary>
+            Identifier of the tenant where the activity occurred. Required for multi-tenant isolation.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Activity.UserId">
+            <summary>
+            Identity user identifier of the user who performed the action.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Activity.UserName">
+            <summary>
+            Display name of the user at the time the activity was recorded.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Activity.Action">
+            <summary>
+            Short description of the action performed (for example, Created, Updated, Deleted).
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Activity.EntityType">
+            <summary>
+            Name of the affected entity type (for example, Customer, Order).
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Activity.EntityId">
+            <summary>
+            Primary key of the affected entity instance.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Activity.EntityName">
+            <summary>
+            Human-readable name or label of the affected entity at the time of the activity.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Activity.Metadata">
+            <summary>
+            Optional JSON or serialized metadata with additional context about the activity.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.AgentProfile">
+            <summary>
+            Catalog entry defining an AI employee agent persona, role, and system prompt.
+            </summary>
+            <remarks>
+            When <see cref="P:BusinessOS.Domain.Entities.AgentProfile.TenantId"/> is null the profile is a system-wide default.
+            A non-null tenant id represents a tenant-specific override of the catalog entry.
+            </remarks>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentProfile.TenantId">
+            <summary>
+            Tenant identifier when this profile is a tenant-specific override; null for system catalog defaults.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentProfile.Key">
+            <summary>
+            Stable machine key used to reference the agent (for example, sophia, adam, emma). Must be unique within scope.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentProfile.DisplayName">
+            <summary>
+            Human-readable display name shown in the UI for this AI employee.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentProfile.RoleTitle">
+            <summary>
+            Job title or role label presented to users (for example, Sales Assistant).
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentProfile.Specialty">
+            <summary>
+            Area of expertise or functional specialty for this agent.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentProfile.SystemPersonaPrompt">
+            <summary>
+            System prompt that defines this employee's persona, tone, and behavioral constraints.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentProfile.DefaultLanguage">
+            <summary>
+            Default language code for agent responses (for example, en).
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentProfile.IsDefault">
+            <summary>
+            Indicates whether this profile is the default agent selection within its scope.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentProfile.IsActive">
+            <summary>
+            Indicates whether this agent profile is available for use. Defaults to true.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.AgentWorkflowRun">
+            <summary>
+            Represents a multi-step autonomous workflow executed by an AI employee agent within a tenant.
+            </summary>
+            <remarks>
+            Tenant-scoped. Owns an ordered collection of <see cref="T:BusinessOS.Domain.Entities.AgentWorkflowStep"/> records.
+            May optionally link to an AI conversation session for context continuity.
+            </remarks>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentWorkflowRun.TenantId">
+            <summary>
+            Identifier of the tenant that owns this workflow run. Required for multi-tenant isolation.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentWorkflowRun.UserId">
+            <summary>
+            Identity user identifier of the user who initiated the workflow.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentWorkflowRun.SessionId">
+            <summary>
+            Optional foreign key to the related <see cref="T:BusinessOS.Domain.Entities.AiConversationSession"/> for conversational context.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentWorkflowRun.AgentKey">
+            <summary>
+            Machine key of the AI agent executing this workflow. References <see cref="P:BusinessOS.Domain.Entities.AgentProfile.Key"/>.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentWorkflowRun.Title">
+            <summary>
+            User-facing title describing the purpose or outcome of the workflow.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentWorkflowRun.Status">
+            <summary>
+            Current lifecycle status of the workflow run. Defaults to Pending.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentWorkflowRun.CurrentStepIndex">
+            <summary>
+            Zero-based index of the step currently being executed within the workflow.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentWorkflowRun.ProgressJson">
+            <summary>
+            Serialized progress snapshot for client display and resume logic after interruption.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentWorkflowRun.ResultSummary">
+            <summary>
+            Human-readable summary of the workflow outcome when completed successfully.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentWorkflowRun.ErrorMessage">
+            <summary>
+            Error message describing why the workflow failed, if applicable.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentWorkflowRun.StartedAt">
+            <summary>
+            UTC timestamp when the workflow run started. Defaults to the current UTC time on creation.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentWorkflowRun.CompletedAt">
+            <summary>
+            UTC timestamp when the workflow run completed, or null if still in progress.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentWorkflowRun.Steps">
+            <summary>
+            Ordered collection of steps belonging to this workflow run.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.AgentWorkflowStep">
+            <summary>
+            A single step within an <see cref="T:BusinessOS.Domain.Entities.AgentWorkflowRun"/> multi-step agent workflow.
+            </summary>
+            <remarks>
+            Scoped to the parent workflow run's tenant. Steps are ordered by <see cref="P:BusinessOS.Domain.Entities.AgentWorkflowStep.SortOrder"/>.
+            </remarks>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentWorkflowStep.WorkflowRunId">
+            <summary>
+            Foreign key to the parent <see cref="T:BusinessOS.Domain.Entities.AgentWorkflowRun"/>. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentWorkflowStep.StepKey">
+            <summary>
+            Stable machine key identifying this step within the workflow definition.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentWorkflowStep.Title">
+            <summary>
+            User-facing title describing what this step does.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentWorkflowStep.Status">
+            <summary>
+            Current execution status of this step. Defaults to Pending.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentWorkflowStep.SortOrder">
+            <summary>
+            Zero-based sort order of this step within the parent workflow run.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentWorkflowStep.Message">
+            <summary>
+            Optional status or result message produced during step execution.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentWorkflowStep.StartedAt">
+            <summary>
+            UTC timestamp when step execution started, or null if not yet started.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentWorkflowStep.CompletedAt">
+            <summary>
+            UTC timestamp when step execution completed, or null if not yet completed.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AgentWorkflowStep.WorkflowRun">
+            <summary>
+            Navigation property to the parent workflow run.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.AIConversation">
+            <summary>
+            Stores a single AI copilot prompt-response exchange for a tenant user.
+            </summary>
+            <remarks>
+            Tenant-scoped. May optionally belong to an <see cref="T:BusinessOS.Domain.Entities.AiConversationSession"/> via <see cref="P:BusinessOS.Domain.Entities.AIConversation.SessionId"/>.
+            Captures intent classification, tool usage, citations, and performance metrics for each turn.
+            </remarks>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AIConversation.TenantId">
+            <summary>
+            Identifier of the tenant that owns this conversation record. Required for multi-tenant isolation.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AIConversation.UserId">
+            <summary>
+            Identity user identifier of the user who submitted the prompt.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AIConversation.SessionId">
+            <summary>
+            Optional foreign key to the parent <see cref="T:BusinessOS.Domain.Entities.AiConversationSession"/>.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AIConversation.Session">
+            <summary>
+            Navigation property to the parent conversation session, if any.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AIConversation.Prompt">
+            <summary>
+            The user's input prompt sent to the AI copilot. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AIConversation.Response">
+            <summary>
+            The AI-generated response returned for the prompt. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AIConversation.Intent">
+            <summary>
+            Optional classified intent label for the user's prompt (for example, query_orders).
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AIConversation.ToolsUsedJson">
+            <summary>
+            Optional JSON array describing tools invoked during response generation.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AIConversation.CitationsJson">
+            <summary>
+            Optional JSON array of document or source citations referenced in the response.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AIConversation.TokenUsage">
+            <summary>
+            Optional total token count consumed for this exchange.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AIConversation.ExecutionTimeMs">
+            <summary>
+            Optional wall-clock execution time in milliseconds for generating the response.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.AiConversationSession">
+            <summary>
+            Persists an AI copilot conversation session with page context and selected entity references.
+            </summary>
+            <remarks>
+            Tenant-scoped. Owns a collection of <see cref="T:BusinessOS.Domain.Entities.AIConversation"/> message records.
+            Stores optional UI context (current page, selected customer, project, order, or invoice) and session memory.
+            </remarks>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiConversationSession.TenantId">
+            <summary>
+            Identifier of the tenant that owns this conversation session. Required for multi-tenant isolation.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiConversationSession.UserId">
+            <summary>
+            Identity user identifier of the user participating in this session.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiConversationSession.Title">
+            <summary>
+            User-facing title for the conversation. Defaults to "New conversation".
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiConversationSession.CurrentPage">
+            <summary>
+            Optional route or page identifier indicating where the user was when the session was active.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiConversationSession.SelectedCustomerId">
+            <summary>
+            Optional foreign key to a <see cref="T:BusinessOS.Domain.Entities.Customer"/> selected as session context.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiConversationSession.SelectedProjectId">
+            <summary>
+            Optional foreign key to a <see cref="T:BusinessOS.Domain.Entities.Project"/> selected as session context.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiConversationSession.SelectedOrderId">
+            <summary>
+            Optional foreign key to an <see cref="T:BusinessOS.Domain.Entities.Order"/> selected as session context.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiConversationSession.SelectedInvoiceId">
+            <summary>
+            Optional foreign key to an <see cref="T:BusinessOS.Domain.Entities.Invoice"/> selected as session context.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiConversationSession.MemoryJson">
+            <summary>
+            Optional serialized session memory or state used to maintain conversational context across turns.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiConversationSession.Summary">
+            <summary>
+            Rolling summary of older messages that no longer fit in the recent context window.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiConversationSession.ConversationMessages">
+            <summary>
+            Role-based conversational messages (user/assistant/tool) used to reconstruct LLM context.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiConversationSession.LastActivityAt">
+            <summary>
+            UTC timestamp of the most recent activity in this session. Defaults to the current UTC time on creation.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiConversationSession.IsActive">
+            <summary>
+            Indicates whether this session is currently active. Defaults to true.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiConversationSession.Messages">
+            <summary>
+            Collection of individual prompt-response exchanges in this session.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.AiCopilotAuditLog">
+            <summary>
+            Audit log entry capturing AI copilot interactions, tool usage, and outcomes for compliance and debugging.
+            </summary>
+            <remarks>
+            Tenant-scoped. Records each copilot invocation including intent, tools, retrieved documents, and success or failure.
+            </remarks>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiCopilotAuditLog.TenantId">
+            <summary>
+            Identifier of the tenant where the copilot interaction occurred. Required for multi-tenant isolation.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiCopilotAuditLog.UserId">
+            <summary>
+            Identity user identifier of the user who triggered the copilot interaction.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiCopilotAuditLog.SessionId">
+            <summary>
+            Optional foreign key to the related <see cref="T:BusinessOS.Domain.Entities.AiConversationSession"/>.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiCopilotAuditLog.Intent">
+            <summary>
+            Classified intent label for the user's request. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiCopilotAuditLog.UserMessage">
+            <summary>
+            Optional copy of the user's message that triggered the interaction.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiCopilotAuditLog.ToolsUsedJson">
+            <summary>
+            Optional JSON array describing tools invoked during the interaction.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiCopilotAuditLog.RetrievedDocumentsJson">
+            <summary>
+            Optional JSON array of documents retrieved from the knowledge base during the interaction.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiCopilotAuditLog.ExecutionTimeMs">
+            <summary>
+            Wall-clock execution time in milliseconds for the copilot request.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiCopilotAuditLog.TokenUsage">
+            <summary>
+            Optional total token count consumed during the interaction.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiCopilotAuditLog.Success">
+            <summary>
+            Indicates whether the copilot interaction completed successfully.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiCopilotAuditLog.ErrorMessage">
+            <summary>
+            Error message describing the failure, if <see cref="P:BusinessOS.Domain.Entities.AiCopilotAuditLog.Success"/> is false.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.AiDocument">
+            <summary>
+            Source document indexed for AI retrieval-augmented generation (RAG) within a tenant knowledge base.
+            </summary>
+            <remarks>
+            Tenant-scoped. Owns a collection of <see cref="T:BusinessOS.Domain.Entities.AiDocumentChunk"/> records used for vector search.
+            May optionally reference a source business entity via <see cref="P:BusinessOS.Domain.Entities.AiDocument.SourceEntityType"/> and <see cref="P:BusinessOS.Domain.Entities.AiDocument.SourceEntityId"/>.
+            </remarks>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiDocument.TenantId">
+            <summary>
+            Identifier of the tenant that owns this document. Required for multi-tenant isolation.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiDocument.Title">
+            <summary>
+            Human-readable title of the document. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiDocument.DocumentType">
+            <summary>
+            Category or type label for the document (for example, policy, faq, invoice). Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiDocument.SourceEntityType">
+            <summary>
+            Optional name of the source business entity type when this document was derived from another entity.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiDocument.SourceEntityId">
+            <summary>
+            Optional primary key of the source business entity when this document was derived from another entity.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiDocument.Content">
+            <summary>
+            Full text content of the document used for chunking and indexing. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiDocument.Tags">
+            <summary>
+            Optional comma-separated or serialized tags for filtering and organization.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiDocument.CreatedByUserId">
+            <summary>
+            Identity user identifier of the user who created or uploaded the document. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiDocument.IsIndexed">
+            <summary>
+            Indicates whether the document has been chunked and indexed for vector search.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiDocument.Chunks">
+            <summary>
+            Collection of text chunks derived from this document for embedding and retrieval.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.AiDocumentChunk">
+            <summary>
+            A searchable text segment of an <see cref="T:BusinessOS.Domain.Entities.AiDocument"/> with optional vector embedding data.
+            </summary>
+            <remarks>
+            Tenant-scoped. Belongs to a parent <see cref="T:BusinessOS.Domain.Entities.AiDocument"/> via <see cref="P:BusinessOS.Domain.Entities.AiDocumentChunk.DocumentId"/>.
+            Chunks are ordered by <see cref="P:BusinessOS.Domain.Entities.AiDocumentChunk.ChunkIndex"/> within the parent document.
+            </remarks>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiDocumentChunk.TenantId">
+            <summary>
+            Identifier of the tenant that owns this chunk. Required for multi-tenant isolation.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiDocumentChunk.DocumentId">
+            <summary>
+            Foreign key to the parent <see cref="T:BusinessOS.Domain.Entities.AiDocument"/>. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiDocumentChunk.Document">
+            <summary>
+            Navigation property to the parent document.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiDocumentChunk.ChunkIndex">
+            <summary>
+            Zero-based index of this chunk within the parent document. Determines chunk ordering.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiDocumentChunk.Content">
+            <summary>
+            Text content of this chunk segment. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiDocumentChunk.EmbeddingJson">
+            <summary>
+            Optional serialized vector embedding for semantic search (stored as JSON).
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiDocumentChunk.Keywords">
+            <summary>
+            Optional extracted keywords associated with this chunk for keyword-based retrieval.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiDocumentChunk.DocumentType">
+            <summary>
+            Document type copied from the parent for denormalized filtering. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiDocumentChunk.CreatedByUserId">
+            <summary>
+            Identity user identifier of the user who created the parent document. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiDocumentChunk.Tags">
+            <summary>
+            Optional tags copied or derived from the parent document for filtering.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.AiMessage">
+            <summary>
+            A single role-based conversational message belonging to an <see cref="T:BusinessOS.Domain.Entities.AiConversationSession"/>.
+            SQL Server is the durable source of truth for chat history.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiMessage.ConversationId">
+            <summary>
+            Parent conversation session identifier (also exposed as ConversationId in the API).
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiMessage.Role">
+            <summary>
+            Message role: system, user, assistant, or tool. See <see cref="T:BusinessOS.Domain.Entities.AiMessageRoles"/>.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiMessage.MetadataJson">
+            <summary>
+            Optional non-sensitive metadata (intent, tool name, client request id). Never store secrets.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.AiMessage.TurnId">
+            <summary>
+            Optional link to the prompt/response turn in <see cref="T:BusinessOS.Domain.Entities.AIConversation"/>.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.AiMessageRoles">
+            <summary>
+            Canonical chat-message roles persisted in <see cref="P:BusinessOS.Domain.Entities.AiMessage.Role"/>.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.AiUsageLedger">
+            <summary>
+            Idempotent AI quota consumption. Provider cost is internal and is not shown to tenant users.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.AuthSession">
+            <summary>
+            One browser or device session. Only a hash of the refresh token is stored.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.BillingInvoice">
+            <summary>
+            Platform billing invoice issued to a tenant for subscription charges.
+            </summary>
+            <remarks>
+            Tenant-scoped. Represents BusinessOS platform billing (not tenant customer invoices).
+            Links to <see cref="P:BusinessOS.Domain.Entities.BillingInvoice.Tenant"/> and records subscription plan, billing period, and payment provider details.
+            </remarks>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingInvoice.TenantId">
+            <summary>
+            Identifier of the tenant being billed. Required. Foreign key to <see cref="P:BusinessOS.Domain.Entities.BillingInvoice.Tenant"/>.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingInvoice.InvoiceNumber">
+            <summary>
+            Unique invoice number displayed to the tenant. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingInvoice.SubscriptionPlanId">
+            <summary>
+            Foreign key to the <see cref="T:BusinessOS.Domain.Entities.SubscriptionPlan"/> billed on this invoice. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingInvoice.PlanName">
+            <summary>
+            Denormalized plan name at the time of invoicing for historical reference. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingInvoice.Subtotal">
+            <summary>
+            Subtotal amount before tax. Must be non-negative.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingInvoice.TaxAmount">
+            <summary>
+            Tax amount applied to the subtotal. Must be non-negative.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingInvoice.TotalAmount">
+            <summary>
+            Total amount due including tax. Must equal subtotal plus tax.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingInvoice.Currency">
+            <summary>
+            ISO currency code for all monetary amounts. Defaults to USD.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingInvoice.Status">
+            <summary>
+            Current billing invoice status. Defaults to Draft.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingInvoice.BillingInterval">
+            <summary>
+            Billing frequency for this invoice (monthly or annual). Defaults to Monthly.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingInvoice.PaymentProvider">
+            <summary>
+            Payment provider used to collect payment. Defaults to Stripe.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingInvoice.PaymentMethod">
+            <summary>
+            Optional description of the payment method used (for example, card ending 4242).
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingInvoice.PeriodStart">
+            <summary>
+            Start of the billing period covered by this invoice. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingInvoice.PeriodEnd">
+            <summary>
+            End of the billing period covered by this invoice. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingInvoice.PaidAt">
+            <summary>
+            UTC timestamp when payment was received, or null if unpaid.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingInvoice.ExternalInvoiceId">
+            <summary>
+            Optional external invoice identifier from the payment provider (for example, Stripe invoice id).
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingInvoice.Notes">
+            <summary>
+            Optional free-text notes attached to the invoice.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingInvoice.Tenant">
+            <summary>
+            Navigation property to the tenant being billed.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.BillingPaymentMethod">
+            <summary>
+            Tokenized payment-method summary. Raw card numbers and CVV are never stored.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.BillingTransaction">
+            <summary>
+            Payment transaction record for platform billing charges against a tenant.
+            </summary>
+            <remarks>
+            Tenant-scoped. May optionally link to a <see cref="T:BusinessOS.Domain.Entities.BillingInvoice"/> when the transaction settles an invoice.
+            Tracks provider references and completion status for reconciliation.
+            </remarks>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingTransaction.TenantId">
+            <summary>
+            Identifier of the tenant associated with this transaction. Required. Foreign key to <see cref="P:BusinessOS.Domain.Entities.BillingTransaction.Tenant"/>.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingTransaction.BillingInvoiceId">
+            <summary>
+            Optional foreign key to the related <see cref="T:BusinessOS.Domain.Entities.BillingInvoice"/> being paid.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingTransaction.TransactionId">
+            <summary>
+            Unique transaction identifier (internal or provider-assigned). Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingTransaction.Amount">
+            <summary>
+            Transaction amount in the specified currency. Must be non-negative.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingTransaction.Currency">
+            <summary>
+            ISO currency code for the transaction amount. Defaults to USD.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingTransaction.Status">
+            <summary>
+            Current transaction status. Defaults to Pending.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingTransaction.Provider">
+            <summary>
+            Payment provider that processed this transaction. Defaults to Stripe.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingTransaction.ProviderReference">
+            <summary>
+            Optional provider-specific reference identifier for reconciliation (for example, payment intent id).
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingTransaction.ProviderOperationKey">
+            <summary>
+            Stable provider operation key derived from the local attempt. Reused on retry.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingTransaction.PaymentMethod">
+            <summary>
+            Optional human-readable description of the transaction.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingTransaction.Metadata">
+            <summary>
+            Optional JSON metadata with additional provider or business context.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingTransaction.CompletedAt">
+            <summary>
+            UTC timestamp when the transaction completed successfully, or null if not yet completed.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingTransaction.Tenant">
+            <summary>
+            Navigation property to the tenant associated with this transaction.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.BillingTransaction.Invoice">
+            <summary>
+            Navigation property to the related billing invoice, if any.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.BusinessTypeTemplate">
+            <summary>
+            Platform catalog of company templates. Not tenant-owned.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.Category">
+            <summary>
+            Product category used to organize a tenant's catalog.
+            </summary>
+            <remarks>
+            Tenant-scoped. Owns a collection of <see cref="T:BusinessOS.Domain.Entities.Product"/> records assigned to this category.
+            </remarks>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Category.TenantId">
+            <summary>
+            Identifier of the tenant that owns this category. Required for multi-tenant isolation.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Category.Name">
+            <summary>
+            Display name of the category. Required and expected to be unique within the tenant.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Category.Description">
+            <summary>
+            Optional description explaining the purpose or contents of this category.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Category.Products">
+            <summary>
+            Collection of products assigned to this category.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.PlanFeatureGrant">
+            <summary>
+            Plan-level feature switch or limit. A later effective date replaces an earlier one.
+            Absence of a row means the catalog default and the plan columns apply.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.CompanyFeatureOverride">
+            <summary>
+            Company-specific entitlement. Used for enterprise overrides and authorized exceptions.
+            Applied after the plan, including when the subscription is restricted.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.AiModelPrice">
+            <summary>
+            Configurable model price card. Estimated usage cost reads the active row.
+            This is not a provider invoice.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.UsageAlert">
+            <summary>
+            One alert per company, resource, level, and period. Quota exhaustion does not delete data.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.CompanyMembership">
+            <summary>
+            Links a platform user account to one company and the role they hold there.
+            A user may have several memberships. The identity user type is not referenced here
+            so the domain project stays free of Identity. The active company remains on the user account.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.Customer">
+            <summary>
+            Customer or client record managed by a tenant for sales, orders, and invoicing.
+            </summary>
+            <remarks>
+            Tenant-scoped. Owns a collection of <see cref="T:BusinessOS.Domain.Entities.Order"/> records placed by this customer.
+            Contact details are required; optional fields support CRM notes and user assignment.
+            </remarks>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Customer.TenantId">
+            <summary>
+            Identifier of the tenant that owns this customer. Required for multi-tenant isolation.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Customer.FirstName">
+            <summary>
+            Customer's first name. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Customer.LastName">
+            <summary>
+            Customer's last name. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Customer.Email">
+            <summary>
+            Primary email address for the customer. Required and expected to be valid for communication.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Customer.PhoneNumber">
+            <summary>
+            Primary phone number for the customer. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Customer.Address">
+            <summary>
+            Street address line for the customer. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Customer.City">
+            <summary>
+            City component of the customer's address. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Customer.Country">
+            <summary>
+            Country component of the customer's address. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Customer.PostalCode">
+            <summary>
+            Postal or ZIP code for the customer's address. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Customer.Company">
+            <summary>
+            Optional company or organization name when the customer represents a business account.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Customer.Notes">
+            <summary>
+            Optional free-text notes about the customer for internal CRM use.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Customer.IsActive">
+            <summary>
+            Indicates whether the customer is active and available for new orders. Defaults to true.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Customer.AssignedUserId">
+            <summary>
+            Optional identity user identifier of the team member assigned to manage this customer.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Customer.Orders">
+            <summary>
+            Collection of orders placed by this customer.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.Employee">
+            <summary>
+            Employee record for a tenant's internal workforce and payroll tracking.
+            </summary>
+            <remarks>
+            Tenant-scoped. Stores contact information, designation, salary, and employment status.
+            </remarks>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Employee.TenantId">
+            <summary>
+            Identifier of the tenant that employs this person. Required for multi-tenant isolation.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Employee.FirstName">
+            <summary>
+            Employee's first name. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Employee.LastName">
+            <summary>
+            Employee's last name. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Employee.Email">
+            <summary>
+            Work email address for the employee. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Employee.Phone">
+            <summary>
+            Work phone number for the employee. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Employee.Designation">
+            <summary>
+            Job title or role designation within the organization. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Employee.Salary">
+            <summary>
+            Current salary amount in the tenant's currency. Must be non-negative.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Employee.JoiningDate">
+            <summary>
+            Date the employee joined the organization. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Employee.IsActive">
+            <summary>
+            Indicates whether the employee is currently active. Defaults to true.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.EntityAuditLog">
+            <summary>
+            Immutable audit trail entry recording field-level changes to business entities within a tenant.
+            </summary>
+            <remarks>
+            Tenant-scoped. Does not inherit soft-delete auditing from <see cref="T:BusinessOS.Domain.Common.AuditableEntity"/>.
+            Stores serialized old and new values for change comparison and compliance review.
+            </remarks>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.EntityAuditLog.TenantId">
+            <summary>
+            Identifier of the tenant where the change occurred. Required for multi-tenant isolation.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.EntityAuditLog.ChangedBy">
+            <summary>
+            Identity user identifier or name of the user who made the change. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.EntityAuditLog.EntityType">
+            <summary>
+            Name of the entity type that was changed (for example, Customer, Product). Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.EntityAuditLog.EntityId">
+            <summary>
+            String representation of the changed entity's primary key. Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.EntityAuditLog.Action">
+            <summary>
+            Action performed on the entity (for example, Created, Updated, Deleted). Required.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.EntityAuditLog.OldValues">
+            <summary>
+            Optional serialized snapshot of field values before the change.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.EntityAuditLog.NewValues">
+            <summary>
+            Optional serialized snapshot of field values after the change.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.EntityAuditLog.ChangedAt">
+            <summary>
+            UTC timestamp when the change was recorded. Defaults to the current UTC time on insert.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.GeneratedReport">
+            <summary>
+            Stores metadata and content for generated PDF reports.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.GeneratedReport.ParametersJson">
+            <summary>JSON parameters used to regenerate the report.</summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.GeneratedReport.EntityId">
+            <summary>Optional entity id (invoice, customer, project).</summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.IdempotencyRecord">
+            <summary>
+            Tenant-scoped record of a logical write operation identified by a client idempotency key.
+            Completed financial records are retained so a later cleanup cannot make the same operation run again.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.IdempotencyRecord.ExpiresAt">
+            <summary>
+            Informational retention timestamp. Completed records are not deleted when this passes.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.AgencyWorkspace">
+            <summary>One agency setup record per company. Templates configure this company; they do not create another application.</summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.EarlyAccessInvitation">
+            <summary>Platform invitation for the controlled early-access launch. Not tenant-owned until it is redeemed.</summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.ProductUsageEvent">
+            <summary>Product usage name and time. Payloads with customer data are not stored.</summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.ProductBacklogItem">
+            <summary>Platform backlog. SourceCompanyId is not a tenant filter, so one company cannot query another company's items through the tenant filter.</summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.NalvaCompanyAgent">
+            <summary>Company-owned instance of a Nalva.ai agent. Catalog definitions stay in code.</summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.PlatformAuditLog">
+            <summary>
+            Append-only platform administration history. SubjectTenantId names the affected company when there is one.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.PlatformSetting">
+            <summary>
+            Non-secret platform configuration. API keys stay in the server environment and are never stored here.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.ProcessedWebhookEvent">
+            <summary>
+            Provider event receipt. Uniqueness is (Provider, EventId), independent of tenant filters,
+            because callbacks arrive before a tenant context exists.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.ProcurementAgentSettings">
+            <summary>
+            Tenant-scoped automation toggles for the Inventory &amp; Procurement agent.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.ProcurementAgentSettings.PreferredSupplierCriterion">
+            <summary>lowest-total | fastest-delivery | preferred-history</summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.ProcurementRecommendation">
+            <summary>
+            Durable procurement recommendation prepared by the agent. Approval is bound to ApprovalFingerprint.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.PurchaseReceivingEvent">
+            <summary>
+            Verified receiving event. Stock only changes when this record is created successfully.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Purchase.ExpectedDeliveryDate">
+            <summary>Expected arrival date used for delivery monitoring.</summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Purchase.IdempotencyKey">
+            <summary>Prevents duplicate agent-created purchase orders for the same intent.</summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Purchase.ApprovalFingerprint">
+            <summary>Hash of supplier + lines + prices approved for this purchase.</summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Purchase.SentToSupplier">
+            <summary>True only when an approved external supplier transmission succeeded.</summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.PurchaseItem.ReceivedQuantity">
+            <summary>Verified received quantity. Stock increases only from verified receiving events.</summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.RbacAuditLog.TenantId">
+            <summary>
+            Owning tenant. Null is reserved for platform events that are not tenant data.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.RegionalPrice">
+            <summary>
+            Server-configured price for a plan in a billing country and currency.
+            Amounts are not derived from a live exchange rate.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Role.IsSystem">
+            <summary>
+            System roles are shared across companies and immutable via tenant APIs.
+            Custom roles always belong to exactly one company.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.Role.TenantId">
+            <summary>
+            Null for shared system roles. Required for company-specific custom roles.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.RolePermission.TenantId">
+            <summary>
+            Null for permissions on shared system roles.
+            Matches the owning custom role's company for tenant-scoped assignments.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.SalesAgentSettings">
+            <summary>Per-tenant Sales Agent runtime settings (limits, ICP defaults, pause).</summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.SupportTicket">
+            <summary>
+            Persisted customer-support ticket owned by a tenant.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.UserRole.TenantId">
+            <summary>
+            Company in which this role assignment is active.
+            Preserves per-company assignments when a user belongs to multiple companies.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Entities.VoicePreference">
+            <summary>
+            Per-user voice and spoken-language preferences for AI employee interactions.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.VoicePreference.SpeechRate">
+            <summary>Speech rate multiplier (1.0 = normal).</summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.VoicePreference.Pitch">
+            <summary>Voice pitch adjustment (1.0 = normal).</summary>
+        </member>
+        <member name="P:BusinessOS.Domain.Entities.VoicePreference.PreferredAgentKey">
+            <summary>Preferred AI employee key (e.g. sophia).</summary>
+        </member>
+        <member name="T:BusinessOS.Domain.Enums.AgentVoiceLanguage">
+            <summary>
+            Preferred spoken language for AI employee voice interactions.
+            </summary>
+        </member>
+        <member name="F:BusinessOS.Domain.Enums.AgentVoiceLanguage.En">
+            <summary>English (en).</summary>
+        </member>
+        <member name="F:BusinessOS.Domain.Enums.AgentVoiceLanguage.Ur">
+            <summary>Urdu (ur), including Roman Urdu speech.</summary>
+        </member>
+        <member name="F:BusinessOS.Domain.Enums.AgentVoiceLanguage.Ar">
+            <summary>Arabic (ar).</summary>
+        </member>
+        <member name="F:BusinessOS.Domain.Enums.AgentVoiceLanguage.Auto">
+            <summary>Detect the language from each message.</summary>
+        </member>
+        <member name="M:BusinessOS.Domain.Enums.BillingTransactionTransitions.CanApplyVerifiedProviderResult(BusinessOS.Domain.Enums.BillingTransactionStatus,BusinessOS.Domain.Enums.BillingTransactionStatus)">
+            <summary>
+            Verified provider events may confirm a payment that an earlier timeout marked as failed.
+            They must not move a completed or refunded payment backwards.
+            </summary>
+        </member>
+    </members>
+</doc>

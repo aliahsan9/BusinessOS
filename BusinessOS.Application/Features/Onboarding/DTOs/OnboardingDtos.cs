@@ -7,9 +7,16 @@ public sealed class OnboardingStatusDto
     public bool IsSkipped { get; init; }
     public DateTime? CompletedAt { get; init; }
     public bool ShouldShowWizard { get; init; }
+    public IReadOnlyList<int> CompletedSteps { get; init; } = [];
+    public DateTime? LastResumedAt { get; init; }
+    public int TotalSteps { get; init; } = 9;
 }
 
-public record SaveOnboardingProgressRequest(int CurrentStep, bool IsSkipped = false);
+public record SaveOnboardingProgressRequest(
+    int CurrentStep,
+    bool IsSkipped = false,
+    bool ResumeLater = false,
+    IReadOnlyList<int>? CompletedSteps = null);
 
 public sealed class OnboardingBusinessProfileDto
 {
@@ -18,8 +25,11 @@ public sealed class OnboardingBusinessProfileDto
     public string? Website { get; init; }
     public string Industry { get; init; } = default!;
     public string? Description { get; init; }
-    public string Currency { get; init; } = "USD";
-    public string Timezone { get; init; } = "UTC";
+    public string? Phone { get; init; }
+    public string? Address { get; init; }
+    public string Currency { get; init; } = "PKR";
+    public string Timezone { get; init; } = "Asia/Karachi";
+    public int FinancialYearStartMonth { get; init; } = 7;
 }
 
 public record SaveOnboardingBusinessProfileRequest(
@@ -28,5 +38,8 @@ public record SaveOnboardingBusinessProfileRequest(
     string? Website,
     string Industry,
     string? Description,
+    string? Phone,
+    string? Address,
     string Currency,
-    string Timezone);
+    string Timezone,
+    int FinancialYearStartMonth = 7);

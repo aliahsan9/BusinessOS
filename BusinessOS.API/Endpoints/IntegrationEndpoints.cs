@@ -11,10 +11,13 @@ public static class IntegrationEndpoints
         var group = app.MapGroup("/integrations").WithTags("Integrations").RequireAuthorization().RequireRateLimiting("api");
         group.MapGet("/marketplace", async (IIntegrationPlatform platform, CancellationToken ct) => Results.Ok(await platform.GetMarketplaceAsync(ct)));
         group.MapGet("/connections", async (IIntegrationPlatform platform, CancellationToken ct) => Results.Ok(await platform.GetConnectionsAsync(ct)));
+        group.MapGet("/health", async (IIntegrationPlatform platform, CancellationToken ct) => Results.Ok(await platform.GetHealthAsync(ct)));
         group.MapPost("/{provider}/authorize", async (string provider, IntegrationAuthorizeRequest request, IIntegrationPlatform platform, CancellationToken ct) =>
             Results.Ok(await platform.BeginAuthorizeAsync(provider, request, ct))).RequirePermission(PermissionCodes.NalvaManage);
         group.MapPost("/{provider}/callback", async (string provider, IntegrationCallbackRequest request, IIntegrationPlatform platform, CancellationToken ct) =>
             Results.Ok(await platform.CompleteAuthorizeAsync(provider, request, ct))).RequirePermission(PermissionCodes.NalvaManage);
+        group.MapPost("/smtp/configure", async (IntegrationSmtpConfigureRequest request, IIntegrationPlatform platform, CancellationToken ct) =>
+            Results.Ok(await platform.ConfigureSmtpAsync(request, ct))).RequirePermission(PermissionCodes.NalvaManage);
         group.MapPost("/connections/{id:guid}/disconnect", async (Guid id, IIntegrationPlatform platform, CancellationToken ct) =>
             Results.Ok(await platform.DisconnectAsync(id, ct))).RequirePermission(PermissionCodes.NalvaManage);
         group.MapPost("/connections/{id:guid}/test", async (Guid id, IIntegrationPlatform platform, CancellationToken ct) =>
@@ -50,7 +53,7 @@ public static class IntegrationEndpoints
                 ?? request.Headers["X-CompanyOS-Signature"].FirstOrDefault();
             var eventId = request.Headers["X-GitHub-Delivery"].FirstOrDefault()
                 ?? request.Headers["X-Event-Id"].FirstOrDefault()
-                ?? request.Headers["X-Hub-Signature-256"].FirstOrDefault();
+                ?? request.Headers["X-Request-Id"].FirstOrDefault();
             var result = await platform.ReceiveWebhookAsync(provider, connectionId, body, signature, eventId, ct);
             return Results.Json(new { message = result.Message }, statusCode: result.StatusCode);
         }).AllowAnonymous();

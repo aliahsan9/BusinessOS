@@ -194,6 +194,7 @@ public sealed class SupportAgentService : ISupportAgentService
         }
 
         var context = await GetAuthorizedCustomerContextAsync(request.CustomerId, request.CustomerEmail, request.CustomerPhone, request.OrderId, request.OrderNumber, cancellationToken);
+        await AttachProductMatchAsync(context, request.Body, cancellationToken);
         var customerId = ReadGuid(context, "customerId");
         var orderId = ReadGuid(context, "orderId");
         var customerFound = ReadBool(context, "customerFound");
@@ -757,7 +758,9 @@ public sealed class SupportAgentService : ISupportAgentService
             }, cancellationToken);
 
             var hold = "Thanks for reaching out. I've escalated this to a teammate who will follow up shortly.";
-            var holdReply = await AddReplyAsync(ticket.Id, new SupportReplyRequest { Body = hold, SendToCustomer = true, Channel = ticket.Channel }, cancellationToken);
+            // External messaging channels require human approval before delivery (Phase 8C).
+            var holdSend = !RequiresExternalApproval(ticket.Channel);
+            var holdReply = await AddReplyAsync(ticket.Id, new SupportReplyRequest { Body = hold, SendToCustomer = holdSend, Channel = ticket.Channel }, cancellationToken);
             return new SupportProcessResult(
                 ticket.Id,
                 ticket.TicketNumber,
@@ -767,20 +770,23 @@ public sealed class SupportAgentService : ISupportAgentService
                 holdReply.DeliveryStatus,
                 true,
                 holdReply.Id,
-                new JsonObject { ["escalated"] = true, ["reason"] = reason });
+                new JsonObject { ["escalated"] = true, ["reason"] = reason, ["awaitingApproval"] = !holdSend });
         }
 
         var reply = BuildAuthorizedReply(rawBody, context, knowledge, customerFound);
-        ticket.RecommendedAction = sources.Count == 0 && !customerFound
-            ? "Ask clarifying question or add knowledge."
-            : "Monitor for customer confirmation.";
+        var externalApproval = RequiresExternalApproval(ticket.Channel);
+        ticket.RecommendedAction = externalApproval
+            ? "Approve SendSupportReply / SendWhatsAppMessage before the customer receives this draft."
+            : sources.Count == 0 && !customerFound
+                ? "Ask clarifying question or add knowledge."
+                : "Monitor for customer confirmation.";
         ticket.Status = SupportTicketStatuses.InProgress;
         await _db.SaveChangesAsync(cancellationToken);
 
         var sent = await AddReplyAsync(ticket.Id, new SupportReplyRequest
         {
             Body = reply,
-            SendToCustomer = true,
+            SendToCustomer = !externalApproval,
             Channel = ticket.Channel
         }, cancellationToken);
 
@@ -813,9 +819,47 @@ public sealed class SupportAgentService : ISupportAgentService
             });
     }
 
+    private static bool RequiresExternalApproval(string channel) =>
+        string.Equals(channel, SupportChannels.WhatsApp, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(channel, SupportChannels.Email, StringComparison.OrdinalIgnoreCase);
+
+    private async Task AttachProductMatchAsync(JsonObject context, string body, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(body) || body.Length < 3)
+            return;
+
+        var products = await _db.Products.AsNoTracking()
+            .Where(x => x.IsActive)
+            .Select(x => new { x.Id, x.Name, x.SKU, x.CurrentStock })
+            .Take(200)
+            .ToListAsync(cancellationToken);
+        var match = products
+            .Where(p => !string.IsNullOrWhiteSpace(p.Name) && body.Contains(p.Name, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(p => p.Name.Length)
+            .FirstOrDefault();
+        if (match is null)
+            return;
+
+        context["productMatch"] = new JsonObject
+        {
+            ["productId"] = match.Id.ToString(),
+            ["name"] = match.Name,
+            ["sku"] = match.SKU,
+            ["currentStock"] = match.CurrentStock
+        };
+    }
+
     private static string BuildAuthorizedReply(string rawBody, JsonObject context, JsonObject knowledge, bool customerFound)
     {
         var sources = knowledge["sources"] as JsonArray ?? [];
+        if (context["productMatch"] is JsonObject product)
+        {
+            var name = product["name"]?.GetValue<string>() ?? "the product";
+            var stock = product["currentStock"]?.GetValue<decimal>() ?? 0;
+            return stock > 0
+                ? $"Yes — {name} is available. Current stock on hand is {stock}."
+                : $"{name} is in our catalog but currently shows 0 stock. I can check a restock timeline with the team.";
+        }
         if (ReadBool(context, "orderFound"))
         {
             return $"I found order {context["orderNumber"]} with status {context["orderStatus"]} (payment: {context["paymentStatus"]}). " +

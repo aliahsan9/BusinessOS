@@ -22,6 +22,9 @@ public class Order : AuditableEntity
     public Guid? QuotationId { get; set; }
     public Guid? DealId { get; set; }
 
+    /// <summary>Stable key from historical import; prevents duplicate order creation on re-import.</summary>
+    public string? ExternalImportKey { get; set; }
+
     public byte[] RowVersion { get; set; } = default!;
 
     public Customer Customer { get; set; } = default!;

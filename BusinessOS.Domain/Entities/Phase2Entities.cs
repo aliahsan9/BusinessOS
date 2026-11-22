@@ -327,6 +327,9 @@ public class PurchaseInvoice : AuditableEntity
     public string Status { get; set; } = "Issued";
     public string? Notes { get; set; }
     public string? AttachmentUrl { get; set; }
+
+    /// <summary>Stable key from historical supplier-payment import.</summary>
+    public string? ExternalImportKey { get; set; }
 }
 
 public class TaxRate : AuditableEntity

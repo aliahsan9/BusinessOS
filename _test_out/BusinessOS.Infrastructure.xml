@@ -1,0 +1,1821 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>BusinessOS.Infrastructure</name>
+    </assembly>
+    <members>
+        <member name="M:BusinessOS.Infrastructure.AI.Agents.AgentPersonaService.RefreshStoredNavlaIdentityAsync(System.Threading.CancellationToken)">
+            <summary>
+            Rewrites the stored display name and self-introduction for the existing assistant.
+            The agent key stays <c>sophia</c> so saved preferences and API calls keep working.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.Agents.EdgeNeuralTtsService">
+            <summary>
+            Microsoft Edge Read Aloud neural speech. Used when OpenAI speech is not configured or fails.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.Agents.NavlaSpecialistRouter">
+            <summary>
+            Routes a Navla chat turn to one or more domain specialists and intersects tools.
+            Does not invent tools; only scopes the existing registry.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.Agents.OpenAiTtsProvider">
+            <summary>
+            OpenAI speech synthesis. The API key is read from server configuration and is not returned to the client.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.Agents.Runtime.AgentPendingAction">
+            <summary>
+            Holds a write action until the owner has supplied the details and confirmed them.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Infrastructure.AI.Agents.Runtime.AgentPendingAction.UpdatedAtUtc">
+            <summary>Refreshed whenever the owner adds a detail. Abandoned drafts expire after <see cref="F:BusinessOS.Infrastructure.AI.Agents.Runtime.AgentPendingAction.PendingLifetime"/>.</summary>
+        </member>
+        <member name="P:BusinessOS.Infrastructure.AI.Agents.Runtime.AgentPendingAction.UserId">
+            <summary>Authenticated user who started the draft. A confirmation from another user is ignored.</summary>
+        </member>
+        <member name="P:BusinessOS.Infrastructure.AI.Agents.Runtime.AgentPendingAction.TenantId">
+            <summary>Tenant that owns the draft. Never taken from the model.</summary>
+        </member>
+        <member name="P:BusinessOS.Infrastructure.AI.Agents.Runtime.AgentPendingAction.ConfirmationFingerprint">
+            <summary>Slot fingerprint shown to the user. A confirmation executes only this exact set.</summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.Agents.Runtime.AgentActionClarifier">
+            <summary>
+            Decides whether a mutating agent tool may run, or whether the owner still needs to clarify.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.AI.Agents.Runtime.AgentActionClarifier.ShouldReleaseDraft(System.String)">
+            <summary>
+            The owner is asking something else, not answering the missing order field.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.Agents.Runtime.AgentIntentParser">
+            <summary>
+            Extends IAiIntentDetector with page-aware short commands for agent workflows.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.AI.Agents.Runtime.AgentIntentParser.NormalizeBilingual(System.String)">
+            <summary>
+            Normalizes user input (trim only; English-only backend).
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.Agents.Runtime.AgentToolSchemas">
+            <summary>
+            Canonical JSON schema descriptions for structured argument extraction.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.Agents.Runtime.SaleOrderCatalog">
+            <summary>
+            Resolves sale customers and products inside the current tenant filter.
+            A name never falls through to an unrelated record.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.Agents.Runtime.SaleOrderDraftService">
+            <summary>
+            Binds a sale draft to tenant records before Navla asks for confirmation or creates the order.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.Agents.Runtime.SaleOrderExecutionLedger">
+            <summary>
+            Stops one conversation from creating the same confirmed order twice, including overlapping requests.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.Agents.Runtime.SaleOrderLanguage">
+            <summary>
+            Reads customer, product, and quantity from a sale message without adding them together
+            or treating model numbers as a quantity.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.AI.Agents.Runtime.SaleOrderLanguage.LabeledQuantityRegex">
+            <remarks>
+            Pattern:<br/>
+            <code>\\b(?:qty|quantity)\\s*(?:is|:|=)?\\s*(\\d{1,5}(?:\\.\\d+)?)\\b</code><br/>
+            Options:<br/>
+            <code>RegexOptions.IgnoreCase</code><br/>
+            Explanation:<br/>
+            <code>
+            ○ Match if at a word boundary.<br/>
+            ○ Match a character in the set [Qq].<br/>
+            ○ Match with 2 alternative expressions.<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a character in the set [Tt].<br/>
+                    ○ Match a character in the set [Yy].<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a character in the set [Uu].<br/>
+                    ○ Match a character in the set [Aa].<br/>
+                    ○ Match a character in the set [Nn].<br/>
+                    ○ Match a character in the set [Tt].<br/>
+                    ○ Match a character in the set [Ii].<br/>
+                    ○ Match a character in the set [Tt].<br/>
+                    ○ Match a character in the set [Yy].<br/>
+            ○ Match a whitespace character greedily any number of times.<br/>
+            ○ Optional (greedy).<br/>
+                ○ Match with 2 alternative expressions.<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Ii].<br/>
+                        ○ Match a character in the set [Ss].<br/>
+                    ○ Match a character in the set [:=].<br/>
+            ○ Match a whitespace character atomically any number of times.<br/>
+            ○ 1st capture group.<br/>
+                ○ Match a Unicode digit greedily at least 1 and at most 5 times.<br/>
+                ○ Optional (greedy).<br/>
+                    ○ Match '.'.<br/>
+                    ○ Match a Unicode digit atomically at least once.<br/>
+            ○ Match if at a word boundary.<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.AI.Agents.Runtime.SaleOrderLanguage.NumberWordRegex">
+            <remarks>
+            Pattern:<br/>
+            <code>\\b(one|two|three|four|five|six|seven|eight|nine|ten)\\b</code><br/>
+            Options:<br/>
+            <code>RegexOptions.IgnoreCase</code><br/>
+            Explanation:<br/>
+            <code>
+            ○ Match if at a word boundary.<br/>
+            ○ 1st capture group.<br/>
+                ○ Match with 7 alternative expressions.<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Oo].<br/>
+                        ○ Match a character in the set [Nn].<br/>
+                        ○ Match a character in the set [Ee].<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Tt].<br/>
+                        ○ Match with 2 alternative expressions.<br/>
+                            ○ Match a sequence of expressions.<br/>
+                                ○ Match a character in the set [Ww].<br/>
+                                ○ Match a character in the set [Oo].<br/>
+                            ○ Match a sequence of expressions.<br/>
+                                ○ Match a character in the set [Hh].<br/>
+                                ○ Match a character in the set [Rr].<br/>
+                                ○ Match a character in the set [Ee] exactly 2 times.<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Ff].<br/>
+                        ○ Match with 2 alternative expressions.<br/>
+                            ○ Match a sequence of expressions.<br/>
+                                ○ Match a character in the set [Oo].<br/>
+                                ○ Match a character in the set [Uu].<br/>
+                                ○ Match a character in the set [Rr].<br/>
+                            ○ Match a sequence of expressions.<br/>
+                                ○ Match a character in the set [Ii].<br/>
+                                ○ Match a character in the set [Vv].<br/>
+                                ○ Match a character in the set [Ee].<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Ss].<br/>
+                        ○ Match with 2 alternative expressions.<br/>
+                            ○ Match a sequence of expressions.<br/>
+                                ○ Match a character in the set [Ii].<br/>
+                                ○ Match a character in the set [Xx].<br/>
+                            ○ Match a sequence of expressions.<br/>
+                                ○ Match a character in the set [Ee].<br/>
+                                ○ Match a character in the set [Vv].<br/>
+                                ○ Match a character in the set [Ee].<br/>
+                                ○ Match a character in the set [Nn].<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Ee].<br/>
+                        ○ Match a character in the set [Ii].<br/>
+                        ○ Match a character in the set [Gg].<br/>
+                        ○ Match a character in the set [Hh].<br/>
+                        ○ Match a character in the set [Tt].<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Nn].<br/>
+                        ○ Match a character in the set [Ii].<br/>
+                        ○ Match a character in the set [Nn].<br/>
+                        ○ Match a character in the set [Ee].<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Tt].<br/>
+                        ○ Match a character in the set [Ee].<br/>
+                        ○ Match a character in the set [Nn].<br/>
+            ○ Match if at a word boundary.<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.AI.Agents.Runtime.SaleOrderLanguage.BareNumberRegex">
+            <remarks>
+            Pattern:<br/>
+            <code>\\b\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?\\b|\\b\\d{1,5}(?:\\.\\d+)?\\b</code><br/>
+            Explanation:<br/>
+            <code>
+            ○ Match if at a word boundary.<br/>
+            ○ Match with 2 alternative expressions, atomically.<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a Unicode digit atomically at least 1 and at most 3 times.<br/>
+                    ○ Loop greedily at least once.<br/>
+                        ○ Match ','.<br/>
+                        ○ Match a Unicode digit exactly 3 times.<br/>
+                    ○ Optional (greedy).<br/>
+                        ○ Match '.'.<br/>
+                        ○ Match a Unicode digit atomically at least once.<br/>
+                    ○ Match if at a word boundary.<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a Unicode digit greedily at least 1 and at most 5 times.<br/>
+                    ○ Optional (greedy).<br/>
+                        ○ Match '.'.<br/>
+                        ○ Match a Unicode digit atomically at least once.<br/>
+                    ○ Match if at a word boundary.<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.AI.Agents.Runtime.SaleOrderLanguage.LeadingCountRegex">
+            <remarks>
+            Pattern:<br/>
+            <code>(?&lt;!generation\\s)(?&lt;!gen\\s)(?&lt;!model\\s)(?&lt;!version\\s)\\b\\d{1,5}(?:\\.\\d+)?\\s+(?=[A-Za-z])</code><br/>
+            Options:<br/>
+            <code>RegexOptions.IgnoreCase</code><br/>
+            Explanation:<br/>
+            <code>
+            ○ Zero-width negative lookbehind.<br/>
+                ○ Match a whitespace character right-to-left.<br/>
+                ○ Match a character in the set [Nn] right-to-left.<br/>
+                ○ Match a character in the set [Oo] right-to-left.<br/>
+                ○ Match a character in the set [Ii] right-to-left.<br/>
+                ○ Match a character in the set [Tt] right-to-left.<br/>
+                ○ Match a character in the set [Aa] right-to-left.<br/>
+                ○ Match a character in the set [Rr] right-to-left.<br/>
+                ○ Match a character in the set [Ee] right-to-left.<br/>
+                ○ Match a character in the set [Nn] right-to-left.<br/>
+                ○ Match a character in the set [Ee] right-to-left.<br/>
+                ○ Match a character in the set [Gg] right-to-left.<br/>
+            ○ Zero-width negative lookbehind.<br/>
+                ○ Match a whitespace character right-to-left.<br/>
+                ○ Match a character in the set [Nn] right-to-left.<br/>
+                ○ Match a character in the set [Ee] right-to-left.<br/>
+                ○ Match a character in the set [Gg] right-to-left.<br/>
+            ○ Zero-width negative lookbehind.<br/>
+                ○ Match a whitespace character right-to-left.<br/>
+                ○ Match a character in the set [Ll] right-to-left.<br/>
+                ○ Match a character in the set [Ee] right-to-left.<br/>
+                ○ Match a character in the set [Dd] right-to-left.<br/>
+                ○ Match a character in the set [Oo] right-to-left.<br/>
+                ○ Match a character in the set [Mm] right-to-left.<br/>
+            ○ Zero-width negative lookbehind.<br/>
+                ○ Match a whitespace character right-to-left.<br/>
+                ○ Match a character in the set [Nn] right-to-left.<br/>
+                ○ Match a character in the set [Oo] right-to-left.<br/>
+                ○ Match a character in the set [Ii] right-to-left.<br/>
+                ○ Match a character in the set [Ss] right-to-left.<br/>
+                ○ Match a character in the set [Rr] right-to-left.<br/>
+                ○ Match a character in the set [Ee] right-to-left.<br/>
+                ○ Match a character in the set [Vv] right-to-left.<br/>
+            ○ Match if at a word boundary.<br/>
+            ○ Match a Unicode digit greedily at least 1 and at most 5 times.<br/>
+            ○ Optional (greedy).<br/>
+                ○ Match '.'.<br/>
+                ○ Match a Unicode digit atomically at least once.<br/>
+            ○ Match a whitespace character atomically at least once.<br/>
+            ○ Zero-width positive lookahead.<br/>
+                ○ Match a character in the set [A-Za-z\u212A].<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.AI.Agents.Runtime.SaleOrderLanguage.GenerationPrefixRegex">
+            <remarks>
+            Pattern:<br/>
+            <code>(?:generation|gen|model|version|v|#)\\s*$</code><br/>
+            Options:<br/>
+            <code>RegexOptions.IgnoreCase</code><br/>
+            Explanation:<br/>
+            <code>
+            ○ Match with 5 alternative expressions.<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a character in the set [Gg].<br/>
+                    ○ Match a character in the set [Ee].<br/>
+                    ○ Match a character in the set [Nn].<br/>
+                    ○ Match a character in the set [Ee].<br/>
+                    ○ Match a character in the set [Rr].<br/>
+                    ○ Match a character in the set [Aa].<br/>
+                    ○ Match a character in the set [Tt].<br/>
+                    ○ Match a character in the set [Ii].<br/>
+                    ○ Match a character in the set [Oo].<br/>
+                    ○ Match a character in the set [Nn].<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a character in the set [Gg].<br/>
+                    ○ Match a character in the set [Ee].<br/>
+                    ○ Match a character in the set [Nn].<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a character in the set [Mm].<br/>
+                    ○ Match a character in the set [Oo].<br/>
+                    ○ Match a character in the set [Dd].<br/>
+                    ○ Match a character in the set [Ee].<br/>
+                    ○ Match a character in the set [Ll].<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a character in the set [Vv].<br/>
+                    ○ Match a character in the set [Ee].<br/>
+                    ○ Match a character in the set [Rr].<br/>
+                    ○ Match a character in the set [Ss].<br/>
+                    ○ Match a character in the set [Ii].<br/>
+                    ○ Match a character in the set [Oo].<br/>
+                    ○ Match a character in the set [Nn].<br/>
+                ○ Match a character in the set [#Vv].<br/>
+            ○ Match a whitespace character greedily any number of times.<br/>
+            ○ Match if at the end of the string or if before an ending newline.<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.AI.Agents.Runtime.SaleOrderLanguage.CustomerNameRegex">
+            <remarks>
+            Pattern:<br/>
+            <code>\\bfor\\s+(?:the\\s+)?(?:customer|client\\s+)?([A-Za-z][A-Za-z' .-]{1,80})</code><br/>
+            Options:<br/>
+            <code>RegexOptions.IgnoreCase</code><br/>
+            Explanation:<br/>
+            <code>
+            ○ Match if at a word boundary.<br/>
+            ○ Match a character in the set [Ff].<br/>
+            ○ Match a character in the set [Oo].<br/>
+            ○ Match a character in the set [Rr].<br/>
+            ○ Match a whitespace character greedily at least once.<br/>
+            ○ Optional (greedy).<br/>
+                ○ Match a character in the set [Tt].<br/>
+                ○ Match a character in the set [Hh].<br/>
+                ○ Match a character in the set [Ee].<br/>
+                ○ Match a whitespace character greedily at least once.<br/>
+            ○ Optional (greedy).<br/>
+                ○ Match a character in the set [Cc].<br/>
+                ○ Match with 2 alternative expressions.<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Uu].<br/>
+                        ○ Match a character in the set [Ss].<br/>
+                        ○ Match a character in the set [Tt].<br/>
+                        ○ Match a character in the set [Oo].<br/>
+                        ○ Match a character in the set [Mm].<br/>
+                        ○ Match a character in the set [Ee].<br/>
+                        ○ Match a character in the set [Rr].<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Ll].<br/>
+                        ○ Match a character in the set [Ii].<br/>
+                        ○ Match a character in the set [Ee].<br/>
+                        ○ Match a character in the set [Nn].<br/>
+                        ○ Match a character in the set [Tt].<br/>
+                        ○ Match a whitespace character atomically at least once.<br/>
+            ○ 1st capture group.<br/>
+                ○ Match a character in the set [A-Za-z\u212A].<br/>
+                ○ Match a character in the set [ '\-.A-Za-z\u212A] atomically at least 1 and at most 80 times.<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.AI.Agents.Runtime.SaleOrderLanguage.NameIsRegex">
+            <remarks>
+            Pattern:<br/>
+            <code>\\b(?:name\\s+is|named|customer\\s+name\\s+is)\\s+([A-Za-z][A-Za-z'.-]{1,40})</code><br/>
+            Options:<br/>
+            <code>RegexOptions.IgnoreCase</code><br/>
+            Explanation:<br/>
+            <code>
+            ○ Match if at a word boundary.<br/>
+            ○ Match with 2 alternative expressions.<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a character in the set [Nn].<br/>
+                    ○ Match a character in the set [Aa].<br/>
+                    ○ Match a character in the set [Mm].<br/>
+                    ○ Match a character in the set [Ee].<br/>
+                    ○ Match with 2 alternative expressions.<br/>
+                        ○ Match a sequence of expressions.<br/>
+                            ○ Match a whitespace character atomically at least once.<br/>
+                            ○ Match a character in the set [Ii].<br/>
+                            ○ Match a character in the set [Ss].<br/>
+                        ○ Match a character in the set [Dd].<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a character in the set [Cc].<br/>
+                    ○ Match a character in the set [Uu].<br/>
+                    ○ Match a character in the set [Ss].<br/>
+                    ○ Match a character in the set [Tt].<br/>
+                    ○ Match a character in the set [Oo].<br/>
+                    ○ Match a character in the set [Mm].<br/>
+                    ○ Match a character in the set [Ee].<br/>
+                    ○ Match a character in the set [Rr].<br/>
+                    ○ Match a whitespace character atomically at least once.<br/>
+                    ○ Match a character in the set [Nn].<br/>
+                    ○ Match a character in the set [Aa].<br/>
+                    ○ Match a character in the set [Mm].<br/>
+                    ○ Match a character in the set [Ee].<br/>
+                    ○ Match a whitespace character atomically at least once.<br/>
+                    ○ Match a character in the set [Ii].<br/>
+                    ○ Match a character in the set [Ss].<br/>
+            ○ Match a whitespace character atomically at least once.<br/>
+            ○ 1st capture group.<br/>
+                ○ Match a character in the set [A-Za-z\u212A].<br/>
+                ○ Match a character in the set ['\-.A-Za-z\u212A] atomically at least 1 and at most 40 times.<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.Agents.SophiaTtsService">
+            <summary>
+            Routes speech to the configured provider, then the fallback, and caches identical audio.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.Agents.TtsAudioCache">
+            <summary>
+            Remembers MP3 bytes for identical speech so the same reply is not synthesized twice.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.Agents.TtsOptions">
+            <summary>
+            Speech synthesis settings. The OpenAI key is Ai:OpenAiApiKey and is never sent to the browser.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Infrastructure.AI.Agents.TtsOptions.Provider">
+            <summary>Primary provider key. <c>openai</c> is the natural voice.</summary>
+        </member>
+        <member name="P:BusinessOS.Infrastructure.AI.Agents.TtsOptions.FallbackProvider">
+            <summary>Tried when the primary provider is missing or fails. Empty disables fallback.</summary>
+        </member>
+        <member name="P:BusinessOS.Infrastructure.AI.Agents.TtsOptions.CacheMinutes">
+            <summary>How long identical audio stays cached. Zero keeps entries until the size cap evicts them.</summary>
+        </member>
+        <member name="P:BusinessOS.Infrastructure.AI.Agents.TtsOptions.CacheMaxBytes">
+            <summary>Approximate cap on cached audio bytes.</summary>
+        </member>
+        <member name="P:BusinessOS.Infrastructure.AI.Agents.TtsOptions.OpenAiModel">
+            <summary>OpenAI speech model. gpt-4o-mini-tts is the natural voice.</summary>
+        </member>
+        <member name="P:BusinessOS.Infrastructure.AI.Agents.TtsOptions.DefaultVoice">
+            <summary>Used when the saved preference is empty or <c>default</c>.</summary>
+        </member>
+        <member name="P:BusinessOS.Infrastructure.AI.Agents.TtsOptions.Instructions">
+            <summary>Style hint for models that accept instructions. Ignored by tts-1.</summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.Agents.TtsTextNormalizer">
+            <summary>Prepares spoken text and stable cache keys.</summary>
+        </member>
+        <member name="P:BusinessOS.Infrastructure.AI.AiOptions.ApiKey">
+            <summary>Cursor Cloud Agents API key (crsr_...).</summary>
+        </member>
+        <member name="P:BusinessOS.Infrastructure.AI.AiOptions.OpenAiApiKey">
+            <summary>OpenAI API key (sk-...). Preferred for RAG when set.</summary>
+        </member>
+        <member name="P:BusinessOS.Infrastructure.AI.AiOptions.RunTimeoutSeconds">
+            <summary>Max seconds to wait for a Cursor agent run to finish.</summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.AiToolSafetyGate">
+            <summary>
+            Rejects untrusted tool requests before they reach business services.
+            Prompt text is not treated as authorization.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.AiToolScope">
+            <summary>
+            Limits a model turn to the tools the intent detector already named.
+            A null set means the full read catalog. An empty set means no tools.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.AI.Copilot.AiIntentDetector.IsAdviceRequest(System.String)">
+            <summary>
+            Business advice / strategy questions should get a chatbot-style answer, not a data dump.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.AI.Copilot.AiIntentDetector.IsConcreteCatalogQuery(System.String)">
+            <summary>
+            A bare "product" or "stock" mention is not a catalog search.
+            General questions stay conversational so they are not sent to inventory.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.AI.Copilot.AiIntentDetector.ClassifyBusinessQuestion(System.String)">
+            <summary>
+            Named business questions. These run before follow-up detection so a short invoice
+            question cannot inherit the previous turn's sales tool.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.Copilot.Tools.BusinessClock">
+            <summary>
+            Calendar boundaries in the tenant timezone. UTC is used when the business has no configured zone.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.LlmChatClientRouter">
+            <summary>
+            Prefers OpenAI for RAG; falls back to Cursor Cloud Agents when only Cursor key is set.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.Nalva.Suppliers.UnavailableSupplierResearchProvider">
+            <summary>
+            Default production provider. No live supplier marketplace is connected.
+            Classification: UNAVAILABLE.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.Nalva.Suppliers.TestSupplierResearchProvider">
+            <summary>
+            Deterministic test/demo provider. Never present as live supplier research.
+            Classification: SIMULATED.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.OpenAiChatClient">
+            <summary>
+            OpenAI Chat Completions API — primary LLM for RAG when OpenAiApiKey is configured.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Infrastructure.AI.OpenAiChatClient.LastFailure">
+            <summary>Last provider failure for this client. Safe to show. Never contains the API key.</summary>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.AI.OpenAiChatClient.RunToolLoopAsync(System.Guid,System.String,System.String,System.String,System.Collections.Generic.IReadOnlyList{BusinessOS.Infrastructure.AI.ModelToolDefinition},System.Func{BusinessOS.Infrastructure.AI.ModelToolCall,System.Threading.CancellationToken,System.Threading.Tasks.Task{System.String}},System.Threading.CancellationToken,System.Collections.Generic.IReadOnlyList{BusinessOS.Application.Features.AI.DTOs.AiMemoryTurnDto})">
+            <summary>
+            OpenAI tool-calling loop. The model chooses tools; the caller executes them.
+            Stops after <see cref="F:BusinessOS.Infrastructure.AI.OpenAiChatClient.MaxToolRounds"/> rounds. Transient HTTP failures are retried twice.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.OpenAiFailure">
+            <summary>
+            Provider failure that is safe to show to a user. It never carries the API key or response headers.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.AI.OpenAiFailure.#ctor(BusinessOS.Infrastructure.AI.OpenAiFailureKind,System.Int32,System.String,System.String)">
+            <summary>
+            Provider failure that is safe to show to a user. It never carries the API key or response headers.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.AI.OpenAiHttp.SecretPattern">
+            <remarks>
+            Pattern:<br/>
+            <code>(?i)(sk-[a-z0-9_\\-]{8,}|bearer\\s+[a-z0-9_\\-\\.]{8,})</code><br/>
+            Options:<br/>
+            <code>RegexOptions.CultureInvariant</code><br/>
+            Explanation:<br/>
+            <code>
+            ○ 1st capture group.<br/>
+                ○ Match with 2 alternative expressions, atomically.<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Ss].<br/>
+                        ○ Match a character in the set [Kk\u212A].<br/>
+                        ○ Match '-'.<br/>
+                        ○ Match a character in the set [\-0-9A-Z_a-z\u212A] atomically at least 8 times.<br/>
+                    ○ Match a sequence of expressions.<br/>
+                        ○ Match a character in the set [Bb].<br/>
+                        ○ Match a character in the set [Ee].<br/>
+                        ○ Match a character in the set [Aa].<br/>
+                        ○ Match a character in the set [Rr].<br/>
+                        ○ Match a character in the set [Ee].<br/>
+                        ○ Match a character in the set [Rr].<br/>
+                        ○ Match a whitespace character atomically at least once.<br/>
+                        ○ Match a character in the set [\-.0-9A-Z_a-z\u212A] atomically at least 8 times.<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.OpenAiStartupCheck">
+            <summary>
+            Warns when Ai:OpenAiApiKey is missing, and confirms a configured key with GET /v1/models.
+            That call lists models and does not generate tokens.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.SalesAgent.ConfiguredHttpLeadResearchProvider">
+            <summary>
+            Optional HTTP lead-research adapter. Requires tenant-configured base URL + API key.
+            Never fabricates companies when the provider is disconnected or returns invalid payloads.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.SalesAgent.FixtureLeadResearchProvider">
+            <summary>
+            Deterministic authorized fixture for automated tests and owner-enabled sandbox research.
+            Explicitly labeled as fixture — never presented as a live third-party integration.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.SalesAgent.TestOutboundEmailSink">
+            <summary>
+            In-process email sink for automated tests. Explicitly labeled as a test sink — not a live mailbox integration.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.SophiaModelToolLoop">
+            <summary>
+            Lets the configured model choose read-only Navla tools, executes those tools
+            on the server, and asks the model for the final sentence. Tenant identity is never
+            taken from the model.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.AI.SophiaModelToolLoop.PreferToolFigures(System.String,System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>
+            The model sometimes drops a total the tool already returned. When that happens, the tool text is the answer.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.AI.SophiaModelToolLoop.MoneyAmount">
+            <remarks>
+            Pattern:<br/>
+            <code>\\d{1,3}(?:,\\d{3})+\\.\\d{2}|\\d+\\.\\d{2}</code><br/>
+            Explanation:<br/>
+            <code>
+            ○ Match with 2 alternative expressions, atomically.<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a Unicode digit atomically at least 1 and at most 3 times.<br/>
+                    ○ Loop greedily at least once.<br/>
+                        ○ Match ','.<br/>
+                        ○ Match a Unicode digit exactly 3 times.<br/>
+                    ○ Match '.'.<br/>
+                    ○ Match a Unicode digit exactly 2 times.<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a Unicode digit atomically at least once.<br/>
+                    ○ Match '.'.<br/>
+                    ○ Match a Unicode digit exactly 2 times.<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.SophiaSpeechAct">
+            <summary>
+            What the user is doing in this turn. Write tools are allowed only for <see cref="F:BusinessOS.Infrastructure.AI.SophiaSpeechAct.Action"/>.
+            Confirmation of a pending action is handled by the stored draft, not by treating the word "yes" as a new command.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.AI.SophiaSpeechActs.AllowsDatabaseWrite(System.String)">
+            <summary>
+            True only when the user gave an imperative create, update, or delete.
+            A question, recommendation, or lookup must not select a write tool.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.SophiaToolArguments">
+            <summary>
+            Allowlisted arguments the model may send with a read tool.
+            Tenant identity, SQL, and secrets are never accepted from the model.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.AI.SophiaToolArguments.ApplyAllowlistedPeriod(System.String,System.Text.Json.JsonElement)">
+            <summary>
+            Routes the tool to the period the model selected.
+            Other period phrases in the user message are removed so a comparison does not collapse onto the first one.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.AI.SophiaToolArguments.PeriodPhrase">
+            <remarks>
+            Pattern:<br/>
+            <code>\\b(?:last 3 months|last three months|past 3 months|previous month|last month|this month|previous week|last week|this week|previous year|last year|this year|this quarter|yesterday|today)\\b</code><br/>
+            Options:<br/>
+            <code>RegexOptions.IgnoreCase</code><br/>
+            Explanation:<br/>
+            <code>
+            ○ Match if at a word boundary.<br/>
+            ○ Match with 12 alternative expressions.<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a character in the set [Ll].<br/>
+                    ○ Match a character in the set [Aa].<br/>
+                    ○ Match a character in the set [Ss].<br/>
+                    ○ Match a character in the set [Tt].<br/>
+                    ○ Match ' '.<br/>
+                    ○ Match with 2 alternative expressions.<br/>
+                        ○ Match a sequence of expressions.<br/>
+                            ○ Match the string "3 ".<br/>
+                            ○ Match a character in the set [Mm].<br/>
+                            ○ Match a character in the set [Oo].<br/>
+                            ○ Match a character in the set [Nn].<br/>
+                            ○ Match a character in the set [Tt].<br/>
+                            ○ Match a character in the set [Hh].<br/>
+                            ○ Match a character in the set [Ss].<br/>
+                        ○ Match a sequence of expressions.<br/>
+                            ○ Match a character in the set [Tt].<br/>
+                            ○ Match a character in the set [Hh].<br/>
+                            ○ Match a character in the set [Rr].<br/>
+                            ○ Match a character in the set [Ee] exactly 2 times.<br/>
+                            ○ Match ' '.<br/>
+                            ○ Match a character in the set [Mm].<br/>
+                            ○ Match a character in the set [Oo].<br/>
+                            ○ Match a character in the set [Nn].<br/>
+                            ○ Match a character in the set [Tt].<br/>
+                            ○ Match a character in the set [Hh].<br/>
+                            ○ Match a character in the set [Ss].<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a character in the set [Pp].<br/>
+                    ○ Match with 2 alternative expressions.<br/>
+                        ○ Match a sequence of expressions.<br/>
+                            ○ Match a character in the set [Aa].<br/>
+                            ○ Match a character in the set [Ss].<br/>
+                            ○ Match a character in the set [Tt].<br/>
+                            ○ Match the string " 3 ".<br/>
+                            ○ Match a character in the set [Mm].<br/>
+                            ○ Match a character in the set [Oo].<br/>
+                            ○ Match a character in the set [Nn].<br/>
+                            ○ Match a character in the set [Tt].<br/>
+                            ○ Match a character in the set [Hh].<br/>
+                            ○ Match a character in the set [Ss].<br/>
+                        ○ Match a sequence of expressions.<br/>
+                            ○ Match a character in the set [Rr].<br/>
+                            ○ Match a character in the set [Ee].<br/>
+                            ○ Match a character in the set [Vv].<br/>
+                            ○ Match a character in the set [Ii].<br/>
+                            ○ Match a character in the set [Oo].<br/>
+                            ○ Match a character in the set [Uu].<br/>
+                            ○ Match a character in the set [Ss].<br/>
+                            ○ Match ' '.<br/>
+                            ○ Match a character in the set [Mm].<br/>
+                            ○ Match a character in the set [Oo].<br/>
+                            ○ Match a character in the set [Nn].<br/>
+                            ○ Match a character in the set [Tt].<br/>
+                            ○ Match a character in the set [Hh].<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a character in the set [Ll].<br/>
+                    ○ Match a character in the set [Aa].<br/>
+                    ○ Match a character in the set [Ss].<br/>
+                    ○ Match a character in the set [Tt].<br/>
+                    ○ Match ' '.<br/>
+                    ○ Match a character in the set [Mm].<br/>
+                    ○ Match a character in the set [Oo].<br/>
+                    ○ Match a character in the set [Nn].<br/>
+                    ○ Match a character in the set [Tt].<br/>
+                    ○ Match a character in the set [Hh].<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a character in the set [Tt].<br/>
+                    ○ Match a character in the set [Hh].<br/>
+                    ○ Match a character in the set [Ii].<br/>
+                    ○ Match a character in the set [Ss].<br/>
+                    ○ Match ' '.<br/>
+                    ○ Match a character in the set [Mm].<br/>
+                    ○ Match a character in the set [Oo].<br/>
+                    ○ Match a character in the set [Nn].<br/>
+                    ○ Match a character in the set [Tt].<br/>
+                    ○ Match a character in the set [Hh].<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a character in the set [Pp].<br/>
+                    ○ Match a character in the set [Rr].<br/>
+                    ○ Match a character in the set [Ee].<br/>
+                    ○ Match a character in the set [Vv].<br/>
+                    ○ Match a character in the set [Ii].<br/>
+                    ○ Match a character in the set [Oo].<br/>
+                    ○ Match a character in the set [Uu].<br/>
+                    ○ Match a character in the set [Ss].<br/>
+                    ○ Match ' '.<br/>
+                    ○ Match a character in the set [Ww].<br/>
+                    ○ Match a character in the set [Ee] exactly 2 times.<br/>
+                    ○ Match a character in the set [Kk\u212A].<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a character in the set [Ll].<br/>
+                    ○ Match a character in the set [Aa].<br/>
+                    ○ Match a character in the set [Ss].<br/>
+                    ○ Match a character in the set [Tt].<br/>
+                    ○ Match ' '.<br/>
+                    ○ Match a character in the set [Ww].<br/>
+                    ○ Match a character in the set [Ee] exactly 2 times.<br/>
+                    ○ Match a character in the set [Kk\u212A].<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a character in the set [Tt].<br/>
+                    ○ Match a character in the set [Hh].<br/>
+                    ○ Match a character in the set [Ii].<br/>
+                    ○ Match a character in the set [Ss].<br/>
+                    ○ Match ' '.<br/>
+                    ○ Match a character in the set [Ww].<br/>
+                    ○ Match a character in the set [Ee] exactly 2 times.<br/>
+                    ○ Match a character in the set [Kk\u212A].<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a character in the set [Pp].<br/>
+                    ○ Match a character in the set [Rr].<br/>
+                    ○ Match a character in the set [Ee].<br/>
+                    ○ Match a character in the set [Vv].<br/>
+                    ○ Match a character in the set [Ii].<br/>
+                    ○ Match a character in the set [Oo].<br/>
+                    ○ Match a character in the set [Uu].<br/>
+                    ○ Match a character in the set [Ss].<br/>
+                    ○ Match ' '.<br/>
+                    ○ Match a character in the set [Yy].<br/>
+                    ○ Match a character in the set [Ee].<br/>
+                    ○ Match a character in the set [Aa].<br/>
+                    ○ Match a character in the set [Rr].<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a character in the set [Ll].<br/>
+                    ○ Match a character in the set [Aa].<br/>
+                    ○ Match a character in the set [Ss].<br/>
+                    ○ Match a character in the set [Tt].<br/>
+                    ○ Match ' '.<br/>
+                    ○ Match a character in the set [Yy].<br/>
+                    ○ Match a character in the set [Ee].<br/>
+                    ○ Match a character in the set [Aa].<br/>
+                    ○ Match a character in the set [Rr].<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a character in the set [Tt].<br/>
+                    ○ Match a character in the set [Hh].<br/>
+                    ○ Match a character in the set [Ii].<br/>
+                    ○ Match a character in the set [Ss].<br/>
+                    ○ Match ' '.<br/>
+                    ○ Match with 2 alternative expressions.<br/>
+                        ○ Match a sequence of expressions.<br/>
+                            ○ Match a character in the set [Yy].<br/>
+                            ○ Match a character in the set [Ee].<br/>
+                            ○ Match a character in the set [Aa].<br/>
+                            ○ Match a character in the set [Rr].<br/>
+                        ○ Match a sequence of expressions.<br/>
+                            ○ Match a character in the set [Qq].<br/>
+                            ○ Match a character in the set [Uu].<br/>
+                            ○ Match a character in the set [Aa].<br/>
+                            ○ Match a character in the set [Rr].<br/>
+                            ○ Match a character in the set [Tt].<br/>
+                            ○ Match a character in the set [Ee].<br/>
+                            ○ Match a character in the set [Rr].<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a character in the set [Yy].<br/>
+                    ○ Match a character in the set [Ee].<br/>
+                    ○ Match a character in the set [Ss].<br/>
+                    ○ Match a character in the set [Tt].<br/>
+                    ○ Match a character in the set [Ee].<br/>
+                    ○ Match a character in the set [Rr].<br/>
+                    ○ Match a character in the set [Dd].<br/>
+                    ○ Match a character in the set [Aa].<br/>
+                    ○ Match a character in the set [Yy].<br/>
+                ○ Match a sequence of expressions.<br/>
+                    ○ Match a character in the set [Tt].<br/>
+                    ○ Match a character in the set [Oo].<br/>
+                    ○ Match a character in the set [Dd].<br/>
+                    ○ Match a character in the set [Aa].<br/>
+                    ○ Match a character in the set [Yy].<br/>
+            ○ Match if at a word boundary.<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.AI.Support.SupportFollowUpProcessor">
+            <summary>
+            Polls due support follow-up jobs and sends them through connected/sandbox channels.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Billing.QuotaEnforcer">
+            <summary>
+            Serializes quota decisions per tenant. SQL Server uses an exclusive application lock
+            held for the database transaction. The in-memory provider uses a process lock so tests
+            can exercise the same check-and-insert critical section.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Caching.CacheService">
+            <summary>
+            Production-ready <see cref="T:Microsoft.Extensions.Caching.Memory.IMemoryCache"/> wrapper with stampede protection,
+            prefix-based invalidation, and Serilog-compatible structured logging.
+            Registered as a singleton so locks and key indexes are shared across requests.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Caching.CacheService.GetAsync``1(System.String,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Caching.CacheService.SetAsync``1(System.String,``0,System.Nullable{System.TimeSpan},System.Nullable{System.TimeSpan},System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Caching.CacheService.RemoveAsync(System.String,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Caching.CacheService.RemoveByPrefixAsync(System.String,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Caching.CacheService.ExistsAsync(System.String,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Caching.CacheService.GetOrSetAsync``1(System.String,System.Func{System.Threading.CancellationToken,System.Threading.Tasks.Task{``0}},System.Nullable{System.TimeSpan},System.Nullable{System.TimeSpan},System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="P:BusinessOS.Infrastructure.Data.BusinessOSDbContext._tenantId">
+            <summary>
+            Resolved at query/save time so auth can set tenant after the scoped DbContext is created
+            (e.g. login loads Identity before CreateSessionForUserAsync calls SetTenantId).
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Infrastructure.Data.BusinessOSDbContext.AllowUserTenantReassignment">
+            <summary>
+            Allows an authorized company switch to change the active company on the user account.
+            Business records still cannot move between companies.
+            </summary>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Data.RbacSeeder.RevokePlatformGrantsFromTenantRolesAsync(BusinessOS.Infrastructure.Data.BusinessOSDbContext,System.Collections.Generic.Dictionary{System.String,BusinessOS.Domain.Entities.Role},Microsoft.AspNetCore.Identity.UserManager{BusinessOS.Infrastructure.Identity.ApplicationUser},System.Threading.CancellationToken)">
+            <summary>
+            Removes grants that let an ordinary tenant role read or rewrite another tenant.
+            SystemAdmin.Manage is never seeded. It can be attached only by a caller who already holds it.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Diagnostics.DatabaseHealthCheck">
+            <summary>
+            Readiness probe for SQL Server. Failure details are not returned to callers
+            because provider exceptions can contain connection information.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Diagnostics.OpenAiHealthCheck">
+            <summary>
+            Readiness probe for the OpenAI provider. Missing credentials report Degraded, not Unhealthy,
+            so the API can still serve non-AI workloads. Failure details never include the API key.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Diagnostics.SlowQueryInterceptor">
+            <summary>
+            Logs slow database commands without capturing full SQL in production-style noise.
+            Command text is only included at Debug level.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Diagnostics.StripeHealthCheck">
+            <summary>
+            Configuration probe for Stripe. Live network calls are skipped when credentials are absent
+            so local and CI environments stay green without payment secrets.
+            </summary>
+        </member>
+        <member name="P:BusinessOS.Infrastructure.Identity.ApplicationUser.SecurityVersion">
+            <summary>
+            Incremented when roles, permissions, account status, or tenant membership change.
+            Access tokens carry this value and are rejected when it no longer matches.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.InitialCreate">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.InitialCreate.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.InitialCreate.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.InitialCreate.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.SyncModelChanges">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.SyncModelChanges.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.SyncModelChanges.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.SyncModelChanges.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.AddQueryPerformanceIndexes">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddQueryPerformanceIndexes.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddQueryPerformanceIndexes.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddQueryPerformanceIndexes.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.AddOrderQueryIndexes">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddOrderQueryIndexes.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddOrderQueryIndexes.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddOrderQueryIndexes.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.UpdateCustomerModel">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.UpdateCustomerModel.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.UpdateCustomerModel.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.UpdateCustomerModel.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.AddInventoryModule">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddInventoryModule.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddInventoryModule.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddInventoryModule.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.AddRbacModule">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddRbacModule.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddRbacModule.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddRbacModule.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.AddSupplierAndPurchaseOrderFields">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddSupplierAndPurchaseOrderFields.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddSupplierAndPurchaseOrderFields.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddSupplierAndPurchaseOrderFields.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.AddPhase4Modules">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddPhase4Modules.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddPhase4Modules.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddPhase4Modules.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.ExpandTenantSettingsThemeColumn">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.ExpandTenantSettingsThemeColumn.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.ExpandTenantSettingsThemeColumn.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.ExpandTenantSettingsThemeColumn.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.AddSaaSPlatformModules">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddSaaSPlatformModules.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddSaaSPlatformModules.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddSaaSPlatformModules.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.AddGeneratedReports">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddGeneratedReports.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddGeneratedReports.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddGeneratedReports.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.AddActivitiesAndNotificationEnhancements">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddActivitiesAndNotificationEnhancements.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddActivitiesAndNotificationEnhancements.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddActivitiesAndNotificationEnhancements.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.AddOnboardingAndAiSettings">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddOnboardingAndAiSettings.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddOnboardingAndAiSettings.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddOnboardingAndAiSettings.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.AddTeamCollaborationModule">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddTeamCollaborationModule.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddTeamCollaborationModule.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddTeamCollaborationModule.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.AddMultiTenantSaaSModules">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddMultiTenantSaaSModules.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddMultiTenantSaaSModules.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddMultiTenantSaaSModules.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.AddSubscriptionBillingSystem">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddSubscriptionBillingSystem.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddSubscriptionBillingSystem.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddSubscriptionBillingSystem.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.AddPhase8NotificationsAuditTrail">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddPhase8NotificationsAuditTrail.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddPhase8NotificationsAuditTrail.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddPhase8NotificationsAuditTrail.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.AddAiCopilotArchitecture">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddAiCopilotArchitecture.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddAiCopilotArchitecture.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddAiCopilotArchitecture.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.SyncPendingModelChanges">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.SyncPendingModelChanges.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.SyncPendingModelChanges.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.SyncPendingModelChanges.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.SyncPendingModelChanges2">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.SyncPendingModelChanges2.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.SyncPendingModelChanges2.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.SyncPendingModelChanges2.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.AddVectorSyncOutboxAndEntityVectorFields">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddVectorSyncOutboxAndEntityVectorFields.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddVectorSyncOutboxAndEntityVectorFields.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddVectorSyncOutboxAndEntityVectorFields.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.AddAiAgentEmployeeArchitecture">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddAiAgentEmployeeArchitecture.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddAiAgentEmployeeArchitecture.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddAiAgentEmployeeArchitecture.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.AddConversationalMemory">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddConversationalMemory.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddConversationalMemory.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.AddConcurrencyIndexesAndPaymentIdempotency">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddConcurrencyIndexesAndPaymentIdempotency.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddConcurrencyIndexesAndPaymentIdempotency.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddConcurrencyIndexesAndPaymentIdempotency.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.InternationalBilling">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.InternationalBilling.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.InternationalBilling.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.InternationalBilling.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.Phase2BusinessOperations">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.Phase2BusinessOperations.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.Phase2BusinessOperations.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.Phase2BusinessOperations.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.SyncModelAfterPhase2">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.SyncModelAfterPhase2.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.SyncModelAfterPhase2.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.SyncModelAfterPhase2.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.AddNalvaAutonomyAndIntegrations">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddNalvaAutonomyAndIntegrations.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddNalvaAutonomyAndIntegrations.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.AddNalvaAutonomyAndIntegrations.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.Phase6CommercialReadiness">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.Phase6CommercialReadiness.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.Phase6CommercialReadiness.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.Phase6CommercialReadiness.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.Phase7AgencyLaunch">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.Phase7AgencyLaunch.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.Phase7AgencyLaunch.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.Phase7AgencyLaunch.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.TenantScopedRoles">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.TenantScopedRoles.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.TenantScopedRoles.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.TenantScopedRoles.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.Phase5BMarketingAgent">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.Phase5BMarketingAgent.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.Phase5BMarketingAgent.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.Phase5BMarketingAgent.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Migrations.Phase5DInventoryProcurementAgent">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.Phase5DInventoryProcurementAgent.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.Phase5DInventoryProcurementAgent.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.Migrations.Phase5DInventoryProcurementAgent.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:BusinessOS.Infrastructure.MultiTenancy.SlugHelper.NonAlphanumericRegex">
+            <remarks>
+            Pattern:<br/>
+            <code>[^a-z0-9\\-]</code><br/>
+            Options:<br/>
+            <code>RegexOptions.Compiled</code><br/>
+            Explanation:<br/>
+            <code>
+            ○ Match a character in the set [^\-0-9a-z].<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="M:BusinessOS.Infrastructure.MultiTenancy.SlugHelper.MultiDashRegex">
+            <remarks>
+            Pattern:<br/>
+            <code>-+</code><br/>
+            Options:<br/>
+            <code>RegexOptions.Compiled</code><br/>
+            Explanation:<br/>
+            <code>
+            ○ Match '-' atomically at least once.<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.MultiTenancy.TenantContext">
+            <summary>
+            Static tenant holder for EF Core global query filters.
+            Set at request boundary via middleware; design-time tools use <see cref="F:System.Guid.Empty"/>.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Payments.JazzCashSecureHash">
+            <summary>
+            JazzCash merchant secure-hash construction: HMAC-SHA256 over the integrity salt
+            and the non-empty field values sorted by parameter name, excluding pp_SecureHash.
+            Payment state is still not changed from the callback alone.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Services.AnalyticsModuleService">
+            <summary>
+            Advanced analytics aggregations. Projects map to Orders; tasks map to Order line items.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Services.EmailNotificationService">
+            <summary>
+            Sends transactional email through SMTP (MailKit). When delivery is disabled, the message is
+            not sent and the body is not written to logs.
+            </summary>
+        </member>
+        <member name="T:BusinessOS.Infrastructure.Services.GoogleIdTokenValidator">
+            <summary>
+            Validates Google ID tokens with Google.Apis.Auth, which checks the signature against Google's
+            published keys plus issuer, audience, and expiry. The raw token is never logged.
+            </summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.LabeledQuantityRegex_0">
+            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the LabeledQuantityRegex method.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.LabeledQuantityRegex_0.Instance">
+            <summary>Cached, thread-safe singleton instance.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.LabeledQuantityRegex_0.#ctor">
+            <summary>Initializes the instance.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.LabeledQuantityRegex_0.RunnerFactory">
+            <summary>Provides a factory for creating <see cref="T:System.Text.RegularExpressions.RegexRunner"/> instances to be used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.LabeledQuantityRegex_0.RunnerFactory.CreateInstance">
+            <summary>Creates an instance of a <see cref="T:System.Text.RegularExpressions.RegexRunner"/> used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.LabeledQuantityRegex_0.RunnerFactory.Runner">
+            <summary>Provides the runner that contains the custom logic implementing the specified regular expression.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.LabeledQuantityRegex_0.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
+            <summary>Scan the <paramref name="inputSpan"/> starting from base.runtextstart for the next match.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.LabeledQuantityRegex_0.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Search <paramref name="inputSpan"/> starting from base.runtextpos for the next location a match could possibly start.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if a possible match was found; false if no more matches are possible.</returns>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.LabeledQuantityRegex_0.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Determine whether <paramref name="inputSpan"/> at base.runtextpos is a match for the regular expression.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if the regular expression matches at the current position; otherwise, false.</returns>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.NumberWordRegex_1">
+            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the NumberWordRegex method.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.NumberWordRegex_1.Instance">
+            <summary>Cached, thread-safe singleton instance.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.NumberWordRegex_1.#ctor">
+            <summary>Initializes the instance.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.NumberWordRegex_1.RunnerFactory">
+            <summary>Provides a factory for creating <see cref="T:System.Text.RegularExpressions.RegexRunner"/> instances to be used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.NumberWordRegex_1.RunnerFactory.CreateInstance">
+            <summary>Creates an instance of a <see cref="T:System.Text.RegularExpressions.RegexRunner"/> used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.NumberWordRegex_1.RunnerFactory.Runner">
+            <summary>Provides the runner that contains the custom logic implementing the specified regular expression.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.NumberWordRegex_1.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
+            <summary>Scan the <paramref name="inputSpan"/> starting from base.runtextstart for the next match.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.NumberWordRegex_1.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Search <paramref name="inputSpan"/> starting from base.runtextpos for the next location a match could possibly start.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if a possible match was found; false if no more matches are possible.</returns>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.NumberWordRegex_1.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Determine whether <paramref name="inputSpan"/> at base.runtextpos is a match for the regular expression.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if the regular expression matches at the current position; otherwise, false.</returns>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.BareNumberRegex_2">
+            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the BareNumberRegex method.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.BareNumberRegex_2.Instance">
+            <summary>Cached, thread-safe singleton instance.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.BareNumberRegex_2.#ctor">
+            <summary>Initializes the instance.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.BareNumberRegex_2.RunnerFactory">
+            <summary>Provides a factory for creating <see cref="T:System.Text.RegularExpressions.RegexRunner"/> instances to be used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.BareNumberRegex_2.RunnerFactory.CreateInstance">
+            <summary>Creates an instance of a <see cref="T:System.Text.RegularExpressions.RegexRunner"/> used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.BareNumberRegex_2.RunnerFactory.Runner">
+            <summary>Provides the runner that contains the custom logic implementing the specified regular expression.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.BareNumberRegex_2.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
+            <summary>Scan the <paramref name="inputSpan"/> starting from base.runtextstart for the next match.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.BareNumberRegex_2.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Search <paramref name="inputSpan"/> starting from base.runtextpos for the next location a match could possibly start.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if a possible match was found; false if no more matches are possible.</returns>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.BareNumberRegex_2.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Determine whether <paramref name="inputSpan"/> at base.runtextpos is a match for the regular expression.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if the regular expression matches at the current position; otherwise, false.</returns>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.LeadingCountRegex_3">
+            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the LeadingCountRegex method.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.LeadingCountRegex_3.Instance">
+            <summary>Cached, thread-safe singleton instance.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.LeadingCountRegex_3.#ctor">
+            <summary>Initializes the instance.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.LeadingCountRegex_3.RunnerFactory">
+            <summary>Provides a factory for creating <see cref="T:System.Text.RegularExpressions.RegexRunner"/> instances to be used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.LeadingCountRegex_3.RunnerFactory.CreateInstance">
+            <summary>Creates an instance of a <see cref="T:System.Text.RegularExpressions.RegexRunner"/> used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.LeadingCountRegex_3.RunnerFactory.Runner">
+            <summary>Provides the runner that contains the custom logic implementing the specified regular expression.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.LeadingCountRegex_3.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
+            <summary>Scan the <paramref name="inputSpan"/> starting from base.runtextstart for the next match.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.LeadingCountRegex_3.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Search <paramref name="inputSpan"/> starting from base.runtextpos for the next location a match could possibly start.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if a possible match was found; false if no more matches are possible.</returns>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.LeadingCountRegex_3.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Determine whether <paramref name="inputSpan"/> at base.runtextpos is a match for the regular expression.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if the regular expression matches at the current position; otherwise, false.</returns>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.GenerationPrefixRegex_4">
+            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the GenerationPrefixRegex method.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.GenerationPrefixRegex_4.Instance">
+            <summary>Cached, thread-safe singleton instance.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.GenerationPrefixRegex_4.#ctor">
+            <summary>Initializes the instance.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.GenerationPrefixRegex_4.RunnerFactory">
+            <summary>Provides a factory for creating <see cref="T:System.Text.RegularExpressions.RegexRunner"/> instances to be used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.GenerationPrefixRegex_4.RunnerFactory.CreateInstance">
+            <summary>Creates an instance of a <see cref="T:System.Text.RegularExpressions.RegexRunner"/> used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.GenerationPrefixRegex_4.RunnerFactory.Runner">
+            <summary>Provides the runner that contains the custom logic implementing the specified regular expression.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.GenerationPrefixRegex_4.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
+            <summary>Scan the <paramref name="inputSpan"/> starting from base.runtextstart for the next match.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.GenerationPrefixRegex_4.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Search <paramref name="inputSpan"/> starting from base.runtextpos for the next location a match could possibly start.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if a possible match was found; false if no more matches are possible.</returns>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.GenerationPrefixRegex_4.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Determine whether <paramref name="inputSpan"/> at base.runtextpos is a match for the regular expression.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if the regular expression matches at the current position; otherwise, false.</returns>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.CustomerNameRegex_5">
+            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the CustomerNameRegex method.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.CustomerNameRegex_5.Instance">
+            <summary>Cached, thread-safe singleton instance.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.CustomerNameRegex_5.#ctor">
+            <summary>Initializes the instance.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.CustomerNameRegex_5.RunnerFactory">
+            <summary>Provides a factory for creating <see cref="T:System.Text.RegularExpressions.RegexRunner"/> instances to be used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.CustomerNameRegex_5.RunnerFactory.CreateInstance">
+            <summary>Creates an instance of a <see cref="T:System.Text.RegularExpressions.RegexRunner"/> used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.CustomerNameRegex_5.RunnerFactory.Runner">
+            <summary>Provides the runner that contains the custom logic implementing the specified regular expression.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.CustomerNameRegex_5.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
+            <summary>Scan the <paramref name="inputSpan"/> starting from base.runtextstart for the next match.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.CustomerNameRegex_5.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Search <paramref name="inputSpan"/> starting from base.runtextpos for the next location a match could possibly start.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if a possible match was found; false if no more matches are possible.</returns>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.CustomerNameRegex_5.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Determine whether <paramref name="inputSpan"/> at base.runtextpos is a match for the regular expression.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if the regular expression matches at the current position; otherwise, false.</returns>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.NameIsRegex_6">
+            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the NameIsRegex method.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.NameIsRegex_6.Instance">
+            <summary>Cached, thread-safe singleton instance.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.NameIsRegex_6.#ctor">
+            <summary>Initializes the instance.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.NameIsRegex_6.RunnerFactory">
+            <summary>Provides a factory for creating <see cref="T:System.Text.RegularExpressions.RegexRunner"/> instances to be used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.NameIsRegex_6.RunnerFactory.CreateInstance">
+            <summary>Creates an instance of a <see cref="T:System.Text.RegularExpressions.RegexRunner"/> used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.NameIsRegex_6.RunnerFactory.Runner">
+            <summary>Provides the runner that contains the custom logic implementing the specified regular expression.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.NameIsRegex_6.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
+            <summary>Scan the <paramref name="inputSpan"/> starting from base.runtextstart for the next match.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.NameIsRegex_6.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Search <paramref name="inputSpan"/> starting from base.runtextpos for the next location a match could possibly start.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if a possible match was found; false if no more matches are possible.</returns>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.NameIsRegex_6.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Determine whether <paramref name="inputSpan"/> at base.runtextpos is a match for the regular expression.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if the regular expression matches at the current position; otherwise, false.</returns>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.SecretPattern_7">
+            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the SecretPattern method.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.SecretPattern_7.Instance">
+            <summary>Cached, thread-safe singleton instance.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.SecretPattern_7.#ctor">
+            <summary>Initializes the instance.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.SecretPattern_7.RunnerFactory">
+            <summary>Provides a factory for creating <see cref="T:System.Text.RegularExpressions.RegexRunner"/> instances to be used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.SecretPattern_7.RunnerFactory.CreateInstance">
+            <summary>Creates an instance of a <see cref="T:System.Text.RegularExpressions.RegexRunner"/> used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.SecretPattern_7.RunnerFactory.Runner">
+            <summary>Provides the runner that contains the custom logic implementing the specified regular expression.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.SecretPattern_7.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
+            <summary>Scan the <paramref name="inputSpan"/> starting from base.runtextstart for the next match.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.SecretPattern_7.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Search <paramref name="inputSpan"/> starting from base.runtextpos for the next location a match could possibly start.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if a possible match was found; false if no more matches are possible.</returns>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.SecretPattern_7.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Determine whether <paramref name="inputSpan"/> at base.runtextpos is a match for the regular expression.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if the regular expression matches at the current position; otherwise, false.</returns>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.MoneyAmount_8">
+            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the MoneyAmount method.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.MoneyAmount_8.Instance">
+            <summary>Cached, thread-safe singleton instance.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.MoneyAmount_8.#ctor">
+            <summary>Initializes the instance.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.MoneyAmount_8.RunnerFactory">
+            <summary>Provides a factory for creating <see cref="T:System.Text.RegularExpressions.RegexRunner"/> instances to be used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.MoneyAmount_8.RunnerFactory.CreateInstance">
+            <summary>Creates an instance of a <see cref="T:System.Text.RegularExpressions.RegexRunner"/> used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.MoneyAmount_8.RunnerFactory.Runner">
+            <summary>Provides the runner that contains the custom logic implementing the specified regular expression.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.MoneyAmount_8.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
+            <summary>Scan the <paramref name="inputSpan"/> starting from base.runtextstart for the next match.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.MoneyAmount_8.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Search <paramref name="inputSpan"/> starting from base.runtextpos for the next location a match could possibly start.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if a possible match was found; false if no more matches are possible.</returns>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.MoneyAmount_8.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Determine whether <paramref name="inputSpan"/> at base.runtextpos is a match for the regular expression.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if the regular expression matches at the current position; otherwise, false.</returns>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.PeriodPhrase_9">
+            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the PeriodPhrase method.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.PeriodPhrase_9.Instance">
+            <summary>Cached, thread-safe singleton instance.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.PeriodPhrase_9.#ctor">
+            <summary>Initializes the instance.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.PeriodPhrase_9.RunnerFactory">
+            <summary>Provides a factory for creating <see cref="T:System.Text.RegularExpressions.RegexRunner"/> instances to be used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.PeriodPhrase_9.RunnerFactory.CreateInstance">
+            <summary>Creates an instance of a <see cref="T:System.Text.RegularExpressions.RegexRunner"/> used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.PeriodPhrase_9.RunnerFactory.Runner">
+            <summary>Provides the runner that contains the custom logic implementing the specified regular expression.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.PeriodPhrase_9.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
+            <summary>Scan the <paramref name="inputSpan"/> starting from base.runtextstart for the next match.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.PeriodPhrase_9.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Search <paramref name="inputSpan"/> starting from base.runtextpos for the next location a match could possibly start.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if a possible match was found; false if no more matches are possible.</returns>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.PeriodPhrase_9.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Determine whether <paramref name="inputSpan"/> at base.runtextpos is a match for the regular expression.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if the regular expression matches at the current position; otherwise, false.</returns>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.NonAlphanumericRegex_10">
+            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the NonAlphanumericRegex method.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.NonAlphanumericRegex_10.Instance">
+            <summary>Cached, thread-safe singleton instance.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.NonAlphanumericRegex_10.#ctor">
+            <summary>Initializes the instance.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.NonAlphanumericRegex_10.RunnerFactory">
+            <summary>Provides a factory for creating <see cref="T:System.Text.RegularExpressions.RegexRunner"/> instances to be used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.NonAlphanumericRegex_10.RunnerFactory.CreateInstance">
+            <summary>Creates an instance of a <see cref="T:System.Text.RegularExpressions.RegexRunner"/> used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.NonAlphanumericRegex_10.RunnerFactory.Runner">
+            <summary>Provides the runner that contains the custom logic implementing the specified regular expression.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.NonAlphanumericRegex_10.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
+            <summary>Scan the <paramref name="inputSpan"/> starting from base.runtextstart for the next match.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.NonAlphanumericRegex_10.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Search <paramref name="inputSpan"/> starting from base.runtextpos for the next location a match could possibly start.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if a possible match was found; false if no more matches are possible.</returns>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.MultiDashRegex_11">
+            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the MultiDashRegex method.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.MultiDashRegex_11.Instance">
+            <summary>Cached, thread-safe singleton instance.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.MultiDashRegex_11.#ctor">
+            <summary>Initializes the instance.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.MultiDashRegex_11.RunnerFactory">
+            <summary>Provides a factory for creating <see cref="T:System.Text.RegularExpressions.RegexRunner"/> instances to be used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.MultiDashRegex_11.RunnerFactory.CreateInstance">
+            <summary>Creates an instance of a <see cref="T:System.Text.RegularExpressions.RegexRunner"/> used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.MultiDashRegex_11.RunnerFactory.Runner">
+            <summary>Provides the runner that contains the custom logic implementing the specified regular expression.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.MultiDashRegex_11.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
+            <summary>Scan the <paramref name="inputSpan"/> starting from base.runtextstart for the next match.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.MultiDashRegex_11.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Search <paramref name="inputSpan"/> starting from base.runtextpos for the next location a match could possibly start.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if a possible match was found; false if no more matches are possible.</returns>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.MultiDashRegex_11.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Determine whether <paramref name="inputSpan"/> at base.runtextpos is a match for the regular expression.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if the regular expression matches at the current position; otherwise, false.</returns>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.Utilities">
+            <summary>Helper methods used by generated <see cref="T:System.Text.RegularExpressions.Regex"/>-derived implementations.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_defaultTimeout">
+            <summary>Default timeout value set in <see cref="T:System.AppContext"/>, or <see cref="F:System.Text.RegularExpressions.Regex.InfiniteMatchTimeout"/> if none was set.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_hasTimeout">
+            <summary>Whether <see cref="F:System.Text.RegularExpressions.Generated.Utilities.s_defaultTimeout"/> is non-infinite.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.Utilities.IndexOfAnyDecimalDigitNumberDecimalDigitNumber(System.ReadOnlySpan{System.Char})">
+            <summary>Finds the next index of any character that matches a character in the set [\d\d].</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.Utilities.IndexOfAnyDigit(System.ReadOnlySpan{System.Char})">
+            <summary>Finds the next index of any character that matches a Unicode digit.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.Utilities.IsBoundary(System.ReadOnlySpan{System.Char},System.Int32)">
+            <summary>Determines whether the specified index is a boundary.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.Utilities.IsBoundaryWordChar(System.Char)">
+            <summary>Determines whether the specified index is a boundary word character.</summary>
+            <remarks>This is the same as \w plus U+200C ZERO WIDTH NON-JOINER and U+200D ZERO WIDTH JOINER.</remarks>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.Utilities.IsPostWordCharBoundary(System.ReadOnlySpan{System.Char},System.Int32)">
+            <summary>Determines whether the specified index is a boundary.</summary>
+            <remarks>This variant is only employed when the previous character has already been validated as a word character.</remarks>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.Utilities.IsPreWordCharBoundary(System.ReadOnlySpan{System.Char},System.Int32)">
+            <summary>Determines whether the specified index is a boundary.</summary>
+            <remarks>This variant is only employed when the subsequent character will separately be validated as a word character.</remarks>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.Utilities.StackPop(System.Int32[],System.Int32@,System.Int32@,System.Int32@)">
+            <summary>Pops 2 values from the backtracking stack.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.Utilities.StackPush(System.Int32[]@,System.Int32@,System.Int32)">
+            <summary>Pushes 1 value onto the backtracking stack.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.Utilities.StackPush(System.Int32[]@,System.Int32@,System.Int32,System.Int32)">
+            <summary>Pushes 2 values onto the backtracking stack.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.Utilities.StackPush(System.Int32[]@,System.Int32@,System.Int32,System.Int32,System.Int32)">
+            <summary>Pushes 3 values onto the backtracking stack.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.WordCategoriesMask">
+            <summary>Provides a mask of Unicode categories that combine to form [\w].</summary>
+        </member>
+        <member name="P:System.Text.RegularExpressions.Generated.Utilities.WordCharBitmap">
+            <summary>Gets a bitmap for whether each character 0 through 127 is in [\w]</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_asciiExceptDigits">
+            <summary>Supports searching for characters in or not in "\0\u0001\u0002\u0003\u0004\u0005\u0006\a\b\t\n\v\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$%&amp;'()*+,-./:;&lt;=&gt;?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\u007f".</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_asciiLettersAndDigitsAndDashDotUnderscoreKelvinSign">
+            <summary>Supports searching for characters in or not in "-.0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyzK".</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_asciiLettersAndDigitsAndDashUnderscoreKelvinSign">
+            <summary>Supports searching for characters in or not in "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyzK".</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_asciiLettersLowerAndDigitsAndDash">
+            <summary>Supports searching for characters in or not in "-0123456789abcdefghijklmnopqrstuvwxyz".</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_ascii_80000008020400080204000">
+            <summary>Supports searching for characters in or not in "#GMVgmv".</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_indexOfAnyStrings_OrdinalIgnoreCase_AF1F3A0B125F869DEA48629E09787692D65D25F26E575F322A2FD6764DE2581A">
+            <summary>Supports searching for the specified strings.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_indexOfAnyStrings_OrdinalIgnoreCase_EB78D7295DE65FC28441E7338AFF0053D29613498CD5ECD7793F60C886D7560E">
+            <summary>Supports searching for the specified strings.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_indexOfAnyStrings_OrdinalIgnoreCase_EDB477ACA7F7E276EBDB180814438911918B2522938456563CDA900A2B52D6AD">
+            <summary>Supports searching for the specified strings.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_indexOfAnyStrings_OrdinalIgnoreCase_FB87D198EEEB88F7FF41DA9D40145021BD8C16BFC6B5C32C0B3E9001682DF5B9">
+            <summary>Supports searching for the specified strings.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_indexOfString_for_OrdinalIgnoreCase">
+            <summary>Supports searching for the string "for".</summary>
+        </member>
+    </members>
+</doc>

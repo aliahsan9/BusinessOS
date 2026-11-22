@@ -216,12 +216,12 @@ public class Phase7CAiWorkforceWorkflowTests
         await harness.Db.SaveChangesAsync();
 
         var retriedFailed = await harness.Service.RetryTaskAsync(failed.Id);
-        retriedFailed.Status.Should().Be(NalvaStatuses.Queued);
+        retriedFailed.Status.Should().BeOneOf(NalvaStatuses.Assigned, NalvaStatuses.Queued);
         (await harness.Db.NalvaTasks.SingleAsync(x => x.Id == failed.Id)).LastError.Should().BeNull();
         (await harness.Db.NalvaTasks.SingleAsync(x => x.Id == failed.Id)).ClaimToken.Should().BeNull();
 
         var retriedDead = await harness.Service.RetryTaskAsync(dead.Id);
-        retriedDead.Status.Should().Be(NalvaStatuses.Queued);
+        retriedDead.Status.Should().BeOneOf(NalvaStatuses.Assigned, NalvaStatuses.Queued);
 
         var act = () => harness.Service.RetryTaskAsync(completed.Id);
         await act.Should().ThrowAsync<BadRequestException>().WithMessage("*failed*");

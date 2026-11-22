@@ -16,6 +16,7 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(x => x.Status).HasMaxLength(50).IsRequired();
         builder.Property(x => x.PaymentStatus).HasMaxLength(40).IsRequired();
         builder.Property(x => x.ShippingAddress).HasMaxLength(500);
+        builder.Property(x => x.ExternalImportKey).HasMaxLength(100);
         builder.Property(x => x.TotalAmount).AsMoney();
         builder.Property(x => x.Discount).AsMoney();
         builder.Property(x => x.Tax).AsMoney();
@@ -28,6 +29,9 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(x => new { x.TenantId, x.OrderNumber }).IsUnique();
+        builder.HasIndex(x => new { x.TenantId, x.ExternalImportKey })
+            .IsUnique()
+            .HasFilter("[ExternalImportKey] IS NOT NULL AND [IsDeleted] = 0");
         builder.HasIndex(x => new { x.TenantId, x.CreatedAt });
         // Finance/analytics filter on OrderDate; CreatedAt indexes alone cause range scans.
         builder.HasIndex(x => new { x.TenantId, x.OrderDate });

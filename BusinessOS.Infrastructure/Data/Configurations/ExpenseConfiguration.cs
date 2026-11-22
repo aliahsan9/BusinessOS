@@ -21,6 +21,11 @@ public class ExpenseConfiguration : IEntityTypeConfiguration<Expense>
         builder.Property(x => x.ReceiptUrl).HasMaxLength(500);
         builder.Property(x => x.Status).HasMaxLength(50).IsRequired();
         builder.Property(x => x.RecurrencePattern).HasMaxLength(50);
+        builder.Property(x => x.ExternalImportKey).HasMaxLength(100);
+
+        builder.HasIndex(x => new { x.TenantId, x.ExternalImportKey })
+            .IsUnique()
+            .HasFilter("[ExternalImportKey] IS NOT NULL AND [IsDeleted] = 0");
 
         builder.HasOne(x => x.ExpenseCategory)
             .WithMany(x => x.Expenses)

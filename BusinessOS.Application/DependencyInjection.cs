@@ -8,6 +8,7 @@ using BusinessOS.Application.Features.Inventory.Services;
 using BusinessOS.Application.Features.Invoices.Services;
 using BusinessOS.Application.Features.Orders.Services;
 using BusinessOS.Application.Features.Quotations.Services;
+using BusinessOS.Application.Features.DataImports.Services;
 using BusinessOS.Application.Features.Products.Commands.CreateProduct;
 using FluentValidation;
 using MediatR;
@@ -34,6 +35,7 @@ public static class DependencyInjection
         services.AddScoped<IQuotationNumberGenerator, QuotationNumberGenerator>();
         services.AddScoped<IInventoryService, InventoryService>();
         services.AddScoped<IIdempotencyService, IdempotencyService>();
+        services.AddScoped<DataImportCommitService>();
 
         services.AddScoped<IAnalyticsDateRangeResolver, AnalyticsDateRangeResolver>();
         services.AddScoped<IDashboardDateRangeResolver, DashboardDateRangeResolver>();

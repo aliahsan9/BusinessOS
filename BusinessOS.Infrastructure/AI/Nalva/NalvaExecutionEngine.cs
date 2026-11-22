@@ -7,6 +7,7 @@ using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.AI.Services;
 using BusinessOS.Application.Features.Nalva;
 using BusinessOS.Domain.Entities;
+using BusinessOS.Application.Features.Autopilot;
 using BusinessOS.Application.Features.Billing.Services;
 using BusinessOS.Application.Features.Notifications.DTOs;
 using BusinessOS.Application.Features.Notifications.Services;
@@ -29,6 +30,7 @@ public sealed class NalvaExecutionEngine : INalvaExecutionEngine
     private readonly ILlmChatClient _llm;
     private readonly ILogger<NalvaExecutionEngine> _logger;
     private readonly INotificationService? _notifications;
+    private readonly IAutonomySafetyEngine? _safety;
 
     public NalvaExecutionEngine(
         BusinessOSDbContext db,
@@ -37,7 +39,8 @@ public sealed class NalvaExecutionEngine : INalvaExecutionEngine
         INalvaToolGateway tools,
         ILlmChatClient llm,
         ILogger<NalvaExecutionEngine> logger,
-        INotificationService? notifications = null)
+        INotificationService? notifications = null,
+        IAutonomySafetyEngine? safety = null)
     {
         _db = db;
         _tenant = tenant;
@@ -46,6 +49,7 @@ public sealed class NalvaExecutionEngine : INalvaExecutionEngine
         _llm = llm;
         _logger = logger;
         _notifications = notifications;
+        _safety = safety;
     }
 
     public async Task RunQueuedTaskAsync(Guid taskId, CancellationToken cancellationToken = default)
@@ -56,7 +60,9 @@ public sealed class NalvaExecutionEngine : INalvaExecutionEngine
         try
         {
             claimed = await _db.NalvaTasks
-                .Where(x => x.Id == taskId && x.Status == NalvaStatuses.Queued && (x.NextAttemptAt == null || x.NextAttemptAt <= DateTime.UtcNow))
+                .Where(x => x.Id == taskId
+                    && (x.Status == NalvaStatuses.Assigned || x.Status == NalvaStatuses.Queued)
+                    && (x.NextAttemptAt == null || x.NextAttemptAt <= DateTime.UtcNow))
                 .ExecuteUpdateAsync(
                     setters => setters
                         .SetProperty(x => x.Status, NalvaStatuses.Running)
@@ -71,7 +77,9 @@ public sealed class NalvaExecutionEngine : INalvaExecutionEngine
             lock (gate)
             {
                 var candidate = _db.NalvaTasks.FirstOrDefault(
-                    x => x.Id == taskId && x.Status == NalvaStatuses.Queued && (x.NextAttemptAt == null || x.NextAttemptAt <= DateTime.UtcNow));
+                    x => x.Id == taskId
+                        && (x.Status == NalvaStatuses.Assigned || x.Status == NalvaStatuses.Queued)
+                        && (x.NextAttemptAt == null || x.NextAttemptAt <= DateTime.UtcNow));
                 if (candidate is not null)
                 {
                     candidate.Status = NalvaStatuses.Running;
@@ -136,7 +144,7 @@ public sealed class NalvaExecutionEngine : INalvaExecutionEngine
                 {
                     AgentKey = task.AgentKey,
                     Objective = task.Objective,
-                    Status = NalvaStatuses.Queued,
+                    Status = NalvaStatuses.Assigned,
                     Priority = task.Priority,
                     RunAfter = DateTime.UtcNow.AddMinutes(minutes),
                     IntervalMinutes = minutes,
@@ -152,7 +160,7 @@ public sealed class NalvaExecutionEngine : INalvaExecutionEngine
         else if (NalvaFailureClassifier.IsRetryable(result.ErrorClass) && result.IdempotentRetryAllowed && task.Attempt + 1 < task.MaxAttempts)
         {
             task.Attempt += 1;
-            task.Status = NalvaStatuses.Queued;
+            task.Status = NalvaStatuses.Assigned;
             task.NextAttemptAt = DateTime.UtcNow.AddSeconds(Math.Pow(2, task.Attempt));
         }
         else if (result.ErrorClass == NalvaErrorClass.Uncertain)
@@ -184,6 +192,17 @@ public sealed class NalvaExecutionEngine : INalvaExecutionEngine
             throw new ForbiddenException("Cross-company agent access was blocked.");
         if (companyAgent.Status != NalvaStatuses.Active)
             throw new BadRequestException("That agent is not active.");
+
+        if (_safety is not null)
+        {
+            if (await _safety.IsAgentPausedAsync(companyAgent.AgentKey, cancellationToken))
+                throw new ConflictException($"Agent '{companyAgent.AgentKey}' is paused by Autopilot.", "AUTOPILOT_AGENT_PAUSED");
+            if (await _safety.IsEmergencyStoppedAsync(cancellationToken) && !request.DryRun)
+            {
+                // Allow dry-run analysis during emergency stop; block live autonomous execution.
+                throw new ConflictException("Emergency stop is active. Autonomous execution is blocked.", "AUTOPILOT_EMERGENCY_STOP");
+            }
+        }
 
         var definition = Resolve(companyAgent);
         var settings = await _db.NalvaCompanySettings.FirstOrDefaultAsync(cancellationToken);
@@ -649,7 +668,7 @@ public sealed class NalvaExecutionEngine : INalvaExecutionEngine
             {
                 AgentKey = target,
                 Objective = objective,
-                Status = NalvaStatuses.Queued,
+                Status = NalvaStatuses.Assigned,
                 RunAfter = DateTime.UtcNow,
                 ParentExecutionId = parent.Id,
                 Depth = parent.Depth + 1,

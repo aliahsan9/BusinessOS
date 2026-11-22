@@ -340,7 +340,11 @@ public class PurchaseInvoiceConfiguration : IEntityTypeConfiguration<PurchaseInv
         builder.Property(x => x.Status).HasMaxLength(40).IsRequired();
         builder.Property(x => x.Notes).HasMaxLength(2000);
         builder.Property(x => x.AttachmentUrl).HasMaxLength(500);
+        builder.Property(x => x.ExternalImportKey).HasMaxLength(100);
         builder.HasIndex(x => new { x.TenantId, x.InvoiceNumber }).IsUnique().HasFilter("[IsDeleted] = 0");
+        builder.HasIndex(x => new { x.TenantId, x.ExternalImportKey })
+            .IsUnique()
+            .HasFilter("[ExternalImportKey] IS NOT NULL AND [IsDeleted] = 0");
     }
 }
 

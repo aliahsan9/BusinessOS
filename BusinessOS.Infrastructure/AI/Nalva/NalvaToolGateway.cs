@@ -12,6 +12,7 @@ using BusinessOS.Application.Features.ProcurementAgent;
 using BusinessOS.Application.Features.SalesAgent;
 using BusinessOS.Application.Features.Support;
 using BusinessOS.Application.Features.Enterprise;
+using BusinessOS.Application.Features.Autopilot;
 using BusinessOS.Domain.Entities;
 using BusinessOS.Domain.Enums;
 using BusinessOS.Infrastructure.AI.SalesAgent;
@@ -51,6 +52,7 @@ public sealed class NalvaToolGateway : INalvaToolGateway
     private readonly IBusinessIntelligenceService? _bi;
     private readonly IEnterpriseAgentGovernanceService? _agentGovernance;
     private readonly IApprovalGovernanceService? _approvalGovernance;
+    private readonly IAutonomySafetyEngine? _safety;
 
     public NalvaToolGateway(
         BusinessOSDbContext db,
@@ -68,7 +70,8 @@ public sealed class NalvaToolGateway : INalvaToolGateway
         IExecutiveIntelligenceService? executive = null,
         IBusinessIntelligenceService? bi = null,
         IEnterpriseAgentGovernanceService? agentGovernance = null,
-        IApprovalGovernanceService? approvalGovernance = null)
+        IApprovalGovernanceService? approvalGovernance = null,
+        IAutonomySafetyEngine? safety = null)
     {
         _db = db;
         _tenant = tenant;
@@ -86,6 +89,7 @@ public sealed class NalvaToolGateway : INalvaToolGateway
         _bi = bi;
         _agentGovernance = agentGovernance;
         _approvalGovernance = approvalGovernance;
+        _safety = safety;
     }
 
     public async Task<NalvaToolOutcome> ExecuteAsync(
@@ -123,12 +127,21 @@ public sealed class NalvaToolGateway : INalvaToolGateway
             }
         }
 
+        AutonomyDecision? safetyDecision = null;
+        if (_safety is not null)
+        {
+            safetyDecision = await _safety.EvaluateToolAsync(agentKey, tool.Name, argsJson, approvalGranted, cancellationToken);
+            if (safetyDecision.Blocked)
+                return Fail(safetyDecision.Reason);
+        }
+
         var settings = await _db.NalvaCompanySettings.AsNoTracking().FirstOrDefaultAsync(cancellationToken);
         var extraApproval = settings is not null
             && NalvaJson.Strings(settings.ExtraApprovalToolsJson).Contains(tool.Name, StringComparer.OrdinalIgnoreCase);
         var forceExternalApproval = settings?.RequireApprovalForExternalActions != false
             && (tool.ExternalEffect || tool.Integration is "gmail" or "meta" or "external" or "prepared");
-        var requiresApproval = tool.RequiresApproval || extraApproval || (forceExternalApproval && tool.IsWrite && tool.ExternalEffect);
+        var requiresApproval = tool.RequiresApproval || extraApproval || (forceExternalApproval && tool.IsWrite && tool.ExternalEffect)
+            || (safetyDecision?.RequireApproval == true && !approvalGranted);
 
         if (_approvalGovernance is not null && requiresApproval && !approvalGranted)
         {
@@ -175,6 +188,12 @@ public sealed class NalvaToolGateway : INalvaToolGateway
                 if (scheduled is not null)
                     return scheduled;
             }
+            if (tool.Name == "SendSupportReply")
+                return await SendSupportReplyTool(args, cancellationToken);
+            if (tool.Name == "CreateCalendarEvent")
+                return await CreateCalendarEventTool(agentKey, executionId, args, argsJson, cancellationToken);
+            if (tool.Name == "SendWhatsAppMessage")
+                return await SendWhatsAppMessageTool(argsJson, cancellationToken);
             if (tool.Name == "SubmitPaymentReminder" && _finance is not null)
             {
                 var reminderId = NalvaArgs.GuidOf(args, "reminderId") ?? NalvaArgs.GuidOf(args, "id");
@@ -329,7 +348,7 @@ public sealed class NalvaToolGateway : INalvaToolGateway
                 "CompareSupplierPrices" or "ResearchSuppliers" => await ResearchSuppliers(args, cancellationToken),
                 "GetPurchaseHistory" or "GetPendingPurchaseOrders" => await Purchases(tool.Name == "GetPendingPurchaseOrders", cancellationToken),
                 "ForecastProductDemand" => await ForecastDemand(args, cancellationToken),
-                "GetProcurementRecommendations" => await ProcurementJson(async () => await _procurement!.GetRecommendationsAsync(cancellationToken), "recommendations"),
+                "GetProcurementRecommendations" or "CalculateReorderRecommendations" => await ProcurementJson(async () => await _procurement!.GetRecommendationsAsync(cancellationToken), "recommendations"),
                 "GetDelayedDeliveries" => await DelayedDeliveries(cancellationToken),
                 "GetSlowMovingProducts" => await SlowMoving(cancellationToken),
                 "GetProcurementBudgetNeed" => await ProcurementBudget(cancellationToken),
@@ -337,7 +356,8 @@ public sealed class NalvaToolGateway : INalvaToolGateway
                 "CreatePurchaseOrder" or "SubmitPreparedPurchaseOrder" => await SubmitPurchase(args, approvalGranted, cancellationToken),
                 "ReceivePurchaseOrderVerified" => await ReceiveVerified(args, cancellationToken),
                 "GetUpcomingTasks" or "GetCalendarEvents" => await Tasks(cancellationToken),
-                "CreateCalendarEvent" => await Draft(agentKey, executionId, "Calendar", NalvaArgs.Str(args, "title") ?? "Calendar note", "Internal note. No invitation was sent.", cancellationToken),
+                "CreateCalendarEvent" => await CreateCalendarEventTool(agentKey, executionId, args, argsJson, cancellationToken),
+                "SendWhatsAppMessage" => await SendWhatsAppMessageTool(argsJson, cancellationToken),
                 "SummarizeMeetingNotes" => await Draft(agentKey, executionId, "Meeting", "Meeting summary", NalvaGuard.Clip(NalvaArgs.Str(args, "notes"), 2000), cancellationToken),
                 "CreateEmailDraft" => await Draft(agentKey, executionId, "Email", NalvaArgs.Str(args, "subject") ?? "Email draft", NalvaArgs.Str(args, "body") ?? "Email draft. It was not sent.", cancellationToken),
                 "CreateReminder" => await Draft(agentKey, executionId, "Reminder", NalvaArgs.Str(args, "title") ?? "Reminder", NalvaArgs.Str(args, "body") ?? "Internal reminder.", cancellationToken),
@@ -1899,6 +1919,100 @@ public sealed class NalvaToolGateway : INalvaToolGateway
         });
     }
 
+    private async Task<NalvaToolOutcome> CreateCalendarEventTool(
+        string agentKey,
+        Guid executionId,
+        JsonElement args,
+        string argsJson,
+        CancellationToken ct)
+    {
+        if (_integrations is not null)
+        {
+            var title = NalvaArgs.Str(args, "title") ?? "Meeting";
+            var start = NalvaArgs.Str(args, "start") ?? NalvaArgs.Str(args, "startTime");
+            var end = NalvaArgs.Str(args, "end") ?? NalvaArgs.Str(args, "endTime");
+            var timeZone = NalvaArgs.Str(args, "timeZone") ?? NalvaArgs.Str(args, "timezone") ?? "UTC";
+            var description = NalvaArgs.Str(args, "description") ?? NalvaArgs.Str(args, "body") ?? "";
+            if (!string.IsNullOrWhiteSpace(start) && !string.IsNullOrWhiteSpace(end))
+            {
+                var payload = new JsonObject
+                {
+                    ["summary"] = title,
+                    ["description"] = description,
+                    ["start"] = new JsonObject { ["dateTime"] = start, ["timeZone"] = timeZone },
+                    ["end"] = new JsonObject { ["dateTime"] = end, ["timeZone"] = timeZone }
+                };
+                var attendees = NalvaArgs.Str(args, "attendees") ?? NalvaArgs.Str(args, "invitees");
+                if (!string.IsNullOrWhiteSpace(attendees))
+                {
+                    var list = new JsonArray();
+                    foreach (var email in attendees.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                        list.Add(new JsonObject { ["email"] = email });
+                    payload["attendees"] = list;
+                }
+
+                var google = await _integrations.ExecuteAsync("google-calendar", "create", payload.ToJsonString(), true, ct);
+                if (google.Performed)
+                    return Ok(google.Message, google.Data);
+                if (google.Status is not ("not_connected" or "not_enabled" or "unknown_provider" or "needs_reauth"))
+                    return Fail(google.Message);
+
+                var outlook = await _integrations.ExecuteAsync("microsoft-calendar", "create",
+                    new JsonObject
+                    {
+                        ["subject"] = title,
+                        ["body"] = new JsonObject { ["contentType"] = "Text", ["content"] = description },
+                        ["start"] = new JsonObject { ["dateTime"] = start, ["timeZone"] = timeZone },
+                        ["end"] = new JsonObject { ["dateTime"] = end, ["timeZone"] = timeZone }
+                    }.ToJsonString(), true, ct);
+                if (outlook.Performed)
+                    return Ok(outlook.Message, outlook.Data);
+                if (outlook.Status is not ("not_connected" or "not_enabled" or "unknown_provider" or "needs_reauth"))
+                    return Fail(outlook.Message);
+            }
+        }
+
+        return await Draft(
+            agentKey,
+            executionId,
+            "Calendar",
+            NalvaArgs.Str(args, "title") ?? "Calendar note",
+            "Internal note only. No calendar invitation was sent because no calendar integration is connected or start/end were missing.",
+            ct);
+    }
+
+    private async Task<NalvaToolOutcome> SendWhatsAppMessageTool(string argsJson, CancellationToken ct)
+    {
+        if (_integrations is null)
+        {
+            return Ok(
+                "Approved. WhatsApp is not connected, so nothing was sent.",
+                new JsonObject { ["performed"] = false, ["integration"] = "prepared", ["action"] = "SendWhatsAppMessage" });
+        }
+
+        var node = JsonNode.Parse(string.IsNullOrWhiteSpace(argsJson) ? "{}" : argsJson) as JsonObject ?? new JsonObject();
+        var operation = !string.IsNullOrWhiteSpace(node["templateName"]?.GetValue<string>() ?? node["template"]?.GetValue<string>())
+            ? "sendTemplate"
+            : "sendText";
+        var result = await _integrations.ExecuteAsync("whatsapp", operation, argsJson, true, ct);
+        if (result.Status is "not_connected" or "not_enabled" or "unknown_provider")
+        {
+            return Ok(
+                "Approved. WhatsApp is not connected, so nothing was sent.",
+                new JsonObject { ["performed"] = false, ["integration"] = "prepared", ["action"] = "SendWhatsAppMessage" });
+        }
+
+        return new NalvaToolOutcome
+        {
+            Success = result.Performed,
+            Error = result.Performed ? null : result.Message,
+            ErrorClass = result.Performed ? NalvaErrorClass.None : NalvaErrorClass.Validation,
+            Idempotent = false,
+            Summary = result.Message,
+            Data = result.Data
+        };
+    }
+
     private async Task<NalvaToolOutcome?> TryLiveIntegrationAsync(string tool, string argsJson, CancellationToken ct)
     {
         if (_integrations is null)
@@ -1908,6 +2022,7 @@ public sealed class NalvaToolGateway : INalvaToolGateway
             "SendExternalEmail" => "gmail",
             "IssueRefund" => "stripe",
             "PublishSocialPost" => "meta",
+            "SendWhatsAppMessage" => "whatsapp",
             _ => ""
         };
         var operation = tool switch
@@ -1915,6 +2030,7 @@ public sealed class NalvaToolGateway : INalvaToolGateway
             "SendExternalEmail" => "send",
             "IssueRefund" => "refund",
             "PublishSocialPost" => "publish",
+            "SendWhatsAppMessage" => "sendText",
             _ => ""
         };
         if (provider.Length == 0)
@@ -2244,7 +2360,7 @@ public sealed class NalvaToolGateway : INalvaToolGateway
             {
                 AgentKey = "marketing",
                 Objective = $"Execute marketing objective: {title}",
-                Status = NalvaStatuses.Queued,
+                Status = NalvaStatuses.Assigned,
                 RunAfter = DateTime.UtcNow,
                 InitiatorUserId = null,
                 Depth = 0,

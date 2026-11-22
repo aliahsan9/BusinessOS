@@ -30,13 +30,13 @@ public static class NalvaWorkforcePackCatalog
             "ecommerce",
             "E-commerce",
             "Catalog, inventory, orders, support, and marketing for online sellers.",
-            ["sales", "procurement", "ecommerce", "support", "marketing", "finance", "analyst", "content", "ceo"],
+            ["sales", "inventory", "procurement", "ecommerce", "support", "marketing", "finance", "analyst", "content", "ceo"],
             ["inventory-automation", "customer-support-automation", "content-generation", "social-campaign", "overdue-payment-followup", "financial-monitoring", "order-to-fulfillment", "low-stock-to-procurement", "weekly-business-review"]),
         Pack(
             "retail",
             "Retail",
             "Inventory, procurement, sales, support, and finance for storefronts.",
-            ["sales", "procurement", "support", "finance", "analyst", "ecommerce", "assistant", "ceo"],
+            ["sales", "inventory", "procurement", "support", "finance", "analyst", "ecommerce", "assistant", "ceo"],
             ["inventory-automation", "customer-support-automation", "overdue-payment-followup", "financial-monitoring", "executive-reporting", "low-stock-to-procurement", "order-to-fulfillment", "weekly-business-review"]),
         Pack(
             "service",
@@ -48,14 +48,20 @@ public static class NalvaWorkforcePackCatalog
             "distributor",
             "Distributor / wholesaler",
             "Order flow, procurement, inventory, and receivables for distribution.",
-            ["sales", "procurement", "finance", "analyst", "support", "assistant", "ecommerce", "ceo"],
+            ["sales", "inventory", "procurement", "finance", "analyst", "support", "assistant", "ecommerce", "ceo"],
             ["inventory-automation", "overdue-payment-followup", "financial-monitoring", "lead-qualification", "executive-reporting", "low-stock-to-procurement", "order-to-fulfillment", "weekly-business-review"]),
         Pack(
             "custom",
             "General / custom",
             "A balanced starter workforce. Disable agents that do not match the business.",
-            ["ceo", "sales", "marketing", "support", "finance", "procurement", "analyst", "assistant", "hr"],
-            ["customer-acquisition", "inventory-automation", "customer-support-automation", "financial-monitoring", "overdue-payment-followup", "executive-reporting", "lead-to-customer-collaboration", "low-stock-to-procurement", "complaint-to-resolution", "weekly-business-review"])
+            ["ceo", "sales", "marketing", "support", "inventory", "finance", "procurement", "analyst", "assistant", "hr"],
+            ["customer-acquisition", "inventory-automation", "customer-support-automation", "financial-monitoring", "overdue-payment-followup", "executive-reporting", "lead-to-customer-collaboration", "low-stock-to-procurement", "complaint-to-resolution", "weekly-business-review"]),
+        Pack(
+            "phase8b-core",
+            "Phase 8B AI employees",
+            "Six production AI employee managers: Sales, Marketing, Support, Inventory, Finance, Procurement.",
+            ["sales", "marketing", "support", "inventory", "finance", "procurement"],
+            ["inventory-automation", "procurement-daily-monitor", "customer-support-automation", "financial-monitoring", "overdue-payment-followup", "autonomous-lead-generation", "autonomous-marketing-weekly", "low-stock-to-procurement", "lead-to-customer-collaboration", "weekly-business-review"])
     ];
 
     private static readonly Dictionary<string, NalvaWorkforcePack> ByKey =
@@ -135,6 +141,8 @@ public sealed record NalvaApplyWorkforcePackRequest
     public bool ActivateRecommendedAgents { get; set; } = true;
     public bool ActivateRecommendedWorkflows { get; set; }
     public List<string>? OnlyAgentKeys { get; set; }
+    /// <summary>When set, use this pack key instead of the tenant business-type pack.</summary>
+    public string? PackKey { get; set; }
 }
 
 public sealed record NalvaApplyWorkforcePackResult(

@@ -59,7 +59,7 @@ public sealed class NalvaReliabilityService : INalvaReliabilityService
             }
             else
             {
-                task.Status = NalvaStatuses.Queued;
+                task.Status = NalvaStatuses.Assigned;
                 task.NextAttemptAt = now.AddSeconds(Math.Pow(2, Math.Min(task.Attempt, 6)));
                 task.RunAfter = now;
             }

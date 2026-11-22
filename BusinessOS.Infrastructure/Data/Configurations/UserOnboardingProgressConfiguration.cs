@@ -13,6 +13,7 @@ public class UserOnboardingProgressConfiguration : IEntityTypeConfiguration<User
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.UserId).HasMaxLength(450).IsRequired();
+        builder.Property(x => x.CompletedStepsJson).HasMaxLength(500);
 
         builder.HasIndex(x => x.UserId).IsUnique();
     }

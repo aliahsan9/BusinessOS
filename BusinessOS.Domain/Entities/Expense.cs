@@ -24,5 +24,8 @@ public class Expense : AuditableEntity
     public string? RecurrencePattern { get; set; }
     public Guid? PurchaseInvoiceId { get; set; }
 
+    /// <summary>Stable key from historical import; prevents duplicate expense creation on re-import.</summary>
+    public string? ExternalImportKey { get; set; }
+
     public ExpenseCategory ExpenseCategory { get; set; } = default!;
 }

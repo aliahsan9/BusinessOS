@@ -52,6 +52,10 @@ public static class NalvaEndpoints
         group.MapGet("/workforce/recommendation", async (INalvaWorkforceService service, CancellationToken ct) => Results.Ok(await service.GetWorkforceRecommendationAsync(ct)));
         group.MapPost("/workforce/apply", async (NalvaApplyWorkforcePackRequest? request, INalvaWorkforceService service, CancellationToken ct) =>
             Results.Ok(await service.ApplyWorkforcePackAsync(request ?? new NalvaApplyWorkforcePackRequest(), ct))).RequirePermission(PermissionCodes.NalvaManage);
+        group.MapPost("/workforce/activate-core", async (INavlaWorkforceManager manager, CancellationToken ct) =>
+            Results.Ok(await manager.ActivateCoreEmployeesAsync(ct))).RequirePermission(PermissionCodes.NalvaManage);
+        group.MapPost("/workforce/delegate", async (NavlaWorkforceDelegationRequest request, INavlaWorkforceManager manager, CancellationToken ct) =>
+            Results.Ok(await manager.DelegateAsync(request, ct))).RequirePermission(PermissionCodes.NalvaManage);
         group.MapGet("/settings", async (INalvaWorkforceService service, CancellationToken ct) => Results.Ok(await service.GetSettingsAsync(ct)));
         group.MapPut("/settings", async (NalvaSettingsWriteRequest request, INalvaWorkforceService service, CancellationToken ct) => Results.Ok(await service.SaveSettingsAsync(request, ct))).RequirePermission(PermissionCodes.NalvaManage);
         group.MapGet("/models", async (INalvaWorkforceService service, CancellationToken ct) => Results.Ok(await service.GetModelsAsync(ct)));

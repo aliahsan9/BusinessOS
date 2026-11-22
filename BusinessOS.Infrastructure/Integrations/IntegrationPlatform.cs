@@ -56,10 +56,16 @@ public sealed class IntegrationPlatform : IIntegrationPlatform
     public async Task<IReadOnlyList<IntegrationProviderDto>> GetMarketplaceAsync(CancellationToken cancellationToken = default)
     {
         Require(PermissionCodesView());
+        var entitlementEnabled = await IsIntegrationsEntitledAsync(cancellationToken);
         var connections = await _db.CompanyIntegrationConnections.AsNoTracking().ToListAsync(cancellationToken);
         return IntegrationProviderCatalog.All.Select(provider =>
         {
-            var connection = connections.FirstOrDefault(item => item.ProviderKey == provider.Key && item.Status == "Connected");
+            var connection = connections
+                .Where(item => item.ProviderKey == provider.Key)
+                .OrderByDescending(item => item.Status == IntegrationConnectionStatuses.Connected)
+                .ThenByDescending(item => item.LastSuccessAt)
+                .FirstOrDefault();
+            var status = connection?.Status ?? "NotConnected";
             return new IntegrationProviderDto(
                 provider.Key,
                 provider.Name,
@@ -72,9 +78,78 @@ public sealed class IntegrationPlatform : IIntegrationPlatform
                 provider.SupportsWebhooks,
                 provider.ReadOperations,
                 provider.WriteOperations,
-                connection?.Status ?? "NotConnected",
-                connection?.Id);
+                status,
+                connection is { Status: IntegrationConnectionStatuses.Connected or IntegrationConnectionStatuses.NeedsReauth }
+                    ? connection.Id
+                    : null,
+                provider.Scopes,
+                connection?.LastSuccessAt,
+                provider.TroubleshootingHint,
+                entitlementEnabled);
         }).ToList();
+    }
+
+    public async Task<IntegrationHealthDashboardDto> GetHealthAsync(CancellationToken cancellationToken = default)
+    {
+        Require(PermissionCodesView());
+        var connections = await _db.CompanyIntegrationConnections.AsNoTracking().ToListAsync(cancellationToken);
+        var since = DateTime.UtcNow.AddDays(-7);
+        var recentLogs = await _db.IntegrationActivityLogs.AsNoTracking()
+            .Where(x => x.CreatedAt >= since)
+            .ToListAsync(cancellationToken);
+        var deadLetters = await _db.IntegrationDeadLetters.AsNoTracking()
+            .Where(x => x.Status == "Open")
+            .ToListAsync(cancellationToken);
+
+        var items = new List<IntegrationHealthItemDto>();
+        foreach (var provider in IntegrationProviderCatalog.All)
+        {
+            var connection = connections.FirstOrDefault(x => x.ProviderKey == provider.Key);
+            var status = connection?.Status ?? "NotConnected";
+            var openDl = deadLetters.Count(x => x.ProviderKey == provider.Key);
+            var recentFailures = recentLogs.Count(x => x.ProviderKey == provider.Key && !x.Success && x.Operation != "webhook");
+            var webhookFailures = recentLogs.Count(x => x.ProviderKey == provider.Key && !x.Success && x.Operation == "webhook");
+            var expired = connection?.TokenExpiresAt is DateTime exp && exp < DateTime.UtcNow
+                          && string.IsNullOrWhiteSpace(connection.RefreshTokenProtected);
+            var needsReconnect = status is IntegrationConnectionStatuses.NeedsReauth or IntegrationConnectionStatuses.Error
+                                 || expired;
+            items.Add(new IntegrationHealthItemDto(
+                provider.Key,
+                provider.Name,
+                provider.Category,
+                status,
+                connection?.Id,
+                connection?.LastSuccessAt,
+                connection?.TokenExpiresAt,
+                connection?.LastError,
+                expired,
+                needsReconnect,
+                openDl,
+                recentFailures,
+                webhookFailures,
+                needsReconnect
+                    ? "Reauthorize from the marketplace, confirm server credentials, then run Test / Sync. " + provider.TroubleshootingHint
+                    : openDl > 0
+                        ? "Open dead-letter items will retry automatically. Review activity logs if failures persist. " + provider.TroubleshootingHint
+                        : provider.TroubleshootingHint));
+        }
+
+        var pending = items
+            .Where(x => x.NeedsReconnect)
+            .Select(x => "Reconnect " + x.ProviderName + " (" + x.ProviderKey + ").")
+            .ToList();
+        var rateLimits = recentLogs.Count(x => !x.Success && (x.ErrorRedacted ?? "").Contains("rate", StringComparison.OrdinalIgnoreCase));
+
+        return new IntegrationHealthDashboardDto(
+            items.Count(x => x.ConnectionStatus == IntegrationConnectionStatuses.Connected),
+            items.Count(x => x.ConnectionStatus is "NotConnected" or IntegrationConnectionStatuses.Disconnected or IntegrationConnectionStatuses.Revoked),
+            items.Count(x => x.ConnectionStatus == IntegrationConnectionStatuses.NeedsReauth),
+            items.Count(x => x.CredentialsExpired),
+            deadLetters.Count,
+            recentLogs.Count(x => !x.Success),
+            rateLimits,
+            items,
+            pending);
     }
 
     public async Task<IReadOnlyList<IntegrationConnectionDto>> GetConnectionsAsync(CancellationToken cancellationToken = default)
@@ -90,6 +165,13 @@ public sealed class IntegrationPlatform : IIntegrationPlatform
         if (_tenant.HasTenant())
             await CommercialGate.EnsureFeatureAsync(_db, _tenant.TenantId, FeatureFlags.Integrations, cancellationToken);
         var provider = RequireProvider(providerKey);
+        if (!provider.SupportsOAuth)
+        {
+            return new IntegrationAuthorizeDto(false, null,
+                provider.Key == "smtp-email"
+                    ? "SMTP does not use OAuth. Use Configure SMTP to store encrypted credentials."
+                    : "This provider does not support OAuth connect.");
+        }
         var credential = _options.For(provider.Key);
         if (!credential.Enabled || string.IsNullOrWhiteSpace(credential.ClientId))
         {
@@ -149,6 +231,11 @@ public sealed class IntegrationPlatform : IIntegrationPlatform
             ?? throw new BadRequestException("The authorization state is not valid.");
         if (state.ExpiresAt < DateTime.UtcNow)
             throw new BadRequestException("The authorization state has expired.");
+        var currentUser = _user.UserId ?? "";
+        if (!string.IsNullOrWhiteSpace(state.UserId)
+            && !string.IsNullOrWhiteSpace(currentUser)
+            && !string.Equals(state.UserId, currentUser, StringComparison.Ordinal))
+            throw new BadRequestException("The authorization state belongs to another user.");
         state.ConsumedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -223,6 +310,8 @@ public sealed class IntegrationPlatform : IIntegrationPlatform
         var operation = provider.ReadOperations.FirstOrDefault();
         if (operation is null)
             return new IntegrationCallResult { Performed = false, Status = "not_enabled", Message = "This provider has no read operation." };
+        if (connection.ProviderKey == "smtp-email" && operation == "status")
+            return await ExecuteAsync(connection.ProviderKey, operation, "{}", false, cancellationToken);
         if (operation is "get" or "payment" or "order" or "report" or "status")
             return new IntegrationCallResult { Performed = false, Status = "configuration", Message = "Add the provider metadata required for a test read. No request was sent." };
         return await ExecuteAsync(connection.ProviderKey, operation, "{}", false, cancellationToken);
@@ -242,6 +331,7 @@ public sealed class IntegrationPlatform : IIntegrationPlatform
     {
         if (!_tenant.HasTenant())
             throw new BadRequestException("Company context is required.");
+        await CommercialGate.EnsureFeatureAsync(_db, _tenant.TenantId, FeatureFlags.Integrations, cancellationToken);
         if (!IntegrationProviderCatalog.TryGet(providerKey, out var provider) || provider is null)
             return new IntegrationCallResult { Performed = false, Status = "unknown_provider", Message = "That provider is not registered." };
         if (NalvaGuard.RejectsArguments(argumentsJson, out var rejected))
@@ -362,6 +452,49 @@ public sealed class IntegrationPlatform : IIntegrationPlatform
         return Map(connection);
     }
 
+    public async Task<IntegrationConnectionDto> ConfigureSmtpAsync(IntegrationSmtpConfigureRequest request, CancellationToken cancellationToken = default)
+    {
+        Require(PermissionCodesManage());
+        if (_tenant.HasTenant())
+            await CommercialGate.EnsureFeatureAsync(_db, _tenant.TenantId, FeatureFlags.Integrations, cancellationToken);
+        if (string.IsNullOrWhiteSpace(request.Host) || request.Port is < 1 or > 65535)
+            throw new BadRequestException("A valid SMTP host and port are required.");
+        if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
+            throw new BadRequestException("SMTP username and password are required.");
+        if (string.IsNullOrWhiteSpace(request.FromAddress) || !request.FromAddress.Contains('@', StringComparison.Ordinal))
+            throw new BadRequestException("A valid From address is required.");
+
+        var secretPayload = JsonSerializer.Serialize(new
+        {
+            host = request.Host.Trim(),
+            port = request.Port,
+            useSsl = request.UseSsl,
+            username = request.Username.Trim(),
+            password = request.Password,
+            fromAddress = request.FromAddress.Trim(),
+            fromDisplayName = request.FromDisplayName?.Trim()
+        });
+
+        var connection = await _db.CompanyIntegrationConnections.FirstOrDefaultAsync(x => x.ProviderKey == "smtp-email", cancellationToken)
+            ?? new CompanyIntegrationConnection { ProviderKey = "smtp-email", OwnerUserId = _user.UserId ?? "user" };
+        if (_db.Entry(connection).State == EntityState.Detached)
+            _db.CompanyIntegrationConnections.Add(connection);
+
+        connection.Status = IntegrationConnectionStatuses.Connected;
+        connection.AccessTokenProtected = _protector.Protect(secretPayload);
+        connection.RefreshTokenProtected = null;
+        connection.TokenExpiresAt = null;
+        connection.ScopesJson = JsonSerializer.Serialize(new[] { "smtp" });
+        connection.ExternalAccountLabel = request.FromAddress.Trim();
+        connection.MetadataJson = JsonSerializer.Serialize(new { host = request.Host.Trim(), port = request.Port, useSsl = request.UseSsl, fromAddress = request.FromAddress.Trim() });
+        connection.LastError = null;
+        connection.LastSuccessAt = DateTime.UtcNow;
+        connection.OwnerUserId = _user.UserId ?? connection.OwnerUserId;
+        await _db.SaveChangesAsync(cancellationToken);
+        await LogAsync(connection.Id, "smtp-email", "smtp.configure", true, 0, null, cancellationToken);
+        return Map(connection);
+    }
+
     public async Task<(int StatusCode, string Message)> ReceiveWebhookAsync(string providerKey, Guid connectionId, string body, string? signature, string? eventId, CancellationToken cancellationToken)
     {
         var connection = await _db.CompanyIntegrationConnections.IgnoreQueryFilters()
@@ -375,8 +508,9 @@ public sealed class IntegrationPlatform : IIntegrationPlatform
         if (!_providers.TryGet(providerKey, out var provider) || provider is null || !provider.VerifyWebhookSignature(secret, body, signature))
             return (401, "The webhook signature is not valid.");
 
-        var eventKey = string.IsNullOrWhiteSpace(eventId)
-            ? Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(body)))
+        // Prefer provider delivery IDs. Never key idempotency on signature headers alone.
+        var eventKey = string.IsNullOrWhiteSpace(eventId) || eventId.StartsWith("sha256=", StringComparison.OrdinalIgnoreCase)
+            ? Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(providerKey + ":" + connectionId + ":" + body)))
             : eventId.Trim();
         var claim = await _webhookIds.TryBeginAsync(providerKey, eventKey, connection.TenantId, cancellationToken);
         if (claim is IntegrationWebhookClaim.Duplicate)
@@ -505,6 +639,7 @@ public sealed class IntegrationPlatform : IIntegrationPlatform
             ErrorRedacted = NalvaGuard.Redact(NalvaGuard.Clip(error, 500)),
             PayloadRedacted = payload is null ? null : NalvaGuard.Redact(NalvaGuard.Clip(payload, 1000)),
             Attempts = 1,
+            NextAttemptAt = DateTime.UtcNow.AddMinutes(2),
             Status = "Open"
         });
         await _db.SaveChangesAsync(cancellationToken);
@@ -526,8 +661,18 @@ public sealed class IntegrationPlatform : IIntegrationPlatform
 
     private bool ServerConfigured(string providerKey)
     {
+        if (providerKey == "smtp-email")
+            return true;
         var credential = _options.For(providerKey);
         return credential.Enabled && !string.IsNullOrWhiteSpace(credential.ClientId) && !string.IsNullOrWhiteSpace(credential.ClientSecret);
+    }
+
+    private async Task<bool> IsIntegrationsEntitledAsync(CancellationToken cancellationToken)
+    {
+        if (!_tenant.HasTenant())
+            return false;
+        var access = await CommercialGate.ResolveAsync(_db, _tenant.TenantId, cancellationToken);
+        return access is null || access.IsEnabled(FeatureFlags.Integrations);
     }
 
     private bool IsAllowedRedirect(string? redirect)

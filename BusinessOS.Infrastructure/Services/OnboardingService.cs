@@ -1,3 +1,4 @@
+using System.Text.Json;
 using BusinessOS.Application.Common.Exceptions;
 using BusinessOS.Application.Common.Interfaces;
 using BusinessOS.Application.Features.Onboarding.DTOs;
@@ -9,7 +10,7 @@ namespace BusinessOS.Infrastructure.Services;
 
 public sealed class OnboardingService : IOnboardingService
 {
-    private const int TotalSteps = 8;
+    public const int TotalSteps = 9;
 
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
@@ -25,6 +26,8 @@ public sealed class OnboardingService : IOnboardingService
     public async Task<OnboardingStatusDto> GetStatusAsync(CancellationToken cancellationToken = default)
     {
         var progress = await GetOrCreateProgressAsync(cancellationToken);
+        progress.LastResumedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
         return MapStatus(progress);
     }
 
@@ -35,9 +38,31 @@ public sealed class OnboardingService : IOnboardingService
         var progress = await GetOrCreateProgressAsync(cancellationToken);
 
         progress.CurrentStep = Math.Clamp(request.CurrentStep, 1, TotalSteps);
-        progress.IsSkipped = request.IsSkipped;
-        progress.UpdatedAt = DateTime.UtcNow;
+        // Resume later saves progress without skipping the forced wizard
+        if (request.ResumeLater)
+        {
+            progress.IsSkipped = false;
+            progress.LastResumedAt = DateTime.UtcNow;
+        }
+        else
+        {
+            progress.IsSkipped = request.IsSkipped;
+        }
 
+        if (request.CompletedSteps is { Count: > 0 })
+        {
+            progress.CompletedStepsJson = JsonSerializer.Serialize(
+                request.CompletedSteps.Distinct().OrderBy(x => x).ToList());
+        }
+        else
+        {
+            var completed = ParseCompleted(progress.CompletedStepsJson).ToHashSet();
+            if (progress.CurrentStep > 1)
+                completed.Add(progress.CurrentStep - 1);
+            progress.CompletedStepsJson = JsonSerializer.Serialize(completed.OrderBy(x => x).ToList());
+        }
+
+        progress.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
 
         return MapStatus(progress);
@@ -51,6 +76,7 @@ public sealed class OnboardingService : IOnboardingService
         progress.IsCompleted = true;
         progress.IsSkipped = false;
         progress.CompletedAt = DateTime.UtcNow;
+        progress.CompletedStepsJson = JsonSerializer.Serialize(Enumerable.Range(1, TotalSteps).ToList());
         progress.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
@@ -78,8 +104,13 @@ public sealed class OnboardingService : IOnboardingService
             Website = tenant.Website,
             Industry = tenant.BusinessType,
             Description = tenant.Description,
-            Currency = settings?.Currency ?? "USD",
-            Timezone = settings?.Timezone ?? "UTC"
+            Phone = tenant.Phone,
+            Address = tenant.Address,
+            Currency = settings?.Currency ?? "PKR",
+            Timezone = settings?.Timezone ?? "Asia/Karachi",
+            FinancialYearStartMonth = settings?.FinancialYearStartMonth > 0
+                ? settings.FinancialYearStartMonth
+                : 7
         };
     }
 
@@ -98,6 +129,10 @@ public sealed class OnboardingService : IOnboardingService
         tenant.BusinessType = request.Industry.Trim();
         tenant.Website = string.IsNullOrWhiteSpace(request.Website) ? null : request.Website.Trim();
         tenant.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+        if (!string.IsNullOrWhiteSpace(request.Phone))
+            tenant.Phone = request.Phone.Trim();
+        if (!string.IsNullOrWhiteSpace(request.Address))
+            tenant.Address = request.Address.Trim();
         tenant.UpdatedAt = DateTime.UtcNow;
 
         var settings = await _context.TenantSettings
@@ -113,9 +148,10 @@ public sealed class OnboardingService : IOnboardingService
             _context.TenantSettings.Add(settings);
         }
 
-        settings.Currency = request.Currency.Trim();
-        settings.Timezone = string.IsNullOrWhiteSpace(request.Timezone) ? "UTC" : request.Timezone.Trim();
+        settings.Currency = string.IsNullOrWhiteSpace(request.Currency) ? "PKR" : request.Currency.Trim();
+        settings.Timezone = string.IsNullOrWhiteSpace(request.Timezone) ? "Asia/Karachi" : request.Timezone.Trim();
         settings.LogoUrl = string.IsNullOrWhiteSpace(request.LogoUrl) ? null : request.LogoUrl.Trim();
+        settings.FinancialYearStartMonth = Math.Clamp(request.FinancialYearStartMonth, 1, 12);
         settings.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
@@ -152,6 +188,24 @@ public sealed class OnboardingService : IOnboardingService
             IsCompleted = progress.IsCompleted,
             IsSkipped = progress.IsSkipped,
             CompletedAt = progress.CompletedAt,
-            ShouldShowWizard = !progress.IsCompleted && !progress.IsSkipped
+            ShouldShowWizard = !progress.IsCompleted && !progress.IsSkipped,
+            CompletedSteps = ParseCompleted(progress.CompletedStepsJson),
+            LastResumedAt = progress.LastResumedAt,
+            TotalSteps = TotalSteps
         };
+
+    private static IReadOnlyList<int> ParseCompleted(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return [];
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<int>>(json) ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
 }

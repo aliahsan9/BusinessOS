@@ -54,6 +54,7 @@ public static class BusinessApiEndpointExtensions
         v1.MapNotificationEndpoints();
         v1.MapActivityEndpoints();
         v1.MapSettingsEndpoints();
+        v1.MapDataImportEndpoints();
         v1.MapOnboardingEndpoints();
         v1.MapAiEndpoints();
         v1.MapAgentEndpoints();
@@ -66,6 +67,7 @@ public static class BusinessApiEndpointExtensions
         v1.MapSystemAdminEndpoints();
         v1.MapBusinessOperationsEndpoints();
         v1.MapNalvaEndpoints();
+        v1.MapAutopilotEndpoints();
         v1.MapProcurementAgentEndpoints();
         v1.MapFinanceAgentEndpoints();
         v1.MapBusinessIntelligenceEndpoints();

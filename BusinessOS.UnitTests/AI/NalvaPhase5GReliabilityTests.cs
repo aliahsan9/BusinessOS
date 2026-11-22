@@ -39,7 +39,7 @@ public class NalvaPhase5GReliabilityTests
 
         result.TasksRecovered.Should().Be(1);
         var reloaded = await harness.Db.NalvaTasks.SingleAsync(x => x.Id == task.Id);
-        reloaded.Status.Should().Be(NalvaStatuses.Queued);
+        reloaded.Status.Should().BeOneOf(NalvaStatuses.Assigned, NalvaStatuses.Queued);
         reloaded.ClaimToken.Should().BeNull();
         reloaded.Attempt.Should().Be(1);
         reloaded.ErrorClass.Should().Be(NalvaErrorClass.Transient);

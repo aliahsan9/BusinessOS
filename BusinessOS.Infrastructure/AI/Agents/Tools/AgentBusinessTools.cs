@@ -598,13 +598,16 @@ public sealed class ApplyOnboardingProfileTool : AiToolBase
 
         await _onboardingService.SaveBusinessProfileAsync(
             new SaveOnboardingBusinessProfileRequest(
-                name.Trim(),
-                null,
-                null,
-                industry.Trim(),
-                data.GetValueOrDefault("size") is { } size ? $"Business size: {size}" : null,
-                currency.Trim(),
-                timezone.Trim()),
+                Name: name.Trim(),
+                LogoUrl: null,
+                Website: null,
+                Industry: industry.Trim(),
+                Description: data.GetValueOrDefault("size") is { } size ? $"Business size: {size}" : null,
+                Phone: null,
+                Address: null,
+                Currency: currency.Trim(),
+                Timezone: timezone.Trim(),
+                FinancialYearStartMonth: 7),
             cancellationToken);
 
         if (_currentUser.TenantId is Guid tenantId

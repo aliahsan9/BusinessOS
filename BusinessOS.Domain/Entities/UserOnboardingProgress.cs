@@ -9,4 +9,7 @@ public class UserOnboardingProgress : AuditableEntity
     public bool IsCompleted { get; set; }
     public bool IsSkipped { get; set; }
     public DateTime? CompletedAt { get; set; }
+    /// <summary>JSON array of completed step numbers for resume UI.</summary>
+    public string? CompletedStepsJson { get; set; }
+    public DateTime? LastResumedAt { get; set; }
 }

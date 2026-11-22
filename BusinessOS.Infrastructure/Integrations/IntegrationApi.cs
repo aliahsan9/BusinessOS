@@ -88,9 +88,46 @@ public static class IntegrationApi
             ("shopify", "updateProduct") => (HttpMethod.Put, $"https://{shop}.myshopify.com/admin/api/2024-10/products/{Required(args, "productId")}.json", args),
             ("wordpress", "posts") => (HttpMethod.Get, "https://public-api.wordpress.com/rest/v1.1/sites/" + Uri.EscapeDataString(site ?? Required(args, "site")) + "/posts/?number=10", null),
             ("wordpress", "draft") => (HttpMethod.Post, "https://public-api.wordpress.com/rest/v1.1/sites/" + Uri.EscapeDataString(site ?? Required(args, "site")) + "/posts/new", args),
+            ("google-business-profile", "accounts") => (HttpMethod.Get, "https://mybusinessaccountmanagement.googleapis.com/v1/accounts", null),
+            ("google-business-profile", "locations") => (HttpMethod.Get, "https://mybusinessbusinessinformation.googleapis.com/v1/" + Required(metadata, "accountId") + "/locations?readMask=name,title,storefrontAddress,phoneNumbers", null),
+            ("google-business-profile", "location") => (HttpMethod.Get, "https://mybusinessbusinessinformation.googleapis.com/v1/" + Required(metadata, "locationId") + "?readMask=name,title,storefrontAddress,phoneNumbers,websiteUri", null),
+            ("google-business-profile", "performance") => (HttpMethod.Get, "https://businessprofileperformance.googleapis.com/v1/" + Required(metadata, "locationId") + ":getDailyMetricsTimeSeries?dailyMetric=WEBSITE_CLICKS", null),
+            ("google-business-profile", "createPost") => (HttpMethod.Post, "https://mybusiness.googleapis.com/v4/" + Required(metadata, "locationId") + "/localPosts", args),
+            ("outlook", "list") => (HttpMethod.Get, "https://graph.microsoft.com/v1.0/me/messages?$top=10&$select=id,subject,from,receivedDateTime", null),
+            ("outlook", "get") => (HttpMethod.Get, "https://graph.microsoft.com/v1.0/me/messages/" + Required(args, "id"), null),
+            ("outlook", "send") => (HttpMethod.Post, "https://graph.microsoft.com/v1.0/me/sendMail", BuildOutlookSend(args)),
+            ("microsoft-calendar", "list") => (HttpMethod.Get, "https://graph.microsoft.com/v1.0/me/events?$top=10&$select=id,subject,start,end,attendees", null),
+            ("microsoft-calendar", "create") => (HttpMethod.Post, "https://graph.microsoft.com/v1.0/me/events", args),
+            ("microsoft-calendar", "update") => (HttpMethod.Patch, "https://graph.microsoft.com/v1.0/me/events/" + Required(args, "eventId"), args),
+            ("microsoft-calendar", "delete") => (HttpMethod.Delete, "https://graph.microsoft.com/v1.0/me/events/" + Required(args, "eventId"), null),
+            ("microsoft-onedrive", "list") => (HttpMethod.Get, "https://graph.microsoft.com/v1.0/me/drive/root/children?$top=20&$select=id,name,size,lastModifiedDateTime", null),
+            ("microsoft-onedrive", "get") => (HttpMethod.Get, "https://graph.microsoft.com/v1.0/me/drive/items/" + Required(args, "fileId") + "?$select=id,name,size,webUrl", null),
+            ("microsoft-onedrive", "upload") => (HttpMethod.Put, "https://graph.microsoft.com/v1.0/me/drive/root:/" + Uri.EscapeDataString(Required(args, "fileName")) + ":/content", args),
             _ => (HttpMethod.Get, null, null)
         };
     }
+
+    private static JsonObject BuildOutlookSend(JsonObject args) =>
+        new()
+        {
+            ["message"] = new JsonObject
+            {
+                ["subject"] = Text(args, "subject") ?? "Message",
+                ["body"] = new JsonObject
+                {
+                    ["contentType"] = "Text",
+                    ["content"] = Text(args, "body") ?? Text(args, "text") ?? ""
+                },
+                ["toRecipients"] = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["emailAddress"] = new JsonObject { ["address"] = Text(args, "to") ?? "" }
+                    }
+                }
+            },
+            ["saveToSentItems"] = true
+        };
 
     private static string ResolveGmailRaw(JsonObject args)
     {

@@ -8,7 +8,10 @@ public static class NalvaStatuses
     public const string Inactive = "Inactive";
     public const string Active = "Active";
     public const string Pending = "Pending";
+    /// <summary>Legacy enqueue status. Prefer <see cref="Assigned"/> for new tasks (Phase 8B).</summary>
     public const string Queued = "Queued";
+    /// <summary>Task created and bound to an agent; waiting for a worker claim.</summary>
+    public const string Assigned = "Assigned";
     public const string Running = "Running";
     public const string AwaitingApproval = "AwaitingApproval";
     public const string Completed = "Completed";
@@ -24,6 +27,10 @@ public static class NalvaStatuses
     public const string Healthy = "Healthy";
     public const string Degraded = "Degraded";
     public const string Unavailable = "Unavailable";
+
+    /// <summary>Statuses a background worker may claim for execution.</summary>
+    public static bool IsRunnable(string? status) =>
+        status is Assigned or Queued;
 }
 
 public static class NalvaLimits
@@ -199,7 +206,7 @@ public static class NalvaToolCatalog
         Draft("CreateSupportTicket", "Open a persisted support ticket from customer context.", PermissionCodes.NalvaManage),
         Draft("UpdateSupportTicket", "Update a persisted support ticket status, priority, or assignment.", PermissionCodes.NalvaManage),
         Draft("CreateResponseDraft", "Store an internal customer reply draft. It is not sent.", PermissionCodes.NalvaManage),
-        Draft("SendSupportReply", "Send an authorized support reply through a connected or sandbox channel.", PermissionCodes.NalvaManage),
+        Guarded("SendSupportReply", "Ask to send a support reply through a connected or sandbox channel. External WhatsApp/email sends require human approval.", "SendSupportReply", "High", "prepared", PermissionCodes.NalvaManage),
         Draft("EscalateTicket", "Escalate a support ticket and notify the owner.", PermissionCodes.NalvaManage),
         Draft("ResolveSupportTicket", "Mark a support ticket resolved and optionally schedule a follow-up.", PermissionCodes.NalvaManage),
         Draft("ScheduleSupportFollowUp", "Schedule a durable customer or employee support follow-up.", PermissionCodes.NalvaManage),
@@ -263,6 +270,7 @@ public static class NalvaToolCatalog
         Read("GetPurchaseHistory", "Stored purchases.", PermissionCodes.PurchaseOrderView),
         Read("ForecastProductDemand", "Per-product demand and stock coverage when history is sufficient; otherwise labeled unavailable.", PermissionCodes.InventoryView),
         Read("GetProcurementRecommendations", "Reorder recommendations that account for inbound purchase orders.", PermissionCodes.InventoryView, PermissionCodes.PurchaseOrderView),
+        Read("CalculateReorderRecommendations", "Alias of GetProcurementRecommendations for Inventory Manager reorder planning.", PermissionCodes.InventoryView, PermissionCodes.PurchaseOrderView),
         Read("GetDelayedDeliveries", "Open purchases past their expected delivery date.", PermissionCodes.PurchaseOrderView),
         Read("GetSlowMovingProducts", "Stocked products with no recent sales.", PermissionCodes.InventoryView),
         Read("GetProcurementBudgetNeed", "Estimated spend to cover current low and out-of-stock recommendations.", PermissionCodes.PurchaseOrderView, PermissionCodes.FinanceView),
@@ -275,7 +283,8 @@ public static class NalvaToolCatalog
         Read("GetUpcomingTasks", "Open tasks with a due date.", PermissionCodes.TaskView),
         Draft("CreateTask", "Create a task on an existing project.", PermissionCodes.TaskCreate),
         Read("GetCalendarEvents", "Tasks due soon. No external calendar is connected.", PermissionCodes.TaskView),
-        Draft("CreateCalendarEvent", "Store an internal calendar note. No invitation is sent.", PermissionCodes.NalvaManage),
+        Guarded("CreateCalendarEvent", "Ask to create a calendar event. Uses Google Calendar when connected; otherwise stores an internal note. Invitations require approval.", "CreateCalendarEvent", "High", "prepared", PermissionCodes.NalvaManage),
+        Guarded("SendWhatsAppMessage", "Ask to send an approved WhatsApp template or in-window text through the connected WhatsApp Business account.", "SendWhatsAppMessage", "High", "prepared", PermissionCodes.NalvaManage),
         Draft("SummarizeMeetingNotes", "Store a summary of supplied notes.", PermissionCodes.NalvaManage),
         Draft("CreateEmailDraft", "Store an email draft. It is not sent.", PermissionCodes.NalvaManage),
         Draft("CreateReminder", "Store an internal reminder.", PermissionCodes.NalvaManage),
@@ -322,8 +331,20 @@ public static class NalvaAgentCatalog
         "Finance",
         "Human Resources",
         "Business Intelligence",
+        "Inventory",
         "Procurement",
         "Administration"
+    ];
+
+    /// <summary>Phase 8B core AI employee keys (activatable workforce managers).</summary>
+    public static readonly IReadOnlyList<string> Phase8BEmployeeKeys =
+    [
+        "sales",
+        "marketing",
+        "support",
+        "inventory",
+        "finance",
+        "procurement"
     ];
 
     private static NalvaAgentDefinition Agent(
@@ -365,24 +386,24 @@ public static class NalvaAgentCatalog
             ["Monitor recorded performance", "Delegate work to active agents", "Surface overdue work and risks", "Prepare daily and weekly summaries", "Assign sales and marketing objectives", "Coordinate multi-agent business objectives"],
             ["GetCompanyOverview", "GetBusinessKPIs", "GetSalesSummary", "GetFinancialSummary", "GetProjectSummary", "GetInventorySummary", "GetEmployeeSummary", "GetAgentStatus", "CreateAgentTask", "DelegateAgentTask", "AssignSalesObjective", "AssignMarketingObjective", "GetSalesAgentStatus", "GetAgentExecutionResults", "GenerateDailySummary", "CoordinateWorkforceObjective", "GetExecutiveDecisionBrief", "GetBusinessRisks", "ForecastSalesRevenue", "GetCustomerIntelligence", "RetrieveSharedBusinessContext", "StoreSharedBusinessDecision"],
             ["executive-reporting", "customer-acquisition", "autonomous-lead-generation", "navla-marketing-campaign", "lead-to-customer-collaboration", "order-to-fulfillment", "low-stock-to-procurement", "complaint-to-resolution", "weekly-business-review"], true),
-        Agent("marketing", "AI Marketing", "Prepares marketing drafts from this company's brand profile, customers, and segments.", "Marketing agent", "Marketing",
-            ["Seed and maintain brand profile", "Draft strategy, calendar, content, and graphics", "Stop before external publish or ad spend without approval", "Accept CEO marketing objectives and share insights with sales"],
+        Agent("marketing", "Marketing Manager", "Prepares marketing drafts from this company's brand profile, customers, and segments.", "Marketing Manager", "Marketing",
+            ["Analyze business products and audience from stored brand and customer data", "Create marketing strategies grounded in brand facts", "Generate social media posts and campaign content as drafts", "Prepare promotional calendars", "Create platform-specific content", "Schedule publishing only through connected integrations after approval", "Analyze campaign performance from verified snapshots"],
             ["GetCompanyProfile", "GetMarketingBrandProfile", "UpsertBrandProfile", "GetTargetCustomers", "GetCustomerSegments", "ResearchMarket", "ResearchCompetitors", "GenerateMarketingStrategy", "CreateContentDraft", "CreateContentCalendar", "CreateCampaignDraft", "GenerateMarketingGraphic", "ScheduleApprovedMarketingPost", "SyncMarketingAnalytics", "GenerateMarketingPerformanceReport", "ShareMarketingInsightsWithSales", "GetCampaignAnalytics", "PublishSocialPost", "SpendAdBudget", "AssignMarketingObjective", "RetrieveSharedBusinessContext"],
             ["content-generation", "social-campaign", "competitor-research", "marketing-performance", "autonomous-marketing-weekly", "navla-marketing-campaign", "lead-to-customer-collaboration", "weekly-business-review"], true, true),
-        Agent("sales", "AI Sales", "Researches authorized prospects, qualifies CRM leads, and prepares approved outreach.", "Sales agent", "Sales",
-            ["Research authorized lead sources without inventing contacts", "Qualify and score prospects with explicit estimate labels", "Create and enrich CRM leads with duplicate checks", "Draft personalized outreach and stop before unapproved sends", "Track replies, follow-ups, and campaign reports from persisted records"],
-            ["SearchAuthorizedLeadSources", "ResearchExternalProspects", "ResearchProspect", "CreateLead", "GetLeadDetails", "UpdateLead", "QualifyLead", "CreateDeal", "CreateFollowUp", "CreateProposalDraft", "CreateQuotationDraft", "GetSalesPipeline", "GetConversionAnalytics", "GetCustomerSegments", "GetSalesIntelligence", "ForecastSalesRevenue", "GetChurnRisk", "GetCustomerIntelligence", "CreateEmailDraft", "CreateOutreachCampaign", "GeneratePersonalizedOutreach", "SendExternalEmail", "ProcessProspectReply", "GenerateSalesCampaignReport", "GetSalesAgentStatus", "AssignSalesObjective", "FindDuplicateLeads", "ConvertLead", "GetCompanyProfile", "GetCustomerDetails", "RetrieveSharedBusinessContext"],
+        Agent("sales", "Sales Manager", "Analyzes customers and sales history, qualifies CRM leads, and prepares approved outreach.", "Sales Manager", "Sales",
+            ["Analyze customers and sales history from recorded CRM data", "Identify potential customers from authorized sources", "Find sales opportunities without inventing contacts", "Prepare customer outreach drafts", "Create quotations and proposals as drafts", "Follow up with leads through scheduled follow-ups", "Track the sales pipeline from persisted records", "Generate sales campaign reports from stored results"],
+            ["SearchAuthorizedLeadSources", "ResearchExternalProspects", "ResearchProspect", "CreateLead", "GetLeadDetails", "UpdateLead", "QualifyLead", "CreateDeal", "CreateFollowUp", "CreateProposalDraft", "CreateQuotationDraft", "GetSalesPipeline", "GetConversionAnalytics", "GetCustomerSegments", "GetSalesIntelligence", "ForecastSalesRevenue", "GetChurnRisk", "GetCustomerIntelligence", "CreateEmailDraft", "CreateOutreachCampaign", "GeneratePersonalizedOutreach", "SendExternalEmail", "CreateCalendarEvent", "ProcessProspectReply", "GenerateSalesCampaignReport", "GetSalesAgentStatus", "AssignSalesObjective", "FindDuplicateLeads", "ConvertLead", "GetCompanyProfile", "GetCustomerDetails", "RetrieveSharedBusinessContext"],
             ["lead-qualification", "prospect-research", "proposal-generation", "follow-up", "quotation-generation", "lead-to-customer", "customer-acquisition", "autonomous-lead-generation", "navla-marketing-campaign", "lead-to-customer-collaboration", "order-to-fulfillment"], true),
-        Agent("support", "AI Customer Support", "Answers from authorized knowledge and stored orders, manages tickets, and escalates when needed.", "Customer support agent", "Customer Support",
-            ["Search authorized knowledge", "Read permitted customer and order records", "Create and update support tickets", "Send permitted channel replies", "Escalate refunds and complex cases", "Schedule follow-ups", "Classify complaints for multi-agent resolution"],
-            ["SearchKnowledgeBase", "GetCustomerDetails", "GetOrderDetails", "GetCustomerHistory", "CreateSupportTicket", "UpdateSupportTicket", "CreateResponseDraft", "SendSupportReply", "ReceiveSupportMessage", "EscalateTicket", "ResolveSupportTicket", "ScheduleSupportFollowUp", "IssueRefund", "CreateFollowUp", "DelegateAgentTask", "ClassifySupportComplaint", "RetrieveSharedBusinessContext", "StoreSharedBusinessDecision"],
+        Agent("support", "Customer Support Manager", "Answers from authorized knowledge and stored orders, manages tickets, and escalates when needed.", "Customer Support Manager", "Customer Support",
+            ["Answer customer questions using approved business knowledge", "Check order status from recorded orders", "Handle common complaints with stored context", "Draft support responses", "Escalate complex cases", "Maintain customer interaction history on tickets"],
+            ["SearchKnowledgeBase", "GetCustomerDetails", "GetOrderDetails", "GetCustomerHistory", "CreateSupportTicket", "UpdateSupportTicket", "CreateResponseDraft", "SendSupportReply", "SendWhatsAppMessage", "ReceiveSupportMessage", "EscalateTicket", "ResolveSupportTicket", "ScheduleSupportFollowUp", "IssueRefund", "CreateFollowUp", "DelegateAgentTask", "ClassifySupportComplaint", "RetrieveSharedBusinessContext", "StoreSharedBusinessDecision"],
             ["customer-support-automation", "customer-onboarding", "complaint-to-resolution", "lead-to-customer-collaboration", "order-to-fulfillment"], true, true),
         Agent("software", "AI Software Development", "Turns stored project requirements into review drafts. It does not run code or deploy.", "Software development agent", "Software Development",
             ["Read stored project requirements", "Create development tasks", "Store specification and review drafts", "Refuse repository access and production deploys until a real integration and approval exist"],
             ["GetProjectDetails", "GetProjectRequirements", "CreateDevelopmentTask", "AnalyzeRepository", "ReviewCodeChanges", "GenerateCode", "GenerateUnitTests", "AnalyzePullRequest", "GenerateTechnicalDocumentation", "GenerateCodeReviewReport", "ExecuteProductionDeployment"],
             [], true),
-        Agent("finance", "AI Finance", "Monitors recorded finances, AR/AP, expenses, cash flow, and reconciliation. Sensitive money moves require approval. It does not post ledger entries or transfer funds.", "Finance agent", "Finance",
-            ["Summarize revenue vs collected cash", "Analyze expenses and anomalies", "Age receivables and prioritize reminders", "Track supplier payables", "Project cash flow with confidence labels", "Reconcile invoices and payments", "Prepare payment reminders", "Monitor budgets"],
+        Agent("finance", "Finance Manager", "Monitors recorded finances, AR/AP, expenses, cash flow, and reconciliation. Sensitive money moves require approval. It does not post ledger entries or transfer funds.", "Finance Manager", "Finance",
+            ["Analyze revenue and expenses from recorded totals", "Monitor outstanding payments and receivables aging", "Prepare financial summaries and operational reports", "Identify unusual expense transactions", "Track cash flow with confidence labels", "Generate financial reports from stored books", "Flag potential financial risks without inventing balances"],
             ["GetFinancialSummary", "GetFinanceIntelligence", "GetExpenseRecords", "AnalyzeExpenses", "GetInvoiceRecords", "GetPaymentRecords", "GetOutstandingReceivables", "GetReceivablesAging", "GetOutstandingPayables", "GetPayablesSchedule", "CalculateProfitability", "ForecastCashFlow", "ReconcileFinancialRecords", "GetBudgetStatus", "GenerateFinancialReport", "PreparePaymentReminder", "SubmitPaymentReminder", "PrepareInvoiceDraft", "VerifyOrderReadiness", "RetrieveSharedBusinessContext", "StoreSharedBusinessDecision"],
             ["executive-reporting", "financial-monitoring", "overdue-payment-followup", "lead-to-customer-collaboration", "order-to-fulfillment", "low-stock-to-procurement", "complaint-to-resolution", "weekly-business-review"], true),
         Agent("hr", "AI HR", "Supports recruiting and onboarding with human review. It does not hire or edit employee records.", "HR and recruitment agent", "Human Resources",
@@ -393,13 +414,17 @@ public static class NalvaAgentCatalog
             ["Read recorded analytics", "Separate history from estimates", "Forecast sales with confidence labels", "Surface business risks and decision briefs", "Store a business report draft"],
             ["GetSalesAnalytics", "GetRevenueAnalytics", "GetInventoryAnalytics", "GetCustomerAnalytics", "GetProjectAnalytics", "GetExpenseAnalytics", "GenerateBusinessReport", "IdentifyBusinessTrends", "ForecastSalesRevenue", "GetSalesIntelligence", "GetCustomerIntelligence", "GetExecutiveDecisionBrief", "GetBusinessRisks", "GetChurnRisk", "RetrieveSharedBusinessContext", "StoreSharedBusinessDecision"],
             ["marketing-performance", "executive-reporting", "weekly-business-review"], true),
-        Agent("procurement", "AI Procurement", "Monitors inventory, forecasts demand when data allows, compares suppliers, prepares approval-bound purchase orders, and tracks verified receiving.", "Procurement and inventory agent", "Procurement",
-            ["Monitor stock risks", "Analyze demand with confidence labels", "Compare suppliers", "Prepare fingerprint-bound purchase orders", "Track delayed deliveries", "Verify receiving before stock changes"],
+        Agent("inventory", "Inventory Manager", "Monitors stock levels, movement, and reorder need from recorded inventory. Does not create purchases — hands off to Procurement Manager.", "Inventory Manager", "Inventory",
+            ["Monitor stock levels from recorded inventory rows", "Identify low-stock and out-of-stock products", "Analyze inventory movement and slow movers", "Recommend reorder quantities from recorded demand", "Identify slow-moving products", "Prepare structured restock context for Procurement", "Escalate purchase preparation via CreateAgentTask"],
+            ["GetInventorySummary", "GetInventoryLevels", "GetLowStockProducts", "GetInventoryRisks", "GetInventoryAnalytics", "GetSlowMovingProducts", "ForecastProductDemand", "GetProcurementRecommendations", "CalculateReorderRecommendations", "CreateAgentTask", "DelegateAgentTask", "RetrieveSharedBusinessContext", "StoreSharedBusinessDecision"],
+            ["inventory-automation", "procurement-daily-monitor", "low-stock-to-procurement", "order-to-fulfillment"], true),
+        Agent("procurement", "Procurement Manager", "Compares suppliers, prepares approval-bound purchase orders, and tracks verified receiving. Uses Inventory Manager findings for restock need.", "Procurement Manager", "Procurement",
+            ["Monitor purchasing requirements from inventory and open POs", "Identify suitable suppliers from business records", "Compare supplier prices from stored or labeled research", "Prepare fingerprint-bound purchase orders", "Track pending purchases and delayed deliveries", "Monitor procurement costs against recommendations", "Verify receiving before stock changes"],
             ["GetInventoryLevels", "GetLowStockProducts", "GetInventoryRisks", "GetProcurementOverview", "GetSupplierDetails", "CompareSupplierPrices", "ResearchSuppliers", "GetPurchaseHistory", "ForecastProductDemand", "GetProcurementRecommendations", "GetDelayedDeliveries", "GetSlowMovingProducts", "GetProcurementBudgetNeed", "CreatePurchaseOrderDraft", "PreparePurchaseOrder", "GetPendingPurchaseOrders", "CreatePurchaseOrder", "SubmitPreparedPurchaseOrder", "ReceivePurchaseOrderVerified", "VerifyOrderReadiness", "GetOrderDetails", "RetrieveSharedBusinessContext", "StoreSharedBusinessDecision"],
             ["inventory-automation", "procurement-daily-monitor", "delivery-followup", "low-stock-to-procurement", "order-to-fulfillment", "complaint-to-resolution"], true),
         Agent("assistant", "AI Executive Assistant", "Organizes internal tasks, reminders, and drafts. It does not send mail or invitations.", "Executive assistant", "Administration",
             ["List upcoming tasks", "Store reminders and calendar notes", "Draft emails and meeting summaries"],
-            ["GetUpcomingTasks", "CreateTask", "GetCalendarEvents", "CreateCalendarEvent", "SummarizeMeetingNotes", "CreateEmailDraft", "CreateReminder", "GenerateDailySummary"],
+            ["GetUpcomingTasks", "CreateTask", "GetCalendarEvents", "CreateCalendarEvent", "SummarizeMeetingNotes", "CreateEmailDraft", "CreateReminder", "GenerateDailySummary", "SendExternalEmail"],
             ["executive-reporting"], true),
         Agent("content", "Content Creator", "Drafts articles and marketing copy for human editing.", "Content creator", "Marketing",
             ["Draft articles, newsletters, and website copy from supplied notes and company knowledge"],
@@ -610,19 +635,19 @@ public static class NalvaWorkflowCatalog
             Step("follow-up", "sales", "Schedule an internal follow-up.", "CreateFollowUp"),
             Step("metrics", "ceo", "Read workforce results for this company.", "GetAgentExecutionResults")
         ], NalvaEventNames.LeadCreated),
-        new("inventory-automation", "Low stock monitoring", "Verify low stock, review suppliers, and stop at a purchase approval.", "Procurement", "Event",
+        new("inventory-automation", "Low stock monitoring", "Inventory Manager verifies low stock; Procurement compares suppliers and stops at purchase approval.", "Procurement", "Event",
         [
-            Step("stock", "procurement", "Verify stock risks including inbound purchase orders.", "GetInventoryRisks", "GetLowStockProducts", "GetInventoryLevels"),
-            Parallel("demand", "procurement", "Analyze demand only from recorded sales.", 1, "ForecastProductDemand", "GetProcurementRecommendations"),
+            Step("stock", "inventory", "Verify stock risks from recorded inventory.", "GetInventoryRisks", "GetLowStockProducts", "GetInventoryLevels"),
+            Parallel("demand", "inventory", "Analyze demand only from recorded sales.", 1, "ForecastProductDemand", "CalculateReorderRecommendations"),
             Parallel("suppliers", "procurement", "Compare stored suppliers and labeled research quotes.", 1, "ResearchSuppliers", "CompareSupplierPrices"),
             Step("draft-po", "procurement", "Prepare a fingerprint-bound purchase draft. Do not transmit it.", "PreparePurchaseOrder"),
             Step("approve-po", "procurement", "Ask a person before submitting the pending purchase.", "SubmitPreparedPurchaseOrder")
         ], NalvaEventNames.StockBelowThreshold),
-        new("procurement-daily-monitor", "Daily inventory monitor", "Scan inventory risks, demand, and open procurement need once per day.", "Procurement", "Scheduled",
+        new("procurement-daily-monitor", "Daily inventory monitor", "Inventory Manager scans stock risks; Procurement estimates spend need once per day.", "Procurement", "Scheduled",
         [
-            Step("risks", "procurement", "Read inventory risks from recorded stock and sales.", "GetInventoryRisks", "GetProcurementOverview"),
-            Step("demand", "procurement", "Label demand insights from recorded history.", "ForecastProductDemand"),
-            Step("budget", "procurement", "Estimate procurement spend from recommendations.", "GetProcurementBudgetNeed")
+            Step("risks", "inventory", "Read inventory risks from recorded stock and sales.", "GetInventoryRisks", "GetInventorySummary"),
+            Step("demand", "inventory", "Label demand insights from recorded history.", "ForecastProductDemand", "CalculateReorderRecommendations"),
+            Step("budget", "procurement", "Estimate procurement spend from recommendations.", "GetProcurementBudgetNeed", "GetProcurementOverview")
         ], null, 1440),
         new("delivery-followup", "Delivery follow-up", "Surface delayed purchase deliveries for owner attention.", "Procurement", "Event",
         [
@@ -683,10 +708,11 @@ public static class NalvaWorkflowCatalog
             Step("customer-update", "support", "Send authorized order updates or store drafts when channels are unavailable.", "CreateResponseDraft", "SendSupportReply"),
             Step("report", "ceo", "Report order status and blockers from verified step results.", "GetAgentExecutionResults", "GenerateDailySummary")
         ], NalvaEventNames.OrderPlaced),
-        new("low-stock-to-procurement", "Low stock to procurement", "Detect genuine shortage, compare suppliers, finance reviews obligations, owner approves the exact PO, receiving updates stock only after verified quantities.", "Procurement", "Event",
+        new("low-stock-to-procurement", "Low stock to procurement", "Inventory Manager detects shortage; Procurement compares suppliers; Finance reviews obligations; owner approves the exact PO; receiving updates stock only after verified quantities.", "Procurement", "Event",
         [
-            Step("detect", "procurement", "Detect shortage from recorded stock, reserved, and inbound POs.", "GetInventoryRisks", "GetLowStockProducts", "GetPendingPurchaseOrders"),
-            Step("reorder", "procurement", "Calculate reorder quantity from recommendations.", "GetProcurementRecommendations", "ForecastProductDemand"),
+            Step("detect", "inventory", "Detect shortage from recorded stock levels and risks.", "GetInventoryRisks", "GetLowStockProducts", "GetInventoryLevels"),
+            Step("reorder", "inventory", "Calculate reorder quantity from recommendations.", "CalculateReorderRecommendations", "ForecastProductDemand"),
+            Step("pending-pos", "procurement", "Review open inbound purchase orders for the shortage.", "GetPendingPurchaseOrders"),
             Step("suppliers", "procurement", "Identify suppliers and compare quotations from stored or labeled research.", "ResearchSuppliers", "CompareSupplierPrices"),
             Step("budget", "procurement", "Estimate procurement spend from current recommendations.", "GetProcurementBudgetNeed"),
             Step("finance-impact", "finance", "Check financial implications and outstanding payables.", "GetOutstandingPayables", "GetFinancialSummary"),
@@ -719,7 +745,29 @@ public static class NalvaWorkflowCatalog
             Parallel("finance-report", "finance", "Report revenue, expenses, receivables, payables, and cash-flow indicators.", 1, "GetFinancialSummary", "GetOutstandingReceivables", "GetOutstandingPayables", "ForecastCashFlow", "GenerateFinancialReport"),
             Step("consolidate", "analyst", "Consolidate recorded analytics and identify trends.", "IdentifyBusinessTrends", "GenerateBusinessReport"),
             Step("navla-report", "ceo", "Prepare the weekly business report for the owner from verified agent results.", "GetCompanyOverview", "GetBusinessKPIs", "GetAgentExecutionResults", "GenerateDailySummary", "StoreSharedBusinessDecision")
-        ], null, 10080)
+        ], null, 10080),
+
+        // Phase 8D — Autopilot cross-agent scenarios
+        new("revenue-growth-collaboration", "Revenue growth collaboration", "Sales finds opportunities from stored customers; Marketing drafts targeted campaigns; Support prepares FAQs; Finance measures actual revenue impact only from records.", "Sales", "Manual",
+        [
+            Step("sales-analysis", "sales", "Analyze stored customers and sales history for opportunities and inactive accounts.", "GetSalesPipeline", "GetCustomerSegments", "GetConversionAnalytics"),
+            Step("sales-outreach", "sales", "Prepare personalized outreach drafts and stop before external send.", "GeneratePersonalizedOutreach", "CreateFollowUp", "SendExternalEmail"),
+            Step("marketing-campaign", "marketing", "Draft a targeted campaign and content calendar from stored segments.", "GetCustomerSegments", "GenerateMarketingStrategy", "CreateCampaignDraft", "CreateContentCalendar", "CreateContentDraft"),
+            Step("support-faq", "support", "Prepare product FAQ drafts from authorized knowledge.", "SearchKnowledgeBase", "CreateResponseDraft"),
+            Step("sales-track", "sales", "Track leads and conversion metrics from persisted records.", "GetSalesPipeline", "GetConversionAnalytics", "GenerateSalesCampaignReport"),
+            Step("finance-impact", "finance", "Measure actual revenue impact from recorded finance data only.", "GetFinancialSummary", "GetSalesSummary", "GenerateFinancialReport"),
+            Step("ceo-summary", "ceo", "Report verified outcomes without inventing lift claims.", "GetAgentExecutionResults", "GenerateDailySummary", "StoreSharedBusinessDecision")
+        ]),
+        new("product-launch-collaboration", "New product launch collaboration", "Marketing prepares launch content; Inventory verifies stock; Sales prepares offers; Support prepares product info; Finance evaluates margin; owner approves launch.", "Marketing", "Manual",
+        [
+            Step("marketing-launch", "marketing", "Create launch campaign drafts and calendar from brand and product records.", "GetMarketingBrandProfile", "GenerateMarketingStrategy", "CreateCampaignDraft", "CreateContentCalendar", "CreateContentDraft", "GenerateMarketingGraphic"),
+            Step("inventory-check", "inventory", "Verify stock availability from recorded inventory levels.", "GetInventoryLevels", "GetInventoryRisks", "GetLowStockProducts"),
+            Step("sales-offers", "sales", "Prepare quotations and offers for existing customers only.", "CreateQuotationDraft", "CreateProposalDraft", "CreateOutreachCampaign"),
+            Step("support-info", "support", "Prepare product information drafts from authorized knowledge.", "SearchKnowledgeBase", "CreateResponseDraft"),
+            Step("finance-margin", "finance", "Evaluate pricing and margin from recorded costs and prices. Do not invent numbers.", "GetFinancialSummary", "GetExpenseRecords", "GenerateFinancialReport"),
+            Step("publish-gate", "social", "Request approval before any external publish.", "PublishSocialPost"),
+            Step("owner-approve", "ceo", "Store the launch decision for owner review.", "GetAgentExecutionResults", "StoreSharedBusinessDecision", "GenerateDailySummary")
+        ])
     ];
 
     public static bool TryGet(string? key, out NalvaWorkflowTemplate? template)

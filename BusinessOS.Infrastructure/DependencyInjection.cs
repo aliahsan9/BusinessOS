@@ -19,6 +19,7 @@ using BusinessOS.Application.Features.AI.Services;
 using BusinessOS.Application.Features.Integrations;
 using BusinessOS.Application.Features.Experience;
 using BusinessOS.Application.Features.Nalva;
+using BusinessOS.Application.Features.Autopilot;
 using BusinessOS.Application.Features.Agents.Services;
 using BusinessOS.Application.Features.Help.Services;
 using BusinessOS.Application.Features.Organization.Services;
@@ -39,6 +40,7 @@ using BusinessOS.Infrastructure.AI.Agents.Tools;
 using BusinessOS.Infrastructure.AI.Copilot;
 using BusinessOS.Infrastructure.AI.Copilot.Tools;
 using BusinessOS.Infrastructure.AI.Nalva;
+using BusinessOS.Infrastructure.AI.Autopilot;
 using BusinessOS.Infrastructure.AI.SalesAgent;
 using BusinessOS.Infrastructure.AI.Support;
 using BusinessOS.Application.Features.Marketing;
@@ -365,6 +367,11 @@ public static class DependencyInjection
         services.AddScoped<INalvaAutomationService, NalvaAutomationService>();
         services.AddScoped<INalvaReliabilityService, NalvaReliabilityService>();
         services.AddScoped<INalvaCollaborationService, NalvaCollaborationService>();
+        services.AddScoped<IAutonomySafetyEngine, AutonomySafetyEngine>();
+        services.AddScoped<IBusinessAutopilotService, BusinessAutopilotService>();
+        services.AddScoped<IBusinessGoalService, BusinessGoalService>();
+        services.AddScoped<IBusinessMemoryService, BusinessMemoryService>();
+        services.AddScoped<INavlaWorkforceManager, NavlaWorkforceManagerService>();
         services.AddScoped<IExperienceService, ExperienceService>();
         services.AddScoped<INalvaEventOutbox, NalvaEventOutbox>();
         services.AddScoped<NalvaEventWorker>();
@@ -376,6 +383,8 @@ public static class DependencyInjection
         services.AddScoped<IIntegrationProvider, WhatsAppIntegrationProvider>();
         services.AddScoped<IIntegrationProvider, MetaIntegrationProvider>();
         services.AddScoped<IIntegrationProvider, StripeConnectIntegrationProvider>();
+        services.AddScoped<IIntegrationProvider, SmtpIntegrationProvider>();
+        services.AddScoped<IIntegrationProvider, GoogleBusinessProfileIntegrationProvider>();
         services.AddScoped<IIntegrationProviderRegistry, IntegrationProviderRegistry>();
         services.AddScoped<ISupportChannelAdapter, SandboxSupportChannelAdapter>();
         services.AddScoped<ISupportChannelAdapter, WebsiteChatSupportChannelAdapter>();
@@ -412,6 +421,7 @@ public static class DependencyInjection
         services.AddHostedService<SupportFollowUpProcessor>();
         services.AddHostedService<MarketingPublishProcessor>();
         services.AddHostedService<GmailInboundSyncProcessor>();
+        services.AddHostedService<IntegrationDeadLetterProcessor>();
         services.AddHttpClient("Integrations", client => client.Timeout = TimeSpan.FromSeconds(30))
             .AddTransientHttpErrorPolicy(policy => policy.WaitAndRetryAsync(3, attempt => TimeSpan.FromMilliseconds(200 * Math.Pow(2, attempt))));
 
