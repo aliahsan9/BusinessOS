@@ -1,4 +1,3 @@
-<img width="1920" height="1080" alt="business_os" src="https://github.com/user-attachments/assets/b154790d-4696-494a-981a-7779f84d18f2" />
 # BusinessOS — AI-Powered Business Operating System
 
 **One platform to manage your business. One intelligent assistant to help you run it.**
@@ -11,16 +10,16 @@ Built with **ASP.NET Core, .NET 10, Angular, PostgreSQL, Qdrant, and OpenAI**, B
 
 ---
 
-<img width="1920" height="1080" alt="business_os" src="https://github.com/user-attachments/assets/69688b96-800c-484c-80c1-55c673dadea3" />
+
 <!--
 PROJECT VISUALS:
 Add real screenshots to docs/assets/ before publishing.
 Recommended: dashboard, inventory, sales, and AI assistant.
 -->
-
-<p align="center">
+<img width="1920" height="1080" alt="business_os" src="https://github.com/user-attachments/assets/69688b96-800c-484c-80c1-55c673dadea3" />
+<!-- <p align="center">
   <img src="docs/assets/businessos-dashboard.png" alt="BusinessOS Dashboard" width="100%">
-</p>
+</p> -->
 
 <p align="center">
   <strong>Manage operations. Understand your data. Work smarter with AI.</strong>
