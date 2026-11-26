@@ -6,10 +6,9 @@ BusinessOS is an AI-powered, multi-tenant business management platform designed 
 
 From customer relationships and inventory to sales, procurement, invoicing, and financial analytics, BusinessOS brings essential business operations together. Its AI-powered assistant combines tool execution and Retrieval-Augmented Generation (RAG) to help users interact with business information more naturally.
 
-Built with **ASP.NET Core, .NET 10, Angular, PostgreSQL, Qdrant, and OpenAI**, BusinessOS explores how modern enterprise architecture and AI agent capabilities can work together in a practical business application.
+Built with **ASP.NET Core, .NET 10, Angular, Microsoft SQL Server, Qdrant, and OpenAI**, BusinessOS explores how modern enterprise architecture and AI agent capabilities can work together in a practical business application.
 
 ---
-
 
 <!--
 PROJECT VISUALS:
@@ -124,7 +123,7 @@ graph TD
         Infra --> RAG[RAG & Retrieval Pipeline]
         Infra --> Sync[Vector Synchronization]
 
-        Persistence --> DB[(PostgreSQL)]
+        Persistence --> DB[(Microsoft SQL Server)]
         Sync --> VectorDB[(Qdrant)]
     end
 
@@ -153,7 +152,7 @@ graph TD
 | Frontend | Angular |
 | Architecture | Clean Architecture, DDD, CQRS |
 | Application Mediation | MediatR |
-| Database | PostgreSQL, Entity Framework Core 10 |
+| Database | Microsoft SQL Server, Entity Framework Core 10 |
 | Vector Database | Qdrant |
 | AI & LLM | OpenAI API |
 | Embeddings | text-embedding-3-small |
@@ -222,7 +221,7 @@ cd BusinessOS
 
 ### 2. Start Infrastructure
 
-Start the PostgreSQL and Qdrant services configured in Docker Compose.
+Start the Microsoft SQL Server and Qdrant services configured in Docker Compose.
 
 ```bash
 docker compose up -d
@@ -235,7 +234,7 @@ Configure your local database connection, authentication secret, and AI credenti
 Example:
 
 ```bash
-ConnectionStrings__DefaultConnection="your-postgresql-connection-string"
+ConnectionStrings__DefaultConnection="your-sql-server-connection-string"
 
 Jwt__Key="your-secure-secret-key-of-at-least-32-characters"
 
@@ -270,7 +269,7 @@ Open the configured Swagger/OpenAPI endpoint to explore available API operations
 
 | Variable | Purpose |
 |---|---|
-| `ConnectionStrings__DefaultConnection` | PostgreSQL connection string |
+| `ConnectionStrings__DefaultConnection` | Microsoft SQL Server connection string |
 | `Jwt__Key` | JWT signing secret |
 | `Ai__OpenAiApiKey` | OpenAI API credential |
 | `Qdrant__Host` | Qdrant server hostname |
